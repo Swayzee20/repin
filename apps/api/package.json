@@ -1,0 +1,25 @@
+{
+  "name": "@repin/api",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "build": "next build",
+    "dev": "next dev",
+    "start": "next start",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@repin/db": "workspace:*",
+    "@repin/types": "workspace:*",
+    "@repin/validation": "workspace:*",
+    "next": "16.3.1",
+    "react": "19.2.3",
+    "react-dom": "19.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/react": "~19.2.2",
+    "@types/react-dom": "~19.2.2",
+    "typescript": "~6.0.3"
+  }
+}

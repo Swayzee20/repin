@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "RepIn",
+    "slug": "repin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "scheme": "repin",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "plugins": ["expo-router"],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.repin.mobile"
+    },
+    "android": {
+      "package": "com.repin.mobile"
+    }
+  }
+}
+
