@@ -22,7 +22,18 @@ export default function RootLayout() {
 
   return (
     <>
-      <Stack screenOptions={{ animation: "slide_from_right", contentStyle: { backgroundColor: colors.background }, headerShown: false }} />
+      <Stack
+        screenOptions={{
+          animation: "slide_from_right",
+          contentStyle: { backgroundColor: colors.background },
+          headerShown: false,
+        }}
+      >
+        <Stack.Screen
+          name="community/[groupId]"
+          options={{ animation: "fade", animationDuration: 220 }}
+        />
+      </Stack>
       <StatusBar style="dark" />
     </>
   );

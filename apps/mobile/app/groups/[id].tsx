@@ -5,10 +5,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
+import { fetchGroupBoard } from "../../lib/group-board";
 import { BackButton, Button, Card, CommunityFeed, LoadingState, Screen, SectionHeader, StateCard } from "../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
-const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const configuredPublicWebUrl = (process.env.EXPO_PUBLIC_WEB_URL ?? "").trim().replace(/\/$/, "");
 const publicWebUrl = configuredPublicWebUrl.startsWith("https://")
   ? configuredPublicWebUrl
@@ -37,16 +37,11 @@ export default function GroupDetailScreen() {
       if (!groupId) throw new Error("This group link is invalid.");
       const { data, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !data.session) throw new Error("Sign in to view this group.");
-      const headers = { Authorization: `Bearer ${data.session.access_token}` };
-      const [groupResponse, workoutsResponse] = await Promise.all([
-        fetch(`${apiUrl}/api/groups/${encodeURIComponent(groupId)}`, { headers, signal: AbortSignal.timeout(5_000) }),
-        fetch(`${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts`, { headers, signal: AbortSignal.timeout(5_000) }),
-      ]);
-      const groupBody = (await groupResponse.json()) as { error?: string; group?: GroupSummary };
-      const workoutsBody = (await workoutsResponse.json()) as { error?: string; workouts?: WorkoutFeedItem[] };
-      if (!groupResponse.ok || !groupBody.group) throw new Error(groupBody.error ?? "Group could not be loaded.");
-      if (!workoutsResponse.ok || !workoutsBody.workouts) throw new Error(workoutsBody.error ?? "Community Board could not be loaded.");
-      setGroup(groupBody.group); setWorkouts(workoutsBody.workouts);
+      const board = await fetchGroupBoard({
+        accessToken: data.session.access_token,
+        groupId,
+      });
+      setGroup(board.group); setWorkouts(board.workouts);
     } catch (loadError) { setError(loadError instanceof Error ? loadError.message : "Group could not be loaded."); }
     finally { setLoading(false); }
   }, [groupId]);

@@ -1,18 +1,29 @@
 import type { HomeData } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
 
-import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { normalizeInviteRedirect } from "../lib/invite-route";
-import { Button, Card, CommunityFeed, LoadingState, SectionHeader, StateCard, TextField } from "../ui/components";
-import { colors, fonts, radii, spacing, type } from "../ui/theme";
+import { isSupabaseConfigured, supabase } from "../../lib/supabase";
+import { normalizeInviteRedirect } from "../../lib/invite-route";
+import { useMainTabs } from "../../ui/main-tabs-context";
+import { Button, Card, CommunityFeed, LoadingState, StateCard, TextField } from "../../ui/components";
+import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
+type CommunityBoardZoomSourceProps = {
+  children: (onExpand?: (event: GestureResponderEvent) => void) => ReactNode;
+  onPress?: (event: GestureResponderEvent) => void;
+};
+
+function CommunityBoardZoomSource({ children, onPress }: CommunityBoardZoomSourceProps) {
+  return children(onPress);
+}
+
 export default function HomeScreen() {
   const router = useRouter();
+  const { setSelectedGroupId: setTabGroupId } = useMainTabs();
   const params = useLocalSearchParams<{ redirect?: string | string[] }>();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
   const [session, setSession] = useState<Session | null>(null);
@@ -60,10 +71,10 @@ export default function HomeScreen() {
         router.replace("./onboarding/groups");
         return;
       }
-      setHomeData(body); setSelectedGroupId(body.selectedGroupId);
+      setHomeData(body); setSelectedGroupId(body.selectedGroupId); setTabGroupId(body.selectedGroupId);
     } catch (error) { setHomeError(error instanceof Error ? error.message : "Home could not be loaded."); }
     finally { setHomeLoading(false); }
-  }, [inviteRedirect, router, selectedGroupId, session]);
+  }, [inviteRedirect, router, selectedGroupId, session, setTabGroupId]);
 
   useFocusEffect(useCallback(() => { if (session) void loadHome(); }, [loadHome, session]));
 
@@ -75,12 +86,6 @@ export default function HomeScreen() {
     if (error) setAuthMessage(error.message);
     else if (data.session && inviteRedirect) router.replace(inviteRedirect);
   }, [email, inviteRedirect, password, router]);
-
-  const signOut = useCallback(async () => {
-    if (!supabase) return;
-    setAuthLoading(true); const { error } = await supabase.auth.signOut({ scope: "local" }); setAuthLoading(false);
-    if (error) setAuthMessage(error.message);
-  }, []);
 
   const createGroup = useCallback(async () => {
     if (!session || !groupName.trim()) return;
@@ -126,11 +131,97 @@ export default function HomeScreen() {
   if (homeError && !homeData) return <Shell><StateCard actionLabel="Try again" message={homeError} onAction={() => void loadHome()} title="Home unavailable" /></Shell>;
   if (!homeData) return null;
 
+  const renderCommunityBoard = (onExpand?: (event: GestureResponderEvent) => void) => (
+    <View
+      collapsable={false}
+      style={[
+        styles.communitySection,
+        selectedGroup ? styles.communityBoardSection : styles.communityOnboardingSection,
+      ]}
+    >
+      {homeData.groups.length === 0 ? (
+        <Card style={styles.onboardingCard}>
+          <Text style={styles.onboardingEyebrow}>YOUR COMMUNITY STARTS HERE</Text><Text style={styles.onboardingTitle}>Find your crew</Text>
+          <Text style={styles.bodyMuted}>Join an existing group to train together, or start one of your own.</Text>
+          <Button onPress={() => router.push("./groups/join")}>Join a Group</Button><Button onPress={() => setShowCreateGroup(true)} variant="secondary">Create a Group</Button>
+        </Card>
+      ) : (
+        <View style={styles.boardViewport}>
+          <View pointerEvents="none" style={styles.boardSurface}>
+            <View style={styles.boardToneTop} />
+            <View style={styles.boardToneBottom} />
+          </View>
+          {selectedGroup ? (
+            <View style={styles.boardHeader}>
+              {homeData.groups.length > 1 ? (
+                <Pressable
+                  accessibilityLabel={`Selected group: ${selectedGroup.name}. Change group`}
+                  accessibilityRole="button"
+                  onPress={() => setGroupPickerOpen((value) => !value)}
+                  style={({ pressed }) => [styles.groupSelector, pressed && styles.pressed]}
+                >
+                  <Text numberOfLines={1} style={styles.selectedGroupName}>{selectedGroup.name}</Text>
+                  <Text style={styles.chevron}>{groupPickerOpen ? "▴" : "▾"}</Text>
+                </Pressable>
+              ) : (
+                <Text numberOfLines={1} style={styles.singleGroupName}>{selectedGroup.name}</Text>
+              )}
+              <Pressable
+                accessibilityRole="button"
+                hitSlop={8}
+                onPress={onExpand ?? (() => router.push(`/community/${selectedGroup.id}`))}
+              >
+                <Text style={styles.expandLink}>Expand ↗</Text>
+              </Pressable>
+            </View>
+          ) : null}
+          {groupPickerOpen && homeData.groups.length > 1 ? (
+            <View style={styles.groupDrawer}>
+              {homeData.groups.map((group) => {
+                const selected = group.id === homeData.selectedGroupId;
+                return (
+                  <Pressable
+                    accessibilityRole="button"
+                    key={group.id}
+                    onPress={() => {
+                      setSelectedGroupId(group.id);
+                      setTabGroupId(group.id);
+                      setGroupPickerOpen(false);
+                    }}
+                    style={({ pressed }) => [
+                      styles.drawerOption,
+                      selected && styles.drawerOptionSelected,
+                      pressed && styles.pressed,
+                    ]}
+                  >
+                    <View style={styles.optionCopy}>
+                      <Text numberOfLines={1} style={styles.optionName}>{group.name}</Text>
+                      <Text style={styles.optionRole}>{group.role}</Text>
+                    </View>
+                    {selected ? <Text style={styles.checkmark}>✓</Text> : null}
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : null}
+          {homeLoading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
+          {homeError ? <Text style={styles.error}>{homeError}</Text> : null}
+          {homeData.communityWorkouts.length === 0 ? (
+            <View style={styles.boardEmptyState}>
+              <StateCard title="The board is quiet" message="Log a workout to get the conversation started." />
+            </View>
+          ) : (
+            <CommunityFeed mode="preview" workouts={homeData.communityWorkouts} />
+          )}
+        </View>
+      )}
+    </View>
+  );
+
   return (
     <Shell>
       <View style={styles.header}>
         <View style={styles.headerCopy}><Text style={styles.brand}>REPIN</Text><Text numberOfLines={1} style={styles.greeting}>Hey, {homeData.user.displayName}</Text></View>
-        <Pressable accessibilityRole="button" hitSlop={10} onPress={() => void signOut()} style={({ pressed }) => [styles.accountButton, pressed && styles.pressed]}><Text style={styles.accountIcon}>↗</Text><Text style={styles.accountText}>Sign out</Text></Pressable>
       </View>
 
       <Card style={styles.snapshot}>
@@ -147,69 +238,14 @@ export default function HomeScreen() {
         {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title} · {homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min</Text> : null}
       </Card>
 
-      <View style={styles.communitySection}>
-        <View pointerEvents="none" style={styles.boardSurface}>
-          <View style={styles.boardToneTop} />
-          <View style={styles.boardToneBottom} />
-        </View>
-        <SectionHeader eyebrow="YOUR CREW" title="Community Board" action={selectedGroup ? (
-          <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push(`./groups/${selectedGroup.id}`)}><Text style={styles.link}>View group ›</Text></Pressable>
-        ) : undefined} />
-
-        {selectedGroup ? homeData.groups.length > 1 ? (
-          <Pressable
-            accessibilityLabel={`Selected group: ${selectedGroup.name}. Change group`}
-            accessibilityRole="button"
-            onPress={() => setGroupPickerOpen((value) => !value)}
-            style={({ pressed }) => [styles.groupSelector, pressed && styles.pressed]}
-          >
-            <Text numberOfLines={1} style={styles.selectedGroupName}>{selectedGroup.name}</Text>
-            <Text style={styles.chevron}>{groupPickerOpen ? "▴" : "▾"}</Text>
-          </Pressable>
-        ) : (
-          <Text numberOfLines={1} style={styles.singleGroupName}>{selectedGroup.name}</Text>
-        ) : null}
-
-        {groupPickerOpen && homeData.groups.length > 1 ? (
-          <View style={styles.groupDrawer}>
-            {homeData.groups.map((group) => {
-              const selected = group.id === homeData.selectedGroupId;
-              return (
-                <Pressable
-                  accessibilityRole="button"
-                  key={group.id}
-                  onPress={() => {
-                    setSelectedGroupId(group.id);
-                    setGroupPickerOpen(false);
-                  }}
-                  style={({ pressed }) => [
-                    styles.drawerOption,
-                    selected && styles.drawerOptionSelected,
-                    pressed && styles.pressed,
-                  ]}
-                >
-                  <View style={styles.optionCopy}>
-                    <Text numberOfLines={1} style={styles.optionName}>{group.name}</Text>
-                    <Text style={styles.optionRole}>{group.role}</Text>
-                  </View>
-                  {selected ? <Text style={styles.checkmark}>✓</Text> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
-        {homeLoading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
-        {homeError ? <Text style={styles.error}>{homeError}</Text> : null}
-        {homeData.groups.length === 0 ? (
-          <Card style={styles.onboardingCard}>
-            <Text style={styles.onboardingEyebrow}>YOUR COMMUNITY STARTS HERE</Text><Text style={styles.onboardingTitle}>Find your crew</Text>
-            <Text style={styles.bodyMuted}>Join an existing group to train together, or start one of your own.</Text>
-            <Button onPress={() => router.push("./groups/join")}>Join a Group</Button><Button onPress={() => setShowCreateGroup(true)} variant="secondary">Create a Group</Button>
-          </Card>
-        ) : homeData.communityWorkouts.length === 0 ? <StateCard title="The board is quiet" message="Log a workout to get the conversation started." /> : (
-          <CommunityFeed workouts={homeData.communityWorkouts} />
-        )}
-      </View>
+      <Text style={styles.communityTitle}>Community Board</Text>
+      {selectedGroup ? (
+        <Link href={`/community/${selectedGroup.id}`} asChild>
+          <Link.AppleZoom>
+            <CommunityBoardZoomSource>{renderCommunityBoard}</CommunityBoardZoomSource>
+          </Link.AppleZoom>
+        </Link>
+      ) : renderCommunityBoard()}
 
       {homeData.groups.length > 0 ? <View style={styles.groupActions}>
         <Button onPress={() => router.push("./groups/join")}>Join another group</Button>
@@ -230,21 +266,23 @@ function Shell({ children, centered = false, flat = false }: { children: ReactNo
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 }, centered: { justifyContent: "center" },
+  safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 }, centered: { justifyContent: "center" },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
   brand: { color: colors.brand, ...type.eyebrow }, greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
-  accountButton: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", minHeight: 40, paddingHorizontal: spacing.xs }, accountIcon: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13 }, accountText: { color: colors.muted, fontFamily: fonts.semibold, fontSize: 13 },
   snapshot: { backgroundColor: colors.surface, borderColor: colors.border, padding: spacing.lg }, snapshotTop: { alignItems: "center", flexDirection: "row" }, statusIcon: { alignItems: "center", borderRadius: radii.md, height: 40, justifyContent: "center", width: 40 },
   doneIcon: { backgroundColor: colors.brandSoft }, pendingIcon: { backgroundColor: colors.brandSoft }, doneGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 }, pendingGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 24, marginTop: -7 },
   snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 }, snapshotMessage: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: spacing.xs },
   weekStat: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.md, marginLeft: spacing.md, minWidth: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, weekNumber: { color: colors.brand, fontFamily: fonts.bold, fontSize: 26, lineHeight: 30 }, weekLabel: { color: colors.brandPressed, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8 },
   latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 13, marginTop: spacing.md, paddingTop: spacing.md },
   communitySection: {
-    borderRadius: radii.xl,
-    marginTop: spacing.xxl,
     overflow: "visible",
-    padding: spacing.lg,
   },
+  communityBoardSection: { marginHorizontal: -spacing.sm, paddingTop: spacing.lg },
+  communityOnboardingSection: { padding: spacing.lg },
+  communityTitle: { color: colors.ink, ...type.title, marginTop: spacing.xxl },
+  boardHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md, minHeight: 40, paddingHorizontal: spacing.lg },
+  boardViewport: { borderRadius: radii.xl, minHeight: 320, overflow: "visible" },
+  boardEmptyState: { justifyContent: "center", minHeight: 320 },
   boardSurface: {
     backgroundColor: colors.board,
     borderColor: colors.boardBorder,
@@ -260,10 +298,11 @@ const styles = StyleSheet.create({
   boardToneTop: { backgroundColor: "rgba(255,255,255,0.40)", borderRadius: 120, height: 180, position: "absolute", right: -70, top: -90, width: 220 },
   boardToneBottom: { backgroundColor: "rgba(232,93,93,0.045)", borderRadius: 140, bottom: -90, height: 210, left: -90, position: "absolute", width: 250 },
   link: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
-  groupSelector: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.surface, borderColor: colors.boardBorder, borderRadius: radii.pill, borderWidth: 1, flexDirection: "row", marginBottom: spacing.md, marginTop: -spacing.sm, maxWidth: "100%", minHeight: 36, paddingHorizontal: spacing.md },
+  expandLink: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 13 },
+  groupSelector: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.boardBorder, borderRadius: radii.pill, borderWidth: 1, flexDirection: "row", flexShrink: 1, marginRight: spacing.md, maxWidth: "78%", minHeight: 36, paddingHorizontal: spacing.md },
   selectedGroupName: { color: colors.inkSoft, flexShrink: 1, fontFamily: fonts.semibold, fontSize: 14 },
   chevron: { color: colors.brand, fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, marginLeft: spacing.sm, textAlignVertical: "center" },
-  singleGroupName: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, marginBottom: spacing.md, marginTop: -spacing.sm },
+  singleGroupName: { color: colors.ink, flex: 1, fontFamily: fonts.semibold, fontSize: 16, marginRight: spacing.md },
   groupDrawer: {
     backgroundColor: colors.surface,
     borderColor: colors.boardBorder,
@@ -271,7 +310,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     gap: spacing.xs,
     marginBottom: spacing.md,
-    marginTop: -spacing.sm,
     padding: spacing.xs,
   },
   drawerOption: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", minHeight: 52, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },

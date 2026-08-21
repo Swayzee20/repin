@@ -278,19 +278,23 @@ export function WorkoutCard({
 }
 
 export function CommunityFeed({
-  viewportHeight = 340,
+  mode = "full",
+  viewportHeight,
   workouts,
 }: {
+  mode?: "preview" | "full";
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
 }) {
+  const resolvedViewportHeight = viewportHeight ?? (mode === "preview" ? 320 : 340);
+  const visibleWorkouts = mode === "preview" ? workouts.slice(0, 4) : workouts;
   const scrollY = useSharedValue(0);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => { scrollY.value = event.contentOffset.y; },
   });
 
   return (
-    <View style={[styles.feedViewport, { height: viewportHeight }]}>
+    <View style={[styles.feedViewport, { height: resolvedViewportHeight }]}>
       <Animated.ScrollView
         contentContainerStyle={styles.feedContent}
         directionalLockEnabled
@@ -300,12 +304,12 @@ export function CommunityFeed({
         overScrollMode="never"
         removeClippedSubviews={false}
         scrollEventThrottle={16}
-        showsVerticalScrollIndicator
+        showsVerticalScrollIndicator={mode === "full"}
         style={styles.feedScroller}
       >
-        {workouts.map((workout, index) => (
+        {visibleWorkouts.map((workout, index) => (
           <CommunityFeedItem
-            focalY={viewportHeight * 0.38}
+            focalY={resolvedViewportHeight * 0.38}
             key={workout.id}
             scrollY={scrollY}
             side={index % 2 === 0 ? "left" : "right"}

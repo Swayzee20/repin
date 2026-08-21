@@ -1,0 +1,98 @@
+import type { Session } from "@supabase/supabase-js";
+import { Tabs, useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+
+import { supabase } from "../../lib/supabase";
+import { MainTabsProvider, useMainTabs } from "../../ui/main-tabs-context";
+import { colors, fonts, radii, spacing } from "../../ui/theme";
+
+const tabIcons = { index: "⌂", community: "◎", profile: "○" } as const;
+
+export default function MainTabsLayout() {
+  return (
+    <MainTabsProvider>
+      <MainTabsNavigator />
+    </MainTabsProvider>
+  );
+}
+
+function MainTabsNavigator() {
+  const router = useRouter();
+  const insets = useSafeAreaInsets();
+  const { selectedGroupId } = useMainTabs();
+  const [session, setSession] = useState<Session | null>(null);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+    });
+    return () => subscription.subscription.unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    const showSubscription = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
+    const hideSubscription = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
+    return () => {
+      showSubscription.remove();
+      hideSubscription.remove();
+    };
+  }, []);
+
+  const tabBarHeight = 58 + insets.bottom;
+
+  return (
+    <View style={styles.root}>
+      <Tabs
+        screenOptions={({ route }) => ({
+          headerShown: false,
+          sceneStyle: { backgroundColor: colors.background },
+          tabBarActiveTintColor: colors.brand,
+          tabBarInactiveTintColor: colors.muted,
+          tabBarLabelStyle: styles.tabLabel,
+          tabBarIcon: ({ color, focused }) => (
+            <Text style={[styles.tabIcon, { color }, focused && styles.activeIcon]}>
+              {tabIcons[route.name as keyof typeof tabIcons]}
+            </Text>
+          ),
+          tabBarStyle: session
+            ? [styles.tabBar, { height: tabBarHeight, paddingBottom: insets.bottom }]
+            : styles.hiddenTabBar,
+        })}
+      >
+        <Tabs.Screen name="index" options={{ title: "Home" }} />
+        <Tabs.Screen name="community" options={{ title: "Community" }} />
+        <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+      </Tabs>
+      {session && selectedGroupId && !keyboardVisible ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => router.push(`/groups/${selectedGroupId}/log-workout`)}
+          style={({ pressed }) => [
+            styles.logWorkout,
+            { bottom: tabBarHeight + spacing.md },
+            pressed && styles.logWorkoutPressed,
+          ]}
+        >
+          <Text style={styles.logWorkoutText}>+ Log workout</Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  root: { flex: 1 },
+  tabBar: { backgroundColor: colors.surface, borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, elevation: 0, paddingTop: spacing.xs },
+  hiddenTabBar: { display: "none" },
+  tabLabel: { fontFamily: fonts.semibold, fontSize: 12 },
+  tabIcon: { fontFamily: fonts.medium, fontSize: 23, lineHeight: 25 },
+  activeIcon: { fontFamily: fonts.bold },
+  logWorkout: { alignItems: "center", alignSelf: "center", backgroundColor: colors.brand, borderRadius: radii.pill, elevation: 4, justifyContent: "center", minHeight: 46, paddingHorizontal: spacing.xl, position: "absolute", shadowColor: colors.ink, shadowOffset: { height: 5, width: 0 }, shadowOpacity: 0.12, shadowRadius: 12 },
+  logWorkoutPressed: { backgroundColor: colors.brandPressed, transform: [{ scale: 0.98 }] },
+  logWorkoutText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 15 },
+});

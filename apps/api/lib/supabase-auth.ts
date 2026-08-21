@@ -29,12 +29,20 @@ function getAuthClient() {
 
 function readBearerToken(request: Request) {
   const authorization = request.headers.get("authorization");
+  const startsWithBearer = authorization?.startsWith("Bearer ") ?? false;
+  const token = startsWithBearer
+    ? (authorization?.slice("Bearer ".length).trim() ?? "")
+    : "";
 
-  if (!authorization?.startsWith("Bearer ")) {
+  console.info("[Supabase bearer diagnostic]", {
+    authorizationHeaderExists: authorization !== null,
+    startsWithBearer,
+    tokenNonEmpty: token.length > 0,
+  });
+
+  if (!startsWithBearer) {
     throw new AuthenticationError();
   }
-
-  const token = authorization.slice("Bearer ".length).trim();
 
   if (!token) {
     throw new AuthenticationError();
@@ -74,6 +82,11 @@ function getSuggestedDisplayName(claims: Record<string, unknown>) {
 export async function requireAuthenticatedUser(request: Request) {
   const token = readBearerToken(request);
   const { data, error } = await getAuthClient().auth.getClaims(token);
+
+  console.info("[Supabase verification diagnostic]", {
+    error: error?.message ?? null,
+    status: error?.status ?? null,
+  });
 
   if (error || !data?.claims.sub) {
     throw new AuthenticationError();
