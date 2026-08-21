@@ -183,6 +183,19 @@ export async function getGroupPreviewByInviteCode(input: {
   return group ?? null;
 }
 
+export async function getPublicGroupInviteByCode(inviteCode: string) {
+  const [group] = await getDatabase()
+    .select({
+      name: schema.groups.name,
+      inviteCode: schema.groups.inviteCode,
+    })
+    .from(schema.groups)
+    .where(eq(schema.groups.inviteCode, inviteCode.toUpperCase()))
+    .limit(1);
+
+  return group ?? null;
+}
+
 export async function joinGroupByInviteCode(input: {
   userId: string;
   inviteCode: string;

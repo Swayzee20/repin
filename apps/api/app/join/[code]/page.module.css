@@ -1,0 +1,112 @@
+.page {
+  align-items: center;
+  background: #ffffff;
+  color: #222222;
+  display: flex;
+  font-family: Outfit, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  inset: 0;
+  justify-content: center;
+  overflow: auto;
+  padding: 32px 24px;
+  position: fixed;
+}
+
+.content {
+  max-width: 440px;
+  width: 100%;
+}
+
+.brand {
+  color: #e85d5d;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+}
+
+.eyebrow {
+  color: #c94a4a;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+  margin: 40px 0 0;
+}
+
+.title {
+  font-size: clamp(32px, 10vw, 44px);
+  line-height: 1.08;
+  margin: 8px 0 0;
+}
+
+.body {
+  color: #777777;
+  font-size: 17px;
+  line-height: 1.5;
+  margin: 16px 0 0;
+}
+
+.codePanel {
+  background: #fbeaea;
+  border: 1px solid #f2cccc;
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  margin-top: 32px;
+  padding: 16px;
+}
+
+.codeLabel {
+  color: #c94a4a;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 1.1px;
+}
+
+.code {
+  font-size: 28px;
+  letter-spacing: 4px;
+  margin-top: 8px;
+}
+
+.primaryAction,
+.secondaryAction {
+  align-items: center;
+  border-radius: 10px;
+  display: flex;
+  font-size: 16px;
+  font-weight: 600;
+  justify-content: center;
+  min-height: 52px;
+  padding: 0 16px;
+  text-decoration: none;
+}
+
+.primaryAction {
+  background: #e85d5d;
+  color: #ffffff;
+  margin-top: 24px;
+}
+
+.primaryAction:hover {
+  background: #c94a4a;
+}
+
+.secondaryAction {
+  background: #f4f0ee;
+  color: #3a3a3a;
+  margin-top: 32px;
+}
+
+.helper {
+  color: #777777;
+  font-size: 14px;
+  line-height: 1.45;
+  margin: 12px 0 0;
+  text-align: center;
+}
+
+@media (max-height: 620px) {
+  .page {
+    align-items: flex-start;
+  }
+}
