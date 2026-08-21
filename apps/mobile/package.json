@@ -13,16 +13,24 @@
     "web": "expo start --web"
   },
   "dependencies": {
+    "@expo-google-fonts/outfit": "^0.4.3",
     "@repin/types": "workspace:*",
+    "@supabase/supabase-js": "^2.112.3",
     "expo": "~57.0.14",
+    "expo-clipboard": "~57.0.1",
     "expo-constants": "~57.0.12",
+    "expo-font": "^57.0.1",
+    "expo-linear-gradient": "^57.0.1",
     "expo-linking": "~57.0.4",
     "expo-router": "~57.0.9",
+    "expo-sqlite": "~57.0.1",
     "expo-status-bar": "~57.0.1",
     "react": "19.2.3",
     "react-native": "0.86.2",
+    "react-native-reanimated": "4.5.3",
     "react-native-safe-area-context": "~5.7.0",
     "react-native-screens": "~4.26.0",
+    "react-native-url-polyfill": "^4.0.0",
     "react-native-worklets": "0.10.1"
   },
   "devDependencies": {

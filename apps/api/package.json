@@ -12,6 +12,7 @@
     "@repin/db": "workspace:*",
     "@repin/types": "workspace:*",
     "@repin/validation": "workspace:*",
+    "@supabase/supabase-js": "^2.112.3",
     "next": "16.3.1",
     "react": "19.2.3",
     "react-dom": "19.2.3"

@@ -8,6 +8,10 @@ export default function HomePage() {
       <p>
         Database health check: <a href="/api/db-health">/api/db-health</a>
       </p>
+      <p>Authenticated user: GET /api/me with a Supabase bearer token</p>
+      <p>Groups: GET/POST /api/groups and GET /api/groups/:id</p>
+      <p>Workouts: GET/POST /api/groups/:id/workouts</p>
+      <p>Home: GET /api/home</p>
     </main>
   );
 }

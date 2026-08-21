@@ -8,6 +8,41 @@
       "when": 1787090231281,
       "tag": "0000_motionless_firestar",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1787163660366,
+      "tag": "0001_volatile_inhumans",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787172840102,
+      "tag": "0002_thin_slipstream",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1787179017467,
+      "tag": "0003_nebulous_jean_grey",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1787186184374,
+      "tag": "0004_married_liz_osborn",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1787259655830,
+      "tag": "0005_friendly_invite_codes",
+      "breakpoints": true
     }
   ]
 }
