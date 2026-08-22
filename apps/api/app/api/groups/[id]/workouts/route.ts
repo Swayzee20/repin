@@ -15,6 +15,16 @@ export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
+const workoutTypeLabels = {
+  run: "Run",
+  walk: "Walk",
+  strength_training: "Strength Training",
+  powerlifting: "Powerlifting",
+  hiit: "HIIT",
+  functional_fitness: "Functional Fitness",
+  other: "Other",
+} as const;
+
 export async function GET(request: Request, context: RouteContext) {
   try {
     const user = await requireApplicationUser(request);
@@ -55,8 +65,21 @@ export async function POST(request: Request, context: RouteContext) {
     const input = createWorkoutSchema.safeParse(body);
 
     if (!input.success) {
+      if (process.env.NODE_ENV !== "production") {
+        console.error("Workout validation failed", {
+          issues: input.error.issues,
+          payloadShape: describePayloadShape(body),
+        });
+      }
       return NextResponse.json(
         { error: "Workout details are invalid", issues: input.error.issues },
+        { status: 400 },
+      );
+    }
+
+    if (input.data.photoPath && !input.data.photoPath.startsWith(`${user.id}/`)) {
+      return NextResponse.json(
+        { error: "Workout photo path is invalid" },
         { status: 400 },
       );
     }
@@ -66,7 +89,8 @@ export async function POST(request: Request, context: RouteContext) {
       displayName: user.displayName,
       groupId,
       ...input.data,
-      completedAt: new Date(input.data.completedAt),
+      title: input.data.name ?? workoutTypeLabels[input.data.workoutType],
+      occurredAt: new Date(input.data.occurredAt),
     });
 
     if (!workout) {
@@ -80,6 +104,13 @@ export async function POST(request: Request, context: RouteContext) {
   } catch (error) {
     return handleRouteError(error, "Workout could not be created");
   }
+}
+
+function describePayloadShape(body: unknown) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) return typeof body;
+  return Object.fromEntries(
+    Object.entries(body).map(([key, value]) => [key, value === null ? "null" : typeof value]),
+  );
 }
 
 async function readGroupId(context: RouteContext) {
@@ -102,4 +133,3 @@ function handleRouteError(error: unknown, message: string) {
     { status: 503, headers: { "Cache-Control": "no-store" } },
   );
 }
-

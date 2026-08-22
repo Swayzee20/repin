@@ -27,16 +27,34 @@ export interface JoinGroupResponse {
   alreadyMember: boolean;
 }
 
+export const workoutTypes = [
+  "run",
+  "walk",
+  "strength_training",
+  "powerlifting",
+  "hiit",
+  "functional_fitness",
+  "other",
+] as const;
+
+export type WorkoutType = (typeof workoutTypes)[number];
+
 export interface WorkoutFeedItem {
   id: string;
   userId: string;
   groupId: string;
   workoutType: string;
   title: string;
-  durationMinutes: number;
+  name: string | null;
+  durationMinutes: number | null;
+  effort: number | null;
+  caption: string | null;
+  photoPath: string | null;
   notes: string | null;
-  completedAt: string;
-  createdAt: string;
+  occurredAt?: string | null;
+  completedAt?: string | null;
+  createdAt?: string | null;
+  updatedAt: string;
   displayName: string;
 }
 

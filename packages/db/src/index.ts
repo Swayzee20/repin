@@ -299,9 +299,12 @@ export async function createWorkoutForMember(input: {
   groupId: string;
   workoutType: string;
   title: string;
-  durationMinutes: number;
-  notes: string | null;
-  completedAt: Date;
+  name: string | null;
+  durationMinutes: number | null;
+  effort: number | null;
+  caption: string | null;
+  photoPath: string | null;
+  occurredAt: Date;
 }) {
   return getDatabase().transaction(async (transaction) => {
     const [membership] = await transaction
@@ -326,9 +329,14 @@ export async function createWorkoutForMember(input: {
         groupId: input.groupId,
         workoutType: input.workoutType,
         title: input.title,
+        name: input.name,
         durationMinutes: input.durationMinutes,
-        notes: input.notes,
-        completedAt: input.completedAt,
+        effort: input.effort,
+        caption: input.caption,
+        photoPath: input.photoPath,
+        notes: input.caption,
+        completedAt: input.occurredAt,
+        occurredAt: input.occurredAt,
       })
       .returning();
 
@@ -368,16 +376,22 @@ export async function listRecentWorkoutsForMember(input: {
       groupId: schema.workouts.groupId,
       workoutType: schema.workouts.workoutType,
       title: schema.workouts.title,
+      name: schema.workouts.name,
       durationMinutes: schema.workouts.durationMinutes,
+      effort: schema.workouts.effort,
+      caption: schema.workouts.caption,
+      photoPath: schema.workouts.photoPath,
       notes: schema.workouts.notes,
+      occurredAt: schema.workouts.occurredAt,
       completedAt: schema.workouts.completedAt,
       createdAt: schema.workouts.createdAt,
+      updatedAt: schema.workouts.updatedAt,
       displayName: schema.users.displayName,
     })
     .from(schema.workouts)
     .innerJoin(schema.users, eq(schema.workouts.userId, schema.users.id))
     .where(eq(schema.workouts.groupId, input.groupId))
-    .orderBy(desc(schema.workouts.completedAt), desc(schema.workouts.createdAt))
+    .orderBy(desc(schema.workouts.occurredAt), desc(schema.workouts.createdAt))
     .limit(input.limit ?? 30);
 }
 
@@ -396,10 +410,16 @@ export async function getUserWorkoutSnapshot(input: {
         groupId: schema.workouts.groupId,
         workoutType: schema.workouts.workoutType,
         title: schema.workouts.title,
+        name: schema.workouts.name,
         durationMinutes: schema.workouts.durationMinutes,
+        effort: schema.workouts.effort,
+        caption: schema.workouts.caption,
+        photoPath: schema.workouts.photoPath,
         notes: schema.workouts.notes,
+        occurredAt: schema.workouts.occurredAt,
         completedAt: schema.workouts.completedAt,
         createdAt: schema.workouts.createdAt,
+        updatedAt: schema.workouts.updatedAt,
         displayName: schema.users.displayName,
       })
       .from(schema.workouts)
@@ -407,11 +427,11 @@ export async function getUserWorkoutSnapshot(input: {
       .where(
         and(
           eq(schema.workouts.userId, input.userId),
-          gte(schema.workouts.completedAt, input.todayStart),
-          lte(schema.workouts.completedAt, input.now),
+          gte(schema.workouts.occurredAt, input.todayStart),
+          lte(schema.workouts.occurredAt, input.now),
         ),
       )
-      .orderBy(desc(schema.workouts.completedAt))
+      .orderBy(desc(schema.workouts.occurredAt))
       .limit(1),
     database
       .select({ value: count() })
@@ -419,8 +439,8 @@ export async function getUserWorkoutSnapshot(input: {
       .where(
         and(
           eq(schema.workouts.userId, input.userId),
-          gte(schema.workouts.completedAt, input.weekStart),
-          lte(schema.workouts.completedAt, input.now),
+          gte(schema.workouts.occurredAt, input.weekStart),
+          lte(schema.workouts.occurredAt, input.now),
         ),
       ),
   ]);

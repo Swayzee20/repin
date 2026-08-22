@@ -1,4 +1,5 @@
 import {
+  check,
   index,
   integer,
   pgEnum,
@@ -8,6 +9,7 @@ import {
   timestamp,
   uuid,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const users = pgTable("users", {
   id: uuid().primaryKey(),
@@ -70,10 +72,18 @@ export const workouts = pgTable(
       .references(() => groups.id, { onDelete: "cascade" }),
     workoutType: text("workout_type").notNull(),
     title: text().notNull(),
-    durationMinutes: integer("duration_minutes").notNull(),
+    name: text(),
+    durationMinutes: integer("duration_minutes"),
+    effort: integer(),
+    caption: text(),
+    photoPath: text("photo_path"),
     notes: text(),
     completedAt: timestamp("completed_at", { withTimezone: true }).notNull(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
     createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
@@ -82,7 +92,12 @@ export const workouts = pgTable(
       table.groupId,
       table.completedAt,
     ),
+    index("workouts_group_occurred_at_idx").on(
+      table.groupId,
+      table.occurredAt,
+    ),
     index("workouts_user_id_idx").on(table.userId),
+    check("workouts_effort_range_check", sql`${table.effort} is null or ${table.effort} between 1 and 5`),
   ],
 );
 

@@ -1,0 +1,1 @@
+CREATE INDEX "workouts_group_occurred_at_idx" ON "workouts" USING btree ("group_id","occurred_at");

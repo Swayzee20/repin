@@ -13,6 +13,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@repin/types": "workspace:*",
     "zod": "^4.1.5"
   },
   "devDependencies": {
