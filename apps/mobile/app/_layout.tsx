@@ -28,12 +28,7 @@ export default function RootLayout() {
           contentStyle: { backgroundColor: colors.background },
           headerShown: false,
         }}
-      >
-        <Stack.Screen
-          name="community/[groupId]"
-          options={{ animation: "fade", animationDuration: 220 }}
-        />
-      </Stack>
+      />
       <StatusBar style="dark" />
     </>
   );

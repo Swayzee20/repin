@@ -272,20 +272,26 @@ export function WorkoutCard({
       }}
       style={[styles.floatingWorkout, side === "left" ? styles.floatingLeft : styles.floatingRight, animatedStyle]}
     >
-      <Card>
-        <View style={styles.workoutTopline}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{initials(workout.displayName)}</Text></View>
-          <View style={styles.workoutAuthor}>
-            <Text numberOfLines={1} style={styles.author}>{workout.displayName}</Text>
-            <Text style={styles.timestamp}>{formatTime(workout.completedAt)}</Text>
-          </View>
-          <View style={styles.typePill}><Text style={styles.typeText}>{workout.workoutType}</Text></View>
-        </View>
-        <Text style={styles.workoutTitle}>{workout.title}</Text>
-        <Text style={styles.duration}>{workout.durationMinutes} min</Text>
-        {workout.notes ? <Text style={styles.notes}>{workout.notes}</Text> : null}
-      </Card>
+      <WorkoutSummaryCard workout={workout} />
     </Animated.View>
+  );
+}
+
+export function WorkoutSummaryCard({ workout }: { workout: WorkoutFeedItem }) {
+  return (
+    <Card>
+      <View style={styles.workoutTopline}>
+        <View style={styles.avatar}><Text style={styles.avatarText}>{initials(workout.displayName)}</Text></View>
+        <View style={styles.workoutAuthor}>
+          <Text numberOfLines={1} style={styles.author}>{workout.displayName}</Text>
+          <Text style={styles.timestamp}>{formatTime(workout.completedAt)}</Text>
+        </View>
+        <View style={styles.typePill}><Text style={styles.typeText}>{workout.workoutType}</Text></View>
+      </View>
+      <Text style={styles.workoutTitle}>{workout.title}</Text>
+      <Text style={styles.duration}>{workout.durationMinutes} min</Text>
+      {workout.notes ? <Text style={styles.notes}>{workout.notes}</Text> : null}
+    </Card>
   );
 }
 

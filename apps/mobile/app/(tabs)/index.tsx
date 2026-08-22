@@ -1,28 +1,20 @@
-import type { HomeData } from "@repin/types";
+import type { HomeData, WorkoutFeedItem } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
-import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View, type GestureResponderEvent } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { normalizeInviteRedirect } from "../../lib/invite-route";
 import { useMainTabs } from "../../ui/main-tabs-context";
-import { Button, Card, CommunityFeed, LoadingState, StateCard, TextField } from "../../ui/components";
+import { Button, Card, LoadingState, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
-type CommunityBoardZoomSourceProps = {
-  children: (onExpand?: (event: GestureResponderEvent) => void) => ReactNode;
-  onPress?: (event: GestureResponderEvent) => void;
-};
-
-function CommunityBoardZoomSource({ children, onPress }: CommunityBoardZoomSourceProps) {
-  return children(onPress);
-}
-
 export default function HomeScreen() {
   const router = useRouter();
+  const { height: windowHeight } = useWindowDimensions();
   const { setSelectedGroupId: setTabGroupId } = useMainTabs();
   const params = useLocalSearchParams<{ redirect?: string | string[] }>();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
@@ -37,10 +29,6 @@ export default function HomeScreen() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(false);
   const [homeError, setHomeError] = useState<string | null>(null);
-  const [groupName, setGroupName] = useState("");
-  const [creatingGroup, setCreatingGroup] = useState(false);
-  const [showCreateGroup, setShowCreateGroup] = useState(false);
-  const [groupPickerOpen, setGroupPickerOpen] = useState(false);
 
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
@@ -50,7 +38,7 @@ export default function HomeScreen() {
       if (data.session && inviteRedirect) router.replace(inviteRedirect);
     });
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession); setAuthLoading(false); setHomeData(null); setSelectedGroupId(null); setShowCreateGroup(false);
+      setSession(nextSession); setAuthLoading(false); setHomeData(null); setSelectedGroupId(null);
       if (nextSession && inviteRedirect) router.replace(inviteRedirect);
     });
     return () => subscription.subscription.unsubscribe();
@@ -87,21 +75,6 @@ export default function HomeScreen() {
     else if (data.session && inviteRedirect) router.replace(inviteRedirect);
   }, [email, inviteRedirect, password, router]);
 
-  const createGroup = useCallback(async () => {
-    if (!session || !groupName.trim()) return;
-    setCreatingGroup(true); setHomeError(null);
-    try {
-      const response = await fetch(`${apiUrl}/api/groups`, {
-        method: "POST", headers: { Authorization: `Bearer ${session.access_token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ name: groupName }), signal: AbortSignal.timeout(5_000),
-      });
-      const body = (await response.json()) as { error?: string; group?: { id: string } };
-      if (!response.ok || !body.group) throw new Error(body.error ?? "Group could not be created.");
-      setGroupName(""); setShowCreateGroup(false); setSelectedGroupId(body.group.id);
-    } catch (error) { setHomeError(error instanceof Error ? error.message : "Group could not be created."); }
-    finally { setCreatingGroup(false); }
-  }, [groupName, session]);
-
   const selectedGroup = useMemo(() => homeData?.groups.find((group) => group.id === homeData.selectedGroupId), [homeData]);
 
   if (!isSupabaseConfigured) return <Shell><StateCard title="Supabase is not configured" message="Add the Expo public Supabase URL and publishable key to the mobile environment file." /></Shell>;
@@ -130,101 +103,19 @@ export default function HomeScreen() {
   if (homeLoading && !homeData) return <Shell><LoadingState message="Loading your community…" /></Shell>;
   if (homeError && !homeData) return <Shell><StateCard actionLabel="Try again" message={homeError} onAction={() => void loadHome()} title="Home unavailable" /></Shell>;
   if (!homeData) return null;
-
-  const renderCommunityBoard = (onExpand?: (event: GestureResponderEvent) => void) => (
-    <View
-      collapsable={false}
-      style={[
-        styles.communitySection,
-        selectedGroup ? styles.communityBoardSection : styles.communityOnboardingSection,
-      ]}
-    >
-      {homeData.groups.length === 0 ? (
-        <Card style={styles.onboardingCard}>
-          <Text style={styles.onboardingEyebrow}>YOUR COMMUNITY STARTS HERE</Text><Text style={styles.onboardingTitle}>Find your crew</Text>
-          <Text style={styles.bodyMuted}>Join an existing group to train together, or start one of your own.</Text>
-          <Button onPress={() => router.push("./groups/join")}>Join a Group</Button><Button onPress={() => setShowCreateGroup(true)} variant="secondary">Create a Group</Button>
-        </Card>
-      ) : (
-        <View style={styles.boardViewport}>
-          <View pointerEvents="none" style={styles.boardSurface}>
-            <View style={styles.boardToneTop} />
-            <View style={styles.boardToneBottom} />
-          </View>
-          {selectedGroup ? (
-            <View style={styles.boardHeader}>
-              {homeData.groups.length > 1 ? (
-                <Pressable
-                  accessibilityLabel={`Selected group: ${selectedGroup.name}. Change group`}
-                  accessibilityRole="button"
-                  onPress={() => setGroupPickerOpen((value) => !value)}
-                  style={({ pressed }) => [styles.groupSelector, pressed && styles.pressed]}
-                >
-                  <Text numberOfLines={1} style={styles.selectedGroupName}>{selectedGroup.name}</Text>
-                  <Text style={styles.chevron}>{groupPickerOpen ? "▴" : "▾"}</Text>
-                </Pressable>
-              ) : (
-                <Text numberOfLines={1} style={styles.singleGroupName}>{selectedGroup.name}</Text>
-              )}
-              <Pressable
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={onExpand ?? (() => router.push(`/community/${selectedGroup.id}`))}
-              >
-                <Text style={styles.expandLink}>Expand ↗</Text>
-              </Pressable>
-            </View>
-          ) : null}
-          {groupPickerOpen && homeData.groups.length > 1 ? (
-            <View style={styles.groupDrawer}>
-              {homeData.groups.map((group) => {
-                const selected = group.id === homeData.selectedGroupId;
-                return (
-                  <Pressable
-                    accessibilityRole="button"
-                    key={group.id}
-                    onPress={() => {
-                      setSelectedGroupId(group.id);
-                      setTabGroupId(group.id);
-                      setGroupPickerOpen(false);
-                    }}
-                    style={({ pressed }) => [
-                      styles.drawerOption,
-                      selected && styles.drawerOptionSelected,
-                      pressed && styles.pressed,
-                    ]}
-                  >
-                    <View style={styles.optionCopy}>
-                      <Text numberOfLines={1} style={styles.optionName}>{group.name}</Text>
-                      <Text style={styles.optionRole}>{group.role}</Text>
-                    </View>
-                    {selected ? <Text style={styles.checkmark}>✓</Text> : null}
-                  </Pressable>
-                );
-              })}
-            </View>
-          ) : null}
-          {homeLoading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
-          {homeError ? <Text style={styles.error}>{homeError}</Text> : null}
-          {homeData.communityWorkouts.length === 0 ? (
-            <View style={styles.boardEmptyState}>
-              <StateCard title="The board is quiet" message="Log a workout to get the conversation started." />
-            </View>
-          ) : (
-            <CommunityFeed mode="preview" workouts={homeData.communityWorkouts} />
-          )}
-        </View>
-      )}
-    </View>
-  );
+  const latestWorkout = homeData.communityWorkouts[0] ?? null;
+  const highlights = deriveWeeklyHighlights(homeData.communityWorkouts, latestWorkout);
+  const compactDashboard = windowHeight < 760;
+  const visibleHighlights = highlights.slice(0, windowHeight < 850 ? 2 : 3);
 
   return (
-    <Shell>
-      <View style={styles.header}>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={[styles.dashboard, compactDashboard && styles.dashboardCompact]}>
+      <View style={[styles.header, compactDashboard && styles.headerCompact]}>
         <View style={styles.headerCopy}><Text style={styles.brand}>REPIN</Text><Text numberOfLines={1} style={styles.greeting}>Hey, {homeData.user.displayName}</Text></View>
       </View>
 
-      <Card style={styles.snapshot}>
+      <Card style={[styles.snapshot, compactDashboard && styles.snapshotCompact]}>
         <View style={styles.snapshotTop}>
           <View style={[styles.statusIcon, homeData.snapshot.hasWorkoutToday ? styles.doneIcon : styles.pendingIcon]}>
             <Text style={homeData.snapshot.hasWorkoutToday ? styles.doneGlyph : styles.pendingGlyph}>{homeData.snapshot.hasWorkoutToday ? "✓" : "·"}</Text>
@@ -238,26 +129,60 @@ export default function HomeScreen() {
         {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title} · {homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min</Text> : null}
       </Card>
 
-      <Text style={styles.communityTitle}>Community Board</Text>
-      {selectedGroup ? (
-        <Link href={`/community/${selectedGroup.id}`} asChild>
-          <Link.AppleZoom>
-            <CommunityBoardZoomSource>{renderCommunityBoard}</CommunityBoardZoomSource>
-          </Link.AppleZoom>
-        </Link>
-      ) : renderCommunityBoard()}
+      <View style={[styles.communityZone, compactDashboard && styles.communityZoneCompact]}>
+        <Text style={styles.crewEyebrow}>YOUR CREW</Text>
+        <View style={[styles.sectionHeader, compactDashboard && styles.sectionHeaderCompact]}>
+          <Text style={styles.sectionTitle}>Activity</Text>
+          {selectedGroup ? (
+            <Pressable
+              accessibilityRole="button"
+              hitSlop={8}
+              onPress={() => {
+                setTabGroupId(selectedGroup.id);
+                router.navigate("/community");
+              }}
+            >
+              <Text style={styles.sectionAction}>View all</Text>
+            </Pressable>
+          ) : null}
+        </View>
+        {homeLoading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
+        {homeError ? <Text style={styles.error}>{homeError}</Text> : null}
+        {latestWorkout ? (
+          <View style={[styles.latestWorkout, compactDashboard && styles.latestWorkoutCompact]}>
+            <WorkoutSummaryCard workout={latestWorkout} />
+          </View>
+        ) : (
+          <View style={[styles.emptySnapshot, compactDashboard && styles.emptySnapshotCompact]}>
+            <Text style={styles.emptyTitle}>No workouts yet</Text>
+            <Text style={styles.emptyCopy}>Be the first in your group to get some reps in.</Text>
+            {selectedGroup ? (
+              <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push(`/groups/${selectedGroup.id}/log-workout`)}>
+                <Text style={styles.emptyAction}>Log workout</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        )}
 
-      {homeData.groups.length > 0 ? <View style={styles.groupActions}>
-        <Button onPress={() => router.push("./groups/join")}>Join another group</Button>
-        <Pressable accessibilityRole="button" onPress={() => setShowCreateGroup((value) => !value)} style={styles.textAction}><Text style={styles.link}>{showCreateGroup ? "Cancel" : "Create a group"}</Text></Pressable>
-      </View> : null}
-      {homeData.groups.length > 0 || showCreateGroup ? <Card style={styles.createCard}>
-        <Text style={styles.createTitle}>{homeData.groups.length > 0 ? "Create another group" : "Create a group"}</Text>
-        <TextField maxLength={80} onChangeText={setGroupName} placeholder="Group name" value={groupName} />
-        <Button disabled={!groupName.trim()} loading={creatingGroup} onPress={() => void createGroup()}>Create Group</Button>
-      </Card> : null}
-
-    </Shell>
+        <Text style={[styles.highlightsTitle, compactDashboard && styles.highlightsTitleCompact]}>Highlights</Text>
+        {visibleHighlights.length ? (
+          <View>
+            {visibleHighlights.map((highlight, index) => (
+              <View key={highlight.userId} style={[styles.highlightRow, compactDashboard && styles.highlightRowCompact, index < visibleHighlights.length - 1 && styles.highlightDivider]}>
+                <View style={styles.highlightAvatar}><Text style={styles.highlightAvatarText}>{initials(highlight.displayName)}</Text></View>
+                <Text style={styles.highlightMessage}>
+                  <Text style={styles.highlightName}>{highlight.displayName}</Text>
+                  {` logged at least ${highlight.count} workouts this week`}
+                </Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.noHighlights}>No highlights yet. Keep getting those reps in.</Text>
+        )}
+      </View>
+      </View>
+    </SafeAreaView>
   );
 }
 
@@ -265,61 +190,85 @@ function Shell({ children, centered = false, flat = false }: { children: ReactNo
   return <SafeAreaView style={[styles.safeArea, flat && styles.loginBackground]}><ScrollView contentContainerStyle={[styles.container, centered && styles.centered]} keyboardShouldPersistTaps="handled" nestedScrollEnabled style={flat ? styles.loginBackground : undefined}>{children}</ScrollView></SafeAreaView>;
 }
 
+function deriveWeeklyHighlights(
+  workouts: WorkoutFeedItem[],
+  latestWorkout: WorkoutFeedItem | null,
+) {
+  const now = new Date();
+  const weekStart = new Date(now);
+  weekStart.setHours(0, 0, 0, 0);
+  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
+  const counts = new Map<string, { count: number; displayName: string; userId: string }>();
+
+  workouts.forEach((workout) => {
+    const completedAt = new Date(workout.completedAt);
+    if (completedAt < weekStart || completedAt > now) return;
+    const current = counts.get(workout.userId);
+    counts.set(workout.userId, {
+      count: (current?.count ?? 0) + 1,
+      displayName: workout.displayName,
+      userId: workout.userId,
+    });
+  });
+
+  return [...counts.values()]
+    .filter((highlight) => highlight.count >= 2)
+    .sort((left, right) => {
+      const leftIsLatest = left.userId === latestWorkout?.userId ? 1 : 0;
+      const rightIsLatest = right.userId === latestWorkout?.userId ? 1 : 0;
+      return leftIsLatest - rightIsLatest || right.count - left.count;
+    })
+    .slice(0, 3);
+}
+
+function initials(name: string) {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join("") || "R";
+}
+
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 }, centered: { justifyContent: "center" },
+  dashboard: { flex: 1, paddingBottom: spacing.huge + spacing.xxxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
+  dashboardCompact: { paddingBottom: spacing.xxxl * 2, paddingTop: spacing.sm },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
+  headerCompact: { marginBottom: spacing.sm },
   brand: { color: colors.brand, ...type.eyebrow }, greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   snapshot: { backgroundColor: colors.surface, borderColor: colors.border, padding: spacing.lg }, snapshotTop: { alignItems: "center", flexDirection: "row" }, statusIcon: { alignItems: "center", borderRadius: radii.md, height: 40, justifyContent: "center", width: 40 },
+  snapshotCompact: { padding: spacing.md },
   doneIcon: { backgroundColor: colors.brandSoft }, pendingIcon: { backgroundColor: colors.brandSoft }, doneGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 }, pendingGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 24, marginTop: -7 },
   snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 }, snapshotMessage: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: spacing.xs },
   weekStat: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.md, marginLeft: spacing.md, minWidth: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, weekNumber: { color: colors.brand, fontFamily: fonts.bold, fontSize: 26, lineHeight: 30 }, weekLabel: { color: colors.brandPressed, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8 },
   latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 13, marginTop: spacing.md, paddingTop: spacing.md },
-  communitySection: {
-    overflow: "visible",
-  },
-  communityBoardSection: { marginHorizontal: -spacing.sm, paddingTop: spacing.lg },
-  communityOnboardingSection: { padding: spacing.lg },
-  communityTitle: { color: colors.ink, ...type.title, marginTop: spacing.xxl },
-  boardHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md, minHeight: 40, paddingHorizontal: spacing.lg },
-  boardViewport: { borderRadius: radii.xl, minHeight: 320, overflow: "visible" },
-  boardEmptyState: { justifyContent: "center", minHeight: 320 },
-  boardSurface: {
-    backgroundColor: colors.board,
-    borderColor: colors.boardBorder,
-    borderRadius: radii.xl,
-    borderWidth: 1,
-    bottom: 0,
-    left: 0,
-    overflow: "hidden",
-    position: "absolute",
-    right: 0,
-    top: 0,
-  },
-  boardToneTop: { backgroundColor: "rgba(255,255,255,0.40)", borderRadius: 120, height: 180, position: "absolute", right: -70, top: -90, width: 220 },
-  boardToneBottom: { backgroundColor: "rgba(232,93,93,0.045)", borderRadius: 140, bottom: -90, height: 210, left: -90, position: "absolute", width: 250 },
-  link: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
-  expandLink: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 13 },
-  groupSelector: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.boardBorder, borderRadius: radii.pill, borderWidth: 1, flexDirection: "row", flexShrink: 1, marginRight: spacing.md, maxWidth: "78%", minHeight: 36, paddingHorizontal: spacing.md },
-  selectedGroupName: { color: colors.inkSoft, flexShrink: 1, fontFamily: fonts.semibold, fontSize: 14 },
-  chevron: { color: colors.brand, fontFamily: fonts.bold, fontSize: 13, lineHeight: 16, marginLeft: spacing.sm, textAlignVertical: "center" },
-  singleGroupName: { color: colors.ink, flex: 1, fontFamily: fonts.semibold, fontSize: 16, marginRight: spacing.md },
-  groupDrawer: {
-    backgroundColor: colors.surface,
-    borderColor: colors.boardBorder,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    gap: spacing.xs,
-    marginBottom: spacing.md,
-    padding: spacing.xs,
-  },
-  drawerOption: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", minHeight: 52, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  drawerOptionSelected: { backgroundColor: colors.brandSoft },
-  pressed: { opacity: 0.76 }, refreshing: { marginBottom: spacing.md }, error: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
-  onboardingCard: { gap: spacing.md, padding: spacing.xl }, onboardingEyebrow: { color: colors.brand, ...type.eyebrow }, onboardingTitle: { color: colors.ink, ...type.title }, bodyMuted: { color: colors.muted, ...type.body },
-  groupActions: { gap: spacing.sm, marginTop: spacing.xxl }, textAction: { alignItems: "center", justifyContent: "center", minHeight: 44 }, createCard: { gap: spacing.lg, marginTop: spacing.lg }, createTitle: { color: colors.ink, ...type.heading },
+  communityZone: { backgroundColor: "#FAFAFA", marginHorizontal: -spacing.xxl, marginTop: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.sm },
+  communityZoneCompact: { marginTop: spacing.md, paddingTop: spacing.xs },
+  crewEyebrow: { color: colors.brand, ...type.eyebrow },
+  sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xs },
+  sectionHeaderCompact: { marginTop: 0 },
+  sectionTitle: { color: colors.ink, ...type.title },
+  sectionAction: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
+  latestWorkout: { marginTop: spacing.lg },
+  latestWorkoutCompact: { marginTop: spacing.sm },
+  emptySnapshot: { borderBottomColor: colors.border, borderBottomWidth: 1, paddingBottom: spacing.xl, paddingTop: spacing.lg },
+  emptySnapshotCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
+  emptyTitle: { color: colors.ink, ...type.heading },
+  emptyCopy: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
+  emptyAction: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, marginTop: spacing.md },
+  highlightsTitle: { color: colors.ink, ...type.title, marginTop: spacing.xl },
+  highlightsTitleCompact: { marginTop: spacing.xs },
+  highlightRow: { alignItems: "center", flexDirection: "row", minHeight: 64, paddingVertical: spacing.md },
+  highlightRowCompact: { minHeight: 44, paddingVertical: spacing.xs },
+  highlightDivider: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
+  highlightAvatar: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.pill, height: 36, justifyContent: "center", width: 36 },
+  highlightAvatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 11 },
+  highlightMessage: { color: colors.inkSoft, flex: 1, ...type.bodySmall, marginLeft: spacing.md },
+  highlightName: { color: colors.ink, fontFamily: fonts.semibold },
+  noHighlights: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
+  refreshing: { marginTop: spacing.md }, error: { color: colors.danger, ...type.bodySmall, marginTop: spacing.md },
   authIntro: { alignItems: "flex-start", marginBottom: spacing.xxxl, marginTop: spacing.huge }, authBrand: { color: colors.brand, ...type.eyebrow },
   authTitle: { color: colors.ink, ...type.display, marginTop: spacing.xxl }, authCopy: { color: colors.muted, ...type.body, marginTop: spacing.sm }, authForm: { gap: spacing.lg }, authInput: { borderRadius: 9 }, authInputFocused: { borderColor: colors.brand }, authButton: { borderRadius: 10 }, loginBackground: { backgroundColor: colors.surface },
   signupPrompt: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.xxl }, signupCopy: { color: colors.muted, ...type.bodySmall }, signupLink: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
-  optionCopy: { flex: 1 }, optionName: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 }, optionRole: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12, marginTop: spacing.xs, textTransform: "capitalize" },
-  checkmark: { color: colors.brand, fontFamily: fonts.bold, fontSize: 18, marginLeft: spacing.md },
 });
