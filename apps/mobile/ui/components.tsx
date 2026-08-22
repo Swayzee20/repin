@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   SafeAreaView,
   ScrollView,
@@ -23,6 +24,17 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
+
+const webFeedScrollerStyle =
+  Platform.OS === "web"
+    ? ({
+        WebkitOverflowScrolling: "touch",
+        overflowX: "hidden",
+        overflowY: "auto",
+        overscrollBehaviorY: "contain",
+        touchAction: "pan-y",
+      } as ViewStyle)
+    : undefined;
 
 export function Screen({
   children,
@@ -305,7 +317,7 @@ export function CommunityFeed({
         removeClippedSubviews={false}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={mode === "full"}
-        style={styles.feedScroller}
+        style={[styles.feedScroller, webFeedScrollerStyle]}
       >
         {visibleWorkouts.map((workout, index) => (
           <CommunityFeedItem
