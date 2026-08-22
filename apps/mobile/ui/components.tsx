@@ -23,6 +23,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
+import { formatWorkoutDate } from "../lib/workout-date";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
 
 const webFeedScrollerStyle =
@@ -284,12 +285,12 @@ export function WorkoutSummaryCard({ workout }: { workout: WorkoutFeedItem }) {
         <View style={styles.avatar}><Text style={styles.avatarText}>{initials(workout.displayName)}</Text></View>
         <View style={styles.workoutAuthor}>
           <Text numberOfLines={1} style={styles.author}>{workout.displayName}</Text>
-          <Text style={styles.timestamp}>{formatTime(workout.completedAt)}</Text>
+          <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
         <View style={styles.typePill}><Text style={styles.typeText}>{workout.workoutType}</Text></View>
       </View>
       <Text style={styles.workoutTitle}>{workout.title}</Text>
-      <Text style={styles.duration}>{workout.durationMinutes} min</Text>
+      {workout.durationMinutes ? <Text style={styles.duration}>{workout.durationMinutes} min</Text> : null}
       {workout.notes ? <Text style={styles.notes}>{workout.notes}</Text> : null}
     </Card>
   );
@@ -392,15 +393,6 @@ function CommunityFeedItem({
 
 function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "R";
-}
-
-function formatTime(value: string) {
-  const date = new Date(value);
-  const today = new Date();
-  const sameDay = date.toDateString() === today.toDateString();
-  return sameDay
-    ? `Today · ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-    : date.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
 const styles = StyleSheet.create({

@@ -79,7 +79,7 @@ export default function ProfileTabScreen() {
             <Text style={styles.sectionTitle}>Recent Activity</Text>
             <View style={styles.activityRow}>
               <View style={styles.activityMark} />
-              <View style={styles.activityCopy}><Text style={styles.activityTitle}>{data.snapshot.mostRecentWorkoutToday.title}</Text><Text style={styles.activityMeta}>{data.snapshot.mostRecentWorkoutToday.workoutType} · {data.snapshot.mostRecentWorkoutToday.durationMinutes} min</Text></View>
+              <View style={styles.activityCopy}><Text style={styles.activityTitle}>{data.snapshot.mostRecentWorkoutToday.title}</Text><Text style={styles.activityMeta}>{data.snapshot.mostRecentWorkoutToday.workoutType}{data.snapshot.mostRecentWorkoutToday.durationMinutes ? ` · ${data.snapshot.mostRecentWorkoutToday.durationMinutes} min` : ""}</Text></View>
             </View>
           </>
         ) : null}

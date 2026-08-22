@@ -9,7 +9,14 @@
     "newArchEnabled": true,
     "plugins": [
       "expo-router",
-      "expo-sqlite"
+      "expo-sqlite",
+      "@react-native-community/datetimepicker",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Allow RepIn to attach a photo to your workout."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

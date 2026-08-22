@@ -6,6 +6,7 @@ import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, Style
 
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { normalizeInviteRedirect } from "../../lib/invite-route";
+import { resolveWorkoutDate } from "../../lib/workout-date";
 import { useMainTabs } from "../../ui/main-tabs-context";
 import { Button, Card, LoadingState, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
@@ -128,7 +129,7 @@ export default function HomeScreen() {
             </View>
             <View style={styles.weekStat}><Text style={styles.weekNumber}>{homeData.snapshot.workoutsThisWeek}</Text><Text style={styles.weekLabel}>THIS WEEK</Text></View>
           </View>
-          {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title} · {homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min</Text> : null}
+          {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title}{homeData.snapshot.mostRecentWorkoutToday.durationMinutes ? ` · ${homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min` : ""}</Text> : null}
         </Card>
       </View>
 
@@ -204,8 +205,9 @@ function deriveWeeklyHighlights(
   const counts = new Map<string, { count: number; displayName: string; userId: string }>();
 
   workouts.forEach((workout) => {
-    const completedAt = new Date(workout.completedAt);
-    if (completedAt < weekStart || completedAt > now) return;
+    const occurredAt = resolveWorkoutDate(workout);
+    if (!occurredAt) return;
+    if (occurredAt < weekStart || occurredAt > now) return;
     const current = counts.get(workout.userId);
     counts.set(workout.userId, {
       count: (current?.count ?? 0) + 1,
