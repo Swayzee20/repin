@@ -109,25 +109,27 @@ export default function HomeScreen() {
   const visibleHighlights = highlights.slice(0, windowHeight < 850 ? 2 : 3);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView style={[styles.safeArea, styles.homeSafeArea]}>
       <View style={[styles.dashboard, compactDashboard && styles.dashboardCompact]}>
-      <View style={[styles.header, compactDashboard && styles.headerCompact]}>
-        <View style={styles.headerCopy}><Text style={styles.brand}>REPIN</Text><Text numberOfLines={1} style={styles.greeting}>Hey, {homeData.user.displayName}</Text></View>
-      </View>
-
-      <Card style={[styles.snapshot, compactDashboard && styles.snapshotCompact]}>
-        <View style={styles.snapshotTop}>
-          <View style={[styles.statusIcon, homeData.snapshot.hasWorkoutToday ? styles.doneIcon : styles.pendingIcon]}>
-            <Text style={homeData.snapshot.hasWorkoutToday ? styles.doneGlyph : styles.pendingGlyph}>{homeData.snapshot.hasWorkoutToday ? "✓" : "·"}</Text>
-          </View>
-          <View style={styles.snapshotCopy}>
-            <Text style={styles.snapshotStatus}>{homeData.snapshot.hasWorkoutToday ? "Workout logged today" : "Ready when you are"}</Text>
-            <Text numberOfLines={2} style={styles.snapshotMessage}>{homeData.snapshot.message}</Text>
-          </View>
-          <View style={styles.weekStat}><Text style={styles.weekNumber}>{homeData.snapshot.workoutsThisWeek}</Text><Text style={styles.weekLabel}>THIS WEEK</Text></View>
+      <View style={[styles.personalZone, compactDashboard && styles.personalZoneCompact]}>
+        <View style={[styles.header, compactDashboard && styles.headerCompact]}>
+          <View style={styles.headerCopy}><Text style={styles.brand}>REPIN</Text><Text numberOfLines={1} style={styles.greeting}>Hey, {homeData.user.displayName}</Text></View>
         </View>
-        {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title} · {homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min</Text> : null}
-      </Card>
+
+        <Card style={[styles.snapshot, compactDashboard && styles.snapshotCompact]}>
+          <View style={styles.snapshotTop}>
+            <View style={[styles.statusIcon, homeData.snapshot.hasWorkoutToday ? styles.doneIcon : styles.pendingIcon]}>
+              <Text style={homeData.snapshot.hasWorkoutToday ? styles.doneGlyph : styles.pendingGlyph}>{homeData.snapshot.hasWorkoutToday ? "✓" : "·"}</Text>
+            </View>
+            <View style={styles.snapshotCopy}>
+              <Text style={styles.snapshotStatus}>{homeData.snapshot.hasWorkoutToday ? "Workout logged today" : "Ready when you are"}</Text>
+              <Text numberOfLines={2} style={styles.snapshotMessage}>{homeData.snapshot.message}</Text>
+            </View>
+            <View style={styles.weekStat}><Text style={styles.weekNumber}>{homeData.snapshot.workoutsThisWeek}</Text><Text style={styles.weekLabel}>THIS WEEK</Text></View>
+          </View>
+          {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title} · {homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min</Text> : null}
+        </Card>
+      </View>
 
       <View style={[styles.communityZone, compactDashboard && styles.communityZoneCompact]}>
         <Text style={styles.crewEyebrow}>YOUR CREW</Text>
@@ -232,8 +234,11 @@ function initials(name: string) {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 }, centered: { justifyContent: "center" },
-  dashboard: { flex: 1, paddingBottom: spacing.huge + spacing.xxxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
-  dashboardCompact: { paddingBottom: spacing.xxxl * 2, paddingTop: spacing.sm },
+  homeSafeArea: { backgroundColor: "#F7F2F2" },
+  dashboard: { backgroundColor: colors.surface, flex: 1, paddingBottom: spacing.huge + spacing.xxxl, paddingHorizontal: spacing.xxl },
+  dashboardCompact: { paddingBottom: spacing.xxxl * 2 },
+  personalZone: { backgroundColor: "#F7F2F2", marginHorizontal: -spacing.xxl, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
+  personalZoneCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
   headerCompact: { marginBottom: spacing.sm },
   brand: { color: colors.brand, ...type.eyebrow }, greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
@@ -243,8 +248,8 @@ const styles = StyleSheet.create({
   snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 }, snapshotMessage: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: spacing.xs },
   weekStat: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.md, marginLeft: spacing.md, minWidth: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, weekNumber: { color: colors.brand, fontFamily: fonts.bold, fontSize: 26, lineHeight: 30 }, weekLabel: { color: colors.brandPressed, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8 },
   latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 13, marginTop: spacing.md, paddingTop: spacing.md },
-  communityZone: { backgroundColor: "#FAFAFA", marginHorizontal: -spacing.xxl, marginTop: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.sm },
-  communityZoneCompact: { marginTop: spacing.md, paddingTop: spacing.xs },
+  communityZone: { backgroundColor: colors.surface, marginHorizontal: -spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.sm },
+  communityZoneCompact: { paddingTop: spacing.xs },
   crewEyebrow: { color: colors.brand, ...type.eyebrow },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xs },
   sectionHeaderCompact: { marginTop: 0 },
