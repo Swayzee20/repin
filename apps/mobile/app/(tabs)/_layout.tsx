@@ -1,3 +1,4 @@
+import { Feather } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 import { Tabs, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
@@ -7,8 +8,6 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { supabase } from "../../lib/supabase";
 import { MainTabsProvider, useMainTabs } from "../../ui/main-tabs-context";
 import { colors, fonts, radii, spacing } from "../../ui/theme";
-
-const tabIcons = { index: "⌂", community: "◎", profile: "○" } as const;
 
 export default function MainTabsLayout() {
   return (
@@ -54,10 +53,10 @@ function MainTabsNavigator() {
           tabBarActiveTintColor: colors.brand,
           tabBarInactiveTintColor: colors.muted,
           tabBarLabelStyle: styles.tabLabel,
-          tabBarIcon: ({ color, focused }) => (
-            <Text style={[styles.tabIcon, { color }, focused && styles.activeIcon]}>
-              {tabIcons[route.name as keyof typeof tabIcons]}
-            </Text>
+          tabBarIcon: ({ color, focused }) => route.name === "index" ? (
+            <Text style={[styles.tabIcon, { color }, focused && styles.activeIcon]}>⌂</Text>
+          ) : (
+            <Feather color={color} name={route.name === "community" ? "activity" : "user"} size={23} />
           ),
           tabBarStyle: session
             ? [styles.tabBar, { height: tabBarHeight, paddingBottom: insets.bottom }]

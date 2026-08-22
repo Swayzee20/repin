@@ -2,7 +2,7 @@ import type { HomeData, WorkoutFeedItem } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { normalizeInviteRedirect } from "../../lib/invite-route";
@@ -106,12 +106,13 @@ export default function HomeScreen() {
   const latestWorkout = homeData.communityWorkouts[0] ?? null;
   const highlights = deriveWeeklyHighlights(homeData.communityWorkouts, latestWorkout);
   const compactDashboard = windowHeight < 760;
+  const standaloneIosWeb = isStandaloneIosWebApp();
   const visibleHighlights = highlights.slice(0, windowHeight < 850 ? 2 : 3);
 
   return (
     <SafeAreaView style={[styles.safeArea, styles.homeSafeArea]}>
       <View style={[styles.dashboard, compactDashboard && styles.dashboardCompact]}>
-      <View style={[styles.personalZone, compactDashboard && styles.personalZoneCompact]}>
+      <View style={[styles.personalZone, compactDashboard && styles.personalZoneCompact, standaloneIosWeb && styles.personalZoneStandalone]}>
         <View style={[styles.header, compactDashboard && styles.headerCompact]}>
           <View style={styles.headerCopy}><Text style={styles.brand}>REPIN</Text><Text numberOfLines={1} style={styles.greeting}>Hey, {homeData.user.displayName}</Text></View>
         </View>
@@ -232,13 +233,19 @@ function initials(name: string) {
     .join("") || "R";
 }
 
+function isStandaloneIosWebApp() {
+  if (Platform.OS !== "web" || typeof window === "undefined") return false;
+  return (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+}
+
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 }, centered: { justifyContent: "center" },
-  homeSafeArea: { backgroundColor: "#F7F2F2" },
+  homeSafeArea: { backgroundColor: "#F7F2F2", ...Platform.select({ web: { paddingBottom: 0 } }) },
   dashboard: { backgroundColor: colors.surface, flex: 1, paddingBottom: spacing.huge + spacing.xxxl, paddingHorizontal: spacing.xxl },
   dashboardCompact: { paddingBottom: spacing.xxxl * 2 },
   personalZone: { backgroundColor: "#F7F2F2", marginHorizontal: -spacing.xxl, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
   personalZoneCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
+  personalZoneStandalone: { paddingTop: spacing.xxl },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
   headerCompact: { marginBottom: spacing.sm },
   brand: { color: colors.brand, ...type.eyebrow }, greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
