@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "pnpm --filter @repin/mobile run build:web",
+  "buildCommand": "pnpm run build:web",
   "outputDirectory": "dist",
   "rewrites": [
     {
