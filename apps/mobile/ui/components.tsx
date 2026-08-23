@@ -213,12 +213,14 @@ export function WorkoutCard({
   layoutY,
   scrollY,
   side = "left",
+  viewportHeight,
   workout,
 }: {
   focalY: number;
   layoutY: SharedValue<number>;
   scrollY: SharedValue<number>;
   side?: "left" | "right";
+  viewportHeight: number;
   workout: WorkoutFeedItem;
 }) {
   const cardHeight = useSharedValue(160);
@@ -235,7 +237,6 @@ export function WorkoutCard({
       [1, 0],
       Extrapolation.CLAMP,
     );
-    const viewportHeight = focalY / 0.38;
     const scale = reduceMotion ? 1 : interpolate(proximity, [0, 1], [0.9, 1.03]);
     const angleFactor = reduceMotion ? 1 : interpolate(proximity, [0, 1], [1, 0.34]);
     const translateX = reduceMotion
@@ -339,11 +340,13 @@ function WorkoutPhoto({ path }: { path: string }) {
 
 export function CommunityFeed({
   edgeToEdge = false,
+  focusOffsetY = 0,
   mode = "full",
   viewportHeight,
   workouts,
 }: {
   edgeToEdge?: boolean;
+  focusOffsetY?: number;
   mode?: "preview" | "full";
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
@@ -373,12 +376,13 @@ export function CommunityFeed({
       >
         {visibleWorkouts.map((workout, index) => (
           <CommunityFeedItem
-            focalY={resolvedViewportHeight * 0.38}
+            focalY={resolvedViewportHeight * 0.38 - focusOffsetY}
             itemHeights={itemHeights}
             key={workout.id}
             orderedWorkoutIds={orderedWorkoutIds}
             scrollY={scrollY}
             side={index % 2 === 0 ? "left" : "right"}
+            viewportHeight={resolvedViewportHeight}
             workout={workout}
           />
         ))}
@@ -413,6 +417,7 @@ function CommunityFeedItem({
   orderedWorkoutIds,
   scrollY,
   side,
+  viewportHeight,
   workout,
 }: {
   focalY: number;
@@ -420,6 +425,7 @@ function CommunityFeedItem({
   orderedWorkoutIds: string[];
   scrollY: SharedValue<number>;
   side: "left" | "right";
+  viewportHeight: number;
   workout: WorkoutFeedItem;
 }) {
   const measuredLayoutY = useSharedValue(0);
@@ -456,6 +462,7 @@ function CommunityFeedItem({
         layoutY={layoutY}
         scrollY={scrollY}
         side={side}
+        viewportHeight={viewportHeight}
         workout={workout}
       />
     </View>
