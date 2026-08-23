@@ -5,7 +5,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View, type LayoutChange
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
-import { CommunityFeed, LoadingState, StateCard } from "../../ui/components";
+import { BrandHeader, CommunityFeed, LoadingState, StateCard } from "../../ui/components";
 import { useMainTabs } from "../../ui/main-tabs-context";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
@@ -62,7 +62,7 @@ export default function CommunityTabScreen() {
   return (
     <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
       <View style={styles.content}>
-        <Text style={styles.brand}>REPIN</Text>
+        <BrandHeader />
         <Text style={styles.title}>Community</Text>
 
         {selectedGroup ? (
@@ -75,7 +75,6 @@ export default function CommunityTabScreen() {
             >
               <View style={styles.selectorCopy}>
                 <Text numberOfLines={1} style={styles.groupName}>{selectedGroup.name}</Text>
-                <Text style={styles.groupRole}>{selectedGroup.role}</Text>
               </View>
               <Text style={styles.chevron}>{pickerOpen ? "▴" : "▾"}</Text>
             </Pressable>
@@ -99,9 +98,8 @@ export default function CommunityTabScreen() {
             ) : null}
 
             <View style={styles.groupActions}>
-              <Pressable accessibilityRole="button" onPress={() => router.push(`/groups/${selectedGroup.id}`)}><Text style={styles.actionText}>Manage group</Text></Pressable>
-              <Pressable accessibilityRole="button" onPress={() => router.push("/groups/join")}><Text style={styles.actionText}>Join group</Text></Pressable>
-              <Pressable accessibilityRole="button" onPress={() => router.push("/onboarding/create-group")}><Text style={styles.actionText}>Create group</Text></Pressable>
+              <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push(`/groups/${selectedGroup.id}`)}><Text style={styles.actionText}>View group ›</Text></Pressable>
+              <Pressable accessibilityRole="button" onPress={() => router.push(`/groups/${selectedGroup.id}/log-workout`)} style={({ pressed }) => [styles.logWorkoutAction, pressed && styles.logWorkoutActionPressed]}><Text style={styles.logWorkoutActionText}>+ Log workout</Text></Pressable>
             </View>
 
             {loading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
@@ -126,22 +124,23 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
-  brand: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
-  selector: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", marginTop: spacing.xxl, minHeight: 64, paddingVertical: spacing.sm },
+  selector: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", marginTop: spacing.md, minHeight: 52, paddingVertical: spacing.xs },
   selectorCopy: { flex: 1 },
   groupName: { color: colors.ink, ...type.title },
-  groupRole: { color: colors.muted, ...type.label, marginTop: spacing.xs, textTransform: "capitalize" },
   chevron: { color: colors.brand, fontFamily: fonts.bold, fontSize: 16, marginLeft: spacing.md },
   groupDrawer: { backgroundColor: colors.surface, borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: spacing.sm },
   groupOption: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", minHeight: 48, paddingHorizontal: spacing.md },
   selectedOption: { backgroundColor: colors.brandSoft },
   optionName: { color: colors.inkSoft, flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
   check: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 },
-  groupActions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg, marginBottom: spacing.lg, marginTop: spacing.md },
+  groupActions: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md, marginTop: spacing.sm, minHeight: 40 },
   boardArea: { backgroundColor: "#F7F2F2", flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
   emptyBoardContent: { padding: spacing.lg },
   actionText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
+  logWorkoutAction: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.sm, justifyContent: "center", minHeight: 36, paddingHorizontal: spacing.md },
+  logWorkoutActionPressed: { backgroundColor: colors.brandPressed },
+  logWorkoutActionText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 13 },
   refreshing: { marginBottom: spacing.md },
   error: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
   pressed: { opacity: 0.72 },

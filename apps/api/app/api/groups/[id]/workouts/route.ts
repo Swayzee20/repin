@@ -10,6 +10,7 @@ import {
   requireApplicationUser,
 } from "../../../../../lib/supabase-auth";
 import { addAuthorizedWorkoutPhotoUrls } from "../../../../../lib/workout-photos";
+import { withResolvedDisplayName } from "../../../../../lib/user-display";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -44,7 +45,9 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
-    const workoutsWithPhotoUrls = await addAuthorizedWorkoutPhotoUrls(workouts);
+    const workoutsWithPhotoUrls = (await addAuthorizedWorkoutPhotoUrls(workouts)).map(
+      withResolvedDisplayName,
+    );
 
     return NextResponse.json(
       { workouts: workoutsWithPhotoUrls },
@@ -101,7 +104,7 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     return NextResponse.json(
-      { workout },
+      { workout: withResolvedDisplayName(workout) },
       { status: 201, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

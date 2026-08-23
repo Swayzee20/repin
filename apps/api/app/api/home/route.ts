@@ -11,6 +11,7 @@ import {
   requireApplicationUser,
 } from "../../../lib/supabase-auth";
 import { addAuthorizedWorkoutPhotoUrls } from "../../../lib/workout-photos";
+import { withResolvedDisplayName } from "../../../lib/user-display";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -53,17 +54,21 @@ export async function GET(request: Request) {
           limit: 20,
         })) ?? [])
       : [];
-    const communityWorkouts = await addAuthorizedWorkoutPhotoUrls(
+    const communityWorkouts = (await addAuthorizedWorkoutPhotoUrls(
       authorizedCommunityWorkouts,
-    );
+    )).map(withResolvedDisplayName);
     const hasWorkoutToday = Boolean(workoutSnapshot.mostRecentWorkoutToday);
+    const mostRecentWorkoutToday = workoutSnapshot.mostRecentWorkoutToday
+      ? withResolvedDisplayName(workoutSnapshot.mostRecentWorkoutToday)
+      : null;
 
     return NextResponse.json(
       {
-        user,
+        user: withResolvedDisplayName(user),
         snapshot: {
           hasWorkoutToday,
           ...workoutSnapshot,
+          mostRecentWorkoutToday,
           message: getSnapshotMessage(
             hasWorkoutToday,
             workoutSnapshot.workoutsThisWeek,

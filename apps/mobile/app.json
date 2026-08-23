@@ -3,6 +3,7 @@
     "name": "RepIn",
     "slug": "repin",
     "version": "1.0.0",
+    "icon": "./assets/branding/repin-app-icon.png",
     "orientation": "portrait",
     "scheme": "repin",
     "userInterfaceStyle": "automatic",
@@ -16,6 +17,15 @@
         {
           "photosPermission": "Allow RepIn to attach a photo to your workout."
         }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#FFFFFF",
+          "image": "./assets/branding/repin-splash-logo.png",
+          "imageWidth": 280,
+          "resizeMode": "contain"
+        }
       ]
     ],
     "experiments": {
@@ -26,10 +36,15 @@
       "bundleIdentifier": "com.repin.mobile"
     },
     "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/branding/repin-app-icon.png"
+      },
       "package": "com.repin.mobile"
     },
     "web": {
       "bundler": "metro",
+      "favicon": "./assets/branding/repin-app-icon.png",
       "output": "single"
     }
   }

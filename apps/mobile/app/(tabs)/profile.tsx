@@ -1,10 +1,10 @@
-import type { HomeData } from "@repin/types";
+import { getUserInitials, resolveUserDisplayName, type HomeData } from "@repin/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
-import { LoadingState, StateCard } from "../../ui/components";
+import { BrandHeader, LoadingState, StateCard } from "../../ui/components";
 import { useMainTabs } from "../../ui/main-tabs-context";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
@@ -43,7 +43,8 @@ export default function ProfileTabScreen() {
 
   useFocusEffect(useCallback(() => { void loadProfile(); }, [loadProfile]));
 
-  const initials = useMemo(() => data?.user.displayName.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "R", [data]);
+  const displayName = useMemo(() => resolveUserDisplayName({ displayName: data?.user.displayName }), [data]);
+  const initials = useMemo(() => getUserInitials({ displayName: data?.user.displayName }), [data]);
 
   if (loading && !data) return <SafeAreaView style={styles.safeArea}><LoadingState message="Loading profile…" /></SafeAreaView>;
   if (error && !data) return <SafeAreaView style={styles.safeArea}><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadProfile()} title="Profile unavailable" /></View></SafeAreaView>;
@@ -53,12 +54,12 @@ export default function ProfileTabScreen() {
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.topRow}>
-          <Text style={styles.brand}>REPIN</Text>
+          <BrandHeader />
           <Pressable accessibilityLabel="Settings" accessibilityRole="button" hitSlop={10} onPress={() => router.push("../settings")}><Text style={styles.settings}>⚙</Text></Pressable>
         </View>
         <View style={styles.identity}>
           <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
-          <Text style={styles.name}>{data.user.displayName}</Text>
+          <Text style={styles.name}>{displayName}</Text>
           <Text style={styles.memberSince}>Training with RepIn since {new Date(data.user.createdAt).getFullYear()}</Text>
         </View>
 
@@ -112,7 +113,6 @@ const styles = StyleSheet.create({
   content: { padding: spacing.xxl, paddingBottom: 160 },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   topRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  brand: { color: colors.brand, ...type.eyebrow },
   settings: { color: colors.inkSoft, fontFamily: fonts.regular, fontSize: 23 },
   identity: { alignItems: "center", marginTop: spacing.xxl },
   avatar: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.pill, height: 82, justifyContent: "center", width: 82 },

@@ -3,6 +3,55 @@ export interface HealthResponse {
   timestamp: string;
 }
 
+export interface UserDisplayNameInput {
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null;
+  email?: string | null;
+}
+
+const namePartPattern = /^[\p{L}\p{M}][\p{L}\p{M}\p{N}'’-]*$/u;
+
+export function resolveUserDisplayName(input: UserDisplayNameInput) {
+  const firstName = cleanNameValue(input.firstName);
+  const lastName = cleanNameValue(input.lastName);
+
+  if (firstName) {
+    return lastName ? `${firstName} ${firstCharacter(lastName).toLocaleUpperCase()}.` : firstName;
+  }
+
+  const displayName = cleanNameValue(input.displayName);
+  if (displayName) {
+    if (displayName === "RepIn member") return displayName;
+
+    const parts = displayName.split(/\s+/);
+    if (parts.length >= 2 && parts.every((part) => namePartPattern.test(part))) {
+      return `${parts[0]} ${firstCharacter(parts.at(-1) ?? "").toLocaleUpperCase()}.`;
+    }
+
+    return displayName;
+  }
+
+  const email = cleanNameValue(input.email);
+  const emailPrefix = email?.split("@")[0]?.trim();
+  return emailPrefix || "RepIn member";
+}
+
+export function getUserInitials(input: UserDisplayNameInput) {
+  const displayName = resolveUserDisplayName(input);
+  const parts = displayName.split(/\s+/).filter(Boolean).slice(0, 2);
+  return parts.map((part) => firstCharacter(part).toLocaleUpperCase()).join("") || "R";
+}
+
+function cleanNameValue(value: string | null | undefined) {
+  const cleaned = value?.trim().replace(/\s+/g, " ");
+  return cleaned || undefined;
+}
+
+function firstCharacter(value: string) {
+  return Array.from(value)[0] ?? "";
+}
+
 export type GroupRole = "owner" | "member";
 
 export interface GroupSummary {

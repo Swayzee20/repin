@@ -1,4 +1,4 @@
-import type { WorkoutFeedItem } from "@repin/types";
+import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { useState, type ReactNode } from "react";
 import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
@@ -25,6 +25,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
+import repinHeaderMark from "../assets/branding/repin-header-mark.png";
 import { formatWorkoutDate } from "../lib/workout-date";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
 
@@ -38,6 +39,20 @@ const webFeedScrollerStyle =
         touchAction: "pan-y",
       } as ViewStyle)
     : undefined;
+
+export function BrandHeader() {
+  return (
+    <View style={styles.brandHeader}>
+      <Image
+        accessible={false}
+        resizeMode="contain"
+        source={repinHeaderMark}
+        style={styles.brandHeaderMark}
+      />
+      <Text style={styles.brandHeaderText}>REPIN</Text>
+    </View>
+  );
+}
 
 export function Screen({
   children,
@@ -288,6 +303,7 @@ export function WorkoutSummaryCard({
   variant?: "compact" | "full";
   workout: WorkoutFeedItem;
 }) {
+  const displayName = resolveUserDisplayName({ displayName: workout.displayName });
   const typeLabel = formatWorkoutType(workout.workoutType);
   const canonicalName = workout.name?.trim();
   const legacyTitle = workout.title?.trim();
@@ -295,16 +311,16 @@ export function WorkoutSummaryCard({
   const showTypeChip = Boolean(typeLabel && normalizeLabel(title) !== normalizeLabel(typeLabel));
   const duration = workout.durationMinutes && workout.durationMinutes > 0 ? `${workout.durationMinutes} min` : null;
   const effort = workout.effort && workout.effort >= 1 && workout.effort <= 5
-    ? `${"🔥".repeat(workout.effort)} ${effortLabels[workout.effort - 1]}`
+    ? "🔥".repeat(workout.effort)
     : null;
   const caption = workout.caption?.trim() || workout.notes?.trim();
 
   return (
     <Card style={variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard}>
       <View style={styles.workoutTopline}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>{initials(workout.displayName)}</Text></View>
+        <View style={styles.avatar}><Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text></View>
         <View style={styles.workoutAuthor}>
-          <Text numberOfLines={1} style={styles.author}>{workout.displayName}</Text>
+          <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
           <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
         {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
@@ -448,11 +464,6 @@ function CommunityFeedItem({
   );
 }
 
-function initials(name: string) {
-  return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "R";
-}
-
-const effortLabels = ["Light work", "Felt good", "Solid work", "That was tough", "How am I alive?"];
 const workoutTypeLabels: Record<string, string> = {
   run: "Run",
   walk: "Walk",
@@ -473,6 +484,9 @@ function normalizeLabel(value: string) {
 }
 
 const styles = StyleSheet.create({
+  brandHeader: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
+  brandHeaderMark: { height: 16, width: 27 },
+  brandHeaderText: { color: colors.brand, ...type.eyebrow },
   safeArea: { backgroundColor: colors.background, flex: 1 },
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
   transformedScreenContent: { overflow: "visible", paddingBottom: 96 },

@@ -2,6 +2,7 @@ import {
   AuthenticationError,
   requireApplicationUser,
 } from "../../../lib/supabase-auth";
+import { withResolvedDisplayName } from "../../../lib/user-display";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export async function GET(request: Request) {
     const user = await requireApplicationUser(request);
 
     return NextResponse.json(
-      { user },
+      { user: withResolvedDisplayName(user) },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getOrCreateUser } from "@repin/db";
+import { resolveUserDisplayName } from "@repin/types";
 import { createClient } from "@supabase/supabase-js";
 
 export class AuthenticationError extends Error {
@@ -67,16 +68,12 @@ function getSuggestedDisplayName(claims: Record<string, unknown>) {
     readMetadataString(metadata, "full_name") ??
     readMetadataString(metadata, "name");
 
-  if (metadataName) {
-    return metadataName;
-  }
-
-  if (typeof claims.email === "string") {
-    const emailName = claims.email.split("@")[0]?.trim();
-    if (emailName) return emailName;
-  }
-
-  return "RepIn member";
+  return resolveUserDisplayName({
+    firstName: readMetadataString(metadata, "first_name"),
+    lastName: readMetadataString(metadata, "last_name"),
+    displayName: metadataName,
+    email: typeof claims.email === "string" ? claims.email : undefined,
+  });
 }
 
 export async function requireAuthenticatedUser(request: Request) {

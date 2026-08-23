@@ -1,4 +1,4 @@
-import type { HomeData, WorkoutFeedItem } from "@repin/types";
+import { getUserInitials, resolveUserDisplayName, type HomeData, type WorkoutFeedItem } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
@@ -8,7 +8,7 @@ import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { normalizeInviteRedirect } from "../../lib/invite-route";
 import { resolveWorkoutDate } from "../../lib/workout-date";
 import { useMainTabs } from "../../ui/main-tabs-context";
-import { Button, Card, LoadingState, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
+import { BrandHeader, Button, Card, LoadingState, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -115,7 +115,7 @@ export default function HomeScreen() {
       <View style={[styles.dashboard, compactDashboard && styles.dashboardCompact]}>
       <View style={[styles.personalZone, compactDashboard && styles.personalZoneCompact, standaloneIosWeb && styles.personalZoneStandalone]}>
         <View style={[styles.header, compactDashboard && styles.headerCompact]}>
-          <View style={styles.headerCopy}><Text style={styles.brand}>REPIN</Text><Text numberOfLines={1} style={styles.greeting}>Hey, {homeData.user.displayName}</Text></View>
+          <View style={styles.headerCopy}><BrandHeader /><Text numberOfLines={1} style={styles.greeting}>Hey, {resolveUserDisplayName({ displayName: homeData.user.displayName })}</Text></View>
         </View>
 
         <Card style={[styles.snapshot, compactDashboard && styles.snapshotCompact]}>
@@ -173,9 +173,9 @@ export default function HomeScreen() {
           <View>
             {visibleHighlights.map((highlight, index) => (
               <View key={highlight.userId} style={[styles.highlightRow, compactDashboard && styles.highlightRowCompact, index < visibleHighlights.length - 1 && styles.highlightDivider]}>
-                <View style={styles.highlightAvatar}><Text style={styles.highlightAvatarText}>{initials(highlight.displayName)}</Text></View>
+                <View style={styles.highlightAvatar}><Text style={styles.highlightAvatarText}>{getUserInitials({ displayName: highlight.displayName })}</Text></View>
                 <Text style={styles.highlightMessage}>
-                  <Text style={styles.highlightName}>{highlight.displayName}</Text>
+                  <Text style={styles.highlightName}>{resolveUserDisplayName({ displayName: highlight.displayName })}</Text>
                   {` logged at least ${highlight.count} workouts this week`}
                 </Text>
               </View>
@@ -226,15 +226,6 @@ function deriveWeeklyHighlights(
     .slice(0, 3);
 }
 
-function initials(name: string) {
-  return name
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
-    .join("") || "R";
-}
-
 function isStandaloneIosWebApp() {
   if (Platform.OS !== "web" || typeof window === "undefined") return false;
   return (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -250,7 +241,7 @@ const styles = StyleSheet.create({
   personalZoneStandalone: { paddingTop: spacing.xxl },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
   headerCompact: { marginBottom: spacing.sm },
-  brand: { color: colors.brand, ...type.eyebrow }, greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
+  greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   snapshot: { backgroundColor: colors.surface, borderColor: colors.border, padding: spacing.lg }, snapshotTop: { alignItems: "center", flexDirection: "row" }, statusIcon: { alignItems: "center", borderRadius: radii.md, height: 40, justifyContent: "center", width: 40 },
   snapshotCompact: { padding: spacing.md },
   doneIcon: { backgroundColor: colors.brandSoft }, pendingIcon: { backgroundColor: colors.brandSoft }, doneGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 }, pendingGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 24, marginTop: -7 },
