@@ -107,9 +107,9 @@ export default function CommunityTabScreen() {
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <View onLayout={handleBoardLayout} style={styles.boardArea}>
               {data?.communityWorkouts.length ? (
-                boardHeight > 0 ? <CommunityFeed mode="full" viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
+                boardHeight > 0 ? <CommunityFeed edgeToEdge mode="full" viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
               ) : (
-                <StateCard title="The board is quiet" message="Log a workout to get the conversation started." />
+                <View style={styles.emptyBoardContent}><StateCard title="The board is quiet" message="Log a workout to get the conversation started." /></View>
               )}
             </View>
           </>
@@ -123,7 +123,7 @@ export default function CommunityTabScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  content: { flex: 1, paddingBottom: 46 + spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
+  content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   brand: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
@@ -138,7 +138,8 @@ const styles = StyleSheet.create({
   optionName: { color: colors.inkSoft, flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
   check: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 },
   groupActions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg, marginBottom: spacing.lg, marginTop: spacing.md },
-  boardArea: { flex: 1, marginHorizontal: -spacing.md, minHeight: 0 },
+  boardArea: { backgroundColor: "#F7F2F2", flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
+  emptyBoardContent: { padding: spacing.lg },
   actionText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
   refreshing: { marginBottom: spacing.md },
   error: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },

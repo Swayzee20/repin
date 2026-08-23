@@ -19,6 +19,7 @@ import Animated, {
   interpolate,
   useAnimatedScrollHandler,
   useAnimatedStyle,
+  useDerivedValue,
   useReducedMotion,
   useSharedValue,
   type SharedValue,
@@ -337,10 +338,12 @@ function WorkoutPhoto({ path }: { path: string }) {
 }
 
 export function CommunityFeed({
+  edgeToEdge = false,
   mode = "full",
   viewportHeight,
   workouts,
 }: {
+  edgeToEdge?: boolean;
   mode?: "preview" | "full";
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
@@ -348,12 +351,14 @@ export function CommunityFeed({
   const resolvedViewportHeight = viewportHeight ?? (mode === "preview" ? 320 : 340);
   const visibleWorkouts = mode === "preview" ? workouts.slice(0, 4) : workouts;
   const scrollY = useSharedValue(0);
+  const itemHeights = useSharedValue<Record<string, number>>({});
+  const orderedWorkoutIds = visibleWorkouts.map((workout) => workout.id);
   const scrollHandler = useAnimatedScrollHandler({
     onScroll: (event) => { scrollY.value = event.contentOffset.y; },
   });
 
   return (
-    <View style={[styles.feedViewport, { height: resolvedViewportHeight }]}>
+    <View style={[styles.feedViewport, edgeToEdge && styles.edgeToEdgeFeedViewport, { height: resolvedViewportHeight }]}>
       <Animated.ScrollView
         contentContainerStyle={styles.feedContent}
         directionalLockEnabled
@@ -369,7 +374,9 @@ export function CommunityFeed({
         {visibleWorkouts.map((workout, index) => (
           <CommunityFeedItem
             focalY={resolvedViewportHeight * 0.38}
+            itemHeights={itemHeights}
             key={workout.id}
+            orderedWorkoutIds={orderedWorkoutIds}
             scrollY={scrollY}
             side={index % 2 === 0 ? "left" : "right"}
             workout={workout}
@@ -402,21 +409,45 @@ export function CommunityFeed({
 
 function CommunityFeedItem({
   focalY,
+  itemHeights,
+  orderedWorkoutIds,
   scrollY,
   side,
   workout,
 }: {
   focalY: number;
+  itemHeights: SharedValue<Record<string, number>>;
+  orderedWorkoutIds: string[];
   scrollY: SharedValue<number>;
   side: "left" | "right";
   workout: WorkoutFeedItem;
 }) {
-  const layoutY = useSharedValue(0);
+  const measuredLayoutY = useSharedValue(0);
+  const workoutIndex = orderedWorkoutIds.indexOf(workout.id);
+  const layoutY = useDerivedValue(() => {
+    let cumulativeY = spacing.xxl;
+
+    for (let index = 0; index < workoutIndex; index += 1) {
+      const precedingId = orderedWorkoutIds[index];
+      if (!precedingId) return measuredLayoutY.value;
+      const precedingHeight = itemHeights.value[precedingId];
+      if (precedingHeight === undefined) return measuredLayoutY.value;
+      cumulativeY += precedingHeight;
+    }
+
+    return cumulativeY;
+  });
 
   return (
     <View
       collapsable={false}
-      onLayout={(event) => { layoutY.value = event.nativeEvent.layout.y; }}
+      onLayout={(event) => {
+        const { height, y } = event.nativeEvent.layout;
+        measuredLayoutY.value = y;
+        if (itemHeights.value[workout.id] !== height) {
+          itemHeights.value = { ...itemHeights.value, [workout.id]: height };
+        }
+      }}
       renderToHardwareTextureAndroid
       style={styles.feedSlot}
     >
@@ -523,6 +554,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "100%",
   },
+  edgeToEdgeFeedViewport: { backgroundColor: "#F7F2F2", borderRadius: 0 },
   feedScroller: { overflow: "visible" },
   feedContent: { paddingBottom: 132, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
   feedSlot: { minWidth: 0, overflow: "visible", paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },
