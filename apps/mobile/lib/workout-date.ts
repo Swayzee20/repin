@@ -16,7 +16,16 @@ export function formatWorkoutDate(workout: WorkoutFeedItem) {
   if (!date) return "Date unavailable";
 
   const today = new Date();
-  return date.toDateString() === today.toDateString()
-    ? `Today · ${date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`
-    : date.toLocaleDateString([], { month: "short", day: "numeric" });
+  const yesterday = new Date(today);
+  yesterday.setDate(today.getDate() - 1);
+  const time = date.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+
+  if (date.toDateString() === today.toDateString()) return `Today, ${time}`;
+  if (date.toDateString() === yesterday.toDateString()) return `Yesterday, ${time}`;
+
+  return date.toLocaleDateString([], {
+    month: "short",
+    day: "numeric",
+    year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
+  });
 }

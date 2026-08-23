@@ -1,7 +1,7 @@
 import type { HomeData } from "@repin/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 
 import { supabase } from "../../lib/supabase";
 import { CommunityFeed, LoadingState, StateCard } from "../../ui/components";
@@ -17,6 +17,7 @@ export default function CommunityTabScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [boardHeight, setBoardHeight] = useState(0);
 
   const loadCommunity = useCallback(async () => {
     setLoading(true);
@@ -49,12 +50,17 @@ export default function CommunityTabScreen() {
     [data],
   );
 
+  const handleBoardLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextHeight = Math.floor(event.nativeEvent.layout.height);
+    setBoardHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
+  }, []);
+
   if (loading && !data) return <SafeAreaView style={styles.safeArea}><LoadingState message="Loading Community…" /></SafeAreaView>;
   if (error && !data) return <SafeAreaView style={styles.safeArea}><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" /></View></SafeAreaView>;
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} nestedScrollEnabled>
+      <View style={styles.content}>
         <Text style={styles.brand}>REPIN</Text>
         <Text style={styles.title}>Community</Text>
 
@@ -99,23 +105,25 @@ export default function CommunityTabScreen() {
 
             {loading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
             {error ? <Text style={styles.error}>{error}</Text> : null}
-            {data?.communityWorkouts.length ? (
-              <CommunityFeed mode="full" workouts={data.communityWorkouts} />
-            ) : (
-              <StateCard title="The board is quiet" message="Log a workout to get the conversation started." />
-            )}
+            <View onLayout={handleBoardLayout} style={styles.boardArea}>
+              {data?.communityWorkouts.length ? (
+                boardHeight > 0 ? <CommunityFeed mode="full" viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
+              ) : (
+                <StateCard title="The board is quiet" message="Log a workout to get the conversation started." />
+              )}
+            </View>
           </>
         ) : (
           <StateCard actionLabel="Join a group" message="Join or create a group to start training with your community." onAction={() => router.push("/groups/join")} title="Find your crew" />
         )}
-      </ScrollView>
+      </View>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  content: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 },
+  content: { flex: 1, paddingBottom: 46 + spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   brand: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
@@ -130,6 +138,7 @@ const styles = StyleSheet.create({
   optionName: { color: colors.inkSoft, flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
   check: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 },
   groupActions: { flexDirection: "row", flexWrap: "wrap", gap: spacing.lg, marginBottom: spacing.lg, marginTop: spacing.md },
+  boardArea: { flex: 1, marginHorizontal: -spacing.md, minHeight: 0 },
   actionText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
   refreshing: { marginBottom: spacing.md },
   error: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },

@@ -154,7 +154,7 @@ export default function HomeScreen() {
         {homeError ? <Text style={styles.error}>{homeError}</Text> : null}
         {latestWorkout ? (
           <View style={[styles.latestWorkout, compactDashboard && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard workout={latestWorkout} />
+            <WorkoutSummaryCard variant="compact" workout={latestWorkout} />
           </View>
         ) : (
           <View style={[styles.emptySnapshot, compactDashboard && styles.emptySnapshotCompact]}>

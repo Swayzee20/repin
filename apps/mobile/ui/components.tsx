@@ -1,9 +1,10 @@
 import type { WorkoutFeedItem } from "@repin/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
+  Image,
   Platform,
   Pressable,
   SafeAreaView,
@@ -24,6 +25,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { formatWorkoutDate } from "../lib/workout-date";
+import { supabase } from "../lib/supabase";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
 
 const webFeedScrollerStyle =
@@ -273,27 +275,65 @@ export function WorkoutCard({
       }}
       style={[styles.floatingWorkout, side === "left" ? styles.floatingLeft : styles.floatingRight, animatedStyle]}
     >
-      <WorkoutSummaryCard workout={workout} />
+      <WorkoutSummaryCard variant="full" workout={workout} />
     </Animated.View>
   );
 }
 
-export function WorkoutSummaryCard({ workout }: { workout: WorkoutFeedItem }) {
+export function WorkoutSummaryCard({
+  variant = "full",
+  workout,
+}: {
+  variant?: "compact" | "full";
+  workout: WorkoutFeedItem;
+}) {
+  const typeLabel = formatWorkoutType(workout.workoutType);
+  const canonicalName = workout.name?.trim();
+  const legacyTitle = workout.title?.trim();
+  const title = canonicalName || legacyTitle || typeLabel;
+  const showTypeChip = Boolean(typeLabel && normalizeLabel(title) !== normalizeLabel(typeLabel));
+  const duration = workout.durationMinutes && workout.durationMinutes > 0 ? `${workout.durationMinutes} min` : null;
+  const effort = workout.effort && workout.effort >= 1 && workout.effort <= 5
+    ? `${"🔥".repeat(workout.effort)} ${effortLabels[workout.effort - 1]}`
+    : null;
+  const caption = workout.caption?.trim() || workout.notes?.trim();
+
   return (
-    <Card>
+    <Card style={variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard}>
       <View style={styles.workoutTopline}>
         <View style={styles.avatar}><Text style={styles.avatarText}>{initials(workout.displayName)}</Text></View>
         <View style={styles.workoutAuthor}>
           <Text numberOfLines={1} style={styles.author}>{workout.displayName}</Text>
           <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
-        <View style={styles.typePill}><Text style={styles.typeText}>{workout.workoutType}</Text></View>
+        {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
       </View>
-      <Text style={styles.workoutTitle}>{workout.title}</Text>
-      {workout.durationMinutes ? <Text style={styles.duration}>{workout.durationMinutes} min</Text> : null}
-      {workout.notes ? <Text style={styles.notes}>{workout.notes}</Text> : null}
+      <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
+      {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
+      {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
+      {workout.photoPath && variant === "full" ? <WorkoutPhoto path={workout.photoPath} /> : null}
     </Card>
   );
+}
+
+function WorkoutPhoto({ path }: { path: string }) {
+  const [uri, setUri] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    setUri(null);
+
+    void supabase?.storage
+      .from("workout-photos")
+      .createSignedUrl(path, 60 * 60)
+      .then(({ data, error }) => {
+        if (active && !error) setUri(data.signedUrl);
+      });
+
+    return () => { active = false; };
+  }, [path]);
+
+  return uri ? <Image accessibilityLabel="Workout photo" resizeMode="cover" source={{ uri }} style={styles.workoutPhoto} /> : null;
 }
 
 export function CommunityFeed({
@@ -395,6 +435,26 @@ function initials(name: string) {
   return name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]?.toUpperCase()).join("") || "R";
 }
 
+const effortLabels = ["Light work", "Felt good", "Solid work", "That was tough", "How am I alive?"];
+const workoutTypeLabels: Record<string, string> = {
+  run: "Run",
+  walk: "Walk",
+  strength_training: "Strength Training",
+  powerlifting: "Powerlifting",
+  hiit: "HIIT",
+  functional_fitness: "Functional Fitness",
+  other: "Other",
+};
+
+function formatWorkoutType(value: string) {
+  const fallback = value.split("_").filter(Boolean).map((word) => `${word[0]?.toUpperCase() ?? ""}${word.slice(1)}`).join(" ");
+  return workoutTypeLabels[value] ?? (fallback || "Workout");
+}
+
+function normalizeLabel(value: string) {
+  return value.trim().replace(/[_\s]+/g, " ").toLowerCase();
+}
+
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
@@ -428,16 +488,20 @@ const styles = StyleSheet.create({
   stateAction: { alignSelf: "flex-start", marginTop: spacing.sm },
   loadingState: { alignItems: "center", flex: 1, gap: spacing.md, justifyContent: "center", minHeight: 300 },
   workoutTopline: { alignItems: "center", flexDirection: "row" },
+  compactWorkoutCard: { padding: spacing.lg },
+  fullWorkoutCard: { padding: spacing.lg },
   avatar: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.pill, height: 38, justifyContent: "center", width: 38 },
   avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 12 },
   workoutAuthor: { flex: 1, marginLeft: spacing.md },
   author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15 },
   timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
-  typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, paddingHorizontal: 10, paddingVertical: 6 },
-  typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11, textTransform: "capitalize" },
+  typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
   workoutTitle: { color: colors.ink, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25, marginTop: spacing.lg },
-  duration: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13, marginTop: spacing.xs },
-  notes: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
+  compactWorkoutTitle: { marginTop: spacing.md },
+  workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },
+  caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
+  workoutPhoto: { aspectRatio: 16 / 10, borderRadius: radii.md, marginTop: spacing.md, width: "100%" },
   floatingWorkout: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,

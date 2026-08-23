@@ -36,6 +36,8 @@ export default function LogWorkoutScreen() {
   const [webTime, setWebTime] = useState(() => getLocalDateParts(new Date()).time);
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
   const [showPicker, setShowPicker] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+  const [durationTouched, setDurationTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -43,6 +45,13 @@ export default function LogWorkoutScreen() {
   const parsedDuration = duration.trim() ? Number(duration) : null;
   const durationValid = parsedDuration === null || (Number.isInteger(parsedDuration) && parsedDuration > 0 && parsedDuration <= 1_440);
   const canSubmit = Boolean(workoutType) && durationValid && (!durationRequired || parsedDuration !== null);
+  const durationError = durationTouched
+    ? !durationValid
+      ? "Enter a valid number of minutes."
+      : durationRequired && parsedDuration === null
+        ? `Duration is required for ${workoutType === "hiit" ? "HIIT workouts" : `${workoutType}s`}.`
+        : null
+    : null;
 
   const pickPhoto = useCallback(async () => {
     setError(null);
@@ -135,37 +144,44 @@ export default function LogWorkoutScreen() {
             ))}</View>
           </View>
 
-          <View style={styles.section}><FieldLabel label="Give it a name" optional /><TextField maxLength={120} onChangeText={setName} placeholder="Push day, morning run..." value={name} /></View>
           <View style={styles.section}>
             <FieldLabel label="How long?" optional={!durationRequired} />
-            <View><TextField inputMode="numeric" maxLength={4} onChangeText={setDuration} placeholder="45" style={styles.durationInput} value={duration} /><Text pointerEvents="none" style={styles.durationSuffix}>min</Text></View>
-            {!durationValid ? <Text style={styles.inlineError}>Enter a positive whole number of minutes.</Text> : null}
+            <View style={styles.durationControl}><TextField containerStyle={styles.controlSpacing} inputMode="numeric" maxLength={4} onBlur={() => setDurationTouched(true)} onChangeText={setDuration} placeholder="45" returnKeyType="done" style={[styles.durationInput, durationError && styles.inputError]} value={duration} /><Text pointerEvents="none" style={styles.durationSuffix}>min</Text></View>
+            {durationError ? <Text style={styles.inlineError}>{durationError}</Text> : null}
           </View>
           <View style={styles.section}>
             <FieldLabel label="How'd it feel?" optional />
             <View style={styles.effortRow}>{[1, 2, 3, 4, 5].map((level) => (
-              <Pressable accessibilityLabel={`${level}: ${effortLabels[level - 1]}`} accessibilityRole="button" key={level} onPress={() => setEffort(level)} style={styles.flameButton}><Text style={[styles.flame, (effort ?? 0) < level && styles.flameInactive]}>🔥</Text></Pressable>
+              <Pressable accessibilityLabel={`${level}: ${effortLabels[level - 1]}`} accessibilityRole="button" key={level} onPress={() => setEffort(effort === level ? null : level)} style={[styles.flameButton, (effort ?? 0) >= level && styles.flameButtonActive, effort === level && styles.flameButtonSelected]}><Text style={[styles.flame, (effort ?? 0) < level && styles.flameInactive]}>🔥</Text></Pressable>
             ))}</View>
-            {effort ? <Text style={styles.effortLabel}>{effortLabels[effort - 1]}</Text> : null}
+            <Text style={[styles.effortLabel, !effort && styles.effortLabelEmpty]}>{effort ? effortLabels[effort - 1] : "Tap a flame to rate your effort"}</Text>
           </View>
-          <View style={styles.section}><FieldLabel label="How'd it go?" optional /><TextField maxLength={2_000} multiline onChangeText={setCaption} placeholder="Knee felt a lot better today..." style={styles.captionInput} value={caption} /></View>
-
           <View style={styles.section}>
-            <FieldLabel label="Photo" optional />
-            {photo ? <View><Image accessibilityLabel="Selected workout" source={{ uri: photo.uri }} style={styles.photoPreview} /><View style={styles.photoActions}><Pressable accessibilityRole="button" onPress={() => void pickPhoto()}><Text style={styles.textAction}>Change</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setPhoto(null)}><Text style={styles.removeAction}>Remove</Text></Pressable></View></View> :
-              <Pressable accessibilityRole="button" onPress={() => void pickPhoto()} style={({ pressed }) => [styles.addPhoto, pressed && styles.pressed]}><Text style={styles.addPhotoText}>+ Add photo</Text></Pressable>}
-          </View>
-
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>When?</Text>
-            {Platform.OS === "web" ? <View style={styles.webDateRow}>
+            {Platform.OS === "web" ? <><Text style={styles.sectionTitle}>When?</Text><View style={styles.webDateRow}>
               <View style={styles.webDateField}><TextField autoCapitalize="none" label="Date" onBlur={() => setOccurredAt(fromLocalParts(webDate, webTime, occurredAt))} onChangeText={setWebDate} placeholder="YYYY-MM-DD" value={webDate} /></View>
               <View style={styles.webDateField}><TextField autoCapitalize="none" label="Time" onBlur={() => setOccurredAt(fromLocalParts(webDate, webTime, occurredAt))} onChangeText={setWebTime} placeholder="HH:MM" value={webTime} /></View>
-            </View> : <>
-              <Pressable accessibilityRole="button" onPress={() => { setPickerMode("date"); setShowPicker(true); }} style={({ pressed }) => [styles.whenRow, pressed && styles.pressed]}><Text style={styles.whenText}>{formatFriendlyDate(occurredAt)}</Text><Text style={styles.whenAction}>Edit</Text></Pressable>
+            </View></> : <>
+              <Pressable accessibilityRole="button" onPress={() => { setPickerMode("date"); setShowPicker(true); }} style={({ pressed }) => [styles.whenRow, pressed && styles.pressed]}><Text style={styles.whenLabel}>When?</Text><View style={styles.whenValue}><Text style={styles.whenText}>{formatFriendlyDate(occurredAt)}</Text><Text style={styles.whenAction}>›</Text></View></Pressable>
               {showPicker ? <View style={styles.pickerWrap}><DateTimePicker mode={Platform.OS === "ios" ? "datetime" : pickerMode} onChange={handleNativeDateChange} value={occurredAt} />{Platform.OS === "ios" ? <Pressable accessibilityRole="button" onPress={() => setShowPicker(false)}><Text style={styles.pickerDone}>Done</Text></Pressable> : null}</View> : null}
             </>}
           </View>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showMore }}
+            onPress={() => setShowMore((current) => !current)}
+            style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}
+          >
+            <Text style={styles.moreText}>{showMore ? "Less  ˄" : "More  ˅"}</Text>
+          </Pressable>
+          {showMore ? <View>
+            <View style={styles.extraSection}><FieldLabel label="Give it a name" optional /><TextField containerStyle={styles.controlSpacing} maxLength={120} onChangeText={setName} placeholder="Push day, morning run..." returnKeyType="next" style={styles.optionalInput} value={name} /></View>
+            <View style={styles.section}><FieldLabel label="How'd it go?" optional /><TextField containerStyle={styles.controlSpacing} maxLength={2_000} multiline onChangeText={setCaption} placeholder="Knee felt a lot better today..." style={styles.captionInput} value={caption} /></View>
+            <View style={styles.section}>
+              <FieldLabel label="Add photo" optional />
+              {photo ? <View><Image accessibilityLabel="Selected workout" source={{ uri: photo.uri }} style={styles.photoPreview} /><View style={styles.photoActions}><Pressable accessibilityRole="button" onPress={() => void pickPhoto()}><Text style={styles.textAction}>Change</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setPhoto(null)}><Text style={styles.removeAction}>Remove</Text></Pressable></View></View> :
+                <Pressable accessibilityRole="button" onPress={() => void pickPhoto()} style={({ pressed }) => [styles.addPhoto, pressed && styles.pressed]}><Text style={styles.addPhotoText}>+ Add photo</Text></Pressable>}
+            </View>
+          </View> : null}
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
           <Button disabled={!canSubmit} loading={submitting} onPress={() => void submitWorkout()} style={styles.submitButton}>Log workout</Button>
         </ScrollView>
@@ -192,13 +208,14 @@ function formatFriendlyDate(value: Date) {
 function decodeBase64(value: string) { const binary = globalThis.atob(value); return Uint8Array.from(binary, (character) => character.charCodeAt(0)); }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 }, keyboardAvoidingView: { flex: 1 }, scrollView: { flex: 1 }, container: { padding: spacing.xxl, paddingBottom: 120 },
-  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, section: { marginTop: spacing.xxl }, sectionTitle: { color: colors.ink, ...type.heading },
-  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm }, optional: { color: colors.muted, ...type.label },
-  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md }, typeChip: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md, width: "48%" }, typeChipSelected: { backgroundColor: colors.brand }, typeChipText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, textAlign: "center" }, typeChipTextSelected: { color: colors.surface }, pressed: { opacity: 0.76 },
-  durationInput: { paddingRight: 52 }, durationSuffix: { color: colors.muted, fontFamily: fonts.semibold, fontSize: 14, position: "absolute", right: spacing.lg, top: 16 }, inlineError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.xs },
-  effortRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm }, flameButton: { alignItems: "center", height: 44, justifyContent: "center", width: 44 }, flame: { fontSize: 25 }, flameInactive: { opacity: 0.2 }, effortLabel: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs }, captionInput: { minHeight: 96, textAlignVertical: "top" },
-  addPhoto: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, justifyContent: "center", marginTop: spacing.sm, minHeight: 44, paddingHorizontal: spacing.lg }, addPhotoText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14 }, photoPreview: { aspectRatio: 4 / 3, borderRadius: radii.md, marginTop: spacing.sm, width: "100%" }, photoActions: { flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm }, textAction: { color: colors.brand, ...type.label }, removeAction: { color: colors.muted, ...type.label },
-  whenRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 52 }, whenText: { color: colors.inkSoft, ...type.bodyMedium }, whenAction: { color: colors.brand, ...type.label }, pickerWrap: { alignItems: "flex-end", marginTop: spacing.sm }, pickerDone: { color: colors.brand, ...type.label, padding: spacing.md }, webDateRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm }, webDateField: { flex: 1 },
+  safeArea: { backgroundColor: colors.background, flex: 1 }, keyboardAvoidingView: { flex: 1 }, scrollView: { flex: 1 }, container: { padding: spacing.xxl, paddingBottom: 144 },
+  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, section: { marginTop: spacing.xxl }, extraSection: { marginTop: spacing.lg }, sectionTitle: { color: colors.ink, ...type.heading },
+  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm }, optional: { color: colors.muted, ...type.label }, controlSpacing: { marginTop: spacing.sm }, optionalInput: { backgroundColor: "#FCFBFA", borderColor: colors.border },
+  typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md }, typeChip: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, flexBasis: "47%", flexGrow: 1, justifyContent: "center", minHeight: 46, paddingHorizontal: spacing.md }, typeChipSelected: { backgroundColor: colors.brand }, typeChipText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, textAlign: "center" }, typeChipTextSelected: { color: colors.surface }, pressed: { opacity: 0.76 },
+  durationControl: { alignSelf: "flex-start", width: 176 }, durationInput: { fontFamily: fonts.semibold, fontSize: 18, paddingRight: 52 }, durationSuffix: { color: colors.muted, fontFamily: fonts.semibold, fontSize: 14, position: "absolute", right: spacing.lg, top: 26 }, inputError: { borderColor: colors.danger }, inlineError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.xs },
+  effortRow: { flexDirection: "row", gap: spacing.xs, marginTop: spacing.sm }, flameButton: { alignItems: "center", borderColor: "transparent", borderRadius: radii.md, borderWidth: 1, height: 48, justifyContent: "center", width: 48 }, flameButtonActive: { backgroundColor: colors.brandSoft }, flameButtonSelected: { borderColor: colors.brand }, flame: { fontSize: 25 }, flameInactive: { opacity: 0.18 }, effortLabel: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.sm }, effortLabelEmpty: { color: colors.muted }, captionInput: { maxHeight: 144, minHeight: 88, textAlignVertical: "top" },
+  addPhoto: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, justifyContent: "center", marginTop: spacing.sm, minHeight: 44, paddingHorizontal: spacing.lg }, addPhotoText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14 }, photoPreview: { borderRadius: radii.md, height: 132, marginTop: spacing.sm, width: 176 }, photoActions: { flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm }, textAction: { color: colors.brand, ...type.label }, removeAction: { color: colors.muted, ...type.label },
+  whenRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 52 }, whenLabel: { color: colors.ink, ...type.heading }, whenValue: { alignItems: "center", flexDirection: "row", flexShrink: 1, marginLeft: spacing.md }, whenText: { color: colors.muted, ...type.bodySmall }, whenAction: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24, marginLeft: spacing.sm }, pickerWrap: { alignItems: "flex-end", marginTop: spacing.sm }, pickerDone: { color: colors.brand, ...type.label, padding: spacing.md }, webDateRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm }, webDateField: { flex: 1 },
+  moreButton: { alignItems: "flex-start", alignSelf: "flex-start", justifyContent: "center", marginTop: spacing.sm, minHeight: 44, paddingRight: spacing.lg }, moreText: { color: colors.brand, ...type.label },
   errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, marginTop: spacing.xl, padding: spacing.md }, errorText: { color: colors.danger, ...type.bodySmall }, submitButton: { marginTop: spacing.xl },
 });
