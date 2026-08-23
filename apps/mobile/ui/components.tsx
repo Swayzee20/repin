@@ -1,6 +1,6 @@
 import type { WorkoutFeedItem } from "@repin/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { useEffect, useState, type ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
@@ -26,7 +26,6 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { formatWorkoutDate } from "../lib/workout-date";
-import { supabase } from "../lib/supabase";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
 
 const webFeedScrollerStyle =
@@ -313,29 +312,9 @@ export function WorkoutSummaryCard({
       <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
       {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
       {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
-      {workout.photoPath && variant === "full" ? <WorkoutPhoto path={workout.photoPath} /> : null}
+      {workout.photoUrl && variant === "full" ? <Image accessibilityLabel="Workout photo" onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} resizeMode="cover" source={{ uri: workout.photoUrl }} style={styles.workoutPhoto} /> : null}
     </Card>
   );
-}
-
-function WorkoutPhoto({ path }: { path: string }) {
-  const [uri, setUri] = useState<string | null>(null);
-
-  useEffect(() => {
-    let active = true;
-    setUri(null);
-
-    void supabase?.storage
-      .from("workout-photos")
-      .createSignedUrl(path, 60 * 60)
-      .then(({ data, error }) => {
-        if (active && !error) setUri(data.signedUrl);
-      });
-
-    return () => { active = false; };
-  }, [path]);
-
-  return uri ? <Image accessibilityLabel="Workout photo" resizeMode="cover" source={{ uri }} style={styles.workoutPhoto} /> : null;
 }
 
 export function CommunityFeed({

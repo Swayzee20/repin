@@ -9,6 +9,7 @@ import {
   AuthenticationError,
   requireApplicationUser,
 } from "../../../../../lib/supabase-auth";
+import { addAuthorizedWorkoutPhotoUrls } from "../../../../../lib/workout-photos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -43,8 +44,10 @@ export async function GET(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
+    const workoutsWithPhotoUrls = await addAuthorizedWorkoutPhotoUrls(workouts);
+
     return NextResponse.json(
-      { workouts },
+      { workouts: workoutsWithPhotoUrls },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

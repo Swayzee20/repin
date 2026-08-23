@@ -10,6 +10,7 @@ import {
   AuthenticationError,
   requireApplicationUser,
 } from "../../../lib/supabase-auth";
+import { addAuthorizedWorkoutPhotoUrls } from "../../../lib/workout-photos";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -45,13 +46,16 @@ export async function GET(request: Request) {
     const selectedGroup =
       groups.find((group) => group.id === query.data.groupId) ?? groups[0];
 
-    const communityWorkouts = selectedGroup
+    const authorizedCommunityWorkouts = selectedGroup
       ? ((await listRecentWorkoutsForMember({
           userId: user.id,
           groupId: selectedGroup.id,
           limit: 20,
         })) ?? [])
       : [];
+    const communityWorkouts = await addAuthorizedWorkoutPhotoUrls(
+      authorizedCommunityWorkouts,
+    );
     const hasWorkoutToday = Boolean(workoutSnapshot.mostRecentWorkoutToday);
 
     return NextResponse.json(

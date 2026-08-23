@@ -50,6 +50,7 @@ export interface WorkoutFeedItem {
   effort: number | null;
   caption: string | null;
   photoPath: string | null;
+  photoUrl?: string | null;
   notes: string | null;
   occurredAt?: string | null;
   completedAt?: string | null;
