@@ -67,39 +67,45 @@ export default function CommunityTabScreen() {
 
         {selectedGroup ? (
           <>
-            <Pressable
-              accessibilityLabel={`Selected group: ${selectedGroup.name}. Change group`}
-              accessibilityRole="button"
-              onPress={() => setPickerOpen((open) => !open)}
-              style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
-            >
-              <View style={styles.selectorCopy}>
-                <Text numberOfLines={1} style={styles.groupName}>{selectedGroup.name}</Text>
-              </View>
-              <Text style={styles.chevron}>{pickerOpen ? "▴" : "▾"}</Text>
-            </Pressable>
             {pickerOpen ? (
-              <View style={styles.groupDrawer}>
-                {data?.groups.map((group) => (
-                  <Pressable
-                    accessibilityRole="button"
-                    key={group.id}
-                    onPress={() => {
-                      setSelectedGroupId(group.id);
-                      setPickerOpen(false);
-                    }}
-                    style={({ pressed }) => [styles.groupOption, group.id === selectedGroup.id && styles.selectedOption, pressed && styles.pressed]}
-                  >
-                    <Text numberOfLines={1} style={styles.optionName}>{group.name}</Text>
-                    {group.id === selectedGroup.id ? <Text style={styles.check}>✓</Text> : null}
-                  </Pressable>
-                ))}
-              </View>
+              <Pressable
+                accessibilityLabel="Close group selector"
+                accessibilityRole="button"
+                onPress={() => setPickerOpen(false)}
+                style={styles.pickerBackdrop}
+              />
             ) : null}
-
-            <View style={styles.groupActions}>
+            <View style={styles.groupHeaderRow}>
+              <View style={styles.selectorAnchor}>
+                <Pressable
+                  accessibilityLabel={`Selected group: ${selectedGroup.name}. Change group`}
+                  accessibilityRole="button"
+                  onPress={() => setPickerOpen((open) => !open)}
+                  style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
+                >
+                  <Text numberOfLines={1} style={styles.groupName}>{selectedGroup.name}</Text>
+                  <Text style={styles.chevron}>{pickerOpen ? "▴" : "▾"}</Text>
+                </Pressable>
+                {pickerOpen ? (
+                  <View style={styles.groupDrawer}>
+                    {data?.groups.map((group) => (
+                      <Pressable
+                        accessibilityRole="button"
+                        key={group.id}
+                        onPress={() => {
+                          setSelectedGroupId(group.id);
+                          setPickerOpen(false);
+                        }}
+                        style={({ pressed }) => [styles.groupOption, group.id === selectedGroup.id && styles.selectedOption, pressed && styles.pressed]}
+                      >
+                        <Text numberOfLines={1} style={styles.optionName}>{group.name}</Text>
+                        {group.id === selectedGroup.id ? <Text style={styles.check}>✓</Text> : null}
+                      </Pressable>
+                    ))}
+                  </View>
+                ) : null}
+              </View>
               <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push(`/groups/${selectedGroup.id}`)}><Text style={styles.actionText}>View group ›</Text></Pressable>
-              <Pressable accessibilityRole="button" onPress={() => router.push(`/groups/${selectedGroup.id}/log-workout`)} style={({ pressed }) => [styles.logWorkoutAction, pressed && styles.logWorkoutActionPressed]}><Text style={styles.logWorkoutActionText}>+ Log workout</Text></Pressable>
             </View>
 
             {loading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
@@ -125,22 +131,20 @@ const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
-  selector: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", marginTop: spacing.md, minHeight: 52, paddingVertical: spacing.xs },
-  selectorCopy: { flex: 1 },
-  groupName: { color: colors.ink, ...type.title },
-  chevron: { color: colors.brand, fontFamily: fonts.bold, fontSize: 16, marginLeft: spacing.md },
-  groupDrawer: { backgroundColor: colors.surface, borderBottomColor: colors.border, borderBottomWidth: 1, paddingVertical: spacing.sm },
-  groupOption: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", minHeight: 48, paddingHorizontal: spacing.md },
+  pickerBackdrop: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0, zIndex: 10 },
+  groupHeaderRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm, minHeight: 44, zIndex: 20 },
+  selectorAnchor: { flexShrink: 1, maxWidth: "75%", position: "relative", zIndex: 21 },
+  selector: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", minHeight: 44, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  groupName: { color: colors.ink, flexShrink: 1, ...type.title },
+  chevron: { color: colors.brand, fontFamily: fonts.bold, fontSize: 16, marginLeft: spacing.sm },
+  groupDrawer: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, elevation: 4, left: 0, maxWidth: 280, minWidth: 220, padding: spacing.xs, position: "absolute", shadowColor: colors.ink, shadowOffset: { height: 3, width: 0 }, shadowOpacity: 0.08, shadowRadius: 8, top: "100%", zIndex: 21 },
+  groupOption: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", minHeight: 44, paddingHorizontal: spacing.md },
   selectedOption: { backgroundColor: colors.brandSoft },
   optionName: { color: colors.inkSoft, flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
   check: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 },
-  groupActions: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md, marginTop: spacing.sm, minHeight: 40 },
-  boardArea: { backgroundColor: "#F7F2F2", flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
+  boardArea: { backgroundColor: "#F7F2F2", borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
   emptyBoardContent: { padding: spacing.lg },
   actionText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
-  logWorkoutAction: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.sm, justifyContent: "center", minHeight: 36, paddingHorizontal: spacing.md },
-  logWorkoutActionPressed: { backgroundColor: colors.brandPressed },
-  logWorkoutActionText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 13 },
   refreshing: { marginBottom: spacing.md },
   error: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
   pressed: { opacity: 0.72 },

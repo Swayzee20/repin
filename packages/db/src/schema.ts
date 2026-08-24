@@ -1,15 +1,39 @@
 import {
+  boolean,
   check,
   index,
   integer,
+  jsonb,
+  numeric,
   pgEnum,
   pgTable,
   primaryKey,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
+
+export type WorkoutConfig = Record<string, unknown>;
+
+export const workoutDefinitionSourceTypes = [
+  "manual",
+  "ai_generated",
+  "photo_import",
+] as const;
+
+export const workoutBlockTypes = [
+  "straight_sets",
+  "rounds",
+  "for_time",
+  "amrap",
+  "emom",
+  "interval",
+  "work",
+  "rest",
+  "freeform",
+] as const;
 
 export const users = pgTable("users", {
   id: uuid().primaryKey(),
@@ -101,6 +125,254 @@ export const workouts = pgTable(
   ],
 );
 
+export const movements = pgTable(
+  "movements",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    name: text().notNull(),
+    slug: text().notNull().unique(),
+    category: text(),
+    equipment: text(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [index("movements_name_idx").on(table.name)],
+);
+
+export const workoutDefinitions = pgTable(
+  "workout_definitions",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    createdByUserId: uuid("created_by_user_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    title: text().notNull(),
+    description: text(),
+    sourceType: text("source_type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("workout_definitions_created_by_user_id_idx").on(
+      table.createdByUserId,
+    ),
+    check(
+      "workout_definitions_source_type_check",
+      sql`${table.sourceType} in ('manual', 'ai_generated', 'photo_import')`,
+    ),
+  ],
+);
+
+export const workoutBlocks = pgTable(
+  "workout_blocks",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    workoutDefinitionId: uuid("workout_definition_id")
+      .notNull()
+      .references(() => workoutDefinitions.id, { onDelete: "cascade" }),
+    position: integer().notNull(),
+    type: text().notNull(),
+    title: text(),
+    rounds: integer(),
+    durationSeconds: integer("duration_seconds"),
+    config: jsonb().$type<WorkoutConfig>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("workout_blocks_workout_definition_id_idx").on(
+      table.workoutDefinitionId,
+    ),
+    uniqueIndex("workout_blocks_definition_position_unique").on(
+      table.workoutDefinitionId,
+      table.position,
+    ),
+    check("workout_blocks_position_check", sql`${table.position} >= 0`),
+    check(
+      "workout_blocks_type_check",
+      sql`${table.type} in ('straight_sets', 'rounds', 'for_time', 'amrap', 'emom', 'interval', 'work', 'rest', 'freeform')`,
+    ),
+    check(
+      "workout_blocks_rounds_check",
+      sql`${table.rounds} is null or ${table.rounds} > 0`,
+    ),
+    check(
+      "workout_blocks_duration_seconds_check",
+      sql`${table.durationSeconds} is null or ${table.durationSeconds} > 0`,
+    ),
+  ],
+);
+
+export const blockMovements = pgTable(
+  "block_movements",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    workoutBlockId: uuid("workout_block_id")
+      .notNull()
+      .references(() => workoutBlocks.id, { onDelete: "cascade" }),
+    movementId: uuid("movement_id").references(() => movements.id, {
+      onDelete: "set null",
+    }),
+    movementName: text("movement_name").notNull(),
+    position: integer().notNull(),
+    targetSets: integer("target_sets"),
+    targetRepsMin: integer("target_reps_min"),
+    targetRepsMax: integer("target_reps_max"),
+    targetSeconds: integer("target_seconds"),
+    targetDistance: numeric("target_distance", {
+      precision: 12,
+      scale: 3,
+      mode: "number",
+    }),
+    targetCalories: integer("target_calories"),
+    targetLoad: numeric("target_load", {
+      precision: 12,
+      scale: 3,
+      mode: "number",
+    }),
+    repType: text("rep_type"),
+    isShared: boolean("is_shared").default(false).notNull(),
+    participant: text(),
+    notes: text(),
+    config: jsonb().$type<WorkoutConfig>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("block_movements_workout_block_id_idx").on(table.workoutBlockId),
+    index("block_movements_movement_id_idx").on(table.movementId),
+    uniqueIndex("block_movements_block_position_unique").on(
+      table.workoutBlockId,
+      table.position,
+    ),
+    check("block_movements_position_check", sql`${table.position} >= 0`),
+    check(
+      "block_movements_target_sets_check",
+      sql`${table.targetSets} is null or ${table.targetSets} > 0`,
+    ),
+    check(
+      "block_movements_target_reps_min_check",
+      sql`${table.targetRepsMin} is null or ${table.targetRepsMin} > 0`,
+    ),
+    check(
+      "block_movements_target_reps_max_check",
+      sql`${table.targetRepsMax} is null or ${table.targetRepsMax} > 0`,
+    ),
+    check(
+      "block_movements_target_reps_range_check",
+      sql`${table.targetRepsMin} is null or ${table.targetRepsMax} is null or ${table.targetRepsMax} >= ${table.targetRepsMin}`,
+    ),
+    check(
+      "block_movements_target_seconds_check",
+      sql`${table.targetSeconds} is null or ${table.targetSeconds} > 0`,
+    ),
+    check(
+      "block_movements_target_distance_check",
+      sql`${table.targetDistance} is null or ${table.targetDistance} > 0`,
+    ),
+    check(
+      "block_movements_target_calories_check",
+      sql`${table.targetCalories} is null or ${table.targetCalories} > 0`,
+    ),
+    check(
+      "block_movements_target_load_check",
+      sql`${table.targetLoad} is null or ${table.targetLoad} > 0`,
+    ),
+  ],
+);
+
+export const workoutSessions = pgTable(
+  "workout_sessions",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    workoutDefinitionId: uuid("workout_definition_id").references(
+      () => workoutDefinitions.id,
+      { onDelete: "set null" },
+    ),
+    workoutType: text("workout_type").notNull(),
+    name: text(),
+    durationMinutes: integer("duration_minutes"),
+    effort: integer(),
+    occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull(),
+    notes: text(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("workout_sessions_user_occurred_at_idx").on(
+      table.userId,
+      table.occurredAt,
+    ),
+    index("workout_sessions_workout_definition_id_idx").on(
+      table.workoutDefinitionId,
+    ),
+    check(
+      "workout_sessions_effort_range_check",
+      sql`${table.effort} is null or ${table.effort} between 1 and 5`,
+    ),
+  ],
+);
+
+export const communityPosts = pgTable(
+  "community_posts",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    workoutSessionId: uuid("workout_session_id")
+      .notNull()
+      .references(() => workoutSessions.id, { onDelete: "cascade" }),
+    caption: text(),
+    photoPath: text("photo_path"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("community_posts_group_created_at_idx").on(
+      table.groupId,
+      table.createdAt,
+    ),
+    index("community_posts_workout_session_id_idx").on(
+      table.workoutSessionId,
+    ),
+    uniqueIndex("community_posts_group_session_unique").on(
+      table.groupId,
+      table.workoutSessionId,
+    ),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Group = typeof groups.$inferSelect;
@@ -108,3 +380,15 @@ export type NewGroup = typeof groups.$inferInsert;
 export type GroupMember = typeof groupMembers.$inferSelect;
 export type Workout = typeof workouts.$inferSelect;
 export type NewWorkout = typeof workouts.$inferInsert;
+export type Movement = typeof movements.$inferSelect;
+export type NewMovement = typeof movements.$inferInsert;
+export type WorkoutDefinition = typeof workoutDefinitions.$inferSelect;
+export type NewWorkoutDefinition = typeof workoutDefinitions.$inferInsert;
+export type WorkoutBlock = typeof workoutBlocks.$inferSelect;
+export type NewWorkoutBlock = typeof workoutBlocks.$inferInsert;
+export type BlockMovement = typeof blockMovements.$inferSelect;
+export type NewBlockMovement = typeof blockMovements.$inferInsert;
+export type WorkoutSession = typeof workoutSessions.$inferSelect;
+export type NewWorkoutSession = typeof workoutSessions.$inferInsert;
+export type CommunityPost = typeof communityPosts.$inferSelect;
+export type NewCommunityPost = typeof communityPosts.$inferInsert;

@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
-import { Tabs, usePathname, useRouter } from "expo-router";
+import { Tabs, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,7 +19,6 @@ export default function MainTabsLayout() {
 
 function MainTabsNavigator() {
   const router = useRouter();
-  const pathname = usePathname();
   const insets = useSafeAreaInsets();
   const { selectedGroupId } = useMainTabs();
   const [session, setSession] = useState<Session | null>(null);
@@ -68,7 +67,7 @@ function MainTabsNavigator() {
         <Tabs.Screen name="community" options={{ title: "Community" }} />
         <Tabs.Screen name="profile" options={{ title: "Me" }} />
       </Tabs>
-      {session && selectedGroupId && !keyboardVisible && pathname !== "/community" ? (
+      {session && selectedGroupId && !keyboardVisible ? (
         <Pressable
           accessibilityRole="button"
           onPress={() => router.push(`/groups/${selectedGroupId}/log-workout`)}
