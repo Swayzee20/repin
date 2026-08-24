@@ -143,7 +143,7 @@ export default function LogWorkoutScreen() {
 
           <QuickLogResultsFields onChange={setResults} value={results} workoutType={workoutType} />
           <View style={styles.section}>
-            <FieldLabel label="How'd it feel?" optional />
+            <FieldLabel hierarchy="primary" label="How'd it feel?" optional />
             <View style={styles.effortRow}>{[1, 2, 3, 4, 5].map((level) => (
               <Pressable accessibilityLabel={`${level}: ${effortLabels[level - 1]}`} accessibilityRole="button" key={level} onPress={() => setEffort(effort === level ? null : level)} style={[styles.flameButton, (effort ?? 0) >= level && styles.flameButtonActive, effort === level && styles.flameButtonSelected]}><Text style={[styles.flame, (effort ?? 0) < level && styles.flameInactive]}>🔥</Text></Pressable>
             ))}</View>
@@ -158,12 +158,12 @@ export default function LogWorkoutScreen() {
               {showPicker ? <View style={styles.pickerWrap}><DateTimePicker mode={Platform.OS === "ios" ? "datetime" : pickerMode} onChange={handleNativeDateChange} value={occurredAt} />{Platform.OS === "ios" ? <Pressable accessibilityRole="button" onPress={() => setShowPicker(false)}><Text style={styles.pickerDone}>Done</Text></Pressable> : null}</View> : null}
             </>}
           </View>
-          <View style={styles.section}>
+          <View style={styles.secondarySection}>
             <FieldLabel label="Workout name" optional />
             <TextField containerStyle={styles.controlSpacing} maxLength={120} onChangeText={setName} placeholder="Push day, morning run..." returnKeyType="next" value={name} />
           </View>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Add to your post</Text>
+          <View style={styles.postSection}>
+            <Text style={styles.subsectionTitle}>Add to your post</Text>
             <View style={styles.postField}>
               <FieldLabel label="Photo" optional />
               {photo ? <View><Image accessibilityLabel="Selected workout" source={{ uri: photo.uri }} style={styles.photoPreview} /><View style={styles.photoActions}><Pressable accessibilityRole="button" onPress={() => void pickPhoto()}><Text style={styles.textAction}>Change</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setPhoto(null)}><Text style={styles.removeAction}>Remove</Text></Pressable></View></View> :
@@ -179,8 +179,8 @@ export default function LogWorkoutScreen() {
   );
 }
 
-function FieldLabel({ label, optional = false }: { label: string; optional?: boolean }) {
-  return <View style={styles.labelRow}><Text style={styles.sectionTitle}>{label}</Text>{optional ? <Text style={styles.optional}>Optional</Text> : null}</View>;
+function FieldLabel({ hierarchy = "field", label, optional = false }: { hierarchy?: "field" | "primary"; label: string; optional?: boolean }) {
+  return <View style={styles.labelRow}><Text style={hierarchy === "primary" ? styles.sectionTitle : styles.fieldLabel}>{label}</Text>{optional ? <Text style={styles.optional}>Optional</Text> : null}</View>;
 }
 
 function getLocalDateParts(value: Date) {
@@ -198,11 +198,11 @@ function decodeBase64(value: string) { const binary = globalThis.atob(value); re
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, keyboardAvoidingView: { flex: 1 }, scrollView: { flex: 1 }, container: { padding: spacing.xxl, paddingBottom: 144 },
-  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, section: { marginTop: spacing.xxl }, sectionTitle: { color: colors.ink, ...type.heading },
-  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm }, optional: { color: colors.muted, ...type.label }, controlSpacing: { marginTop: spacing.sm },
+  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, section: { marginTop: spacing.xxl }, secondarySection: { marginTop: spacing.xl }, postSection: { marginTop: spacing.xxxl }, sectionTitle: { color: colors.ink, ...type.heading }, subsectionTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 }, fieldLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
+  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm }, optional: { color: colors.muted, ...type.bodySmall }, controlSpacing: { marginTop: spacing.sm },
   typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md }, typeChip: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, flexBasis: "47%", flexGrow: 1, justifyContent: "center", minHeight: 46, paddingHorizontal: spacing.md }, typeChipSelected: { backgroundColor: colors.brand }, typeChipText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, textAlign: "center" }, typeChipTextSelected: { color: colors.surface }, pressed: { opacity: 0.76 },
   effortRow: { flexDirection: "row", gap: spacing.xs, marginTop: spacing.sm }, flameButton: { alignItems: "center", borderColor: "transparent", borderRadius: radii.md, borderWidth: 1, height: 48, justifyContent: "center", width: 48 }, flameButtonActive: { backgroundColor: colors.brandSoft }, flameButtonSelected: { borderColor: colors.brand }, flame: { fontSize: 25 }, flameInactive: { opacity: 0.18 }, effortLabel: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.sm }, effortLabelEmpty: { color: colors.muted }, captionInput: { maxHeight: 144, minHeight: 88, textAlignVertical: "top" },
-  postField: { marginTop: spacing.lg },
+  postField: { marginTop: spacing.md },
   addPhoto: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, justifyContent: "center", marginTop: spacing.sm, minHeight: 44, paddingHorizontal: spacing.lg }, addPhotoText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14 }, photoPreview: { borderRadius: radii.md, height: 132, marginTop: spacing.sm, width: 176 }, photoActions: { flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm }, textAction: { color: colors.brand, ...type.label }, removeAction: { color: colors.muted, ...type.label },
   whenRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 52 }, whenLabel: { color: colors.ink, ...type.heading }, whenValue: { alignItems: "center", flexDirection: "row", flexShrink: 1, marginLeft: spacing.md }, whenText: { color: colors.muted, ...type.bodySmall }, whenAction: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24, marginLeft: spacing.sm }, pickerWrap: { alignItems: "flex-end", marginTop: spacing.sm }, pickerDone: { color: colors.brand, ...type.label, padding: spacing.md }, webDateRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm }, webDateField: { flex: 1 },
   errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, marginTop: spacing.xl, padding: spacing.md }, errorText: { color: colors.danger, ...type.bodySmall }, submitButton: { marginTop: spacing.xl },

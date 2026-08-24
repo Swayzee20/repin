@@ -28,7 +28,8 @@ type ExerciseDraft = {
 export interface QuickLogResultsDraft {
   distance: string;
   distanceUnit: DistanceUnit;
-  duration: string;
+  timeMinutes: string;
+  timeSeconds: string;
   functionalResultType: FunctionalResultType | null;
   rounds: string;
   score: string;
@@ -38,7 +39,8 @@ export interface QuickLogResultsDraft {
 export const emptyQuickLogResults: QuickLogResultsDraft = {
   distance: "",
   distanceUnit: "mi",
-  duration: "",
+  timeMinutes: "",
+  timeSeconds: "",
   functionalResultType: null,
   rounds: "",
   score: "",
@@ -95,8 +97,12 @@ export function QuickLogResultsFields({
       {showTime ? (
         <View style={styles.section}>
           <FieldLabel label="Time" />
-          <TextField containerStyle={styles.timeField} inputMode="numeric" onChangeText={(duration) => update({ duration })} placeholder="28:14" value={value.duration} />
-          <Text style={styles.hint}>MM:SS or H:MM:SS</Text>
+          <QuickLogTimeInput
+            minutes={value.timeMinutes}
+            onMinutesChange={(timeMinutes) => update({ timeMinutes })}
+            onSecondsChange={(timeSeconds) => update({ timeSeconds })}
+            seconds={value.timeSeconds}
+          />
         </View>
       ) : null}
 
@@ -263,6 +269,31 @@ function FieldLabel({ label }: { label: string }) {
   return <View style={styles.labelRow}><Text style={styles.sectionTitle}>{label}</Text><Text style={styles.optional}>Optional</Text></View>;
 }
 
+function QuickLogTimeInput({
+  minutes,
+  onMinutesChange,
+  onSecondsChange,
+  seconds,
+}: {
+  minutes: string;
+  onMinutesChange: (value: string) => void;
+  onSecondsChange: (value: string) => void;
+  seconds: string;
+}) {
+  return (
+    <View style={styles.timeRow}>
+      <View style={styles.timePart}>
+        <TextField accessibilityLabel="Minutes" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" onChangeText={onMinutesChange} placeholder="28" value={minutes} />
+        <Text style={styles.timeUnit}>min</Text>
+      </View>
+      <View style={styles.timePart}>
+        <TextField accessibilityLabel="Seconds" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" maxLength={2} onChangeText={onSecondsChange} placeholder="14" value={seconds} />
+        <Text style={styles.timeUnit}>sec</Text>
+      </View>
+    </View>
+  );
+}
+
 export function validateQuickLogResults(value: QuickLogResultsDraft, workoutType: WorkoutType) {
   if ((workoutType === "run" || workoutType === "walk") && value.distance.trim()) {
     const distance = Number(value.distance);
@@ -273,8 +304,9 @@ export function validateQuickLogResults(value: QuickLogResultsDraft, workoutType
     || workoutType === "hiit"
     || workoutType === "other"
     || (workoutType === "functional_fitness" && value.functionalResultType === "time");
-  if (usesTime && value.duration.trim() && parseDurationSeconds(value.duration) === null) {
-    return "Enter time as MM:SS or H:MM:SS.";
+  if (usesTime) {
+    const timeValidationError = validateTimeParts(value.timeMinutes, value.timeSeconds);
+    if (timeValidationError) return timeValidationError;
   }
   if (workoutType === "functional_fitness" && value.functionalResultType === "rounds" && value.rounds.trim()) {
     const rounds = Number(value.rounds);
@@ -312,7 +344,7 @@ export function buildQuickLogResults(value: QuickLogResultsDraft, workoutType: W
     || workoutType === "hiit"
     || workoutType === "other"
     || (workoutType === "functional_fitness" && value.functionalResultType === "time");
-  const durationSeconds = usesTime ? parseDurationSeconds(value.duration) : null;
+  const durationSeconds = usesTime ? getDurationSeconds(value.timeMinutes, value.timeSeconds) : null;
   if (durationSeconds != null) metrics.push({ metricType: "duration", numericValue: durationSeconds, unit: "seconds" });
   if (workoutType === "functional_fitness" && value.functionalResultType === "rounds" && value.rounds.trim()) {
     metrics.push({ metricType: "rounds", numericValue: Number(value.rounds), unit: "rounds" });
@@ -341,17 +373,23 @@ export function buildQuickLogResults(value: QuickLogResultsDraft, workoutType: W
   return { metrics, movements, durationSeconds };
 }
 
-function parseDurationSeconds(value: string) {
-  if (!value.trim()) return null;
-  const parts = value.trim().split(":");
-  if ((parts.length !== 2 && parts.length !== 3) || parts.some((part) => !/^\d+$/.test(part))) return null;
-  const numbers = parts.map(Number);
-  const seconds = numbers.at(-1) ?? 0;
-  const minutes = numbers.at(-2) ?? 0;
-  const hours = numbers.length === 3 ? (numbers[0] ?? 0) : 0;
-  if (seconds > 59 || minutes > 59 || hours > 23) return null;
-  const total = hours * 3_600 + minutes * 60 + seconds;
-  return total > 0 ? total : null;
+function validateTimeParts(minutesInput: string, secondsInput: string) {
+  const minutesText = minutesInput.trim();
+  const secondsText = secondsInput.trim();
+  if (!minutesText && !secondsText) return null;
+  if (minutesText && !/^\d+$/.test(minutesText)) return "Minutes must be a non-negative whole number.";
+  if (secondsText && !/^\d+$/.test(secondsText)) return "Seconds must be between 0 and 59.";
+  const minutes = minutesText ? Number(minutesText) : 0;
+  const seconds = secondsText ? Number(secondsText) : 0;
+  if (!Number.isSafeInteger(minutes) || minutes < 0) return "Minutes must be a non-negative whole number.";
+  if (!Number.isInteger(seconds) || seconds < 0 || seconds > 59) return "Seconds must be between 0 and 59.";
+  if (minutes === 0 && seconds === 0) return "Time must be greater than zero.";
+  return null;
+}
+
+function getDurationSeconds(minutesInput: string, secondsInput: string) {
+  if (!minutesInput.trim() && !secondsInput.trim()) return null;
+  return Number(minutesInput.trim() || 0) * 60 + Number(secondsInput.trim() || 0);
 }
 
 function createSetDraft(): SetDraft {
@@ -371,15 +409,17 @@ function capitalize(value: string) {
 }
 
 const styles = StyleSheet.create({
-  section: { marginTop: spacing.xxl },
-  sectionTitle: { color: colors.ink, ...type.heading },
+  section: { marginTop: spacing.xl },
+  sectionTitle: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
   labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm },
-  optional: { color: colors.muted, ...type.label },
+  optional: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   metricRow: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   metricField: { flex: 1, marginTop: 0 },
   resultField: { marginTop: spacing.sm },
-  timeField: { marginTop: spacing.sm, maxWidth: 180 },
-  hint: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
+  timeRow: { alignItems: "center", flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
+  timePart: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
+  timeField: { width: 84 },
+  timeUnit: { color: colors.muted, ...type.bodySmall },
   toggle: { alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexDirection: "row", marginTop: spacing.sm, padding: 3 },
   toggleOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 36, minWidth: 48, paddingHorizontal: spacing.md },
   toggleOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
