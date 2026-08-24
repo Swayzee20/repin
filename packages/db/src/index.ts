@@ -20,6 +20,7 @@ import { Pool } from "pg";
 import * as schema from "./schema";
 
 type Database = ReturnType<typeof drizzle<typeof schema>>;
+type DatabaseTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
 
 interface DatabaseGlobals {
   repinDatabase?: Database;
@@ -259,6 +260,267 @@ export async function getWorkoutDefinition(definitionId: string) {
   };
 }
 
+export type WorkoutSessionMetricType =
+  (typeof schema.workoutSessionMetricTypes)[number];
+
+export interface CreateWorkoutSessionMetricInput {
+  position: number;
+  metricType: WorkoutSessionMetricType;
+  label?: string | null;
+  numericValue?: number | null;
+  textValue?: string | null;
+  unit?: string | null;
+}
+
+export interface CreateSetResultInput {
+  position: number;
+  reps?: number | null;
+  load?: number | null;
+  loadUnit?: string | null;
+  durationSeconds?: number | null;
+  distance?: number | null;
+  distanceUnit?: string | null;
+  calories?: number | null;
+  completed?: boolean;
+  notes?: string | null;
+  config?: schema.WorkoutConfig | null;
+}
+
+export interface CreateSessionMovementResultInput {
+  blockMovementId?: string | null;
+  movementId?: string | null;
+  movementName: string;
+  position: number;
+  notes?: string | null;
+  config?: schema.WorkoutConfig | null;
+  sets: CreateSetResultInput[];
+}
+
+export interface CreateWorkoutSessionWithResultsInput {
+  session: {
+    id?: string;
+    userId: string;
+    workoutDefinitionId?: string | null;
+    workoutType: string;
+    name?: string | null;
+    durationMinutes?: number | null;
+    effort?: number | null;
+    occurredAt: Date;
+    notes?: string | null;
+    createdAt?: Date;
+    updatedAt?: Date;
+  };
+  metrics?: CreateWorkoutSessionMetricInput[];
+  movements?: CreateSessionMovementResultInput[];
+}
+
+async function insertWorkoutSessionWithResults(
+  transaction: DatabaseTransaction,
+  input: CreateWorkoutSessionWithResultsInput,
+) {
+    const [session] = await transaction
+      .insert(schema.workoutSessions)
+      .values({
+        id: input.session.id,
+        userId: input.session.userId,
+        workoutDefinitionId: input.session.workoutDefinitionId ?? null,
+        workoutType: input.session.workoutType,
+        name: input.session.name ?? null,
+        durationMinutes: input.session.durationMinutes ?? null,
+        effort: input.session.effort ?? null,
+        occurredAt: input.session.occurredAt,
+        notes: input.session.notes ?? null,
+        createdAt: input.session.createdAt,
+        updatedAt: input.session.updatedAt,
+      })
+      .returning();
+
+    if (!session) {
+      throw new Error("Workout session could not be created");
+    }
+
+    const movementInputs = input.movements ?? [];
+    const prescribedMovementIds = movementInputs.flatMap((movement) =>
+      movement.blockMovementId ? [movement.blockMovementId] : [],
+    );
+
+    if (prescribedMovementIds.length) {
+      const prescribedMovements = await transaction
+        .select({
+          id: schema.blockMovements.id,
+          workoutDefinitionId: schema.workoutBlocks.workoutDefinitionId,
+        })
+        .from(schema.blockMovements)
+        .innerJoin(
+          schema.workoutBlocks,
+          eq(
+            schema.blockMovements.workoutBlockId,
+            schema.workoutBlocks.id,
+          ),
+        )
+        .where(inArray(schema.blockMovements.id, prescribedMovementIds));
+      const matchingIds = new Set(
+        prescribedMovements
+          .filter(
+            (movement) =>
+              movement.workoutDefinitionId === session.workoutDefinitionId,
+          )
+          .map((movement) => movement.id),
+      );
+
+      if (
+        prescribedMovementIds.some(
+          (movementId) => !matchingIds.has(movementId),
+        )
+      ) {
+        throw new Error(
+          "A prescribed movement does not belong to the session definition",
+        );
+      }
+    }
+
+    const metrics = input.metrics?.length
+      ? await transaction
+          .insert(schema.workoutSessionMetrics)
+          .values(
+            input.metrics.map((metric) => ({
+              workoutSessionId: session.id,
+              position: metric.position,
+              metricType: metric.metricType,
+              label: metric.label ?? null,
+              numericValue: metric.numericValue ?? null,
+              textValue: metric.textValue ?? null,
+              unit: metric.unit ?? null,
+            })),
+          )
+          .returning()
+      : [];
+
+    const movements = [];
+    for (const movementInput of movementInputs) {
+      const [movement] = await transaction
+        .insert(schema.sessionMovementResults)
+        .values({
+          workoutSessionId: session.id,
+          blockMovementId: movementInput.blockMovementId ?? null,
+          movementId: movementInput.movementId ?? null,
+          movementName: movementInput.movementName,
+          position: movementInput.position,
+          notes: movementInput.notes ?? null,
+          config: movementInput.config ?? null,
+        })
+        .returning();
+
+      if (!movement) {
+        throw new Error("Session movement result could not be created");
+      }
+
+      const sets = movementInput.sets.length
+        ? await transaction
+            .insert(schema.setResults)
+            .values(
+              movementInput.sets.map((set) => ({
+                sessionMovementResultId: movement.id,
+                position: set.position,
+                reps: set.reps ?? null,
+                load: set.load ?? null,
+                loadUnit: set.loadUnit ?? null,
+                durationSeconds: set.durationSeconds ?? null,
+                distance: set.distance ?? null,
+                distanceUnit: set.distanceUnit ?? null,
+                calories: set.calories ?? null,
+                completed: set.completed ?? true,
+                notes: set.notes ?? null,
+                config: set.config ?? null,
+              })),
+            )
+            .returning()
+        : [];
+
+      movements.push({ ...movement, sets });
+    }
+
+    return { ...session, metrics, movements };
+}
+
+export async function createWorkoutSessionWithResults(
+  input: CreateWorkoutSessionWithResultsInput,
+) {
+  return getDatabase().transaction(async (transaction) => {
+    return insertWorkoutSessionWithResults(transaction, input);
+  });
+}
+
+export async function getWorkoutSessionWithResults(workoutSessionId: string) {
+  const database = getDatabase();
+  const [session] = await database
+    .select()
+    .from(schema.workoutSessions)
+    .where(eq(schema.workoutSessions.id, workoutSessionId))
+    .limit(1);
+
+  if (!session) return null;
+
+  const [metrics, movements] = await Promise.all([
+    database
+      .select()
+      .from(schema.workoutSessionMetrics)
+      .where(
+        eq(schema.workoutSessionMetrics.workoutSessionId, workoutSessionId),
+      )
+      .orderBy(asc(schema.workoutSessionMetrics.position)),
+    database
+      .select()
+      .from(schema.sessionMovementResults)
+      .where(
+        eq(schema.sessionMovementResults.workoutSessionId, workoutSessionId),
+      )
+      .orderBy(asc(schema.sessionMovementResults.position)),
+  ]);
+
+  const sets = movements.length
+    ? await database
+        .select()
+        .from(schema.setResults)
+        .where(
+          inArray(
+            schema.setResults.sessionMovementResultId,
+            movements.map((movement) => movement.id),
+          ),
+        )
+        .orderBy(
+          asc(schema.setResults.sessionMovementResultId),
+          asc(schema.setResults.position),
+        )
+    : [];
+
+  return {
+    ...session,
+    metrics,
+    movements: movements.map((movement) => ({
+      ...movement,
+      sets: sets.filter(
+        (set) => set.sessionMovementResultId === movement.id,
+      ),
+    })),
+  };
+}
+
+export async function searchMovements(input: { query: string; limit?: number }) {
+  const query = input.query.trim();
+  return getDatabase()
+    .select({
+      id: schema.movements.id,
+      name: schema.movements.name,
+      category: schema.movements.category,
+      equipment: schema.movements.equipment,
+    })
+    .from(schema.movements)
+    .where(query ? ilike(schema.movements.name, `%${query}%`) : undefined)
+    .orderBy(asc(schema.movements.name))
+    .limit(Math.min(Math.max(input.limit ?? 8, 1), 20));
+}
+
 export async function createGroup(input: { ownerId: string; name: string }) {
   const database = getDatabase();
 
@@ -488,6 +750,12 @@ export async function createWorkoutForMember(input: {
   caption: string | null;
   photoPath: string | null;
   occurredAt: Date;
+  metrics?: Omit<CreateWorkoutSessionMetricInput, "position">[];
+  movements?: Array<
+    Omit<CreateSessionMovementResultInput, "position" | "sets"> & {
+      sets: Omit<CreateSetResultInput, "position">[];
+    }
+  >;
 }) {
   return getDatabase().transaction(async (transaction) => {
     const [membership] = await transaction
@@ -509,9 +777,8 @@ export async function createWorkoutForMember(input: {
     const postId = randomUUID();
     const createdAt = new Date();
 
-    const [session] = await transaction
-      .insert(schema.workoutSessions)
-      .values({
+    const session = await insertWorkoutSessionWithResults(transaction, {
+      session: {
         id: sessionId,
         userId: input.userId,
         workoutType: input.workoutType,
@@ -522,12 +789,17 @@ export async function createWorkoutForMember(input: {
         notes: null,
         createdAt,
         updatedAt: createdAt,
-      })
-      .returning();
-
-    if (!session) {
-      throw new Error("Workout session could not be created");
-    }
+      },
+      metrics: input.metrics?.map((metric, position) => ({ ...metric, position })),
+      movements: input.movements?.map((movement, position) => ({
+        ...movement,
+        position,
+        sets: movement.sets.map((set, setPosition) => ({
+          ...set,
+          position: setPosition,
+        })),
+      })),
+    });
 
     const [post] = await transaction
       .insert(schema.communityPosts)
@@ -707,9 +979,12 @@ export {
   groupMembers,
   groups,
   movements,
+  sessionMovementResults,
+  setResults,
   users,
   workouts,
   workoutBlocks,
   workoutDefinitions,
+  workoutSessionMetrics,
   workoutSessions,
 } from "./schema";

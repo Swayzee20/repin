@@ -53,55 +53,74 @@ export default function ProfileTabScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content}>
-        <View style={styles.topRow}>
-          <BrandHeader />
-          <Pressable accessibilityLabel="Settings" accessibilityRole="button" hitSlop={10} onPress={() => router.push("../settings")}><Text style={styles.settings}>⚙</Text></Pressable>
-        </View>
+        <BrandHeader />
         <View style={styles.identity}>
           <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
-          <Text style={styles.name}>{displayName}</Text>
-          <Text style={styles.memberSince}>Training with RepIn since {new Date(data.user.createdAt).getFullYear()}</Text>
+          <View style={styles.identityCopy}>
+            <Text style={styles.name}>{displayName}</Text>
+            <Text style={styles.memberSince}>RepIn member since {new Date(data.user.createdAt).getFullYear()}</Text>
+          </View>
         </View>
 
-        <View style={styles.stats}>
-          <View style={styles.stat}><Text style={styles.statValue}>{data.snapshot.workoutsThisWeek}</Text><Text style={styles.statLabel}>THIS WEEK</Text></View>
-          <View style={styles.statDivider} />
-          <View style={styles.stat}><Text style={styles.statValue}>{data.groups.length}</Text><Text style={styles.statLabel}>GROUPS</Text></View>
-        </View>
-
-        <Text style={styles.sectionTitle}>This Week</Text>
-        <View style={styles.weekRow}>
-          <View style={[styles.weekStatus, data.snapshot.hasWorkoutToday && styles.weekStatusDone]}><Text style={[styles.weekGlyph, data.snapshot.hasWorkoutToday && styles.weekGlyphDone]}>{data.snapshot.hasWorkoutToday ? "✓" : "+"}</Text></View>
-          <View style={styles.weekCopy}><Text style={styles.weekTitle}>{data.snapshot.hasWorkoutToday ? "Workout logged today" : "Today is open"}</Text><Text style={styles.weekMessage}>{data.snapshot.message}</Text></View>
-        </View>
-
-        {data.snapshot.mostRecentWorkoutToday ? (
-          <>
-            <Text style={styles.sectionTitle}>Recent Activity</Text>
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>PERSONAL ACTIVITY</Text>
+          <View style={styles.activityPanel}>
+            <View style={styles.activitySummary}>
+              <View>
+                <Text style={styles.weekCount}>{data.snapshot.workoutsThisWeek}</Text>
+                <Text style={styles.weekCountLabel}>WORKOUTS THIS WEEK</Text>
+              </View>
+              <View style={[styles.todayStatus, data.snapshot.hasWorkoutToday && styles.todayStatusDone]}>
+                <Text style={[styles.todayStatusText, data.snapshot.hasWorkoutToday && styles.todayStatusTextDone]}>
+                  {data.snapshot.hasWorkoutToday ? "✓ Logged today" : "Today is open"}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.weekMessage}>{data.snapshot.message}</Text>
+            {data.snapshot.mostRecentWorkoutToday ? (
             <View style={styles.activityRow}>
               <View style={styles.activityMark} />
-              <View style={styles.activityCopy}><Text style={styles.activityTitle}>{data.snapshot.mostRecentWorkoutToday.title}</Text><Text style={styles.activityMeta}>{data.snapshot.mostRecentWorkoutToday.workoutType}{data.snapshot.mostRecentWorkoutToday.durationMinutes ? ` · ${data.snapshot.mostRecentWorkoutToday.durationMinutes} min` : ""}</Text></View>
+              <View style={styles.activityCopy}>
+                <Text style={styles.activityEyebrow}>LATEST TODAY</Text>
+                <Text style={styles.activityTitle}>{data.snapshot.mostRecentWorkoutToday.title}</Text>
+                <Text style={styles.activityMeta}>{data.snapshot.mostRecentWorkoutToday.workoutType}{data.snapshot.mostRecentWorkoutToday.durationMinutes ? ` · ${data.snapshot.mostRecentWorkoutToday.durationMinutes} min` : ""}</Text>
+              </View>
             </View>
-          </>
-        ) : null}
+            ) : null}
+          </View>
+        </View>
 
-        <Text style={styles.sectionTitle}>My Groups</Text>
-        <View style={styles.groups}>
-          {data.groups.map((group) => (
-            <Pressable
-              accessibilityRole="button"
-              key={group.id}
-              onPress={() => {
-                setSelectedGroupId(group.id);
-                router.push(`/groups/${group.id}`);
-              }}
-              style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}
-            >
-              <View style={styles.groupMark}><Text style={styles.groupMarkText}>{group.name[0]?.toUpperCase()}</Text></View>
-              <View style={styles.groupCopy}><Text numberOfLines={1} style={styles.groupName}>{group.name}</Text><Text style={styles.groupRole}>{group.role}</Text></View>
-              <Text style={styles.groupArrow}>›</Text>
-            </Pressable>
-          ))}
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>MY GROUPS</Text>
+          <View style={styles.groups}>
+            {data.groups.map((group) => (
+              <Pressable
+                accessibilityRole="button"
+                key={group.id}
+                onPress={() => {
+                  setSelectedGroupId(group.id);
+                  router.push(`/groups/${group.id}`);
+                }}
+                style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}
+              >
+                <View style={styles.groupMark}><Text style={styles.groupMarkText}>{group.name[0]?.toUpperCase()}</Text></View>
+                <View style={styles.groupCopy}><Text numberOfLines={1} style={styles.groupName}>{group.name}</Text><Text style={styles.groupRole}>{group.role}</Text></View>
+                <Text style={styles.rowArrow}>›</Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>ACCOUNT</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push("../settings")}
+            style={({ pressed }) => [styles.settingsRow, pressed && styles.pressed]}
+          >
+            <Text style={styles.settingsLabel}>Settings</Text>
+            <Text style={styles.rowArrow}>›</Text>
+          </Pressable>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -112,30 +131,27 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   content: { padding: spacing.xxl, paddingBottom: 160 },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
-  topRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  settings: { color: colors.inkSoft, fontFamily: fonts.regular, fontSize: 23 },
-  identity: { alignItems: "center", marginTop: spacing.xxl },
-  avatar: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.pill, height: 82, justifyContent: "center", width: 82 },
-  avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 27 },
-  name: { color: colors.ink, ...type.title, marginTop: spacing.md },
+  identity: { alignItems: "center", flexDirection: "row", marginTop: spacing.xl },
+  avatar: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.pill, height: 64, justifyContent: "center", width: 64 },
+  avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 23 },
+  identityCopy: { flex: 1, marginLeft: spacing.lg },
+  name: { color: colors.ink, ...type.title },
   memberSince: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  stats: { borderBottomColor: colors.border, borderBottomWidth: 1, borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", marginTop: spacing.xxl, paddingVertical: spacing.lg },
-  stat: { alignItems: "center", flex: 1 },
-  statValue: { color: colors.ink, fontFamily: fonts.bold, fontSize: 24 },
-  statLabel: { color: colors.muted, ...type.eyebrow, fontSize: 10, marginTop: spacing.xs },
-  statDivider: { backgroundColor: colors.border, width: 1 },
-  sectionTitle: { color: colors.ink, ...type.heading, marginTop: spacing.xxxl },
-  weekRow: { alignItems: "center", flexDirection: "row", marginTop: spacing.md },
-  weekStatus: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, height: 46, justifyContent: "center", width: 46 },
-  weekStatusDone: { backgroundColor: colors.successSoft },
-  weekGlyph: { color: colors.muted, fontFamily: fonts.bold, fontSize: 19 },
-  weekGlyphDone: { color: colors.success },
-  weekCopy: { flex: 1, marginLeft: spacing.md },
-  weekTitle: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15 },
-  weekMessage: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  activityRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", marginTop: spacing.md, paddingBottom: spacing.lg },
+  section: { marginTop: spacing.xxxl },
+  sectionLabel: { color: colors.muted, ...type.eyebrow, fontSize: 11 },
+  activityPanel: { borderBottomColor: colors.border, borderBottomWidth: 1, borderTopColor: colors.border, borderTopWidth: 1, marginTop: spacing.md, paddingVertical: spacing.lg },
+  activitySummary: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  weekCount: { color: colors.ink, fontFamily: fonts.bold, fontSize: 28, lineHeight: 32 },
+  weekCountLabel: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.9, marginTop: spacing.xs },
+  todayStatus: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  todayStatusDone: { backgroundColor: colors.successSoft },
+  todayStatusText: { color: colors.muted, ...type.label },
+  todayStatusTextDone: { color: colors.success },
+  weekMessage: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
+  activityRow: { alignItems: "center", borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", marginTop: spacing.lg, paddingTop: spacing.lg },
   activityMark: { backgroundColor: colors.brand, borderRadius: radii.pill, height: 9, width: 9 },
   activityCopy: { flex: 1, marginLeft: spacing.md },
+  activityEyebrow: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.8, marginBottom: spacing.xs },
   activityTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16 },
   activityMeta: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs, textTransform: "capitalize" },
   groups: { marginTop: spacing.sm },
@@ -145,6 +161,8 @@ const styles = StyleSheet.create({
   groupCopy: { flex: 1, marginLeft: spacing.md },
   groupName: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16 },
   groupRole: { color: colors.muted, ...type.label, marginTop: spacing.xs, textTransform: "capitalize" },
-  groupArrow: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24 },
+  settingsRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 56 },
+  settingsLabel: { color: colors.ink, flex: 1, fontFamily: fonts.semibold, fontSize: 16 },
+  rowArrow: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24 },
   pressed: { opacity: 0.7 },
 });

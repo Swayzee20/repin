@@ -7,6 +7,12 @@ import { Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollV
 
 import { supabase } from "../../../lib/supabase";
 import { BackButton, Button, TextField } from "../../../ui/components";
+import {
+  buildQuickLogResults,
+  emptyQuickLogResults,
+  QuickLogResultsFields,
+  validateQuickLogResults,
+} from "../../../ui/quick-log-results";
 import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -16,7 +22,6 @@ const workoutOptions: { label: string; value: WorkoutType }[] = [
   { label: "HIIT", value: "hiit" }, { label: "Functional Fitness", value: "functional_fitness" },
   { label: "Other", value: "other" },
 ];
-const requiredDurationTypes = new Set<WorkoutType>(["run", "walk", "hiit"]);
 const workoutTypeLabels = Object.fromEntries(workoutOptions.map((option) => [option.value, option.label])) as Record<WorkoutType, string>;
 const effortLabels = ["Light work", "Felt good", "Solid work", "That was tough", "How am I alive?"];
 type SelectedPhoto = { base64: string; mimeType: string; uri: string };
@@ -26,8 +31,8 @@ export default function LogWorkoutScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [workoutType, setWorkoutType] = useState<WorkoutType | null>(null);
+  const [results, setResults] = useState(emptyQuickLogResults);
   const [name, setName] = useState("");
-  const [duration, setDuration] = useState("");
   const [effort, setEffort] = useState<number | null>(null);
   const [caption, setCaption] = useState("");
   const [photo, setPhoto] = useState<SelectedPhoto | null>(null);
@@ -36,22 +41,10 @@ export default function LogWorkoutScreen() {
   const [webTime, setWebTime] = useState(() => getLocalDateParts(new Date()).time);
   const [pickerMode, setPickerMode] = useState<"date" | "time">("date");
   const [showPicker, setShowPicker] = useState(false);
-  const [showMore, setShowMore] = useState(false);
-  const [durationTouched, setDurationTouched] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const durationRequired = workoutType ? requiredDurationTypes.has(workoutType) : false;
-  const parsedDuration = duration.trim() ? Number(duration) : null;
-  const durationValid = parsedDuration === null || (Number.isInteger(parsedDuration) && parsedDuration > 0 && parsedDuration <= 1_440);
-  const canSubmit = Boolean(workoutType) && durationValid && (!durationRequired || parsedDuration !== null);
-  const durationError = durationTouched
-    ? !durationValid
-      ? "Enter a valid number of minutes."
-      : durationRequired && parsedDuration === null
-        ? `Duration is required for ${workoutType === "hiit" ? "HIIT workouts" : `${workoutType}s`}.`
-        : null
-    : null;
+  const canSubmit = Boolean(workoutType);
 
   const pickPhoto = useCallback(async () => {
     setError(null);
@@ -67,10 +60,8 @@ export default function LogWorkoutScreen() {
   const submitWorkout = useCallback(async () => {
     setError(null);
     if (!workoutType) { setError("Choose a workout type."); return; }
-    if (!durationValid || (durationRequired && parsedDuration === null)) {
-      setError(durationRequired ? "Add a valid duration for this workout." : "Duration must be a positive whole number of minutes.");
-      return;
-    }
+    const resultsIssue = validateQuickLogResults(results, workoutType);
+    if (resultsIssue) { setError(resultsIssue); return; }
     if (!supabase || !groupId) { setError("This workout cannot be submitted from the current screen."); return; }
     setSubmitting(true);
     let uploadedPhotoPath: string | null = null;
@@ -87,17 +78,23 @@ export default function LogWorkoutScreen() {
         );
         if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
       }
+      const structuredResults = buildQuickLogResults(results, workoutType);
+      const durationMinutes = structuredResults.durationSeconds == null
+        ? null
+        : Math.max(1, Math.round(structuredResults.durationSeconds / 60));
       const response = await fetch(`${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts`, {
         method: "POST",
         headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           workoutType,
           name,
-          durationMinutes: parsedDuration,
+          durationMinutes,
           effort,
           caption,
           photoPath: uploadedPhotoPath,
           occurredAt: occurredAt.toISOString(),
+          metrics: structuredResults.metrics,
+          movements: structuredResults.movements,
           // Keep aliases during the v1 rollout so an older API deployment can validate the request.
           title: name.trim() || workoutTypeLabels[workoutType],
           notes: caption,
@@ -117,7 +114,7 @@ export default function LogWorkoutScreen() {
       setError(submitError instanceof Error ? submitError.message : "Workout could not be created.");
       setSubmitting(false);
     }
-  }, [caption, durationRequired, durationValid, effort, groupId, name, occurredAt, parsedDuration, photo, router, workoutType]);
+  }, [caption, effort, groupId, name, occurredAt, photo, results, router, workoutType]);
 
   const handleNativeDateChange = useCallback((event: DateTimePickerEvent, value?: Date) => {
     if (event.type === "dismissed" || !value) { setShowPicker(false); return; }
@@ -144,11 +141,7 @@ export default function LogWorkoutScreen() {
             ))}</View>
           </View>
 
-          <View style={styles.section}>
-            <FieldLabel label="How long?" optional={!durationRequired} />
-            <View style={styles.durationControl}><TextField containerStyle={styles.controlSpacing} inputMode="numeric" maxLength={4} onBlur={() => setDurationTouched(true)} onChangeText={setDuration} placeholder="45" returnKeyType="done" style={[styles.durationInput, durationError && styles.inputError]} value={duration} /><Text pointerEvents="none" style={styles.durationSuffix}>min</Text></View>
-            {durationError ? <Text style={styles.inlineError}>{durationError}</Text> : null}
-          </View>
+          <QuickLogResultsFields onChange={setResults} value={results} workoutType={workoutType} />
           <View style={styles.section}>
             <FieldLabel label="How'd it feel?" optional />
             <View style={styles.effortRow}>{[1, 2, 3, 4, 5].map((level) => (
@@ -165,23 +158,19 @@ export default function LogWorkoutScreen() {
               {showPicker ? <View style={styles.pickerWrap}><DateTimePicker mode={Platform.OS === "ios" ? "datetime" : pickerMode} onChange={handleNativeDateChange} value={occurredAt} />{Platform.OS === "ios" ? <Pressable accessibilityRole="button" onPress={() => setShowPicker(false)}><Text style={styles.pickerDone}>Done</Text></Pressable> : null}</View> : null}
             </>}
           </View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ expanded: showMore }}
-            onPress={() => setShowMore((current) => !current)}
-            style={({ pressed }) => [styles.moreButton, pressed && styles.pressed]}
-          >
-            <Text style={styles.moreText}>{showMore ? "Less  ˄" : "More  ˅"}</Text>
-          </Pressable>
-          {showMore ? <View>
-            <View style={styles.extraSection}><FieldLabel label="Give it a name" optional /><TextField containerStyle={styles.controlSpacing} maxLength={120} onChangeText={setName} placeholder="Push day, morning run..." returnKeyType="next" style={styles.optionalInput} value={name} /></View>
-            <View style={styles.section}><FieldLabel label="How'd it go?" optional /><TextField containerStyle={styles.controlSpacing} maxLength={2_000} multiline onChangeText={setCaption} placeholder="Knee felt a lot better today..." style={styles.captionInput} value={caption} /></View>
-            <View style={styles.section}>
-              <FieldLabel label="Add photo" optional />
+          <View style={styles.section}>
+            <FieldLabel label="Workout name" optional />
+            <TextField containerStyle={styles.controlSpacing} maxLength={120} onChangeText={setName} placeholder="Push day, morning run..." returnKeyType="next" value={name} />
+          </View>
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Add to your post</Text>
+            <View style={styles.postField}>
+              <FieldLabel label="Photo" optional />
               {photo ? <View><Image accessibilityLabel="Selected workout" source={{ uri: photo.uri }} style={styles.photoPreview} /><View style={styles.photoActions}><Pressable accessibilityRole="button" onPress={() => void pickPhoto()}><Text style={styles.textAction}>Change</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setPhoto(null)}><Text style={styles.removeAction}>Remove</Text></Pressable></View></View> :
                 <Pressable accessibilityRole="button" onPress={() => void pickPhoto()} style={({ pressed }) => [styles.addPhoto, pressed && styles.pressed]}><Text style={styles.addPhotoText}>+ Add photo</Text></Pressable>}
             </View>
-          </View> : null}
+            <View style={styles.postField}><FieldLabel label="Caption" optional /><TextField containerStyle={styles.controlSpacing} maxLength={2_000} multiline onChangeText={setCaption} placeholder="Knee felt a lot better today..." style={styles.captionInput} value={caption} /></View>
+          </View>
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
           <Button disabled={!canSubmit} loading={submitting} onPress={() => void submitWorkout()} style={styles.submitButton}>Log workout</Button>
         </ScrollView>
@@ -209,13 +198,12 @@ function decodeBase64(value: string) { const binary = globalThis.atob(value); re
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, keyboardAvoidingView: { flex: 1 }, scrollView: { flex: 1 }, container: { padding: spacing.xxl, paddingBottom: 144 },
-  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, section: { marginTop: spacing.xxl }, extraSection: { marginTop: spacing.lg }, sectionTitle: { color: colors.ink, ...type.heading },
-  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm }, optional: { color: colors.muted, ...type.label }, controlSpacing: { marginTop: spacing.sm }, optionalInput: { backgroundColor: "#FCFBFA", borderColor: colors.border },
+  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, section: { marginTop: spacing.xxl }, sectionTitle: { color: colors.ink, ...type.heading },
+  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm }, optional: { color: colors.muted, ...type.label }, controlSpacing: { marginTop: spacing.sm },
   typeGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md }, typeChip: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, flexBasis: "47%", flexGrow: 1, justifyContent: "center", minHeight: 46, paddingHorizontal: spacing.md }, typeChipSelected: { backgroundColor: colors.brand }, typeChipText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, textAlign: "center" }, typeChipTextSelected: { color: colors.surface }, pressed: { opacity: 0.76 },
-  durationControl: { alignSelf: "flex-start", width: 176 }, durationInput: { fontFamily: fonts.semibold, fontSize: 18, paddingRight: 52 }, durationSuffix: { color: colors.muted, fontFamily: fonts.semibold, fontSize: 14, position: "absolute", right: spacing.lg, top: 26 }, inputError: { borderColor: colors.danger }, inlineError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.xs },
   effortRow: { flexDirection: "row", gap: spacing.xs, marginTop: spacing.sm }, flameButton: { alignItems: "center", borderColor: "transparent", borderRadius: radii.md, borderWidth: 1, height: 48, justifyContent: "center", width: 48 }, flameButtonActive: { backgroundColor: colors.brandSoft }, flameButtonSelected: { borderColor: colors.brand }, flame: { fontSize: 25 }, flameInactive: { opacity: 0.18 }, effortLabel: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.sm }, effortLabelEmpty: { color: colors.muted }, captionInput: { maxHeight: 144, minHeight: 88, textAlignVertical: "top" },
+  postField: { marginTop: spacing.lg },
   addPhoto: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, justifyContent: "center", marginTop: spacing.sm, minHeight: 44, paddingHorizontal: spacing.lg }, addPhotoText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14 }, photoPreview: { borderRadius: radii.md, height: 132, marginTop: spacing.sm, width: 176 }, photoActions: { flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm }, textAction: { color: colors.brand, ...type.label }, removeAction: { color: colors.muted, ...type.label },
   whenRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 52 }, whenLabel: { color: colors.ink, ...type.heading }, whenValue: { alignItems: "center", flexDirection: "row", flexShrink: 1, marginLeft: spacing.md }, whenText: { color: colors.muted, ...type.bodySmall }, whenAction: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24, marginLeft: spacing.sm }, pickerWrap: { alignItems: "flex-end", marginTop: spacing.sm }, pickerDone: { color: colors.brand, ...type.label, padding: spacing.md }, webDateRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm }, webDateField: { flex: 1 },
-  moreButton: { alignItems: "flex-start", alignSelf: "flex-start", justifyContent: "center", marginTop: spacing.sm, minHeight: 44, paddingRight: spacing.lg }, moreText: { color: colors.brand, ...type.label },
   errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, marginTop: spacing.xl, padding: spacing.md }, errorText: { color: colors.danger, ...type.bodySmall }, submitButton: { marginTop: spacing.xl },
 });

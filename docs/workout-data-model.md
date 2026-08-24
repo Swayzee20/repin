@@ -10,11 +10,12 @@ Last major architecture update: August 2026.
 
 # 1. Overview
 
-RepIn separates a workout into three primary concepts:
+RepIn separates a workout into three primary concepts and one session-owned results layer:
 
 1. **Workout Definition** — what is prescribed or intended to be performed.
 2. **Workout Session** — what a user actually did.
-3. **Community Post** — how a completed workout is shared socially.
+3. **Session Results** — structured actual metrics, movements, and sets recorded for that session.
+4. **Community Post** — how a completed workout is shared socially.
 
 These concepts intentionally have separate lifecycles.
 
@@ -26,6 +27,10 @@ WORKOUT DEFINITION
         ▼
 WORKOUT SESSION
 "What did I actually do?"
+        │
+        ├── workout_session_metrics
+        └── session_movement_results
+                    └── set_results
         │
         │ optional sharing
         ▼
@@ -124,10 +129,14 @@ workout_definitions
 │                         │
 │ Personal workout        │
 │ history / completion    │
-└────────────┬────────────┘
-             │
-             │ may be shared
-             ▼
+└───────┬───────────┬─────┘
+        │           │
+        │           ├── workout_session_metrics
+        │           └── session_movement_results
+        │                       └── set_results
+        │
+        │ may be shared
+        ▼
 ┌─────────────────────────┐
 │    community_posts      │
 │                         │
@@ -771,28 +780,105 @@ Possible completed result:
 185 × 8
 ```
 
-Those should not overwrite each other.
+Those do not overwrite each other. Prescribed targets remain associated with the definition, while actual results belong to the completed session through three result tables.
 
-Future detailed result tracking should therefore attach actual results to the session, while prescribed targets remain associated with the definition.
+## Workout-level actual metrics
 
-This future model may introduce entities such as:
+`workout_session_metrics` stores ordered results that describe the workout as a whole:
 
 ```text
-session_block_results
-movement_results
-set_results
+workout_session_metrics
+-----------------------
+id
+workout_session_id
+position
+metric_type
+label
+numeric_value
+text_value
+unit
+created_at
+updated_at
 ```
 
-The exact implementation has not yet been finalized.
+Supported initial metric types are:
+
+```text
+duration
+distance
+calories
+rounds
+score
+pace
+other
+```
+
+At least one of `numeric_value` or `text_value` is required. Measurements should use numeric values when practical. For example, a run can store `3.2 mi` and `1694 sec`, while an unusual score can use text such as `5 rounds + 12 reps`.
+
+## Movements actually performed
+
+`session_movement_results` records ordered movements actually performed during a session:
+
+```text
+session_movement_results
+------------------------
+id
+workout_session_id
+block_movement_id       nullable
+movement_id             nullable
+movement_name
+position
+notes
+config
+created_at
+updated_at
+```
+
+`block_movement_id` optionally connects an actual result to the corresponding prescribed movement. It is only valid when that prescribed movement belongs to the session's workout definition.
+
+`movement_id` optionally connects the result to the canonical movement library. `movement_name` is always retained, including for unrecognized or manually entered movements.
+
+Deleting a prescribed or canonical movement sets the optional reference to null rather than deleting completed history.
+
+## Actual sets/results
+
+`set_results` stores ordered results under a performed movement:
+
+```text
+set_results
+-----------
+id
+session_movement_result_id
+position
+reps
+load
+load_unit
+duration_seconds
+distance
+distance_unit
+calories
+completed
+notes
+config
+created_at
+updated_at
+```
+
+A result can describe strength work, timed work, distance work, bodyweight repetitions, a skipped/incomplete set, or an unusual format preserved in `config`. Common result values stay in first-class columns rather than JSONB.
+
+Deleting a session cascades to its metrics, movement results, and sets. Deleting a movement result cascades to its sets.
 
 ---
 
 # 14. Current Quick Workout Logging
 
-RepIn's existing quick workout form creates:
+RepIn's Quick Log form transactionally creates:
 
 ```text
 workout_session
+      ├── optional workout_session_metrics
+      └── optional session_movement_results
+                        └── optional set_results
       ↓
 community_post
 ```
@@ -801,7 +887,9 @@ It does not currently create a structured workout definition.
 
 This is intentional.
 
-A user can continue logging simple workouts such as:
+A user can still log a minimal workout with only a workout type and occurred timestamp. Depending on the selected workout type, Quick Log can also capture precise duration, distance, rounds, a text score, or shorthand strength sets without creating a prescription.
+
+For example:
 
 ```text
 Strength Training
@@ -812,7 +900,7 @@ Effort 3/5
 
 without being required to enter exercises, sets, reps, or blocks.
 
-Future manual workout creation should therefore distinguish between:
+Manual workout creation should distinguish between:
 
 ### Quick Log
 
@@ -820,11 +908,13 @@ Fast social/accountability check-in.
 
 and potentially:
 
-### Structured Workout
+### Detailed Workout
 
 Detailed workout prescription and/or workout results.
 
-The structured model should enhance the quick-log experience rather than replace it.
+Quick Log and Detailed Workout intentionally converge on the same session/results model. Their difference is UX depth, not database ownership.
+
+Quick Log expands repeated identical-set quantities into individual ordered `set_results` rows before persistence. Canonical movement selection is optional: freeform exercise names are preserved with a null `movement_id`. A minimal Quick Log remains valid with no metric, movement-result, or set-result rows.
 
 ---
 
@@ -980,6 +1070,9 @@ workout_definitions
 workout_blocks
 block_movements
 movements
+workout_session_metrics
+session_movement_results
+set_results
 ```
 
 The legacy table may be removed in a future migration after the new architecture has remained stable for an appropriate period.
@@ -1006,6 +1099,7 @@ When extending RepIn's workout system, preserve these boundaries:
 14. **Common workout concepts should use structured fields.**
 15. **JSONB is an escape hatch, not the primary workout schema.**
 16. **Quick workout logging should remain possible without detailed structured entry.**
+17. **Quick Log and Detailed Workout use the same session/results architecture.**
 
 ---
 
@@ -1027,6 +1121,11 @@ Prescribed workout structure
 
 Canonical exercise information
     → movements
+
+Structured actual workout results
+    → workout_session_metrics
+       + session_movement_results
+       + set_results
 
 Legacy historical workout model
     → workouts

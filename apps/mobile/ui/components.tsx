@@ -384,9 +384,9 @@ export function CommunityFeed({
       </Animated.ScrollView>
       <LinearGradient
         colors={[
-          "#D8D8D8",
-          "rgba(216,216,216,0.72)",
-          "rgba(216,216,216,0)",
+          "#F7F2F2",
+          "rgba(247,242,242,0.58)",
+          "rgba(247,242,242,0)",
         ]}
         locations={[0, 0.38, 1]}
         pointerEvents="none"
@@ -394,9 +394,9 @@ export function CommunityFeed({
       />
       <LinearGradient
         colors={[
-          "rgba(216,216,216,0)",
-          "rgba(216,216,216,0.68)",
-          "#D8D8D8",
+          "rgba(247,242,242,0)",
+          "rgba(247,242,242,0.54)",
+          "#F7F2F2",
         ]}
         locations={[0, 0.64, 1]}
         pointerEvents="none"
@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
   feedScroller: { overflow: "visible" },
   feedContent: { paddingBottom: 132, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
   feedSlot: { minWidth: 0, overflow: "visible", paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },
-  edgeFade: { height: 15, left: 0, position: "absolute", right: 0, zIndex: 10 },
+  edgeFade: { height: 20, left: 0, position: "absolute", right: 0, zIndex: 10 },
   topFade: { top: 0 },
   bottomFade: { bottom: 0 },
 });

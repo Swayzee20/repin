@@ -35,6 +35,16 @@ export const workoutBlockTypes = [
   "freeform",
 ] as const;
 
+export const workoutSessionMetricTypes = [
+  "duration",
+  "distance",
+  "calories",
+  "rounds",
+  "score",
+  "pace",
+  "other",
+] as const;
+
 export const users = pgTable("users", {
   id: uuid().primaryKey(),
   displayName: text("display_name").notNull(),
@@ -336,6 +346,148 @@ export const workoutSessions = pgTable(
   ],
 );
 
+export const workoutSessionMetrics = pgTable(
+  "workout_session_metrics",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    workoutSessionId: uuid("workout_session_id")
+      .notNull()
+      .references(() => workoutSessions.id, { onDelete: "cascade" }),
+    position: integer().notNull(),
+    metricType: text("metric_type").notNull(),
+    label: text(),
+    numericValue: numeric("numeric_value", {
+      precision: 14,
+      scale: 3,
+      mode: "number",
+    }),
+    textValue: text("text_value"),
+    unit: text(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("workout_session_metrics_workout_session_id_idx").on(
+      table.workoutSessionId,
+    ),
+    uniqueIndex("workout_session_metrics_session_position_unique").on(
+      table.workoutSessionId,
+      table.position,
+    ),
+    check(
+      "workout_session_metrics_position_check",
+      sql`${table.position} >= 0`,
+    ),
+    check(
+      "workout_session_metrics_metric_type_check",
+      sql`${table.metricType} in ('duration', 'distance', 'calories', 'rounds', 'score', 'pace', 'other')`,
+    ),
+    check(
+      "workout_session_metrics_value_check",
+      sql`${table.numericValue} is not null or ${table.textValue} is not null`,
+    ),
+  ],
+);
+
+export const sessionMovementResults = pgTable(
+  "session_movement_results",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    workoutSessionId: uuid("workout_session_id")
+      .notNull()
+      .references(() => workoutSessions.id, { onDelete: "cascade" }),
+    blockMovementId: uuid("block_movement_id").references(
+      () => blockMovements.id,
+      { onDelete: "set null" },
+    ),
+    movementId: uuid("movement_id").references(() => movements.id, {
+      onDelete: "set null",
+    }),
+    movementName: text("movement_name").notNull(),
+    position: integer().notNull(),
+    notes: text(),
+    config: jsonb().$type<WorkoutConfig>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("session_movement_results_workout_session_id_idx").on(
+      table.workoutSessionId,
+    ),
+    index("session_movement_results_block_movement_id_idx").on(
+      table.blockMovementId,
+    ),
+    index("session_movement_results_movement_id_idx").on(table.movementId),
+    uniqueIndex("session_movement_results_session_position_unique").on(
+      table.workoutSessionId,
+      table.position,
+    ),
+    check(
+      "session_movement_results_position_check",
+      sql`${table.position} >= 0`,
+    ),
+  ],
+);
+
+export const setResults = pgTable(
+  "set_results",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    sessionMovementResultId: uuid("session_movement_result_id")
+      .notNull()
+      .references(() => sessionMovementResults.id, { onDelete: "cascade" }),
+    position: integer().notNull(),
+    reps: integer(),
+    load: numeric({ precision: 12, scale: 3, mode: "number" }),
+    loadUnit: text("load_unit"),
+    durationSeconds: integer("duration_seconds"),
+    distance: numeric({ precision: 12, scale: 3, mode: "number" }),
+    distanceUnit: text("distance_unit"),
+    calories: integer(),
+    completed: boolean().default(true).notNull(),
+    notes: text(),
+    config: jsonb().$type<WorkoutConfig>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("set_results_session_movement_result_id_idx").on(
+      table.sessionMovementResultId,
+    ),
+    uniqueIndex("set_results_movement_position_unique").on(
+      table.sessionMovementResultId,
+      table.position,
+    ),
+    check("set_results_position_check", sql`${table.position} >= 0`),
+    check("set_results_reps_check", sql`${table.reps} is null or ${table.reps} >= 0`),
+    check("set_results_load_check", sql`${table.load} is null or ${table.load} >= 0`),
+    check(
+      "set_results_duration_seconds_check",
+      sql`${table.durationSeconds} is null or ${table.durationSeconds} >= 0`,
+    ),
+    check(
+      "set_results_distance_check",
+      sql`${table.distance} is null or ${table.distance} >= 0`,
+    ),
+    check(
+      "set_results_calories_check",
+      sql`${table.calories} is null or ${table.calories} >= 0`,
+    ),
+  ],
+);
+
 export const communityPosts = pgTable(
   "community_posts",
   {
@@ -390,5 +542,11 @@ export type BlockMovement = typeof blockMovements.$inferSelect;
 export type NewBlockMovement = typeof blockMovements.$inferInsert;
 export type WorkoutSession = typeof workoutSessions.$inferSelect;
 export type NewWorkoutSession = typeof workoutSessions.$inferInsert;
+export type WorkoutSessionMetric = typeof workoutSessionMetrics.$inferSelect;
+export type NewWorkoutSessionMetric = typeof workoutSessionMetrics.$inferInsert;
+export type SessionMovementResult = typeof sessionMovementResults.$inferSelect;
+export type NewSessionMovementResult = typeof sessionMovementResults.$inferInsert;
+export type SetResult = typeof setResults.$inferSelect;
+export type NewSetResult = typeof setResults.$inferInsert;
 export type CommunityPost = typeof communityPosts.$inferSelect;
 export type NewCommunityPost = typeof communityPosts.$inferInsert;

@@ -88,6 +88,45 @@ export const workoutTypes = [
 
 export type WorkoutType = (typeof workoutTypes)[number];
 
+export const workoutMetricTypes = [
+  "duration",
+  "distance",
+  "calories",
+  "rounds",
+  "score",
+  "pace",
+  "other",
+] as const;
+
+export type WorkoutMetricType = (typeof workoutMetricTypes)[number];
+
+export interface QuickLogMetricInput {
+  metricType: WorkoutMetricType;
+  label?: string | null;
+  numericValue?: number | null;
+  textValue?: string | null;
+  unit?: string | null;
+}
+
+export interface QuickLogSetInput {
+  reps?: number | null;
+  load?: number | null;
+  loadUnit?: "lb" | "kg" | null;
+}
+
+export interface QuickLogMovementInput {
+  movementId?: string | null;
+  movementName: string;
+  sets: QuickLogSetInput[];
+}
+
+export interface MovementSummary {
+  id: string;
+  name: string;
+  category: string | null;
+  equipment: string | null;
+}
+
 export interface WorkoutFeedItem {
   id: string;
   userId: string;
