@@ -1,4 +1,4 @@
-import type { HomeData } from "@repin/types";
+import type { HomeData, WorkoutFeedItem } from "@repin/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
@@ -56,6 +56,13 @@ export default function CommunityTabScreen() {
     setBoardHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
   }, []);
 
+  const openWorkoutDetail = useCallback((workout: WorkoutFeedItem) => {
+    if (!selectedGroup) return;
+    router.push(
+      `../workouts/${encodeURIComponent(workout.id)}?groupId=${encodeURIComponent(selectedGroup.id)}`,
+    );
+  }, [router, selectedGroup]);
+
   if (loading && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><LoadingState message="Loading Community…" /></SafeAreaView>;
   if (error && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" /></View></SafeAreaView>;
 
@@ -112,7 +119,7 @@ export default function CommunityTabScreen() {
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <View onLayout={handleBoardLayout} style={styles.boardArea}>
               {data?.communityWorkouts.length ? (
-                boardHeight > 0 ? <CommunityFeed edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
+                boardHeight > 0 ? <CommunityFeed edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutPress={openWorkoutDetail} viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
               ) : (
                 <View style={styles.emptyBoardContent}><StateCard title="The board is quiet" message="Log a workout to get the conversation started." /></View>
               )}

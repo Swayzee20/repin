@@ -1005,6 +1005,192 @@ export async function listRecentWorkoutsForMember(input: {
   }));
 }
 
+export async function getCommunityWorkoutDetailForMember(input: {
+  userId: string;
+  groupId: string;
+  workoutSessionId: string;
+}) {
+  const database = getDatabase();
+  const [post] = await database
+    .select({
+      communityPostId: schema.communityPosts.id,
+      id: schema.workoutSessions.id,
+      userId: schema.workoutSessions.userId,
+      groupId: schema.communityPosts.groupId,
+      workoutType: schema.workoutSessions.workoutType,
+      name: schema.workoutSessions.name,
+      durationMinutes: schema.workoutSessions.durationMinutes,
+      effort: schema.workoutSessions.effort,
+      caption: schema.communityPosts.caption,
+      photoPath: schema.communityPosts.photoPath,
+      occurredAt: schema.workoutSessions.occurredAt,
+      createdAt: schema.communityPosts.createdAt,
+      updatedAt: schema.communityPosts.updatedAt,
+      displayName: schema.users.displayName,
+    })
+    .from(schema.communityPosts)
+    .innerJoin(
+      schema.workoutSessions,
+      eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
+    )
+    .innerJoin(
+      schema.users,
+      eq(schema.workoutSessions.userId, schema.users.id),
+    )
+    .innerJoin(
+      schema.groupMembers,
+      and(
+        eq(schema.groupMembers.groupId, schema.communityPosts.groupId),
+        eq(schema.groupMembers.userId, input.userId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.communityPosts.groupId, input.groupId),
+        eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+      ),
+    )
+    .limit(1);
+
+  if (!post) return null;
+
+  const [metrics, movementSetRows] = await Promise.all([
+    database
+      .select({
+        id: schema.workoutSessionMetrics.id,
+        position: schema.workoutSessionMetrics.position,
+        metricType: schema.workoutSessionMetrics.metricType,
+        label: schema.workoutSessionMetrics.label,
+        numericValue: schema.workoutSessionMetrics.numericValue,
+        textValue: schema.workoutSessionMetrics.textValue,
+        unit: schema.workoutSessionMetrics.unit,
+      })
+      .from(schema.workoutSessionMetrics)
+      .where(
+        eq(
+          schema.workoutSessionMetrics.workoutSessionId,
+          input.workoutSessionId,
+        ),
+      )
+      .orderBy(asc(schema.workoutSessionMetrics.position)),
+    database
+      .select({
+        movementResultId: schema.sessionMovementResults.id,
+        movementId: schema.sessionMovementResults.movementId,
+        movementName: schema.sessionMovementResults.movementName,
+        movementPosition: schema.sessionMovementResults.position,
+        movementNotes: schema.sessionMovementResults.notes,
+        setId: schema.setResults.id,
+        setPosition: schema.setResults.position,
+        reps: schema.setResults.reps,
+        load: schema.setResults.load,
+        loadUnit: schema.setResults.loadUnit,
+        durationSeconds: schema.setResults.durationSeconds,
+        distance: schema.setResults.distance,
+        distanceUnit: schema.setResults.distanceUnit,
+        calories: schema.setResults.calories,
+        completed: schema.setResults.completed,
+        setNotes: schema.setResults.notes,
+      })
+      .from(schema.sessionMovementResults)
+      .leftJoin(
+        schema.setResults,
+        eq(
+          schema.setResults.sessionMovementResultId,
+          schema.sessionMovementResults.id,
+        ),
+      )
+      .where(
+        eq(
+          schema.sessionMovementResults.workoutSessionId,
+          input.workoutSessionId,
+        ),
+      )
+      .orderBy(
+        asc(schema.sessionMovementResults.position),
+        asc(schema.setResults.position),
+      ),
+  ]);
+
+  const movements = new Map<
+    string,
+    {
+      id: string;
+      movementId: string | null;
+      movementName: string;
+      position: number;
+      notes: string | null;
+      sets: Array<{
+        id: string;
+        position: number;
+        reps: number | null;
+        load: number | null;
+        loadUnit: string | null;
+        durationSeconds: number | null;
+        distance: number | null;
+        distanceUnit: string | null;
+        calories: number | null;
+        completed: boolean;
+        notes: string | null;
+      }>;
+    }
+  >();
+
+  for (const row of movementSetRows) {
+    let movement = movements.get(row.movementResultId);
+    if (!movement) {
+      movement = {
+        id: row.movementResultId,
+        movementId: row.movementId,
+        movementName: row.movementName,
+        position: row.movementPosition,
+        notes: row.movementNotes,
+        sets: [],
+      };
+      movements.set(row.movementResultId, movement);
+    }
+
+    if (row.setId && row.setPosition != null && row.completed != null) {
+      movement.sets.push({
+        id: row.setId,
+        position: row.setPosition,
+        reps: row.reps,
+        load: row.load,
+        loadUnit: row.loadUnit,
+        durationSeconds: row.durationSeconds,
+        distance: row.distance,
+        distanceUnit: row.distanceUnit,
+        calories: row.calories,
+        completed: row.completed,
+        notes: row.setNotes,
+      });
+    }
+  }
+
+  const summaryMovements = [...movements.values()].map((movement) => ({
+    movementName: movement.movementName,
+    sets: movement.sets.map((set) => ({
+      reps: set.reps,
+      load: set.load,
+      loadUnit: set.loadUnit,
+    })),
+  }));
+
+  return {
+    ...post,
+    title: post.name ?? post.workoutType,
+    notes: post.caption,
+    completedAt: post.occurredAt,
+    resultSummary: formatWorkoutResultSummary({
+      workoutType: post.workoutType,
+      metrics,
+      movements: summaryMovements,
+    }),
+    metrics,
+    movements: [...movements.values()],
+  };
+}
+
 export async function getUserWorkoutSnapshot(input: {
   userId: string;
   todayStart: Date;

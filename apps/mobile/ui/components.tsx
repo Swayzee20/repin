@@ -225,6 +225,7 @@ export function LoadingState({ message }: { message: string }) {
 export function WorkoutCard({
   focalY,
   layoutY,
+  onPress,
   scrollY,
   side = "left",
   viewportHeight,
@@ -232,6 +233,7 @@ export function WorkoutCard({
 }: {
   focalY: number;
   layoutY: SharedValue<number>;
+  onPress?: () => void;
   scrollY: SharedValue<number>;
   side?: "left" | "right";
   viewportHeight: number;
@@ -291,7 +293,18 @@ export function WorkoutCard({
       }}
       style={[styles.floatingWorkout, side === "left" ? styles.floatingLeft : styles.floatingRight, animatedStyle]}
     >
-      <WorkoutSummaryCard variant="full" workout={workout} />
+      {onPress ? (
+        <Pressable
+          accessibilityLabel={`Open ${workout.title} workout details`}
+          accessibilityRole="button"
+          onPress={onPress}
+          style={({ pressed }) => pressed && styles.workoutCardPressed}
+        >
+          <WorkoutSummaryCard variant="full" workout={workout} />
+        </Pressable>
+      ) : (
+        <WorkoutSummaryCard variant="full" workout={workout} />
+      )}
     </Animated.View>
   );
 }
@@ -339,12 +352,14 @@ export function CommunityFeed({
   edgeToEdge = false,
   focusOffsetY = 0,
   mode = "full",
+  onWorkoutPress,
   viewportHeight,
   workouts,
 }: {
   edgeToEdge?: boolean;
   focusOffsetY?: number;
   mode?: "preview" | "full";
+  onWorkoutPress?: (workout: WorkoutFeedItem) => void;
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
 }) {
@@ -376,6 +391,7 @@ export function CommunityFeed({
             focalY={resolvedViewportHeight * 0.38 - focusOffsetY}
             itemHeights={itemHeights}
             key={workout.id}
+            onPress={onWorkoutPress ? () => onWorkoutPress(workout) : undefined}
             orderedWorkoutIds={orderedWorkoutIds}
             scrollY={scrollY}
             side={index % 2 === 0 ? "left" : "right"}
@@ -411,6 +427,7 @@ export function CommunityFeed({
 function CommunityFeedItem({
   focalY,
   itemHeights,
+  onPress,
   orderedWorkoutIds,
   scrollY,
   side,
@@ -419,6 +436,7 @@ function CommunityFeedItem({
 }: {
   focalY: number;
   itemHeights: SharedValue<Record<string, number>>;
+  onPress?: () => void;
   orderedWorkoutIds: string[];
   scrollY: SharedValue<number>;
   side: "left" | "right";
@@ -457,6 +475,7 @@ function CommunityFeedItem({
       <WorkoutCard
         focalY={focalY}
         layoutY={layoutY}
+        onPress={onPress}
         scrollY={scrollY}
         side={side}
         viewportHeight={viewportHeight}
@@ -476,7 +495,7 @@ const workoutTypeLabels: Record<string, string> = {
   other: "Other",
 };
 
-function formatWorkoutType(value: string) {
+export function formatWorkoutType(value: string) {
   const fallback = value.split("_").filter(Boolean).map((word) => `${word[0]?.toUpperCase() ?? ""}${word.slice(1)}`).join(" ");
   return workoutTypeLabels[value] ?? (fallback || "Workout");
 }
@@ -534,6 +553,7 @@ const styles = StyleSheet.create({
   compactWorkoutTitle: { marginTop: spacing.md },
   workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },
   workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: spacing.xs },
+  workoutCardPressed: { opacity: 0.94 },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
   workoutPhoto: { aspectRatio: 16 / 10, borderRadius: radii.md, marginTop: spacing.md, width: "100%" },
   floatingWorkout: {

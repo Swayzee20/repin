@@ -148,6 +148,45 @@ export interface WorkoutFeedItem {
   displayName: string;
 }
 
+export interface WorkoutDetailMetric {
+  id: string;
+  position: number;
+  metricType: WorkoutMetricType;
+  label: string | null;
+  numericValue: number | null;
+  textValue: string | null;
+  unit: string | null;
+}
+
+export interface WorkoutDetailSet {
+  id: string;
+  position: number;
+  reps: number | null;
+  load: number | null;
+  loadUnit: string | null;
+  durationSeconds: number | null;
+  distance: number | null;
+  distanceUnit: string | null;
+  calories: number | null;
+  completed: boolean;
+  notes: string | null;
+}
+
+export interface WorkoutDetailMovement {
+  id: string;
+  movementId: string | null;
+  movementName: string;
+  position: number;
+  notes: string | null;
+  sets: WorkoutDetailSet[];
+}
+
+export interface CommunityWorkoutDetail extends WorkoutFeedItem {
+  communityPostId: string;
+  metrics: WorkoutDetailMetric[];
+  movements: WorkoutDetailMovement[];
+}
+
 export interface HomeData {
   user: {
     id: string;

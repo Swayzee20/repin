@@ -12,6 +12,7 @@ export const createGroupSchema = z.object({
 });
 
 export const groupIdSchema = z.uuid();
+export const workoutSessionIdSchema = z.uuid();
 
 export const groupSearchQuerySchema = z.object({
   q: z.string().trim().min(2).max(80),
