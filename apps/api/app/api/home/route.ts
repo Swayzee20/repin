@@ -23,6 +23,7 @@ export async function GET(request: Request) {
     const query = homeQuerySchema.safeParse({
       groupId: url.searchParams.get("groupId") ?? undefined,
       timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes"),
+      includeReactions: url.searchParams.get("includeReactions") ?? undefined,
     });
 
     if (!query.success) {
@@ -52,6 +53,7 @@ export async function GET(request: Request) {
           userId: user.id,
           groupId: selectedGroup.id,
           limit: 20,
+          includeReactionCounts: query.data.includeReactions,
         })) ?? [])
       : [];
     const communityWorkouts = (await addAuthorizedWorkoutPhotoUrls(

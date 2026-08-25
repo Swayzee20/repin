@@ -88,6 +88,18 @@ export const workoutTypes = [
 
 export type WorkoutType = (typeof workoutTypes)[number];
 
+export const communityReactionTypes = ["fire", "strong", "clap"] as const;
+
+export type CommunityReactionType = (typeof communityReactionTypes)[number];
+
+export type CommunityReactionCounts = Record<CommunityReactionType, number>;
+
+export interface CommunityReactionSummary {
+  counts: CommunityReactionCounts;
+  total: number;
+  viewerReaction: CommunityReactionType | null;
+}
+
 export const workoutMetricTypes = [
   "duration",
   "distance",
@@ -146,6 +158,7 @@ export interface WorkoutFeedItem {
   createdAt?: string | null;
   updatedAt: string;
   displayName: string;
+  reactionCounts?: CommunityReactionCounts;
 }
 
 export interface WorkoutDetailMetric {
@@ -185,6 +198,7 @@ export interface CommunityWorkoutDetail extends WorkoutFeedItem {
   communityPostId: string;
   metrics: WorkoutDetailMetric[];
   movements: WorkoutDetailMovement[];
+  reactions: CommunityReactionSummary;
 }
 
 export interface HomeData {

@@ -45,6 +45,8 @@ export const workoutSessionMetricTypes = [
   "other",
 ] as const;
 
+export const communityPostReactionTypes = ["fire", "strong", "clap"] as const;
+
 export const users = pgTable("users", {
   id: uuid().primaryKey(),
   displayName: text("display_name").notNull(),
@@ -525,6 +527,37 @@ export const communityPosts = pgTable(
   ],
 );
 
+export const communityPostReactions = pgTable(
+  "community_post_reactions",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    communityPostId: uuid("community_post_id")
+      .notNull()
+      .references(() => communityPosts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    reactionType: text("reaction_type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("community_post_reactions_post_user_unique").on(
+      table.communityPostId,
+      table.userId,
+    ),
+    index("community_post_reactions_user_id_idx").on(table.userId),
+    check(
+      "community_post_reactions_type_check",
+      sql`${table.reactionType} in ('fire', 'strong', 'clap')`,
+    ),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Group = typeof groups.$inferSelect;
@@ -550,3 +583,5 @@ export type SetResult = typeof setResults.$inferSelect;
 export type NewSetResult = typeof setResults.$inferInsert;
 export type CommunityPost = typeof communityPosts.$inferSelect;
 export type NewCommunityPost = typeof communityPosts.$inferInsert;
+export type CommunityPostReaction = typeof communityPostReactions.$inferSelect;
+export type NewCommunityPostReaction = typeof communityPostReactions.$inferInsert;

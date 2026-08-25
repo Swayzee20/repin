@@ -1,6 +1,10 @@
 import { z } from "zod";
 
-import { workoutMetricTypes, workoutTypes } from "@repin/types";
+import {
+  communityReactionTypes,
+  workoutMetricTypes,
+  workoutTypes,
+} from "@repin/types";
 
 export const healthResponseSchema = z.object({
   status: z.literal("ok"),
@@ -13,6 +17,10 @@ export const createGroupSchema = z.object({
 
 export const groupIdSchema = z.uuid();
 export const workoutSessionIdSchema = z.uuid();
+
+export const setCommunityReactionSchema = z.object({
+  reactionType: z.enum(communityReactionTypes),
+}).strict();
 
 export const groupSearchQuerySchema = z.object({
   q: z.string().trim().min(2).max(80),
@@ -200,4 +208,5 @@ export const movementSearchQuerySchema = z.object({
 export const homeQuerySchema = z.object({
   groupId: z.uuid().optional(),
   timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840),
+  includeReactions: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
 });

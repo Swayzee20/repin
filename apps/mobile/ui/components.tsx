@@ -227,6 +227,7 @@ export function WorkoutCard({
   layoutY,
   onPress,
   scrollY,
+  showReactionSummary = false,
   side = "left",
   viewportHeight,
   workout,
@@ -235,6 +236,7 @@ export function WorkoutCard({
   layoutY: SharedValue<number>;
   onPress?: () => void;
   scrollY: SharedValue<number>;
+  showReactionSummary?: boolean;
   side?: "left" | "right";
   viewportHeight: number;
   workout: WorkoutFeedItem;
@@ -300,19 +302,21 @@ export function WorkoutCard({
           onPress={onPress}
           style={({ pressed }) => pressed && styles.workoutCardPressed}
         >
-          <WorkoutSummaryCard variant="full" workout={workout} />
+          <WorkoutSummaryCard showReactionSummary={showReactionSummary} variant="full" workout={workout} />
         </Pressable>
       ) : (
-        <WorkoutSummaryCard variant="full" workout={workout} />
+        <WorkoutSummaryCard showReactionSummary={showReactionSummary} variant="full" workout={workout} />
       )}
     </Animated.View>
   );
 }
 
 export function WorkoutSummaryCard({
+  showReactionSummary = false,
   variant = "full",
   workout,
 }: {
+  showReactionSummary?: boolean;
   variant?: "compact" | "full";
   workout: WorkoutFeedItem;
 }) {
@@ -328,6 +332,13 @@ export function WorkoutSummaryCard({
     ? "🔥".repeat(workout.effort)
     : null;
   const caption = workout.caption?.trim() || workout.notes?.trim();
+  const reactionSummary = showReactionSummary && workout.reactionCounts
+    ? ([
+        ["🔥", workout.reactionCounts.fire],
+        ["💪", workout.reactionCounts.strong],
+        ["👏", workout.reactionCounts.clap],
+      ] as const).filter(([, value]) => value > 0)
+    : [];
 
   return (
     <Card style={variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard}>
@@ -342,6 +353,11 @@ export function WorkoutSummaryCard({
       <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
       {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
       {resultSummary ? <Text numberOfLines={1} style={styles.workoutResultSummary}>{resultSummary}</Text> : null}
+      {reactionSummary.length ? (
+        <Text accessibilityLabel={`${reactionSummary.map(([, value]) => value).reduce((sum, value) => sum + value, 0)} reactions`} numberOfLines={1} style={styles.reactionSummary}>
+          {reactionSummary.map(([emoji, value]) => `${emoji} ${value}`).join("   ")}
+        </Text>
+      ) : null}
       {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
       {workout.photoUrl && variant === "full" ? <Image accessibilityLabel="Workout photo" onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} resizeMode="cover" source={{ uri: workout.photoUrl }} style={styles.workoutPhoto} /> : null}
     </Card>
@@ -353,6 +369,7 @@ export function CommunityFeed({
   focusOffsetY = 0,
   mode = "full",
   onWorkoutPress,
+  showReactionSummary = false,
   viewportHeight,
   workouts,
 }: {
@@ -360,6 +377,7 @@ export function CommunityFeed({
   focusOffsetY?: number;
   mode?: "preview" | "full";
   onWorkoutPress?: (workout: WorkoutFeedItem) => void;
+  showReactionSummary?: boolean;
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
 }) {
@@ -394,6 +412,7 @@ export function CommunityFeed({
             onPress={onWorkoutPress ? () => onWorkoutPress(workout) : undefined}
             orderedWorkoutIds={orderedWorkoutIds}
             scrollY={scrollY}
+            showReactionSummary={showReactionSummary}
             side={index % 2 === 0 ? "left" : "right"}
             viewportHeight={resolvedViewportHeight}
             workout={workout}
@@ -430,6 +449,7 @@ function CommunityFeedItem({
   onPress,
   orderedWorkoutIds,
   scrollY,
+  showReactionSummary,
   side,
   viewportHeight,
   workout,
@@ -439,6 +459,7 @@ function CommunityFeedItem({
   onPress?: () => void;
   orderedWorkoutIds: string[];
   scrollY: SharedValue<number>;
+  showReactionSummary: boolean;
   side: "left" | "right";
   viewportHeight: number;
   workout: WorkoutFeedItem;
@@ -477,6 +498,7 @@ function CommunityFeedItem({
         layoutY={layoutY}
         onPress={onPress}
         scrollY={scrollY}
+        showReactionSummary={showReactionSummary}
         side={side}
         viewportHeight={viewportHeight}
         workout={workout}
@@ -553,6 +575,7 @@ const styles = StyleSheet.create({
   compactWorkoutTitle: { marginTop: spacing.md },
   workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },
   workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: spacing.xs },
+  reactionSummary: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.sm },
   workoutCardPressed: { opacity: 0.94 },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
   workoutPhoto: { aspectRatio: 16 / 10, borderRadius: radii.md, marginTop: spacing.md, width: "100%" },
