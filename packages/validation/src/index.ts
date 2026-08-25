@@ -210,6 +210,7 @@ export const movementSearchQuerySchema = z.object({
 });
 
 export const homeQuerySchema = z.object({
+  view: z.enum(["home", "community", "profile"]).optional(),
   groupId: z.uuid().optional(),
   timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840),
   includeReactions: z.enum(["true", "false"]).optional().transform((value) => value === "true"),

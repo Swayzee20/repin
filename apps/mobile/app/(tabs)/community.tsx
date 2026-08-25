@@ -1,10 +1,15 @@
-import type { CommunityReactionSummary, HomeData, WorkoutFeedItem } from "@repin/types";
+import type { CommunityData, CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
+import {
+  getWorkoutDataRevision,
+  isFresh,
+  type FreshnessRecord,
+} from "../../lib/data-freshness";
 import { BrandHeader, CommunityFeed, LoadingState, StateCard } from "../../ui/components";
 import { useMainTabs } from "../../ui/main-tabs-context";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
@@ -15,39 +20,86 @@ const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").repl
 export default function CommunityTabScreen() {
   const router = useRouter();
   const { selectedGroupId, setSelectedGroupId } = useMainTabs();
-  const [data, setData] = useState<HomeData | null>(null);
+  const [data, setData] = useState<CommunityData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [boardHeight, setBoardHeight] = useState(0);
-  const [detailTarget, setDetailTarget] = useState<{ groupId: string; sessionId: string } | null>(null);
+  const [detailTarget, setDetailTarget] = useState<{
+    groupId: string;
+    workout: WorkoutFeedItem;
+  } | null>(null);
+  const dataRef = useRef<CommunityData | null>(null);
+  const lastSuccessfulLoad = useRef<FreshnessRecord | null>(null);
+  const inFlightRequests = useRef(new Map<string, Promise<void>>());
+  const latestRequestKey = useRef<string | null>(null);
+  const loadedUserId = useRef<string | null>(null);
 
   const loadCommunity = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (!supabase) throw new Error("Supabase is not configured.");
-      const { data: auth, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !auth.session) throw new Error("Sign in to view Community.");
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      setLoading(false);
+      return;
+    }
+    const { data: auth, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !auth.session) {
+      setError("Sign in to view Community.");
+      setLoading(false);
+      return;
+    }
+    if (loadedUserId.current && loadedUserId.current !== auth.session.user.id) {
+      dataRef.current = null;
+      lastSuccessfulLoad.current = null;
+      setData(null);
+    }
+
+    const groupKey = `community:${auth.session.user.id}:${selectedGroupId ?? "auto"}`;
+    const workoutRevision = getWorkoutDataRevision();
+    if (
+      dataRef.current &&
+      isFresh(lastSuccessfulLoad.current, groupKey, workoutRevision)
+    ) return;
+
+    const requestKey = `${groupKey}:${workoutRevision}`;
+    const currentRequest = inFlightRequests.current.get(requestKey);
+    if (currentRequest) return currentRequest;
+
+    latestRequestKey.current = requestKey;
+    const request = (async () => {
+      setLoading(true);
+      setError(null);
+      try {
       const search = new URLSearchParams({
-        includeComments: "true",
-        includeReactions: "true",
         timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
+        view: "community",
       });
       if (selectedGroupId) search.set("groupId", selectedGroupId);
       const response = await fetch(`${apiUrl}/api/home?${search.toString()}`, {
         headers: { Authorization: `Bearer ${auth.session.access_token}` },
         signal: AbortSignal.timeout(7_500),
       });
-      const body = (await response.json()) as HomeData & { error?: string };
+      const body = (await response.json()) as CommunityData & { error?: string };
       if (!response.ok) throw new Error(body.error ?? "Community could not be loaded.");
+      if (latestRequestKey.current !== requestKey) return;
+      dataRef.current = body;
+      loadedUserId.current = auth.session.user.id;
+      lastSuccessfulLoad.current = {
+        key: `community:${auth.session.user.id}:${body.selectedGroupId ?? "none"}`,
+        loadedAt: Date.now(),
+        workoutRevision,
+      };
       setData(body);
       setSelectedGroupId(body.selectedGroupId);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Community could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
+      } catch (loadError) {
+        if (latestRequestKey.current === requestKey) {
+          setError(loadError instanceof Error ? loadError.message : "Community could not be loaded.");
+        }
+      } finally {
+        if (latestRequestKey.current === requestKey) setLoading(false);
+      }
+    })().finally(() => inFlightRequests.current.delete(requestKey));
+    inFlightRequests.current.set(requestKey, request);
+    return request;
   }, [selectedGroupId, setSelectedGroupId]);
 
   useFocusEffect(useCallback(() => { void loadCommunity(); }, [loadCommunity]));
@@ -65,25 +117,35 @@ export default function CommunityTabScreen() {
   const openWorkoutDetail = useCallback((workout: WorkoutFeedItem) => {
     if (!selectedGroup) return;
     setPickerOpen(false);
-    setDetailTarget({ groupId: selectedGroup.id, sessionId: workout.id });
+    setDetailTarget({ groupId: selectedGroup.id, workout });
   }, [selectedGroup]);
 
   const updateFeedReactionSummary = useCallback((sessionId: string, reactions: CommunityReactionSummary) => {
-    setData((current) => current ? {
-      ...current,
-      communityWorkouts: current.communityWorkouts.map((workout) =>
-        workout.id === sessionId ? { ...workout, reactionCounts: reactions.counts } : workout,
-      ),
-    } : current);
+    setData((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        communityWorkouts: current.communityWorkouts.map((workout) =>
+          workout.id === sessionId ? { ...workout, reactionCounts: reactions.counts } : workout,
+        ),
+      };
+      dataRef.current = next;
+      return next;
+    });
   }, []);
 
   const updateFeedCommentCount = useCallback((sessionId: string, commentCount: number) => {
-    setData((current) => current ? {
-      ...current,
-      communityWorkouts: current.communityWorkouts.map((workout) =>
-        workout.id === sessionId ? { ...workout, commentCount } : workout,
-      ),
-    } : current);
+    setData((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        communityWorkouts: current.communityWorkouts.map((workout) =>
+          workout.id === sessionId ? { ...workout, commentCount } : workout,
+        ),
+      };
+      dataRef.current = next;
+      return next;
+    });
   }, []);
 
   if (loading && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><LoadingState message="Loading Community…" /></SafeAreaView>;
@@ -138,14 +200,18 @@ export default function CommunityTabScreen() {
               <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push(`/groups/${selectedGroup.id}`)}><Text style={styles.actionText}>View group ›</Text></Pressable>
             </View>
 
-            {loading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
-            {error ? <Text style={styles.error}>{error}</Text> : null}
             <View onLayout={handleBoardLayout} style={styles.boardArea}>
               {data?.communityWorkouts.length ? (
                 boardHeight > 0 ? <CommunityFeed edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutPress={openWorkoutDetail} showCommentCount showReactionSummary viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
               ) : (
                 <View style={styles.emptyBoardContent}><StateCard title="The board is quiet" message="Log a workout to get the conversation started." /></View>
               )}
+              {loading || error ? (
+                <View pointerEvents="none" style={styles.refreshStatus}>
+                  {loading ? <ActivityIndicator color={colors.brand} size="small" /> : null}
+                  {error ? <Text numberOfLines={1} style={styles.error}>Refresh failed</Text> : null}
+                </View>
+              ) : null}
             </View>
           </>
         ) : (
@@ -154,10 +220,11 @@ export default function CommunityTabScreen() {
       </View>
       <WorkoutDetailModal
         groupId={detailTarget?.groupId ?? null}
+        initialWorkout={detailTarget?.workout ?? null}
         onCommentCountChange={updateFeedCommentCount}
         onDismiss={() => setDetailTarget(null)}
         onReactionSummaryChange={updateFeedReactionSummary}
-        sessionId={detailTarget?.sessionId ?? null}
+        sessionId={detailTarget?.workout.id ?? null}
         visible={detailTarget !== null}
       />
     </SafeAreaView>
@@ -181,9 +248,9 @@ const styles = StyleSheet.create({
   optionName: { color: colors.inkSoft, flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
   check: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 },
   boardArea: { backgroundColor: "#F7F2F2", borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
+  refreshStatus: { alignItems: "center", backgroundColor: "rgba(255,255,255,0.92)", borderColor: colors.border, borderRadius: radii.pill, borderWidth: 1, flexDirection: "row", gap: spacing.xs, minHeight: 30, paddingHorizontal: spacing.sm, position: "absolute", right: spacing.md, top: spacing.sm, zIndex: 30 },
   emptyBoardContent: { padding: spacing.lg },
   actionText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
-  refreshing: { marginBottom: spacing.md },
-  error: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
+  error: { color: colors.danger, fontFamily: fonts.medium, fontSize: 12 },
   pressed: { opacity: 0.72 },
 });

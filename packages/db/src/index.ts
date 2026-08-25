@@ -69,6 +69,16 @@ export async function getOrCreateUser(input: {
   displayName: string;
 }) {
   const database = getDatabase();
+  const [existingUser] = await database
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.id, input.id))
+    .limit(1);
+
+  if (existingUser) {
+    return existingUser;
+  }
+
   const [createdUser] = await database
     .insert(schema.users)
     .values(input)
@@ -79,17 +89,19 @@ export async function getOrCreateUser(input: {
     return createdUser;
   }
 
-  const [existingUser] = await database
+  // Another request may have provisioned the same authenticated user after
+  // the read above. Resolve that canonical row instead of failing the request.
+  const [concurrentlyCreatedUser] = await database
     .select()
     .from(schema.users)
     .where(eq(schema.users.id, input.id))
     .limit(1);
 
-  if (!existingUser) {
+  if (!concurrentlyCreatedUser) {
     throw new Error("Application user could not be loaded");
   }
 
-  return existingUser;
+  return concurrentlyCreatedUser;
 }
 
 export async function createMovement(input: {
@@ -1278,7 +1290,7 @@ export async function setCommunityPostReactionForMember(input: {
     if (!post) return null;
 
     const now = new Date();
-    await transaction
+    const [reaction] = await transaction
       .insert(schema.communityPostReactions)
       .values({
         id: randomUUID(),
@@ -1294,9 +1306,14 @@ export async function setCommunityPostReactionForMember(input: {
           schema.communityPostReactions.userId,
         ],
         set: { reactionType: input.reactionType, updatedAt: now },
-      });
+      })
+      .returning({ reactionType: schema.communityPostReactions.reactionType });
 
-    return getReactionSummary(transaction, post.id, input.userId);
+    const countRows = await getReactionCounts(transaction, post.id);
+    return buildReactionSummary(
+      countRows,
+      reaction?.reactionType ?? input.reactionType,
+    );
   });
 }
 
@@ -1318,7 +1335,8 @@ export async function removeCommunityPostReactionForMember(input: {
         ),
       );
 
-    return getReactionSummary(transaction, post.id, input.userId);
+    const countRows = await getReactionCounts(transaction, post.id);
+    return buildReactionSummary(countRows, null);
   });
 }
 
@@ -1429,33 +1447,18 @@ async function getAuthorizedCommunityPost(
   return post ?? null;
 }
 
-async function getReactionSummary(
+async function getReactionCounts(
   transaction: DatabaseTransaction,
   communityPostId: string,
-  userId: string,
 ) {
-  const [countRows, viewerRows] = await Promise.all([
-    transaction
-      .select({
-        reactionType: schema.communityPostReactions.reactionType,
-        value: count(),
-      })
-      .from(schema.communityPostReactions)
-      .where(eq(schema.communityPostReactions.communityPostId, communityPostId))
-      .groupBy(schema.communityPostReactions.reactionType),
-    transaction
-      .select({ reactionType: schema.communityPostReactions.reactionType })
-      .from(schema.communityPostReactions)
-      .where(
-        and(
-          eq(schema.communityPostReactions.communityPostId, communityPostId),
-          eq(schema.communityPostReactions.userId, userId),
-        ),
-      )
-      .limit(1),
-  ]);
-
-  return buildReactionSummary(countRows, viewerRows[0]?.reactionType ?? null);
+  return transaction
+    .select({
+      reactionType: schema.communityPostReactions.reactionType,
+      value: count(),
+    })
+    .from(schema.communityPostReactions)
+    .where(eq(schema.communityPostReactions.communityPostId, communityPostId))
+    .groupBy(schema.communityPostReactions.reactionType);
 }
 
 function buildReactionSummary(

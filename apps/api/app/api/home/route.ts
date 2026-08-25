@@ -4,12 +4,12 @@ import {
   listRecentWorkoutsForMember,
 } from "@repin/db";
 import { homeQuerySchema } from "@repin/validation";
-import { NextResponse } from "next/server";
 
 import {
   AuthenticationError,
   requireApplicationUser,
 } from "../../../lib/supabase-auth";
+import { ServerTiming, timedJson } from "../../../lib/server-timing";
 import { addAuthorizedWorkoutPhotoUrls } from "../../../lib/workout-photos";
 import { withResolvedDisplayName } from "../../../lib/user-display";
 
@@ -17,10 +17,13 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(request: Request) {
+  const timing = new ServerTiming();
+
   try {
-    const user = await requireApplicationUser(request);
+    const user = await requireApplicationUser(request, timing);
     const url = new URL(request.url);
     const query = homeQuerySchema.safeParse({
+      view: url.searchParams.get("view") ?? undefined,
       groupId: url.searchParams.get("groupId") ?? undefined,
       timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes"),
       includeReactions: url.searchParams.get("includeReactions") ?? undefined,
@@ -28,76 +31,136 @@ export async function GET(request: Request) {
     });
 
     if (!query.success) {
-      return NextResponse.json(
+      return timedJson(
+        timing,
         { error: "Home request parameters are invalid" },
         { status: 400 },
       );
     }
 
-    const now = new Date();
-    const { todayStart, weekStart } = getLocalBoundaries(
-      now,
-      query.data.timezoneOffsetMinutes,
+    // Keep the historical social flags as a compatibility path for older app
+    // builds. New clients declare the data shape they need explicitly.
+    const view = query.data.view ?? (
+      query.data.includeReactions || query.data.includeComments
+        ? "community"
+        : "home"
     );
-    const [groups, workoutSnapshot] = await Promise.all([
-      listGroupsForUser(user.id),
-      getUserWorkoutSnapshot({ userId: user.id, todayStart, weekStart, now }),
-    ]);
+    const groupsPromise = timing.measure("db", () => listGroupsForUser(user.id));
+    const workoutSnapshotPromise = view === "community"
+      ? null
+      : timing.measure("db", () =>
+          getWorkoutSnapshot(
+            user.id,
+            query.data.timezoneOffsetMinutes,
+          ));
+    const groups = await groupsPromise;
 
     // A client selection can become stale after membership changes. Always fall
     // back to a valid membership so Home and its feed remain usable.
     const selectedGroup =
       groups.find((group) => group.id === query.data.groupId) ?? groups[0];
 
-    const authorizedCommunityWorkouts = selectedGroup
-      ? ((await listRecentWorkoutsForMember({
-          userId: user.id,
-          groupId: selectedGroup.id,
-          limit: 20,
-          includeReactionCounts: query.data.includeReactions,
-          includeCommentCounts: query.data.includeComments,
-        })) ?? [])
-      : [];
-    const communityWorkouts = (await addAuthorizedWorkoutPhotoUrls(
-      authorizedCommunityWorkouts,
-    )).map(withResolvedDisplayName);
-    const hasWorkoutToday = Boolean(workoutSnapshot.mostRecentWorkoutToday);
-    const mostRecentWorkoutToday = workoutSnapshot.mostRecentWorkoutToday
-      ? withResolvedDisplayName(workoutSnapshot.mostRecentWorkoutToday)
-      : null;
+    if (view === "profile") {
+      const workoutSnapshot = await workoutSnapshotPromise!;
 
-    return NextResponse.json(
-      {
+      return jsonNoStore(timing, {
         user: withResolvedDisplayName(user),
-        snapshot: {
-          hasWorkoutToday,
-          ...workoutSnapshot,
-          mostRecentWorkoutToday,
-          message: getSnapshotMessage(
-            hasWorkoutToday,
-            workoutSnapshot.workoutsThisWeek,
-          ),
-        },
+        snapshot: timing.measureSync("enrichment", () =>
+          formatWorkoutSnapshot(workoutSnapshot)),
+        groups,
+        selectedGroupId: selectedGroup?.id ?? null,
+      });
+    }
+
+    const authorizedCommunityWorkouts = selectedGroup
+      ? ((await timing.measure("db", () =>
+          listRecentWorkoutsForMember({
+            userId: user.id,
+            groupId: selectedGroup.id,
+            limit: 20,
+            includeReactionCounts: view === "community",
+            includeCommentCounts: view === "community",
+          }))) ?? [])
+      : [];
+    const workoutsWithPhotos = view === "community"
+      ? await timing.measure("photo", () =>
+          addAuthorizedWorkoutPhotoUrls(authorizedCommunityWorkouts))
+      : authorizedCommunityWorkouts;
+    const communityWorkouts = timing.measureSync("enrichment", () =>
+      workoutsWithPhotos.map(withResolvedDisplayName));
+
+    if (view === "community") {
+      return jsonNoStore(timing, {
         groups,
         selectedGroupId: selectedGroup?.id ?? null,
         communityWorkouts,
-      },
-      { headers: { "Cache-Control": "no-store" } },
-    );
+      });
+    }
+
+    const workoutSnapshot = await workoutSnapshotPromise!;
+
+    return jsonNoStore(timing, {
+      user: withResolvedDisplayName(user),
+      snapshot: timing.measureSync("enrichment", () =>
+        formatWorkoutSnapshot(workoutSnapshot)),
+      groups,
+      selectedGroupId: selectedGroup?.id ?? null,
+      communityWorkouts,
+    });
   } catch (error) {
     if (error instanceof AuthenticationError) {
-      return NextResponse.json(
+      return timedJson(
+        timing,
         { error: "Unauthorized" },
         { status: 401, headers: { "Cache-Control": "no-store" } },
       );
     }
 
     console.error("Home data could not be loaded", error);
-    return NextResponse.json(
+    return timedJson(
+      timing,
       { error: "Home data could not be loaded" },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }
+}
+
+async function getWorkoutSnapshot(
+  userId: string,
+  timezoneOffsetMinutes: number,
+) {
+  const now = new Date();
+  const { todayStart, weekStart } = getLocalBoundaries(
+    now,
+    timezoneOffsetMinutes,
+  );
+
+  return getUserWorkoutSnapshot({ userId, todayStart, weekStart, now });
+}
+
+function formatWorkoutSnapshot(
+  workoutSnapshot: Awaited<ReturnType<typeof getUserWorkoutSnapshot>>,
+) {
+  const hasWorkoutToday = Boolean(workoutSnapshot.mostRecentWorkoutToday);
+  const mostRecentWorkoutToday = workoutSnapshot.mostRecentWorkoutToday
+    ? withResolvedDisplayName(workoutSnapshot.mostRecentWorkoutToday)
+    : null;
+
+  return {
+    hasWorkoutToday,
+    ...workoutSnapshot,
+    mostRecentWorkoutToday,
+    message: getSnapshotMessage(
+      hasWorkoutToday,
+      workoutSnapshot.workoutsThisWeek,
+    ),
+  };
+}
+
+function jsonNoStore(timing: ServerTiming, body: unknown) {
+  return timedJson(timing, body, {
+    headers: { "Cache-Control": "no-store" },
+  });
 }
 
 function getLocalBoundaries(now: Date, timezoneOffsetMinutes: number) {

@@ -75,10 +75,11 @@ export default function GroupDetailScreen() {
   return (
     <Screen preserveTransformedContent>
       <BackButton label="Home" onPress={() => router.back()} />
-      {loading ? <LoadingState message="Loading group…" /> : error ? (
+      {loading && !group ? <LoadingState message="Loading group…" /> : error && !group ? (
         <StateCard actionLabel="Try again" message={error} onAction={() => void loadGroup()} title="Unable to open group" />
       ) : group ? (
         <>
+          {error ? <Text style={styles.refreshError}>Group refresh failed. Showing saved content.</Text> : null}
           <View style={styles.hero}>
             <View style={styles.groupMark}><Text style={styles.groupMarkText}>{group.name[0]?.toUpperCase()}</Text></View>
             <View style={styles.heroCopy}><Text style={styles.eyebrow}>GROUP</Text><Text style={styles.title}>{group.name}</Text></View>
@@ -132,6 +133,7 @@ export default function GroupDetailScreen() {
 }
 
 const styles = StyleSheet.create({
+  refreshError: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
   hero: { alignItems: "center", flexDirection: "row" },
   groupMark: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.lg, height: 52, justifyContent: "center", width: 52 },
   groupMarkText: { color: colors.surface, fontFamily: fonts.bold, fontSize: 22 },

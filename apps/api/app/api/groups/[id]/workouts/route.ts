@@ -9,6 +9,7 @@ import {
   AuthenticationError,
   requireApplicationUser,
 } from "../../../../../lib/supabase-auth";
+import { ServerTiming, timedJson } from "../../../../../lib/server-timing";
 import { addAuthorizedWorkoutPhotoUrls } from "../../../../../lib/workout-photos";
 import { withResolvedDisplayName } from "../../../../../lib/user-display";
 
@@ -28,33 +29,38 @@ const workoutTypeLabels = {
 } as const;
 
 export async function GET(request: Request, context: RouteContext) {
+  const timing = new ServerTiming();
+
   try {
-    const user = await requireApplicationUser(request);
+    const user = await requireApplicationUser(request, timing);
     const groupId = await readGroupId(context);
 
     if (!groupId) {
-      return NextResponse.json({ error: "Invalid group ID" }, { status: 400 });
+      return timedJson(timing, { error: "Invalid group ID" }, { status: 400 });
     }
 
-    const workouts = await listRecentWorkoutsForMember({
-      userId: user.id,
-      groupId,
-    });
+    const workouts = await timing.measure("db", () =>
+      listRecentWorkoutsForMember({
+        userId: user.id,
+        groupId,
+      }));
 
     if (!workouts) {
-      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+      return timedJson(timing, { error: "Group not found" }, { status: 404 });
     }
 
-    const workoutsWithPhotoUrls = (await addAuthorizedWorkoutPhotoUrls(workouts)).map(
-      withResolvedDisplayName,
-    );
+    const workoutsWithPhotoUrls = await timing.measure("photo", () =>
+      addAuthorizedWorkoutPhotoUrls(workouts));
+    const enrichedWorkouts = timing.measureSync("enrichment", () =>
+      workoutsWithPhotoUrls.map(withResolvedDisplayName));
 
-    return NextResponse.json(
-      { workouts: workoutsWithPhotoUrls },
+    return timedJson(
+      timing,
+      { workouts: enrichedWorkouts },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    return handleRouteError(error, "Workouts could not be loaded");
+    return handleRouteError(error, "Workouts could not be loaded", timing);
   }
 }
 
@@ -125,17 +131,23 @@ async function readGroupId(context: RouteContext) {
   return result.success ? result.data : null;
 }
 
-function handleRouteError(error: unknown, message: string) {
+function handleRouteError(
+  error: unknown,
+  message: string,
+  timing?: ServerTiming,
+) {
   if (error instanceof AuthenticationError) {
-    return NextResponse.json(
-      { error: "Unauthorized" },
-      { status: 401, headers: { "Cache-Control": "no-store" } },
-    );
+    const body = { error: "Unauthorized" };
+    const init = { status: 401, headers: { "Cache-Control": "no-store" } };
+    return timing
+      ? timedJson(timing, body, init)
+      : NextResponse.json(body, init);
   }
 
   console.error(message, error);
-  return NextResponse.json(
-    { error: message },
-    { status: 503, headers: { "Cache-Control": "no-store" } },
-  );
+  const body = { error: message };
+  const init = { status: 503, headers: { "Cache-Control": "no-store" } };
+  return timing
+    ? timedJson(timing, body, init)
+    : NextResponse.json(body, init);
 }

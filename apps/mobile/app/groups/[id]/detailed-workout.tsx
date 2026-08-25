@@ -16,6 +16,7 @@ import {
 } from "react-native";
 
 import { supabase } from "../../../lib/supabase";
+import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { BackButton, Button, TextField } from "../../../ui/components";
 import {
   buildDetailedMovements,
@@ -158,6 +159,7 @@ export default function DetailedWorkoutScreen() {
         if (__DEV__ && body.issues?.length) console.warn("Detailed workout validation failed", body.issues);
         throw new Error(validationMessage || body.error || "Workout could not be created.");
       }
+      markWorkoutDataStale();
       router.back();
     } catch (submitError) {
       if (uploadedPhotoPath && supabase) {

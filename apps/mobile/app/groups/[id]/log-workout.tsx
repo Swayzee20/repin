@@ -6,6 +6,7 @@ import { useCallback, useState } from "react";
 import { Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../../../lib/supabase";
+import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { BackButton, Button, TextField } from "../../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
 import { WorkoutTypeSelector, workoutTypeLabels } from "../../../ui/workout-type-selector";
@@ -89,6 +90,7 @@ export default function LogWorkoutScreen() {
         if (__DEV__ && body.issues?.length) console.warn("Workout validation failed", body.issues);
         throw new Error(validationMessage || body.error || "Workout could not be created.");
       }
+      markWorkoutDataStale();
       router.back();
     } catch (submitError) {
       if (uploadedPhotoPath && supabase) await supabase.storage.from("workout-photos").remove([uploadedPhotoPath]);

@@ -1,9 +1,14 @@
-import { getUserInitials, resolveUserDisplayName, type HomeData } from "@repin/types";
+import { getUserInitials, resolveUserDisplayName, type ProfileData } from "@repin/types";
 import { useFocusEffect, useRouter } from "expo-router";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
+import {
+  getWorkoutDataRevision,
+  isFresh,
+  type FreshnessRecord,
+} from "../../lib/data-freshness";
 import { BrandHeader, LoadingState, StateCard } from "../../ui/components";
 import { useMainTabs } from "../../ui/main-tabs-context";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
@@ -13,32 +18,77 @@ const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").repl
 export default function ProfileTabScreen() {
   const router = useRouter();
   const { selectedGroupId, setSelectedGroupId } = useMainTabs();
-  const [data, setData] = useState<HomeData | null>(null);
+  const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const dataRef = useRef<ProfileData | null>(null);
+  const lastSuccessfulLoad = useRef<FreshnessRecord | null>(null);
+  const inFlightRequests = useRef(new Map<string, Promise<void>>());
+  const latestRequestKey = useRef<string | null>(null);
+  const loadedUserId = useRef<string | null>(null);
 
   const loadProfile = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      if (!supabase) throw new Error("Supabase is not configured.");
-      const { data: auth, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !auth.session) throw new Error("Sign in to view your profile.");
-      const search = new URLSearchParams({ timezoneOffsetMinutes: String(new Date().getTimezoneOffset()) });
+    if (!supabase) {
+      setError("Supabase is not configured.");
+      setLoading(false);
+      return;
+    }
+    const { data: auth, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !auth.session) {
+      setError("Sign in to view your profile.");
+      setLoading(false);
+      return;
+    }
+    if (loadedUserId.current && loadedUserId.current !== auth.session.user.id) {
+      dataRef.current = null;
+      lastSuccessfulLoad.current = null;
+      setData(null);
+    }
+
+    const groupKey = `profile:${auth.session.user.id}:${selectedGroupId ?? "auto"}`;
+    const workoutRevision = getWorkoutDataRevision();
+    if (
+      dataRef.current &&
+      isFresh(lastSuccessfulLoad.current, groupKey, workoutRevision)
+    ) return;
+
+    const requestKey = `${groupKey}:${workoutRevision}`;
+    const currentRequest = inFlightRequests.current.get(requestKey);
+    if (currentRequest) return currentRequest;
+
+    latestRequestKey.current = requestKey;
+    const request = (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+      const search = new URLSearchParams({ timezoneOffsetMinutes: String(new Date().getTimezoneOffset()), view: "profile" });
       if (selectedGroupId) search.set("groupId", selectedGroupId);
       const response = await fetch(`${apiUrl}/api/home?${search.toString()}`, {
         headers: { Authorization: `Bearer ${auth.session.access_token}` },
         signal: AbortSignal.timeout(7_500),
       });
-      const body = (await response.json()) as HomeData & { error?: string };
+      const body = (await response.json()) as ProfileData & { error?: string };
       if (!response.ok) throw new Error(body.error ?? "Profile could not be loaded.");
+      if (latestRequestKey.current !== requestKey) return;
+      dataRef.current = body;
+      loadedUserId.current = auth.session.user.id;
+      lastSuccessfulLoad.current = {
+        key: `profile:${auth.session.user.id}:${body.selectedGroupId ?? "none"}`,
+        loadedAt: Date.now(),
+        workoutRevision,
+      };
       setData(body);
       setSelectedGroupId(body.selectedGroupId);
-    } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Profile could not be loaded.");
-    } finally {
-      setLoading(false);
-    }
+      } catch (loadError) {
+        if (latestRequestKey.current === requestKey) {
+          setError(loadError instanceof Error ? loadError.message : "Profile could not be loaded.");
+        }
+      } finally {
+        if (latestRequestKey.current === requestKey) setLoading(false);
+      }
+    })().finally(() => inFlightRequests.current.delete(requestKey));
+    inFlightRequests.current.set(requestKey, request);
+    return request;
   }, [selectedGroupId, setSelectedGroupId]);
 
   useFocusEffect(useCallback(() => { void loadProfile(); }, [loadProfile]));
@@ -123,6 +173,11 @@ export default function ProfileTabScreen() {
           </Pressable>
         </View>
       </ScrollView>
+      {error ? (
+        <Pressable accessibilityRole="button" onPress={() => void loadProfile()} style={styles.refreshError}>
+          <Text style={styles.refreshErrorText}>Refresh failed · Retry</Text>
+        </Pressable>
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -165,4 +220,6 @@ const styles = StyleSheet.create({
   settingsLabel: { color: colors.ink, flex: 1, fontFamily: fonts.semibold, fontSize: 16 },
   rowArrow: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24 },
   pressed: { opacity: 0.7 },
+  refreshError: { backgroundColor: colors.dangerSoft, borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, position: "absolute", right: spacing.xxl, top: spacing.xxl },
+  refreshErrorText: { color: colors.danger, ...type.label },
 });

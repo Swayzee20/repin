@@ -1,12 +1,17 @@
 import { getUserInitials, resolveUserDisplayName, type HomeData, type WorkoutFeedItem } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { isSupabaseConfigured, supabase } from "../../lib/supabase";
 import { normalizeInviteRedirect } from "../../lib/invite-route";
 import { resolveWorkoutDate } from "../../lib/workout-date";
+import {
+  getWorkoutDataRevision,
+  isFresh,
+  type FreshnessRecord,
+} from "../../lib/data-freshness";
 import { useMainTabs } from "../../ui/main-tabs-context";
 import { BrandHeader, Button, Card, LoadingState, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
@@ -30,6 +35,10 @@ export default function HomeScreen() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(false);
   const [homeError, setHomeError] = useState<string | null>(null);
+  const homeDataRef = useRef<HomeData | null>(null);
+  const lastSuccessfulLoad = useRef<FreshnessRecord | null>(null);
+  const inFlightRequests = useRef(new Map<string, Promise<void>>());
+  const latestRequestKey = useRef<string | null>(null);
 
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
@@ -40,6 +49,8 @@ export default function HomeScreen() {
     });
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession); setAuthLoading(false); setHomeData(null); setSelectedGroupId(null);
+      homeDataRef.current = null;
+      lastSuccessfulLoad.current = null;
       if (nextSession && inviteRedirect) router.replace(inviteRedirect);
     });
     return () => subscription.subscription.unsubscribe();
@@ -47,9 +58,22 @@ export default function HomeScreen() {
 
   const loadHome = useCallback(async () => {
     if (!session || inviteRedirect) return;
-    setHomeLoading(true); setHomeError(null);
-    try {
-      const search = new URLSearchParams({ timezoneOffsetMinutes: String(new Date().getTimezoneOffset()) });
+    const groupKey = `home:${session.user.id}:${selectedGroupId ?? "auto"}`;
+    const workoutRevision = getWorkoutDataRevision();
+    if (
+      homeDataRef.current &&
+      isFresh(lastSuccessfulLoad.current, groupKey, workoutRevision)
+    ) return;
+
+    const requestKey = `${groupKey}:${workoutRevision}`;
+    const currentRequest = inFlightRequests.current.get(requestKey);
+    if (currentRequest) return currentRequest;
+
+    latestRequestKey.current = requestKey;
+    const request = (async () => {
+      setHomeLoading(true); setHomeError(null);
+      try {
+      const search = new URLSearchParams({ timezoneOffsetMinutes: String(new Date().getTimezoneOffset()), view: "home" });
       if (selectedGroupId) search.set("groupId", selectedGroupId);
       const response = await fetch(`${apiUrl}/api/home?${search.toString()}`, {
         headers: { Authorization: `Bearer ${session.access_token}` }, signal: AbortSignal.timeout(7_500),
@@ -60,9 +84,29 @@ export default function HomeScreen() {
         router.replace("./onboarding/groups");
         return;
       }
+      if (latestRequestKey.current !== requestKey) return;
+      const resolvedGroupKey = `home:${session.user.id}:${body.selectedGroupId ?? "none"}`;
+      homeDataRef.current = body;
+      lastSuccessfulLoad.current = {
+        key: resolvedGroupKey,
+        loadedAt: Date.now(),
+        workoutRevision,
+      };
       setHomeData(body); setSelectedGroupId(body.selectedGroupId); setTabGroupId(body.selectedGroupId);
-    } catch (error) { setHomeError(error instanceof Error ? error.message : "Home could not be loaded."); }
-    finally { setHomeLoading(false); }
+      } catch (error) {
+        if (latestRequestKey.current === requestKey) {
+          setHomeError(error instanceof Error ? error.message : "Home could not be loaded.");
+        }
+      } finally {
+        if (latestRequestKey.current === requestKey) setHomeLoading(false);
+      }
+    })().finally(() => {
+      if (inFlightRequests.current.get(requestKey) === request) {
+        inFlightRequests.current.delete(requestKey);
+      }
+    });
+    inFlightRequests.current.set(requestKey, request);
+    return request;
   }, [inviteRedirect, router, selectedGroupId, session, setTabGroupId]);
 
   useFocusEffect(useCallback(() => { if (session) void loadHome(); }, [loadHome, session]));

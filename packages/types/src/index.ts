@@ -227,3 +227,16 @@ export interface HomeData {
   selectedGroupId: string | null;
   communityWorkouts: WorkoutFeedItem[];
 }
+
+export interface CommunityData {
+  groups: GroupSummary[];
+  selectedGroupId: string | null;
+  communityWorkouts: WorkoutFeedItem[];
+}
+
+export interface ProfileData {
+  user: HomeData["user"];
+  snapshot: HomeData["snapshot"];
+  groups: GroupSummary[];
+  selectedGroupId: string | null;
+}

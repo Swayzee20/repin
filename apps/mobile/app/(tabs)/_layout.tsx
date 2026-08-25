@@ -1,11 +1,12 @@
 import { Feather } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 import { Tabs, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
+import { clearWorkoutDetailCaches } from "../../lib/workout-detail-cache";
 import { LogWorkoutChooser } from "../../ui/log-workout-chooser";
 import { MainTabsProvider, useMainTabs } from "../../ui/main-tabs-context";
 import { colors, fonts, radii, spacing } from "../../ui/theme";
@@ -25,11 +26,20 @@ function MainTabsNavigator() {
   const [session, setSession] = useState<Session | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [workoutChooserVisible, setWorkoutChooserVisible] = useState(false);
+  const authUserId = useRef<string | null>(null);
 
   useEffect(() => {
     if (!supabase) return;
-    void supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    void supabase.auth.getSession().then(({ data }) => {
+      authUserId.current = data.session?.user.id ?? null;
+      setSession(data.session);
+    });
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      const nextUserId = nextSession?.user.id ?? null;
+      if (authUserId.current && authUserId.current !== nextUserId) {
+        clearWorkoutDetailCaches();
+      }
+      authUserId.current = nextUserId;
       setSession(nextSession);
     });
     return () => subscription.subscription.unsubscribe();

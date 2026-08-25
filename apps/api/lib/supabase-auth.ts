@@ -4,6 +4,8 @@ import { getOrCreateUser } from "@repin/db";
 import { resolveUserDisplayName } from "@repin/types";
 import { createClient } from "@supabase/supabase-js";
 
+import type { ServerTiming } from "./server-timing";
+
 export class AuthenticationError extends Error {
   constructor(message = "Unauthorized") {
     super(message);
@@ -95,11 +97,18 @@ export async function requireAuthenticatedUser(request: Request) {
   };
 }
 
-export async function requireApplicationUser(request: Request) {
-  const identity = await requireAuthenticatedUser(request);
+export async function requireApplicationUser(
+  request: Request,
+  timing?: ServerTiming,
+) {
+  const identity = timing
+    ? await timing.measure("auth", () => requireAuthenticatedUser(request))
+    : await requireAuthenticatedUser(request);
 
-  return getOrCreateUser({
-    id: identity.id,
-    displayName: identity.suggestedDisplayName,
-  });
+  const resolveUser = () => getOrCreateUser({
+      id: identity.id,
+      displayName: identity.suggestedDisplayName,
+    });
+
+  return timing ? timing.measure("user", resolveUser) : resolveUser();
 }

@@ -13,9 +13,9 @@ import {
   type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CommunityReactionSummary } from "@repin/types";
+import type { CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 
-import { colors, fonts, radii, spacing, type } from "./theme";
+import { colors, fonts, radii, spacing } from "./theme";
 import { WorkoutDetailView } from "./workout-detail";
 
 const webScrollerStyle = Platform.OS === "web"
@@ -29,6 +29,7 @@ const webScrollerStyle = Platform.OS === "web"
 
 export function WorkoutDetailModal({
   groupId,
+  initialWorkout,
   onCommentCountChange,
   onDismiss,
   onReactionSummaryChange,
@@ -36,6 +37,7 @@ export function WorkoutDetailModal({
   visible,
 }: {
   groupId: string | null;
+  initialWorkout?: WorkoutFeedItem | null;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onDismiss: () => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
@@ -135,18 +137,6 @@ export function WorkoutDetailModal({
           ]}
         >
           <View style={styles.handle} />
-          <View style={styles.header}>
-            <Text style={styles.headerTitle}>Workout</Text>
-            <Pressable
-              accessibilityLabel="Close workout details"
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={close}
-              style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.closeText}>×</Text>
-            </Pressable>
-          </View>
           <ScrollView
             automaticallyAdjustKeyboardInsets
             contentContainerStyle={[
@@ -160,12 +150,34 @@ export function WorkoutDetailModal({
             style={[styles.scroller, webScrollerStyle]}
           >
             {groupId && sessionId ? (
-              <WorkoutDetailView groupId={groupId} onCommentCountChange={onCommentCountChange} onReactionSummaryChange={onReactionSummaryChange} sessionId={sessionId} />
+              <WorkoutDetailView
+                closeAction={<ModalCloseButton onPress={close} />}
+                groupId={groupId}
+                seedWorkout={initialWorkout ?? undefined}
+                onCommentCountChange={onCommentCountChange}
+                onReactionSummaryChange={onReactionSummaryChange}
+                presentation="community-modal"
+                sessionId={sessionId}
+              />
             ) : null}
           </ScrollView>
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+function ModalCloseButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityLabel="Close workout details"
+      accessibilityRole="button"
+      hitSlop={8}
+      onPress={onPress}
+      style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
+    >
+      <Text style={styles.closeText}>×</Text>
+    </Pressable>
   );
 }
 
@@ -175,11 +187,9 @@ const styles = StyleSheet.create({
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   panel: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" },
   handle: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: 4, marginTop: spacing.md, width: 38 },
-  header: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", justifyContent: "space-between", minHeight: 56, paddingHorizontal: spacing.xxl },
-  headerTitle: { color: colors.ink, ...type.heading },
   closeButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 36, justifyContent: "center", width: 36 },
   closeText: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 26, lineHeight: 29, marginTop: -2 },
   pressed: { opacity: 0.66 },
   scroller: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
+  scrollContent: { flexGrow: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
 });
