@@ -1,7 +1,7 @@
 import {
   getUserWorkoutSnapshot,
   listGroupsForUser,
-  listRecentWorkoutsForMember,
+  listRecentWorkoutsForAuthorizedGroup,
 } from "@repin/db";
 import { homeQuerySchema } from "@repin/validation";
 
@@ -74,8 +74,7 @@ export async function GET(request: Request) {
 
     const authorizedCommunityWorkouts = selectedGroup
       ? ((await timing.measure("db", () =>
-          listRecentWorkoutsForMember({
-            userId: user.id,
+          listRecentWorkoutsForAuthorizedGroup({
             groupId: selectedGroup.id,
             limit: 20,
             includeReactionCounts: view === "community",

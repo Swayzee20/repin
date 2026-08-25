@@ -863,25 +863,47 @@ export async function listRecentWorkoutsForMember(input: {
   includeReactionCounts?: boolean;
   includeCommentCounts?: boolean;
 }) {
-  const database = getDatabase();
-  const [membership] = await database
-    .select({ userId: schema.groupMembers.userId })
-    .from(schema.groupMembers)
-    .where(
-      and(
-        eq(schema.groupMembers.groupId, input.groupId),
-        eq(schema.groupMembers.userId, input.userId),
-      ),
-    )
-    .limit(1);
+  return listRecentWorkouts({ ...input, verifyMembership: true });
+}
 
-  if (!membership) {
-    return null;
+export async function listRecentWorkoutsForAuthorizedGroup(input: {
+  groupId: string;
+  limit?: number;
+  includeReactionCounts?: boolean;
+  includeCommentCounts?: boolean;
+}) {
+  return listRecentWorkouts({ ...input, verifyMembership: false });
+}
+
+async function listRecentWorkouts(input: {
+  userId?: string;
+  groupId: string;
+  limit?: number;
+  includeReactionCounts?: boolean;
+  includeCommentCounts?: boolean;
+  verifyMembership: boolean;
+}) {
+  const database = getDatabase();
+  if (input.verifyMembership) {
+    if (!input.userId) throw new Error("A user is required to verify membership");
+    const [membership] = await database
+      .select({ userId: schema.groupMembers.userId })
+      .from(schema.groupMembers)
+      .where(
+        and(
+          eq(schema.groupMembers.groupId, input.groupId),
+          eq(schema.groupMembers.userId, input.userId),
+        ),
+      )
+      .limit(1);
+
+    if (!membership) {
+      return null;
+    }
   }
 
   const posts = await database
     .select({
-      communityPostId: schema.communityPosts.id,
       id: schema.workoutSessions.id,
       userId: schema.workoutSessions.userId,
       groupId: schema.communityPosts.groupId,
@@ -895,6 +917,37 @@ export async function listRecentWorkoutsForMember(input: {
       createdAt: schema.communityPosts.createdAt,
       updatedAt: schema.communityPosts.updatedAt,
       displayName: schema.users.displayName,
+      fireReactionCount: input.includeReactionCounts
+        ? sql<number>`(
+            select count(*)::int
+            from ${schema.communityPostReactions}
+            where ${schema.communityPostReactions.communityPostId} = ${schema.communityPosts.id}
+              and ${schema.communityPostReactions.reactionType} = 'fire'
+          )`.mapWith(Number)
+        : sql<number>`0`.mapWith(Number),
+      strongReactionCount: input.includeReactionCounts
+        ? sql<number>`(
+            select count(*)::int
+            from ${schema.communityPostReactions}
+            where ${schema.communityPostReactions.communityPostId} = ${schema.communityPosts.id}
+              and ${schema.communityPostReactions.reactionType} = 'strong'
+          )`.mapWith(Number)
+        : sql<number>`0`.mapWith(Number),
+      clapReactionCount: input.includeReactionCounts
+        ? sql<number>`(
+            select count(*)::int
+            from ${schema.communityPostReactions}
+            where ${schema.communityPostReactions.communityPostId} = ${schema.communityPosts.id}
+              and ${schema.communityPostReactions.reactionType} = 'clap'
+          )`.mapWith(Number)
+        : sql<number>`0`.mapWith(Number),
+      commentCount: input.includeCommentCounts
+        ? sql<number>`(
+            select count(*)::int
+            from ${schema.communityPostComments}
+            where ${schema.communityPostComments.communityPostId} = ${schema.communityPosts.id}
+          )`.mapWith(Number)
+        : sql<number>`0`.mapWith(Number),
     })
     .from(schema.communityPosts)
     .innerJoin(
@@ -917,91 +970,78 @@ export async function listRecentWorkoutsForMember(input: {
 
   if (!posts.length) return [];
 
-  const workoutSessionIds = [...new Set(posts.map((post) => post.id))];
-  const [metrics, movementSetRows, reactionCountRows, commentCountRows] = await Promise.all([
-    database
-      .select({
-        workoutSessionId: schema.workoutSessionMetrics.workoutSessionId,
-        metricType: schema.workoutSessionMetrics.metricType,
-        numericValue: schema.workoutSessionMetrics.numericValue,
-        textValue: schema.workoutSessionMetrics.textValue,
-        unit: schema.workoutSessionMetrics.unit,
-      })
-      .from(schema.workoutSessionMetrics)
-      .where(
-        inArray(
-          schema.workoutSessionMetrics.workoutSessionId,
-          workoutSessionIds,
-        ),
-      )
-      .orderBy(
-        asc(schema.workoutSessionMetrics.workoutSessionId),
-        asc(schema.workoutSessionMetrics.position),
-      ),
-    database
-      .select({
-        workoutSessionId: schema.sessionMovementResults.workoutSessionId,
-        movementResultId: schema.sessionMovementResults.id,
-        movementName: schema.sessionMovementResults.movementName,
-        movementPosition: schema.sessionMovementResults.position,
-        setId: schema.setResults.id,
-        setPosition: schema.setResults.position,
-        reps: schema.setResults.reps,
-        load: schema.setResults.load,
-        loadUnit: schema.setResults.loadUnit,
-      })
-      .from(schema.sessionMovementResults)
-      .leftJoin(
-        schema.setResults,
-        eq(
-          schema.setResults.sessionMovementResultId,
-          schema.sessionMovementResults.id,
-        ),
-      )
-      .where(
-        inArray(
-          schema.sessionMovementResults.workoutSessionId,
-          workoutSessionIds,
-        ),
-      )
-      .orderBy(
-        asc(schema.sessionMovementResults.workoutSessionId),
-        asc(schema.sessionMovementResults.position),
-        asc(schema.setResults.position),
-      ),
-    input.includeReactionCounts
+  const metricSessionIds = [
+    ...new Set(
+      posts
+        .filter((post) =>
+          ["run", "walk", "hiit", "functional_fitness", "other"].includes(
+            post.workoutType,
+          ))
+        .map((post) => post.id),
+    ),
+  ];
+  const movementSessionIds = [
+    ...new Set(
+      posts
+        .filter((post) =>
+          ["strength_training", "powerlifting"].includes(post.workoutType))
+        .map((post) => post.id),
+    ),
+  ];
+  const [metrics, movementSetRows] = await Promise.all([
+    metricSessionIds.length
       ? database
           .select({
-            communityPostId: schema.communityPostReactions.communityPostId,
-            reactionType: schema.communityPostReactions.reactionType,
-            value: count(),
+            workoutSessionId: schema.workoutSessionMetrics.workoutSessionId,
+            metricType: schema.workoutSessionMetrics.metricType,
+            numericValue: schema.workoutSessionMetrics.numericValue,
+            textValue: schema.workoutSessionMetrics.textValue,
+            unit: schema.workoutSessionMetrics.unit,
           })
-          .from(schema.communityPostReactions)
+          .from(schema.workoutSessionMetrics)
           .where(
             inArray(
-              schema.communityPostReactions.communityPostId,
-              posts.map((post) => post.communityPostId),
+              schema.workoutSessionMetrics.workoutSessionId,
+              metricSessionIds,
             ),
           )
-          .groupBy(
-            schema.communityPostReactions.communityPostId,
-            schema.communityPostReactions.reactionType,
+          .orderBy(
+            asc(schema.workoutSessionMetrics.workoutSessionId),
+            asc(schema.workoutSessionMetrics.position),
           )
       : Promise.resolve([]),
-    input.includeCommentCounts
+    movementSessionIds.length
       ? database
           .select({
-            communityPostId: schema.communityPostComments.communityPostId,
-            value: count(),
+            workoutSessionId: schema.sessionMovementResults.workoutSessionId,
+            movementResultId: schema.sessionMovementResults.id,
+            movementName: schema.sessionMovementResults.movementName,
+            movementPosition: schema.sessionMovementResults.position,
+            setId: schema.setResults.id,
+            setPosition: schema.setResults.position,
+            reps: schema.setResults.reps,
+            load: schema.setResults.load,
+            loadUnit: schema.setResults.loadUnit,
           })
-          .from(schema.communityPostComments)
-          .where(
-            inArray(
-              schema.communityPostComments.communityPostId,
-              posts.map((post) => post.communityPostId),
+          .from(schema.sessionMovementResults)
+          .leftJoin(
+            schema.setResults,
+            eq(
+              schema.setResults.sessionMovementResultId,
+              schema.sessionMovementResults.id,
             ),
           )
-          .groupBy(schema.communityPostComments.communityPostId)
+          .where(
+            inArray(
+              schema.sessionMovementResults.workoutSessionId,
+              movementSessionIds,
+            ),
+          )
+          .orderBy(
+            asc(schema.sessionMovementResults.workoutSessionId),
+            asc(schema.sessionMovementResults.position),
+            asc(schema.setResults.position),
+          )
       : Promise.resolve([]),
   ]);
 
@@ -1041,18 +1081,13 @@ export async function listRecentWorkoutsForMember(input: {
     }
   }
 
-  const reactionCountsByPost = new Map<string, ReturnType<typeof emptyReactionCounts>>();
-  for (const row of reactionCountRows) {
-    if (!isCommunityReactionType(row.reactionType)) continue;
-    const counts = reactionCountsByPost.get(row.communityPostId) ?? emptyReactionCounts();
-    counts[row.reactionType] = row.value;
-    reactionCountsByPost.set(row.communityPostId, counts);
-  }
-  const commentCountsByPost = new Map(
-    commentCountRows.map((row) => [row.communityPostId, row.value]),
-  );
-
-  return posts.map(({ communityPostId, ...post }) => ({
+  return posts.map(({
+    fireReactionCount,
+    strongReactionCount,
+    clapReactionCount,
+    commentCount,
+    ...post
+  }) => ({
     ...post,
     title: post.name ?? post.workoutType,
     notes: post.caption,
@@ -1063,10 +1098,16 @@ export async function listRecentWorkoutsForMember(input: {
       movements: [...(movementsBySession.get(post.id)?.values() ?? [])],
     }),
     ...(input.includeReactionCounts
-      ? { reactionCounts: reactionCountsByPost.get(communityPostId) ?? emptyReactionCounts() }
+      ? {
+          reactionCounts: {
+            fire: fireReactionCount,
+            strong: strongReactionCount,
+            clap: clapReactionCount,
+          },
+        }
       : {}),
     ...(input.includeCommentCounts
-      ? { commentCount: commentCountsByPost.get(communityPostId) ?? 0 }
+      ? { commentCount }
       : {}),
   }));
 }
