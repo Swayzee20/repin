@@ -11,7 +11,11 @@ function getStorageAdminClient() {
   const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
   const storageAdminKey = secretKey || serviceRoleKey;
-  const keySource = secretKey ? "secret" : serviceRoleKey ? "service_role" : null;
+  const keySource: "secret" | "service_role" | null = secretKey
+    ? "secret"
+    : serviceRoleKey
+      ? "service_role"
+      : null;
   const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY?.trim();
 
   if (!supabaseUrl || !storageAdminKey) {
@@ -44,49 +48,108 @@ function getStorageAdminClient() {
 export async function addAuthorizedWorkoutPhotoUrls<T extends WorkoutWithPhotoPath>(
   workouts: T[],
 ): Promise<Array<T & { photoUrl: string | null }>> {
-  if (!workouts.some((workout) => workout.photoPath)) {
+  const photoPaths = [
+    ...new Set(
+      workouts.flatMap((workout) =>
+        workout.photoPath ? [workout.photoPath] : []),
+    ),
+  ];
+
+  if (photoPaths.length === 0) {
     return workouts.map((workout) => ({ ...workout, photoUrl: null }));
   }
 
   const { client, keySource } = getStorageAdminClient();
   const storage = client.storage.from("workout-photos");
 
-  return Promise.all(
-    workouts.map(async (workout) => {
-      if (!workout.photoPath) return { ...workout, photoUrl: null };
+  if (photoPaths.length === 1) {
+    const photoPath = photoPaths[0]!;
+    const { data, error } = await storage.createSignedUrl(
+      photoPath,
+      SIGNED_URL_LIFETIME_SECONDS,
+    );
+    const photoUrl = error ? null : data?.signedUrl?.trim() || null;
 
-      const { data, error } = await storage.createSignedUrl(
-        workout.photoPath,
-        SIGNED_URL_LIFETIME_SECONDS,
-      );
-
-      if (error) {
-        console.error("An authorized workout photo URL could not be generated", {
-          workoutId: workout.id,
-          hasPhotoPath: true,
-          signerKeySource: keySource,
-          signingSucceeded: false,
-          hasPhotoUrl: false,
-          ...getStorageErrorDetails(error),
-        });
+    return workouts.map((workout) => {
+      if (workout.photoPath !== photoPath) {
         return { ...workout, photoUrl: null };
       }
 
-      const photoUrl = data?.signedUrl?.trim() || null;
-      console.info("Authorized workout photo URL generation completed", {
+      logSigningResult({
         workoutId: workout.id,
-        hasPhotoPath: true,
-        signerKeySource: keySource,
-        signingSucceeded: photoUrl !== null,
-        hasPhotoUrl: photoUrl !== null,
+        keySource,
+        photoUrl,
+        error,
       });
-
       return { ...workout, photoUrl };
+    });
+  }
+
+  const { data, error } = await storage.createSignedUrls(
+    photoPaths,
+    SIGNED_URL_LIFETIME_SECONDS,
+  );
+  const requestedPaths = new Set(photoPaths);
+  const resultsByPath = new Map(
+    (data ?? []).flatMap((result) => {
+      const path = result.path?.trim();
+      if (!path || !requestedPaths.has(path)) return [];
+
+      return [[
+        path,
+        {
+          photoUrl: result.error ? null : result.signedUrl?.trim() || null,
+          error: result.error ? "Batch photo signing failed for this item" : null,
+        },
+      ] as const];
     }),
   );
+
+  return workouts.map((workout) => {
+    if (!workout.photoPath) return { ...workout, photoUrl: null };
+
+    const result = resultsByPath.get(workout.photoPath);
+    const photoUrl = result?.photoUrl ?? null;
+    logSigningResult({
+      workoutId: workout.id,
+      keySource,
+      photoUrl,
+      error: error ?? result?.error ?? (result ? null : "Missing batch result"),
+    });
+    return { ...workout, photoUrl };
+  });
+}
+
+function logSigningResult(input: {
+  workoutId: string;
+  keySource: "secret" | "service_role" | null;
+  photoUrl: string | null;
+  error: unknown;
+}) {
+  const details = {
+    workoutId: input.workoutId,
+    hasPhotoPath: true,
+    signerKeySource: input.keySource,
+    signingSucceeded: input.photoUrl !== null,
+    hasPhotoUrl: input.photoUrl !== null,
+  };
+
+  if (input.error || !input.photoUrl) {
+    console.error("An authorized workout photo URL could not be generated", {
+      ...details,
+      ...getStorageErrorDetails(input.error),
+    });
+    return;
+  }
+
+  console.info("Authorized workout photo URL generation completed", details);
 }
 
 function getStorageErrorDetails(error: unknown) {
+  if (typeof error === "string") {
+    return { error, statusCode: null, errorCode: null };
+  }
+
   if (!error || typeof error !== "object") {
     return { error: "Unknown Storage error", statusCode: null, errorCode: null };
   }
