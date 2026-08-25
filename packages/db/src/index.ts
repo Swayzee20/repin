@@ -18,6 +18,10 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { Pool } from "pg";
 
 import * as schema from "./schema";
+import {
+  formatWorkoutResultSummary,
+  type WorkoutResultMovement,
+} from "./workout-result-summary";
 
 type Database = ReturnType<typeof drizzle<typeof schema>>;
 type DatabaseTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
@@ -896,11 +900,108 @@ export async function listRecentWorkoutsForMember(input: {
     )
     .limit(input.limit ?? 30);
 
+  if (!posts.length) return [];
+
+  const workoutSessionIds = [...new Set(posts.map((post) => post.id))];
+  const [metrics, movementSetRows] = await Promise.all([
+    database
+      .select({
+        workoutSessionId: schema.workoutSessionMetrics.workoutSessionId,
+        metricType: schema.workoutSessionMetrics.metricType,
+        numericValue: schema.workoutSessionMetrics.numericValue,
+        textValue: schema.workoutSessionMetrics.textValue,
+        unit: schema.workoutSessionMetrics.unit,
+      })
+      .from(schema.workoutSessionMetrics)
+      .where(
+        inArray(
+          schema.workoutSessionMetrics.workoutSessionId,
+          workoutSessionIds,
+        ),
+      )
+      .orderBy(
+        asc(schema.workoutSessionMetrics.workoutSessionId),
+        asc(schema.workoutSessionMetrics.position),
+      ),
+    database
+      .select({
+        workoutSessionId: schema.sessionMovementResults.workoutSessionId,
+        movementResultId: schema.sessionMovementResults.id,
+        movementName: schema.sessionMovementResults.movementName,
+        movementPosition: schema.sessionMovementResults.position,
+        setId: schema.setResults.id,
+        setPosition: schema.setResults.position,
+        reps: schema.setResults.reps,
+        load: schema.setResults.load,
+        loadUnit: schema.setResults.loadUnit,
+      })
+      .from(schema.sessionMovementResults)
+      .leftJoin(
+        schema.setResults,
+        eq(
+          schema.setResults.sessionMovementResultId,
+          schema.sessionMovementResults.id,
+        ),
+      )
+      .where(
+        inArray(
+          schema.sessionMovementResults.workoutSessionId,
+          workoutSessionIds,
+        ),
+      )
+      .orderBy(
+        asc(schema.sessionMovementResults.workoutSessionId),
+        asc(schema.sessionMovementResults.position),
+        asc(schema.setResults.position),
+      ),
+  ]);
+
+  const metricsBySession = new Map<
+    string,
+    Array<(typeof metrics)[number]>
+  >();
+  for (const metric of metrics) {
+    const sessionMetrics = metricsBySession.get(metric.workoutSessionId) ?? [];
+    sessionMetrics.push(metric);
+    metricsBySession.set(metric.workoutSessionId, sessionMetrics);
+  }
+
+  const movementsBySession = new Map<
+    string,
+    Map<string, WorkoutResultMovement>
+  >();
+  for (const row of movementSetRows) {
+    let sessionMovements = movementsBySession.get(row.workoutSessionId);
+    if (!sessionMovements) {
+      sessionMovements = new Map();
+      movementsBySession.set(row.workoutSessionId, sessionMovements);
+    }
+
+    let movement = sessionMovements.get(row.movementResultId);
+    if (!movement) {
+      movement = { movementName: row.movementName, sets: [] };
+      sessionMovements.set(row.movementResultId, movement);
+    }
+
+    if (row.setId) {
+      movement.sets.push({
+        reps: row.reps,
+        load: row.load,
+        loadUnit: row.loadUnit,
+      });
+    }
+  }
+
   return posts.map((post) => ({
     ...post,
     title: post.name ?? post.workoutType,
     notes: post.caption,
     completedAt: post.occurredAt,
+    resultSummary: formatWorkoutResultSummary({
+      workoutType: post.workoutType,
+      metrics: metricsBySession.get(post.id) ?? [],
+      movements: [...(movementsBySession.get(post.id)?.values() ?? [])],
+    }),
   }));
 }
 

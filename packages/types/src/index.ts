@@ -135,6 +135,7 @@ export interface WorkoutFeedItem {
   title: string;
   name: string | null;
   durationMinutes: number | null;
+  resultSummary?: string | null;
   effort: number | null;
   caption: string | null;
   photoPath: string | null;

@@ -906,15 +906,17 @@ Manual workout creation should distinguish between:
 
 Fast social/accountability check-in.
 
-and potentially:
+or:
 
 ### Detailed Workout
 
-Detailed workout prescription and/or workout results.
+Focused actual-results logging with exercises and individually editable sets.
 
 Quick Log and Detailed Workout intentionally converge on the same session/results model. Their difference is UX depth, not database ownership.
 
 Quick Log expands repeated identical-set quantities into individual ordered `set_results` rows before persistence. Canonical movement selection is optional: freeform exercise names are preserved with a null `movement_id`. A minimal Quick Log remains valid with no metric, movement-result, or set-result rows.
+
+Detailed Workout v1 uses the same creation endpoint and transaction, but each visible set row maps to exactly one ordered `set_results` row. It creates actual session results only and does not create `workout_definitions`, prescribed targets, or workout blocks.
 
 ---
 
