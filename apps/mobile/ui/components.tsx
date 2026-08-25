@@ -309,7 +309,8 @@ export function WorkoutSummaryCard({
   const legacyTitle = workout.title?.trim();
   const title = canonicalName || legacyTitle || typeLabel;
   const showTypeChip = Boolean(typeLabel && normalizeLabel(title) !== normalizeLabel(typeLabel));
-  const duration = workout.durationMinutes && workout.durationMinutes > 0 ? `${workout.durationMinutes} min` : null;
+  const resultSummary = workout.resultSummary?.trim() || null;
+  const duration = !resultSummary && workout.durationMinutes && workout.durationMinutes > 0 ? `${workout.durationMinutes} min` : null;
   const effort = workout.effort && workout.effort >= 1 && workout.effort <= 5
     ? "🔥".repeat(workout.effort)
     : null;
@@ -327,6 +328,7 @@ export function WorkoutSummaryCard({
       </View>
       <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
       {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
+      {resultSummary ? <Text numberOfLines={1} style={styles.workoutResultSummary}>{resultSummary}</Text> : null}
       {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
       {workout.photoUrl && variant === "full" ? <Image accessibilityLabel="Workout photo" onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} resizeMode="cover" source={{ uri: workout.photoUrl }} style={styles.workoutPhoto} /> : null}
     </Card>
@@ -531,6 +533,7 @@ const styles = StyleSheet.create({
   workoutTitle: { color: colors.ink, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25, marginTop: spacing.lg },
   compactWorkoutTitle: { marginTop: spacing.md },
   workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },
+  workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: spacing.xs },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
   workoutPhoto: { aspectRatio: 16 / 10, borderRadius: radii.md, marginTop: spacing.md, width: "100%" },
   floatingWorkout: {

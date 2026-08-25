@@ -6,6 +6,7 @@ import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
+import { LogWorkoutChooser } from "../../ui/log-workout-chooser";
 import { MainTabsProvider, useMainTabs } from "../../ui/main-tabs-context";
 import { colors, fonts, radii, spacing } from "../../ui/theme";
 
@@ -23,6 +24,7 @@ function MainTabsNavigator() {
   const { selectedGroupId } = useMainTabs();
   const [session, setSession] = useState<Session | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [workoutChooserVisible, setWorkoutChooserVisible] = useState(false);
 
   useEffect(() => {
     if (!supabase) return;
@@ -70,7 +72,7 @@ function MainTabsNavigator() {
       {session && selectedGroupId && !keyboardVisible ? (
         <Pressable
           accessibilityRole="button"
-          onPress={() => router.push(`/groups/${selectedGroupId}/log-workout`)}
+          onPress={() => setWorkoutChooserVisible(true)}
           style={({ pressed }) => [
             styles.logWorkout,
             { bottom: tabBarHeight + spacing.md },
@@ -79,6 +81,20 @@ function MainTabsNavigator() {
         >
           <Text style={styles.logWorkoutText}>+ Log workout</Text>
         </Pressable>
+      ) : null}
+      {session && selectedGroupId ? (
+        <LogWorkoutChooser
+          onDetailedWorkout={() => {
+            setWorkoutChooserVisible(false);
+            router.push(`/groups/${selectedGroupId}/detailed-workout`);
+          }}
+          onDismiss={() => setWorkoutChooserVisible(false)}
+          onQuickLog={() => {
+            setWorkoutChooserVisible(false);
+            router.push(`/groups/${selectedGroupId}/log-workout`);
+          }}
+          visible={workoutChooserVisible}
+        />
       ) : null}
     </View>
   );
