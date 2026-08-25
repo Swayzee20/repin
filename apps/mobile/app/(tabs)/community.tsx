@@ -30,6 +30,7 @@ export default function CommunityTabScreen() {
       const { data: auth, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !auth.session) throw new Error("Sign in to view Community.");
       const search = new URLSearchParams({
+        includeComments: "true",
         includeReactions: "true",
         timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
       });
@@ -72,6 +73,15 @@ export default function CommunityTabScreen() {
       ...current,
       communityWorkouts: current.communityWorkouts.map((workout) =>
         workout.id === sessionId ? { ...workout, reactionCounts: reactions.counts } : workout,
+      ),
+    } : current);
+  }, []);
+
+  const updateFeedCommentCount = useCallback((sessionId: string, commentCount: number) => {
+    setData((current) => current ? {
+      ...current,
+      communityWorkouts: current.communityWorkouts.map((workout) =>
+        workout.id === sessionId ? { ...workout, commentCount } : workout,
       ),
     } : current);
   }, []);
@@ -132,7 +142,7 @@ export default function CommunityTabScreen() {
             {error ? <Text style={styles.error}>{error}</Text> : null}
             <View onLayout={handleBoardLayout} style={styles.boardArea}>
               {data?.communityWorkouts.length ? (
-                boardHeight > 0 ? <CommunityFeed edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutPress={openWorkoutDetail} showReactionSummary viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
+                boardHeight > 0 ? <CommunityFeed edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutPress={openWorkoutDetail} showCommentCount showReactionSummary viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
               ) : (
                 <View style={styles.emptyBoardContent}><StateCard title="The board is quiet" message="Log a workout to get the conversation started." /></View>
               )}
@@ -144,6 +154,7 @@ export default function CommunityTabScreen() {
       </View>
       <WorkoutDetailModal
         groupId={detailTarget?.groupId ?? null}
+        onCommentCountChange={updateFeedCommentCount}
         onDismiss={() => setDetailTarget(null)}
         onReactionSummaryChange={updateFeedReactionSummary}
         sessionId={detailTarget?.sessionId ?? null}

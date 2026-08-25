@@ -4,11 +4,12 @@ import {
   resolveUserDisplayName,
   type CommunityReactionSummary,
   type CommunityReactionType,
+  type CommunityPostComment,
   type CommunityWorkoutDetail,
 } from "@repin/types";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Image, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { supabase } from "../lib/supabase";
 import {
@@ -28,11 +29,13 @@ const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").repl
 
 export function WorkoutDetailView({
   groupId,
+  onCommentCountChange,
   onReactionSummaryChange,
   refreshOnFocus = false,
   sessionId,
 }: {
   groupId: string;
+  onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   refreshOnFocus?: boolean;
   sessionId: string;
@@ -42,23 +45,38 @@ export function WorkoutDetailView({
   const [error, setError] = useState<string | null>(null);
   const [reactionError, setReactionError] = useState<string | null>(null);
   const [reactionPending, setReactionPending] = useState(false);
+  const [comments, setComments] = useState<CommunityPostComment[]>([]);
+  const [commentsLoading, setCommentsLoading] = useState(true);
+  const [commentError, setCommentError] = useState<string | null>(null);
+  const [commentText, setCommentText] = useState("");
+  const [commentSubmitting, setCommentSubmitting] = useState(false);
   const reactionRequestPending = useRef(false);
+  const commentRequestPending = useRef(false);
 
   const loadWorkout = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setCommentsLoading(true);
+    setCommentError(null);
     try {
       if (!supabase) throw new Error("Supabase is not configured.");
       const { data, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !data.session) throw new Error("Sign in to view this workout.");
 
-      const response = await fetch(
-        `${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts/${encodeURIComponent(sessionId)}`,
-        {
-          headers: { Authorization: `Bearer ${data.session.access_token}` },
-          signal: AbortSignal.timeout(7_500),
-        },
-      );
+      const workoutUrl = `${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts/${encodeURIComponent(sessionId)}`;
+      const headers = { Authorization: `Bearer ${data.session.access_token}` };
+      const [response, commentsResult] = await Promise.all([
+        fetch(workoutUrl, { headers, signal: AbortSignal.timeout(7_500) }),
+        fetch(`${workoutUrl}/comments`, { headers, signal: AbortSignal.timeout(7_500) })
+          .then(async (commentsResponse) => ({
+            body: (await commentsResponse.json()) as {
+              comments?: CommunityPostComment[];
+              error?: string;
+            },
+            response: commentsResponse,
+          }))
+          .catch(() => null),
+      ]);
       const body = (await response.json()) as {
         error?: string;
         workout?: CommunityWorkoutDetail;
@@ -75,6 +93,14 @@ export function WorkoutDetailView({
       };
       setWorkout(workoutWithReactions);
       onReactionSummaryChange?.(sessionId, workoutWithReactions.reactions);
+
+      if (!commentsResult?.response.ok || !commentsResult.body.comments) {
+        setComments([]);
+        setCommentError(commentsResult?.body.error ?? "Comments could not be loaded.");
+      } else {
+        setComments(commentsResult.body.comments);
+        onCommentCountChange?.(sessionId, commentsResult.body.comments.length);
+      }
     } catch (loadError) {
       setError(
         loadError instanceof Error
@@ -83,8 +109,9 @@ export function WorkoutDetailView({
       );
     } finally {
       setLoading(false);
+      setCommentsLoading(false);
     }
-  }, [groupId, onReactionSummaryChange, sessionId]);
+  }, [groupId, onCommentCountChange, onReactionSummaryChange, sessionId]);
 
   useEffect(() => {
     if (!refreshOnFocus) void loadWorkout();
@@ -143,6 +170,54 @@ export function WorkoutDetailView({
     }
   }, [groupId, onReactionSummaryChange, sessionId, workout]);
 
+  const submitComment = useCallback(async () => {
+    const text = commentText.trim();
+    if (!text || text.length > 2_000 || commentRequestPending.current) return;
+
+    commentRequestPending.current = true;
+    setCommentSubmitting(true);
+    setCommentError(null);
+    try {
+      if (!supabase) throw new Error("Supabase is not configured.");
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !data.session) throw new Error("Sign in to comment on this workout.");
+
+      const response = await fetch(
+        `${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts/${encodeURIComponent(sessionId)}/comments`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${data.session.access_token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ text }),
+          signal: AbortSignal.timeout(7_500),
+        },
+      );
+      const body = (await response.json()) as {
+        comment?: CommunityPostComment;
+        error?: string;
+      };
+      if (!response.ok || !body.comment) {
+        throw new Error(body.error ?? "Comment could not be posted.");
+      }
+
+      const nextComments = [...comments, body.comment];
+      setComments(nextComments);
+      setCommentText("");
+      onCommentCountChange?.(sessionId, nextComments.length);
+    } catch (submitError) {
+      setCommentError(
+        submitError instanceof Error
+          ? submitError.message
+          : "Comment could not be posted.",
+      );
+    } finally {
+      commentRequestPending.current = false;
+      setCommentSubmitting(false);
+    }
+  }, [commentText, comments, groupId, onCommentCountChange, sessionId]);
+
   if (loading && !workout) return <LoadingState message="Loading workout…" />;
   if (error && !workout) {
     return (
@@ -158,6 +233,14 @@ export function WorkoutDetailView({
   return workout ? (
     <WorkoutDetailContent
       onReactionPress={(reactionType) => void toggleReaction(reactionType)}
+      commentError={commentError}
+      commentSubmitting={commentSubmitting}
+      commentText={commentText}
+      comments={comments}
+      commentsLoading={commentsLoading}
+      onCommentChange={setCommentText}
+      onCommentSubmit={() => void submitComment()}
+      onCommentsRetry={() => void loadWorkout()}
       reactionError={reactionError}
       reactionPending={reactionPending}
       workout={workout}
@@ -166,11 +249,27 @@ export function WorkoutDetailView({
 }
 
 export function WorkoutDetailContent({
+  commentError,
+  commentSubmitting = false,
+  commentText = "",
+  comments = [],
+  commentsLoading = false,
+  onCommentChange,
+  onCommentSubmit,
+  onCommentsRetry,
   onReactionPress,
   reactionError,
   reactionPending = false,
   workout,
 }: {
+  commentError?: string | null;
+  commentSubmitting?: boolean;
+  commentText?: string;
+  comments?: CommunityPostComment[];
+  commentsLoading?: boolean;
+  onCommentChange?: (text: string) => void;
+  onCommentSubmit?: () => void;
+  onCommentsRetry?: () => void;
   onReactionPress?: (reactionType: CommunityReactionType) => void;
   reactionError?: string | null;
   reactionPending?: boolean;
@@ -281,6 +380,69 @@ export function WorkoutDetailContent({
         </View>
         {reactionError ? <Text style={styles.reactionError}>{reactionError}</Text> : null}
       </View>
+
+      <View style={styles.commentsSection}>
+        <Text style={styles.sectionEyebrow}>COMMENTS</Text>
+        {commentsLoading ? (
+          <View style={styles.commentsLoading}>
+            <ActivityIndicator color={colors.brand} size="small" />
+            <Text style={styles.commentMuted}>Loading comments…</Text>
+          </View>
+        ) : comments.length ? (
+          <View style={styles.commentList}>
+            {comments.map((comment, index) => (
+              <View key={comment.id} style={[styles.commentRow, index > 0 && styles.dividedRow]}>
+                <View style={styles.commentHeader}>
+                  <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
+                  <Text style={styles.commentTimestamp}>{formatCommentTimestamp(comment.createdAt)}</Text>
+                </View>
+                <Text style={styles.commentBody}>{comment.text}</Text>
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.commentEmpty}>No comments yet.</Text>
+        )}
+
+        {onCommentChange && onCommentSubmit ? (
+          <View style={styles.composer}>
+            <TextInput
+              accessibilityLabel="Add a comment"
+              editable={!commentSubmitting}
+              maxLength={2_000}
+              multiline
+              onChangeText={onCommentChange}
+              placeholder="Add a comment..."
+              placeholderTextColor={colors.muted}
+              style={styles.commentInput}
+              value={commentText}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ disabled: commentSubmitting || !commentText.trim() }}
+              disabled={commentSubmitting || !commentText.trim()}
+              onPress={onCommentSubmit}
+              style={({ pressed }) => [
+                styles.commentSubmit,
+                (commentSubmitting || !commentText.trim()) && styles.commentSubmitDisabled,
+                pressed && styles.reactionButtonPressed,
+              ]}
+            >
+              {commentSubmitting ? <ActivityIndicator color={colors.surface} size="small" /> : <Text style={styles.commentSubmitText}>Post</Text>}
+            </Pressable>
+          </View>
+        ) : null}
+        {commentError ? (
+          <View style={styles.commentErrorRow}>
+            <Text style={styles.reactionError}>{commentError}</Text>
+            {onCommentsRetry && !comments.length ? (
+              <Pressable accessibilityRole="button" onPress={onCommentsRetry}>
+                <Text style={styles.commentRetry}>Try again</Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+      </View>
     </View>
   );
 }
@@ -316,6 +478,15 @@ function emptyCommunityReactionSummary(): CommunityReactionSummary {
     total: 0,
     viewerReaction: null,
   };
+}
+
+function formatCommentTimestamp(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
 }
 
 const styles = StyleSheet.create({
@@ -357,4 +528,21 @@ const styles = StyleSheet.create({
   reactionCount: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14 },
   reactionCountSelected: { color: colors.brandPressed },
   reactionError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.sm },
+  commentsSection: { marginTop: spacing.xxxl },
+  commentsLoading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, minHeight: 44 },
+  commentMuted: { color: colors.muted, ...type.bodySmall },
+  commentList: { marginTop: spacing.sm },
+  commentRow: { paddingVertical: spacing.md },
+  commentHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  commentAuthor: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
+  commentTimestamp: { color: colors.muted, ...type.bodySmall, marginLeft: spacing.md },
+  commentBody: { color: colors.inkSoft, ...type.body, marginTop: spacing.xs },
+  commentEmpty: { color: colors.muted, ...type.body, marginTop: spacing.md },
+  composer: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
+  commentInput: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, color: colors.ink, flex: 1, fontFamily: fonts.regular, fontSize: 15, maxHeight: 120, minHeight: 48, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, textAlignVertical: "top" },
+  commentSubmit: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.sm, justifyContent: "center", minHeight: 44, minWidth: 64, paddingHorizontal: spacing.md },
+  commentSubmitDisabled: { opacity: 0.45 },
+  commentSubmitText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 14 },
+  commentErrorRow: { marginTop: spacing.sm },
+  commentRetry: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13, marginTop: spacing.xs },
 });

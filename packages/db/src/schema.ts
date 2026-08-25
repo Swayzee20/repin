@@ -558,6 +558,38 @@ export const communityPostReactions = pgTable(
   ],
 );
 
+export const communityPostComments = pgTable(
+  "community_post_comments",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    communityPostId: uuid("community_post_id")
+      .notNull()
+      .references(() => communityPosts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    text: text().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("community_post_comments_post_created_at_idx").on(
+      table.communityPostId,
+      table.createdAt,
+      table.id,
+    ),
+    index("community_post_comments_user_id_idx").on(table.userId),
+    check(
+      "community_post_comments_text_check",
+      sql`length(btrim(${table.text})) between 1 and 2000`,
+    ),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Group = typeof groups.$inferSelect;
@@ -585,3 +617,5 @@ export type CommunityPost = typeof communityPosts.$inferSelect;
 export type NewCommunityPost = typeof communityPosts.$inferInsert;
 export type CommunityPostReaction = typeof communityPostReactions.$inferSelect;
 export type NewCommunityPostReaction = typeof communityPostReactions.$inferInsert;
+export type CommunityPostComment = typeof communityPostComments.$inferSelect;
+export type NewCommunityPostComment = typeof communityPostComments.$inferInsert;

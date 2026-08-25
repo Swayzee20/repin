@@ -29,12 +29,14 @@ const webScrollerStyle = Platform.OS === "web"
 
 export function WorkoutDetailModal({
   groupId,
+  onCommentCountChange,
   onDismiss,
   onReactionSummaryChange,
   sessionId,
   visible,
 }: {
   groupId: string | null;
+  onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onDismiss: () => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   sessionId: string | null;
@@ -146,6 +148,7 @@ export function WorkoutDetailModal({
             </Pressable>
           </View>
           <ScrollView
+            automaticallyAdjustKeyboardInsets
             contentContainerStyle={[
               styles.scrollContent,
               { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xxl },
@@ -157,7 +160,7 @@ export function WorkoutDetailModal({
             style={[styles.scroller, webScrollerStyle]}
           >
             {groupId && sessionId ? (
-              <WorkoutDetailView groupId={groupId} onReactionSummaryChange={onReactionSummaryChange} sessionId={sessionId} />
+              <WorkoutDetailView groupId={groupId} onCommentCountChange={onCommentCountChange} onReactionSummaryChange={onReactionSummaryChange} sessionId={sessionId} />
             ) : null}
           </ScrollView>
         </Animated.View>

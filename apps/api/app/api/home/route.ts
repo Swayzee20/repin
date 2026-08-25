@@ -24,6 +24,7 @@ export async function GET(request: Request) {
       groupId: url.searchParams.get("groupId") ?? undefined,
       timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes"),
       includeReactions: url.searchParams.get("includeReactions") ?? undefined,
+      includeComments: url.searchParams.get("includeComments") ?? undefined,
     });
 
     if (!query.success) {
@@ -54,6 +55,7 @@ export async function GET(request: Request) {
           groupId: selectedGroup.id,
           limit: 20,
           includeReactionCounts: query.data.includeReactions,
+          includeCommentCounts: query.data.includeComments,
         })) ?? [])
       : [];
     const communityWorkouts = (await addAuthorizedWorkoutPhotoUrls(

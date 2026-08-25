@@ -849,6 +849,7 @@ export async function listRecentWorkoutsForMember(input: {
   groupId: string;
   limit?: number;
   includeReactionCounts?: boolean;
+  includeCommentCounts?: boolean;
 }) {
   const database = getDatabase();
   const [membership] = await database
@@ -905,7 +906,7 @@ export async function listRecentWorkoutsForMember(input: {
   if (!posts.length) return [];
 
   const workoutSessionIds = [...new Set(posts.map((post) => post.id))];
-  const [metrics, movementSetRows, reactionCountRows] = await Promise.all([
+  const [metrics, movementSetRows, reactionCountRows, commentCountRows] = await Promise.all([
     database
       .select({
         workoutSessionId: schema.workoutSessionMetrics.workoutSessionId,
@@ -975,6 +976,21 @@ export async function listRecentWorkoutsForMember(input: {
             schema.communityPostReactions.reactionType,
           )
       : Promise.resolve([]),
+    input.includeCommentCounts
+      ? database
+          .select({
+            communityPostId: schema.communityPostComments.communityPostId,
+            value: count(),
+          })
+          .from(schema.communityPostComments)
+          .where(
+            inArray(
+              schema.communityPostComments.communityPostId,
+              posts.map((post) => post.communityPostId),
+            ),
+          )
+          .groupBy(schema.communityPostComments.communityPostId)
+      : Promise.resolve([]),
   ]);
 
   const metricsBySession = new Map<
@@ -1020,6 +1036,9 @@ export async function listRecentWorkoutsForMember(input: {
     counts[row.reactionType] = row.value;
     reactionCountsByPost.set(row.communityPostId, counts);
   }
+  const commentCountsByPost = new Map(
+    commentCountRows.map((row) => [row.communityPostId, row.value]),
+  );
 
   return posts.map(({ communityPostId, ...post }) => ({
     ...post,
@@ -1033,6 +1052,9 @@ export async function listRecentWorkoutsForMember(input: {
     }),
     ...(input.includeReactionCounts
       ? { reactionCounts: reactionCountsByPost.get(communityPostId) ?? emptyReactionCounts() }
+      : {}),
+    ...(input.includeCommentCounts
+      ? { commentCount: commentCountsByPost.get(communityPostId) ?? 0 }
       : {}),
   }));
 }
@@ -1300,6 +1322,88 @@ export async function removeCommunityPostReactionForMember(input: {
   });
 }
 
+export async function listCommunityPostCommentsForMember(input: {
+  userId: string;
+  groupId: string;
+  workoutSessionId: string;
+}) {
+  const database = getDatabase();
+  const [post] = await database
+    .select({ id: schema.communityPosts.id })
+    .from(schema.communityPosts)
+    .innerJoin(
+      schema.groupMembers,
+      and(
+        eq(schema.groupMembers.groupId, schema.communityPosts.groupId),
+        eq(schema.groupMembers.userId, input.userId),
+      ),
+    )
+    .where(
+      and(
+        eq(schema.communityPosts.groupId, input.groupId),
+        eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+      ),
+    )
+    .limit(1);
+
+  if (!post) return null;
+
+  return database
+    .select({
+      id: schema.communityPostComments.id,
+      userId: schema.communityPostComments.userId,
+      displayName: schema.users.displayName,
+      text: schema.communityPostComments.text,
+      createdAt: schema.communityPostComments.createdAt,
+      updatedAt: schema.communityPostComments.updatedAt,
+    })
+    .from(schema.communityPostComments)
+    .innerJoin(
+      schema.users,
+      eq(schema.communityPostComments.userId, schema.users.id),
+    )
+    .where(eq(schema.communityPostComments.communityPostId, post.id))
+    .orderBy(
+      asc(schema.communityPostComments.createdAt),
+      asc(schema.communityPostComments.id),
+    );
+}
+
+export async function createCommunityPostCommentForMember(input: {
+  userId: string;
+  displayName: string;
+  groupId: string;
+  workoutSessionId: string;
+  text: string;
+}) {
+  return getDatabase().transaction(async (transaction) => {
+    const post = await getAuthorizedCommunityPost(transaction, input);
+    if (!post) return null;
+
+    const now = new Date();
+    const [comment] = await transaction
+      .insert(schema.communityPostComments)
+      .values({
+        id: randomUUID(),
+        communityPostId: post.id,
+        userId: input.userId,
+        text: input.text,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning({
+        id: schema.communityPostComments.id,
+        userId: schema.communityPostComments.userId,
+        text: schema.communityPostComments.text,
+        createdAt: schema.communityPostComments.createdAt,
+        updatedAt: schema.communityPostComments.updatedAt,
+      });
+
+    if (!comment) throw new Error("Community comment could not be created");
+    return { ...comment, displayName: input.displayName };
+  });
+}
+
 async function getAuthorizedCommunityPost(
   transaction: DatabaseTransaction,
   input: { userId: string; groupId: string; workoutSessionId: string },
@@ -1453,6 +1557,7 @@ export async function getUserWorkoutSnapshot(input: {
 
 export {
   blockMovements,
+  communityPostComments,
   communityPostReactions,
   communityPosts,
   groupMembers,

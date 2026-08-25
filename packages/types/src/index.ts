@@ -100,6 +100,15 @@ export interface CommunityReactionSummary {
   viewerReaction: CommunityReactionType | null;
 }
 
+export interface CommunityPostComment {
+  id: string;
+  userId: string;
+  displayName: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export const workoutMetricTypes = [
   "duration",
   "distance",
@@ -159,6 +168,7 @@ export interface WorkoutFeedItem {
   updatedAt: string;
   displayName: string;
   reactionCounts?: CommunityReactionCounts;
+  commentCount?: number;
 }
 
 export interface WorkoutDetailMetric {

@@ -22,6 +22,10 @@ export const setCommunityReactionSchema = z.object({
   reactionType: z.enum(communityReactionTypes),
 }).strict();
 
+export const createCommunityCommentSchema = z.object({
+  text: z.string().trim().min(1, "Enter a comment").max(2_000, "Comment is too long"),
+}).strict();
+
 export const groupSearchQuerySchema = z.object({
   q: z.string().trim().min(2).max(80),
 });
@@ -209,4 +213,5 @@ export const homeQuerySchema = z.object({
   groupId: z.uuid().optional(),
   timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840),
   includeReactions: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
+  includeComments: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
 });
