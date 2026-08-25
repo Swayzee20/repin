@@ -10,6 +10,7 @@ import {
 
 import {
   AuthenticationError,
+  requireAuthenticatedUser,
   requireApplicationUser,
 } from "../../../../../../../lib/supabase-auth";
 import {
@@ -29,7 +30,7 @@ export async function GET(request: Request, context: RouteContext) {
   const timing = new ServerTiming();
 
   try {
-    const user = await requireApplicationUser(request, timing);
+    const user = await requireAuthenticatedUser(request, timing);
     const target = await readTarget(context);
     if (!target) return notFound(timing);
 

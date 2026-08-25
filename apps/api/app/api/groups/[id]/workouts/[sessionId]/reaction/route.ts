@@ -10,7 +10,7 @@ import {
 
 import {
   AuthenticationError,
-  requireApplicationUser,
+  requireAuthenticatedUser,
 } from "../../../../../../../lib/supabase-auth";
 import {
   ServerTiming,
@@ -28,7 +28,7 @@ export async function PUT(request: Request, context: RouteContext) {
   const timing = new ServerTiming();
 
   try {
-    const user = await requireApplicationUser(request, timing);
+    const user = await requireAuthenticatedUser(request, timing);
     const target = await readTarget(context);
     if (!target) return notFound(timing);
 
@@ -61,7 +61,7 @@ export async function DELETE(request: Request, context: RouteContext) {
   const timing = new ServerTiming();
 
   try {
-    const user = await requireApplicationUser(request, timing);
+    const user = await requireAuthenticatedUser(request, timing);
     const target = await readTarget(context);
     if (!target) return notFound(timing);
 

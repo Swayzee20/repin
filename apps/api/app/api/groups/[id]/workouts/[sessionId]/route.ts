@@ -6,7 +6,7 @@ import {
 
 import {
   AuthenticationError,
-  requireApplicationUser,
+  requireAuthenticatedUser,
 } from "../../../../../../lib/supabase-auth";
 import {
   ServerTiming,
@@ -26,7 +26,7 @@ export async function GET(request: Request, context: RouteContext) {
   const timing = new ServerTiming();
 
   try {
-    const user = await requireApplicationUser(request, timing);
+    const user = await requireAuthenticatedUser(request, timing);
     const { id, sessionId } = await context.params;
     const groupId = groupIdSchema.safeParse(id);
     const workoutSessionId = workoutSessionIdSchema.safeParse(sessionId);

@@ -7,6 +7,7 @@ import { NextResponse } from "next/server";
 
 import {
   AuthenticationError,
+  requireAuthenticatedUser,
   requireApplicationUser,
 } from "../../../../../lib/supabase-auth";
 import { ServerTiming, timedJson } from "../../../../../lib/server-timing";
@@ -32,7 +33,7 @@ export async function GET(request: Request, context: RouteContext) {
   const timing = new ServerTiming();
 
   try {
-    const user = await requireApplicationUser(request, timing);
+    const user = await requireAuthenticatedUser(request, timing);
     const groupId = await readGroupId(context);
 
     if (!groupId) {

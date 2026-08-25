@@ -7,7 +7,8 @@ import { homeQuerySchema } from "@repin/validation";
 
 import {
   AuthenticationError,
-  requireApplicationUser,
+  ensureApplicationUser,
+  requireAuthenticatedUser,
 } from "../../../lib/supabase-auth";
 import { ServerTiming, timedJson } from "../../../lib/server-timing";
 import { addAuthorizedWorkoutPhotoUrls } from "../../../lib/workout-photos";
@@ -20,7 +21,7 @@ export async function GET(request: Request) {
   const timing = new ServerTiming();
 
   try {
-    const user = await requireApplicationUser(request, timing);
+    const identity = await requireAuthenticatedUser(request, timing);
     const url = new URL(request.url);
     const query = homeQuerySchema.safeParse({
       view: url.searchParams.get("view") ?? undefined,
@@ -45,12 +46,15 @@ export async function GET(request: Request) {
         ? "community"
         : "home"
     );
-    const groupsPromise = timing.measure("db", () => listGroupsForUser(user.id));
+    const user = view === "community"
+      ? null
+      : await ensureApplicationUser(identity, timing);
+    const groupsPromise = timing.measure("db", () => listGroupsForUser(identity.id));
     const workoutSnapshotPromise = view === "community"
       ? null
       : timing.measure("db", () =>
           getWorkoutSnapshot(
-            user.id,
+            identity.id,
             query.data.timezoneOffsetMinutes,
           ));
     const groups = await groupsPromise;
@@ -61,6 +65,7 @@ export async function GET(request: Request) {
       groups.find((group) => group.id === query.data.groupId) ?? groups[0];
 
     if (view === "profile") {
+      if (!user) throw new Error("Application user was not provisioned");
       const workoutSnapshot = await workoutSnapshotPromise!;
 
       return jsonNoStore(timing, {
@@ -97,6 +102,7 @@ export async function GET(request: Request) {
     }
 
     const workoutSnapshot = await workoutSnapshotPromise!;
+    if (!user) throw new Error("Application user was not provisioned");
 
     return jsonNoStore(timing, {
       user: withResolvedDisplayName(user),

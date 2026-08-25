@@ -78,37 +78,48 @@ function getSuggestedDisplayName(claims: Record<string, unknown>) {
   });
 }
 
-export async function requireAuthenticatedUser(request: Request) {
-  const token = readBearerToken(request);
-  const { data, error } = await getAuthClient().auth.getClaims(token);
+export async function requireAuthenticatedUser(
+  request: Request,
+  timing?: ServerTiming,
+) {
+  const authenticate = async () => {
+    const token = readBearerToken(request);
+    const { data, error } = await getAuthClient().auth.getClaims(token);
 
-  console.info("[Supabase verification diagnostic]", {
-    error: error?.message ?? null,
-    status: error?.status ?? null,
+    console.info("[Supabase verification diagnostic]", {
+      error: error?.message ?? null,
+      status: error?.status ?? null,
+    });
+
+    if (error || !data?.claims.sub) {
+      throw new AuthenticationError();
+    }
+
+    return {
+      id: data.claims.sub,
+      suggestedDisplayName: getSuggestedDisplayName(data.claims),
+    };
+  };
+
+  return timing ? timing.measure("auth", authenticate) : authenticate();
+}
+
+export function ensureApplicationUser(
+  identity: Awaited<ReturnType<typeof requireAuthenticatedUser>>,
+  timing?: ServerTiming,
+) {
+  const resolveUser = () => getOrCreateUser({
+    id: identity.id,
+    displayName: identity.suggestedDisplayName,
   });
 
-  if (error || !data?.claims.sub) {
-    throw new AuthenticationError();
-  }
-
-  return {
-    id: data.claims.sub,
-    suggestedDisplayName: getSuggestedDisplayName(data.claims),
-  };
+  return timing ? timing.measure("user", resolveUser) : resolveUser();
 }
 
 export async function requireApplicationUser(
   request: Request,
   timing?: ServerTiming,
 ) {
-  const identity = timing
-    ? await timing.measure("auth", () => requireAuthenticatedUser(request))
-    : await requireAuthenticatedUser(request);
-
-  const resolveUser = () => getOrCreateUser({
-      id: identity.id,
-      displayName: identity.suggestedDisplayName,
-    });
-
-  return timing ? timing.measure("user", resolveUser) : resolveUser();
+  const identity = await requireAuthenticatedUser(request, timing);
+  return ensureApplicationUser(identity, timing);
 }

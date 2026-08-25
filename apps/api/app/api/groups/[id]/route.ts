@@ -4,7 +4,7 @@ import { NextResponse } from "next/server";
 
 import {
   AuthenticationError,
-  requireApplicationUser,
+  requireAuthenticatedUser,
 } from "../../../../lib/supabase-auth";
 
 export const dynamic = "force-dynamic";
@@ -15,7 +15,7 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   try {
-    const user = await requireApplicationUser(request);
+    const user = await requireAuthenticatedUser(request);
     const { id } = await context.params;
     const groupId = groupIdSchema.safeParse(id);
 
@@ -51,4 +51,3 @@ export async function GET(
     );
   }
 }
-
