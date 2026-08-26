@@ -585,12 +585,20 @@ export function WorkoutDetailContent({
         ) : comments.length ? (
           <View style={styles.commentList}>
             {comments.map((comment, index) => (
-              <View key={comment.id} style={[styles.commentRow, index > 0 && styles.dividedRow]}>
-                <View style={styles.commentHeader}>
+              <View
+                key={comment.id}
+                style={[
+                  styles.commentRow,
+                  isCommunityModal && styles.modalCommentRow,
+                  !isCommunityModal && index > 0 && styles.dividedRow,
+                ]}
+              >
+                <View style={[styles.commentHeader, isCommunityModal && styles.modalCommentHeader]}>
                   <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
-                  <Text style={styles.commentTimestamp}>{formatCommentTimestamp(comment.createdAt)}</Text>
+                  {isCommunityModal ? <Text style={styles.commentSeparator}>·</Text> : null}
+                  <Text style={[styles.commentTimestamp, isCommunityModal && styles.modalCommentTimestamp]}>{formatCommentTimestamp(comment.createdAt)}</Text>
                 </View>
-                <Text style={styles.commentBody}>{comment.text}</Text>
+                <Text style={[styles.commentBody, isCommunityModal && styles.modalCommentBody]}>{comment.text}</Text>
               </View>
             ))}
           </View>
@@ -917,9 +925,14 @@ const styles = StyleSheet.create({
   commentList: { marginTop: spacing.sm },
   commentRow: { paddingVertical: spacing.md },
   commentHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  modalCommentRow: { paddingVertical: spacing.sm },
+  modalCommentHeader: { justifyContent: "flex-start" },
   commentAuthor: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
   commentTimestamp: { color: colors.muted, ...type.bodySmall, marginLeft: spacing.md },
+  commentSeparator: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 12, marginLeft: spacing.xs },
+  modalCommentTimestamp: { color: colors.subtle, fontSize: 12, marginLeft: spacing.xs },
   commentBody: { color: colors.inkSoft, ...type.body, marginTop: spacing.xs },
+  modalCommentBody: { color: colors.ink, marginTop: 2 },
   commentEmpty: { color: colors.muted, ...type.body, marginTop: spacing.md },
   composer: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   commentInput: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, color: colors.ink, flex: 1, fontFamily: fonts.regular, fontSize: 15, maxHeight: 120, minHeight: 44, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },

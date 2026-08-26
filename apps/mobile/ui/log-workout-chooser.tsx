@@ -1,3 +1,4 @@
+import { Feather } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -7,11 +8,13 @@ import { colors, fonts, radii, spacing, type } from "./theme";
 const workoutLogOptions = [
   {
     key: "quick",
+    icon: "zap",
     title: "Quick Log",
     description: "Fast check-in with optional details",
   },
   {
     key: "detailed",
+    icon: "clipboard",
     title: "Detailed Workout",
     description: "For better tracking of exercises and stats",
   },
@@ -88,8 +91,7 @@ export function LogWorkoutChooser({
         <Pressable accessibilityLabel="Close workout options" accessibilityRole="button" onPress={() => close(onDismiss)} style={styles.backdropPressable} />
         <Animated.View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg), transform: [{ translateY: sheetTranslateY }] }]}>
           <View style={styles.handle} />
-          <Text style={styles.title}>Log workout</Text>
-          <Text style={styles.supporting}>Choose how much detail you want to capture.</Text>
+          <Text style={styles.title}>Check in</Text>
           <View style={styles.options}>
             {workoutLogOptions.map((option) => (
               <Pressable
@@ -98,6 +100,9 @@ export function LogWorkoutChooser({
                 onPress={() => close(option.key === "quick" ? onQuickLog : onDetailedWorkout)}
                 style={({ pressed }) => [styles.option, pressed && styles.optionPressed]}
               >
+                <View style={styles.optionIcon}>
+                  <Feather color={colors.muted} name={option.icon} size={20} />
+                </View>
                 <View style={styles.optionCopy}>
                   <Text style={styles.optionTitle}>{option.title}</Text>
                   <Text style={styles.optionDescription}>{option.description}</Text>
@@ -122,10 +127,10 @@ const styles = StyleSheet.create({
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingHorizontal: spacing.xxl, paddingTop: spacing.md },
   handle: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: 4, marginBottom: spacing.lg, width: 38 },
   title: { color: colors.ink, ...type.title },
-  supporting: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  options: { marginTop: spacing.xl },
+  options: { marginTop: spacing.lg },
   option: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", justifyContent: "space-between", minHeight: 72, paddingVertical: spacing.md },
   optionPressed: { opacity: 0.66 },
+  optionIcon: { alignItems: "center", justifyContent: "center", marginRight: spacing.md, width: 28 },
   optionCopy: { flex: 1, paddingRight: spacing.lg },
   optionTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 17, lineHeight: 23 },
   optionDescription: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },

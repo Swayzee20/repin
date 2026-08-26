@@ -89,7 +89,7 @@ function MainTabsNavigator() {
             pressed && styles.logWorkoutPressed,
           ]}
         >
-          <Text style={styles.logWorkoutText}>+ Log workout</Text>
+          <Text style={styles.logWorkoutText}>Check in</Text>
         </Pressable>
       ) : null}
       {session && selectedGroupId ? (
