@@ -118,7 +118,13 @@ export function WorkoutDetailModal({
       transparent
       visible={visible}
     >
-      <View accessibilityViewIsModal style={styles.overlay}>
+      <View
+        accessibilityViewIsModal
+        style={[
+          styles.overlay,
+          Platform.OS === "web" ? { height: viewportHeight, flex: undefined } : null,
+        ]}
+      >
         <Animated.View pointerEvents="none" style={[styles.backdrop, { opacity: backdropOpacity }]} />
         <Pressable
           accessibilityLabel="Close workout details"
@@ -143,7 +149,7 @@ export function WorkoutDetailModal({
               styles.scrollContent,
               { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xxl },
             ]}
-            keyboardDismissMode="on-drag"
+            keyboardDismissMode={Platform.OS === "web" ? "none" : "on-drag"}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
             showsVerticalScrollIndicator

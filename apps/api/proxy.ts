@@ -1,10 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server";
 
-const localWebOrigins = new Set([
+const defaultWebOrigins = new Set([
   "http://localhost:8081",
   "http://localhost:8082",
   "http://127.0.0.1:8081",
   "http://127.0.0.1:8082",
+  "https://repin.vercel.app",
 ]);
 
 export function proxy(request: NextRequest) {
@@ -16,7 +17,7 @@ export function proxy(request: NextRequest) {
       .filter(Boolean),
   );
   const allowedOrigin =
-    origin && (localWebOrigins.has(origin) || configuredOrigins.has(origin))
+    origin && (defaultWebOrigins.has(origin) || configuredOrigins.has(origin))
       ? origin
       : null;
   const response =
@@ -27,7 +28,10 @@ export function proxy(request: NextRequest) {
   if (allowedOrigin) {
     response.headers.set("Access-Control-Allow-Origin", allowedOrigin);
     response.headers.set("Access-Control-Allow-Headers", "Authorization, Content-Type");
-    response.headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    response.headers.set(
+      "Access-Control-Allow-Methods",
+      "GET, POST, PUT, DELETE, OPTIONS",
+    );
     response.headers.set("Vary", "Origin");
   }
 
