@@ -1537,7 +1537,7 @@ export async function getUserWorkoutSnapshot(input: {
   now: Date;
 }) {
   const database = getDatabase();
-  const [todaySessions, weekCounts] = await Promise.all([
+  const [todaySessions, weekSessions] = await Promise.all([
     database
       .select({
         id: schema.workoutSessions.id,
@@ -1567,7 +1567,7 @@ export async function getUserWorkoutSnapshot(input: {
       .orderBy(desc(schema.workoutSessions.occurredAt))
       .limit(1),
     database
-      .select({ value: count() })
+      .select({ occurredAt: schema.workoutSessions.occurredAt })
       .from(schema.workoutSessions)
       .where(
         and(
@@ -1595,7 +1595,8 @@ export async function getUserWorkoutSnapshot(input: {
 
   return {
     mostRecentWorkoutToday,
-    workoutsThisWeek: weekCounts[0]?.value ?? 0,
+    workoutOccurredAtThisWeek: weekSessions.map((session) => session.occurredAt),
+    workoutsThisWeek: weekSessions.length,
   };
 }
 

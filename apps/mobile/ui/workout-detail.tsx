@@ -10,7 +10,7 @@ import {
 } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Animated, Easing, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { supabase } from "../lib/supabase";
@@ -40,7 +40,7 @@ import { colors, fonts, radii, spacing, type } from "./theme";
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export function WorkoutDetailView({
-  closeAction,
+  detailExpansionResetKey,
   groupId,
   onCommentCountChange,
   onReactionSummaryChange,
@@ -49,7 +49,7 @@ export function WorkoutDetailView({
   seedWorkout,
   sessionId,
 }: {
-  closeAction?: ReactNode;
+  detailExpansionResetKey?: string;
   groupId: string;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
@@ -368,7 +368,6 @@ export function WorkoutDetailView({
   if (loading && !workout) {
     return (
       <View>
-        {closeAction ? <View style={styles.fallbackCloseRow}>{closeAction}</View> : null}
         <LoadingState message="Loading workout…" />
       </View>
     );
@@ -376,7 +375,6 @@ export function WorkoutDetailView({
   if (error && !workout) {
     return (
       <View>
-        {closeAction ? <View style={styles.fallbackCloseRow}>{closeAction}</View> : null}
         <StateCard
           actionLabel="Try again"
           message={error}
@@ -389,8 +387,8 @@ export function WorkoutDetailView({
 
   return workout ? (
     <WorkoutDetailContent
+      detailExpansionResetKey={detailExpansionResetKey}
       onReactionPress={(reactionType) => void toggleReaction(reactionType)}
-      closeAction={closeAction}
       detailError={error}
       commentError={commentError}
       commentSubmitting={commentSubmitting}
@@ -409,12 +407,12 @@ export function WorkoutDetailView({
 }
 
 export function WorkoutDetailContent({
-  closeAction,
   commentError,
   commentSubmitting = false,
   commentText = "",
   comments = [],
   commentsLoading = false,
+  detailExpansionResetKey,
   detailError,
   onCommentChange,
   onCommentSubmit,
@@ -425,12 +423,12 @@ export function WorkoutDetailContent({
   reactionPending = false,
   workout,
 }: {
-  closeAction?: ReactNode;
   commentError?: string | null;
   commentSubmitting?: boolean;
   commentText?: string;
   comments?: CommunityPostComment[];
   commentsLoading?: boolean;
+  detailExpansionResetKey?: string;
   detailError?: string | null;
   onCommentChange?: (text: string) => void;
   onCommentSubmit?: () => void;
@@ -451,14 +449,58 @@ export function WorkoutDetailContent({
   const hasResults = formattedMetrics.length > 0 || workout.movements.length > 0;
   const isCommunityModal = presentation === "community-modal";
   const [commentInputHeight, setCommentInputHeight] = useState(44);
+  const [workoutExpanded, setWorkoutExpanded] = useState(false);
 
   useEffect(() => {
     if (!commentText) setCommentInputHeight(44);
   }, [commentText]);
 
+  useEffect(() => {
+    setWorkoutExpanded(false);
+  }, [detailExpansionResetKey, workout.id]);
+
+  const workoutResults = hasResults ? (
+    <View style={[styles.resultsSection, isCommunityModal && styles.modalResultsSection]}>
+      {!isCommunityModal ? <Text style={styles.sectionEyebrow}>WORKOUT RESULTS</Text> : null}
+      {formattedMetrics.length ? (
+        <Card style={[styles.metricsCard, isCommunityModal && styles.modalMetricsCard]}>
+          {formattedMetrics.map((metric, index) => (
+            <View key={`${metric.label}-${index}`} style={[styles.metricRow, index > 0 && styles.dividedRow]}>
+              <Text style={styles.metricLabel}>{metric.label}</Text>
+              <Text style={styles.metricValue}>{metric.value}</Text>
+            </View>
+          ))}
+        </Card>
+      ) : null}
+
+      {workout.movements.map((movement, movementIndex) => (
+        <Card
+          key={movement.id}
+          style={[
+            styles.movementCard,
+            isCommunityModal && styles.modalMovementCard,
+            isCommunityModal && (formattedMetrics.length > 0 || movementIndex > 0) && styles.modalStackedResultCard,
+          ]}
+        >
+          <Text style={styles.movementName}>{movement.movementName}</Text>
+          {movement.notes ? <Text style={styles.movementNotes}>{movement.notes}</Text> : null}
+          {movement.sets.map((set, index) => (
+            <View key={set.id} style={[styles.setRow, index > 0 && styles.dividedRow]}>
+              <Text style={styles.setLabel}>Set {set.position + 1}</Text>
+              <View style={styles.setResult}>
+                <Text style={styles.setValue}>{formatWorkoutSet(set)}</Text>
+                {set.notes ? <Text style={styles.setNotes}>{set.notes}</Text> : null}
+              </View>
+            </View>
+          ))}
+        </Card>
+      ))}
+    </View>
+  ) : null;
+
   return (
     <View>
-      <View style={styles.authorRow}>
+      <View style={[styles.authorRow, isCommunityModal && styles.modalAuthorRow]}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text>
         </View>
@@ -466,56 +508,19 @@ export function WorkoutDetailContent({
           <Text style={styles.author}>{displayName}</Text>
           <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
-        {isCommunityModal ? closeAction : <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View>}
+        {!isCommunityModal ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
       </View>
 
       <Text style={[styles.title, isCommunityModal && styles.modalTitle]}>{title}</Text>
       {detailError ? <Text style={styles.detailError}>{detailError}</Text> : null}
       {workout.effort ? <Text accessibilityLabel={`Effort ${workout.effort} out of 5`} style={styles.effort}>{"🔥".repeat(workout.effort)}</Text> : null}
-      {!hasResults && workout.resultSummary ? (
+      {workout.resultSummary && (isCommunityModal || !hasResults) ? (
         <Text style={styles.compatibilityDuration}>{workout.resultSummary}</Text>
       ) : !hasResults && workout.durationMinutes ? (
         <Text style={styles.compatibilityDuration}>{workout.durationMinutes} min</Text>
       ) : null}
 
-      {hasResults ? (
-        <View style={[styles.resultsSection, isCommunityModal && styles.modalResultsSection]}>
-          {!isCommunityModal ? <Text style={styles.sectionEyebrow}>WORKOUT RESULTS</Text> : null}
-          {formattedMetrics.length ? (
-            <Card style={[styles.metricsCard, isCommunityModal && styles.modalMetricsCard]}>
-              {formattedMetrics.map((metric, index) => (
-                <View key={`${metric.label}-${index}`} style={[styles.metricRow, index > 0 && styles.dividedRow]}>
-                  <Text style={styles.metricLabel}>{metric.label}</Text>
-                  <Text style={styles.metricValue}>{metric.value}</Text>
-                </View>
-              ))}
-            </Card>
-          ) : null}
-
-          {workout.movements.map((movement, movementIndex) => (
-            <Card
-              key={movement.id}
-              style={[
-                styles.movementCard,
-                isCommunityModal && styles.modalMovementCard,
-                isCommunityModal && (formattedMetrics.length > 0 || movementIndex > 0) && styles.modalStackedResultCard,
-              ]}
-            >
-              <Text style={styles.movementName}>{movement.movementName}</Text>
-              {movement.notes ? <Text style={styles.movementNotes}>{movement.notes}</Text> : null}
-              {movement.sets.map((set, index) => (
-                <View key={set.id} style={[styles.setRow, index > 0 && styles.dividedRow]}>
-                  <Text style={styles.setLabel}>Set {set.position + 1}</Text>
-                  <View style={styles.setResult}>
-                    <Text style={styles.setValue}>{formatWorkoutSet(set)}</Text>
-                    {set.notes ? <Text style={styles.setNotes}>{set.notes}</Text> : null}
-                  </View>
-                </View>
-              ))}
-            </Card>
-          ))}
-        </View>
-      ) : null}
+      {!isCommunityModal ? workoutResults : null}
 
       {caption ? isCommunityModal ? (
         <Text style={[styles.caption, styles.modalCaption]}>{caption}</Text>
@@ -533,6 +538,23 @@ export function WorkoutDetailContent({
           source={{ uri: workout.photoUrl }}
           style={styles.photo}
         />
+      ) : null}
+
+      {isCommunityModal && hasResults ? (
+        <View style={styles.workoutDisclosure}>
+          <Pressable
+            accessibilityLabel={workoutExpanded ? "Hide workout details" : "View workout details"}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: workoutExpanded }}
+            hitSlop={8}
+            onPress={() => setWorkoutExpanded((expanded) => !expanded)}
+            style={({ pressed }) => [styles.workoutDisclosureButton, pressed && styles.reactionButtonPressed]}
+          >
+            <Text style={styles.workoutDisclosureText}>{workoutExpanded ? "Hide workout" : "View workout"}</Text>
+            <Feather color={colors.muted} name={workoutExpanded ? "chevron-up" : "chevron-down"} size={14} />
+          </Pressable>
+          {workoutExpanded ? workoutResults : null}
+        </View>
       ) : null}
 
       <View style={[styles.reactionSection, isCommunityModal && styles.modalReactionSection]}>
@@ -584,21 +606,27 @@ export function WorkoutDetailContent({
           </View>
         ) : comments.length ? (
           <View style={styles.commentList}>
-            {comments.map((comment, index) => (
-              <View
-                key={comment.id}
-                style={[
-                  styles.commentRow,
-                  isCommunityModal && styles.modalCommentRow,
-                  !isCommunityModal && index > 0 && styles.dividedRow,
-                ]}
-              >
-                <View style={[styles.commentHeader, isCommunityModal && styles.modalCommentHeader]}>
+            {isCommunityModal ? groupCommentsByLocalDate(comments).map((group, groupIndex) => (
+              <View key={group.key} style={[styles.commentDateGroup, groupIndex === 0 && styles.firstCommentDateGroup]}>
+                <Text style={styles.commentDateLabel}>{group.label}</Text>
+                {group.comments.map((comment) => (
+                  <View key={comment.id} style={[styles.commentRow, styles.modalCommentRow]}>
+                    <View style={[styles.commentHeader, styles.modalCommentHeader]}>
+                      <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
+                      <Text style={styles.commentSeparator}>·</Text>
+                      <Text style={[styles.commentTimestamp, styles.modalCommentTimestamp]}>{formatCommentTime(comment.createdAt)}</Text>
+                    </View>
+                    <Text style={[styles.commentBody, styles.modalCommentBody]}>{comment.text}</Text>
+                  </View>
+                ))}
+              </View>
+            )) : comments.map((comment, index) => (
+              <View key={comment.id} style={[styles.commentRow, index > 0 && styles.dividedRow]}>
+                <View style={styles.commentHeader}>
                   <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
-                  {isCommunityModal ? <Text style={styles.commentSeparator}>·</Text> : null}
-                  <Text style={[styles.commentTimestamp, isCommunityModal && styles.modalCommentTimestamp]}>{formatCommentTimestamp(comment.createdAt)}</Text>
+                  <Text style={styles.commentTimestamp}>{formatCommentTimestamp(comment.createdAt)}</Text>
                 </View>
-                <Text style={[styles.commentBody, isCommunityModal && styles.modalCommentBody]}>{comment.text}</Text>
+                <Text style={styles.commentBody}>{comment.text}</Text>
               </View>
             ))}
           </View>
@@ -714,21 +742,29 @@ function CommunityModalReactionRow({
   return (
     <View style={styles.compactReactionRow}>
       {visibleReactions.length ? (
-        <View accessibilityRole="summary" style={styles.reactionSummaryRow}>
+        <View style={styles.reactionSummaryRow}>
           {visibleReactions.map((reactionType) => {
             const option = reactionOptions[reactionType];
             const count = reactions.counts[reactionType];
             const selected = reactions.viewerReaction === reactionType;
             return (
-              <View
-                accessibilityLabel={`${option.label}, ${count} reaction${count === 1 ? "" : "s"}${selected ? ", your reaction" : ""}`}
-                accessible
+              <Pressable
+                accessibilityLabel={`React with ${option.label}, ${count} reaction${count === 1 ? "" : "s"}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected, disabled: reactionPending }}
+                disabled={reactionPending || !onReactionPress}
                 key={reactionType}
-                style={[styles.compactReactionSummary, selected && styles.compactReactionSummarySelected]}
+                onPress={() => chooseReaction(reactionType)}
+                style={({ pressed }) => [
+                  styles.compactReactionChoice,
+                  pressed && styles.reactionButtonPressed,
+                ]}
               >
-                <Text style={styles.compactReactionEmoji}>{option.emoji}</Text>
-                <Text style={[styles.compactReactionCount, selected && styles.reactionCountSelected]}>{count}</Text>
-              </View>
+                <View style={[styles.compactReactionSummary, selected && styles.compactReactionSummarySelected]}>
+                  <Text style={styles.compactReactionEmoji}>{option.emoji}</Text>
+                  <Text style={[styles.compactReactionCount, selected && styles.reactionCountSelected]}>{count}</Text>
+                </View>
+              </Pressable>
             );
           })}
         </View>
@@ -855,9 +891,60 @@ function formatCommentTimestamp(value: string) {
   }).format(date);
 }
 
+function formatCommentTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently";
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+function groupCommentsByLocalDate(comments: CommunityPostComment[]) {
+  const now = new Date();
+  const todayKey = getLocalDateKey(now);
+  const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+  const yesterdayKey = getLocalDateKey(yesterday);
+
+  return comments.reduce<Array<{
+    comments: CommunityPostComment[];
+    key: string;
+    label: string;
+  }>>((groups, comment) => {
+    const date = new Date(comment.createdAt);
+    const validDate = !Number.isNaN(date.getTime());
+    const dateKey = validDate ? getLocalDateKey(date) : `invalid-${comment.id}`;
+    const previousGroup = groups.at(-1);
+
+    if (previousGroup?.key === dateKey) {
+      previousGroup.comments.push(comment);
+      return groups;
+    }
+
+    const label = !validDate
+      ? "Recently"
+      : dateKey === todayKey
+        ? "Today"
+        : dateKey === yesterdayKey
+          ? "Yesterday"
+          : new Intl.DateTimeFormat(undefined, {
+              day: "numeric",
+              month: "short",
+              year: "numeric",
+            }).format(date);
+
+    groups.push({ comments: [comment], key: dateKey, label });
+    return groups;
+  }, []);
+}
+
+function getLocalDateKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
 const styles = StyleSheet.create({
-  fallbackCloseRow: { alignItems: "flex-end", minHeight: 44 },
   authorRow: { alignItems: "center", flexDirection: "row" },
+  modalAuthorRow: { paddingRight: 48 },
   avatar: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },
   avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 13 },
   authorCopy: { flex: 1, marginLeft: spacing.md },
@@ -893,6 +980,9 @@ const styles = StyleSheet.create({
   modalCaption: { marginTop: spacing.lg },
   photo: { aspectRatio: 16 / 10, borderRadius: radii.md, marginTop: spacing.lg, width: "100%" },
   compatibilityDuration: { color: colors.muted, fontFamily: fonts.medium, fontSize: 14, marginTop: spacing.lg },
+  workoutDisclosure: { marginTop: spacing.md },
+  workoutDisclosureButton: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: spacing.xs, minHeight: 36 },
+  workoutDisclosureText: { color: colors.muted, ...type.bodySmall },
   reactionSection: { marginTop: spacing.xxxl },
   modalReactionSection: { marginTop: spacing.md },
   reactionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
@@ -905,6 +995,7 @@ const styles = StyleSheet.create({
   reactionError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.sm },
   compactReactionRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, minHeight: 44 },
   reactionSummaryRow: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
+  compactReactionChoice: { alignItems: "center", justifyContent: "center", minHeight: 44 },
   compactReactionSummary: { alignItems: "center", borderRadius: radii.pill, flexDirection: "row", gap: 3, minHeight: 30, paddingHorizontal: spacing.sm },
   compactReactionSummarySelected: { backgroundColor: colors.brandSoft },
   compactReactionEmoji: { fontSize: 14, lineHeight: 18 },
@@ -923,6 +1014,9 @@ const styles = StyleSheet.create({
   commentsLoading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, minHeight: 44 },
   commentMuted: { color: colors.muted, ...type.bodySmall },
   commentList: { marginTop: spacing.sm },
+  commentDateGroup: { marginTop: spacing.md },
+  firstCommentDateGroup: { marginTop: spacing.xs },
+  commentDateLabel: { color: colors.subtle, ...type.bodySmall, textAlign: "center" },
   commentRow: { paddingVertical: spacing.md },
   commentHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   modalCommentRow: { paddingVertical: spacing.sm },

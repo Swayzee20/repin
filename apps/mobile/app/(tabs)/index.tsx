@@ -1,4 +1,5 @@
 import { getUserInitials, resolveUserDisplayName, type HomeData, type WorkoutFeedItem } from "@repin/types";
+import { Feather } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -21,7 +22,7 @@ const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").repl
 export default function HomeScreen() {
   const router = useRouter();
   const { height: windowHeight } = useWindowDimensions();
-  const { setSelectedGroupId: setTabGroupId } = useMainTabs();
+  const { openWorkoutChooser, setSelectedGroupId: setTabGroupId } = useMainTabs();
   const params = useLocalSearchParams<{ redirect?: string | string[] }>();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
   const [session, setSession] = useState<Session | null>(null);
@@ -35,6 +36,7 @@ export default function HomeScreen() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(false);
   const [homeError, setHomeError] = useState<string | null>(null);
+  const [localDayKey, setLocalDayKey] = useState(() => getLocalDateKey(new Date()));
   const homeDataRef = useRef<HomeData | null>(null);
   const lastSuccessfulLoad = useRef<FreshnessRecord | null>(null);
   const inFlightRequests = useRef(new Map<string, Promise<void>>());
@@ -111,6 +113,15 @@ export default function HomeScreen() {
 
   useFocusEffect(useCallback(() => { if (session) void loadHome(); }, [loadHome, session]));
 
+  useEffect(() => {
+    const now = new Date();
+    const nextLocalDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const timeout = setTimeout(() => {
+      setLocalDayKey(getLocalDateKey(new Date()));
+    }, nextLocalDay.getTime() - now.getTime() + 1_000);
+    return () => clearTimeout(timeout);
+  }, [localDayKey]);
+
   const signIn = useCallback(async () => {
     if (!supabase) return;
     setAuthLoading(true); setAuthMessage(null);
@@ -148,18 +159,25 @@ export default function HomeScreen() {
   if (homeLoading && !homeData) return <Shell><LoadingState message="Loading your community…" /></Shell>;
   if (homeError && !homeData) return <Shell><StateCard actionLabel="Try again" message={homeError} onAction={() => void loadHome()} title="Home unavailable" /></Shell>;
   if (!homeData) return null;
-  const latestWorkout = homeData.communityWorkouts[0] ?? null;
-  const highlights = deriveWeeklyHighlights(homeData.communityWorkouts, latestWorkout);
+  const latestCommunityWorkout = homeData.communityWorkouts[0] ?? null;
+  const latestWorkoutToday = homeData.communityWorkouts.find(isWorkoutFromToday) ?? null;
+  const highlights = deriveWeeklyHighlights(homeData.communityWorkouts, latestCommunityWorkout);
   const compactDashboard = windowHeight < 760;
   const standaloneIosWeb = isStandaloneIosWebApp();
   const visibleHighlights = highlights.slice(0, windowHeight < 850 ? 2 : 3);
+  const consistencyDays = buildWeeklyConsistencyDays(
+    homeData.snapshot.workoutOccurredAtThisWeek,
+  );
 
   return (
     <SafeAreaView style={[styles.safeArea, styles.homeSafeArea]}>
-      <View style={[styles.dashboard, compactDashboard && styles.dashboardCompact]}>
+      <ScrollView
+        contentContainerStyle={[styles.dashboard, compactDashboard && styles.dashboardCompact]}
+        showsVerticalScrollIndicator={false}
+      >
       <View style={[styles.personalZone, compactDashboard && styles.personalZoneCompact, standaloneIosWeb && styles.personalZoneStandalone]}>
         <View style={[styles.header, compactDashboard && styles.headerCompact]}>
-          <View style={styles.headerCopy}><BrandHeader /><Text numberOfLines={1} style={styles.greeting}>Hey, {resolveUserDisplayName({ displayName: homeData.user.displayName })}</Text></View>
+          <View style={styles.headerCopy}><BrandHeader /><Text numberOfLines={1} style={styles.greeting}>Hey, {getGreetingFirstName(homeData.user.displayName)}</Text></View>
         </View>
 
         <Card style={[styles.snapshot, compactDashboard && styles.snapshotCompact]}>
@@ -175,12 +193,40 @@ export default function HomeScreen() {
           </View>
           {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title}{homeData.snapshot.mostRecentWorkoutToday.durationMinutes ? ` · ${homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min` : ""}</Text> : null}
         </Card>
+
+        <View accessibilityRole="list" style={styles.consistencyRow}>
+          {consistencyDays.map((day) => (
+            <View
+              accessibilityLabel={day.accessibilityLabel}
+              accessible
+              key={day.key}
+              style={styles.consistencyDay}
+            >
+              <Text style={styles.consistencyWeekday}>{day.weekday}</Text>
+              <Text style={styles.consistencyDate}>{day.dateLabel}</Text>
+              <View style={[styles.consistencyRing, day.isToday && (day.completed ? styles.consistencyRingTodayCompleted : styles.consistencyRingToday)]}>
+                <View style={[
+                  styles.consistencyCircle,
+                  day.completed
+                    ? styles.consistencyCircleCompleted
+                    : day.isFuture
+                      ? styles.consistencyCircleFuture
+                      : day.isToday
+                        ? styles.consistencyCircleToday
+                        : styles.consistencyCirclePast,
+                ]}>
+                  {day.completed ? <Feather color={colors.surface} name="check" size={14} /> : null}
+                </View>
+              </View>
+            </View>
+          ))}
+        </View>
       </View>
 
       <View style={[styles.communityZone, compactDashboard && styles.communityZoneCompact]}>
         <Text style={styles.crewEyebrow}>YOUR CREW</Text>
         <View style={[styles.sectionHeader, compactDashboard && styles.sectionHeaderCompact]}>
-          <Text style={styles.sectionTitle}>Activity</Text>
+          <Text style={styles.subsectionTitle}>Activity</Text>
           {selectedGroup ? (
             <Pressable
               accessibilityRole="button"
@@ -196,23 +242,25 @@ export default function HomeScreen() {
         </View>
         {homeLoading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
         {homeError ? <Text style={styles.error}>{homeError}</Text> : null}
-        {latestWorkout ? (
+        {latestWorkoutToday ? (
           <View style={[styles.latestWorkout, compactDashboard && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard variant="compact" workout={latestWorkout} />
+            <WorkoutSummaryCard variant="compact" workout={latestWorkoutToday} />
           </View>
         ) : (
           <View style={[styles.emptySnapshot, compactDashboard && styles.emptySnapshotCompact]}>
-            <Text style={styles.emptyTitle}>No workouts yet</Text>
-            <Text style={styles.emptyCopy}>Be the first in your group to get some reps in.</Text>
+            <Feather color={colors.brand} name="activity" size={18} />
+            <Text style={styles.emptyCopy}>No workouts logged yet</Text>
+            <Text style={styles.emptyTitle}>Be the first to check in</Text>
             {selectedGroup ? (
-              <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push(`/groups/${selectedGroup.id}/log-workout`)}>
-                <Text style={styles.emptyAction}>Log workout</Text>
+              <Pressable accessibilityRole="button" hitSlop={8} onPress={openWorkoutChooser} style={({ pressed }) => [styles.emptyAction, pressed && styles.emptyActionPressed]}>
+                <Feather color={colors.surface} name="plus" size={14} />
+                <Text style={styles.emptyActionText}>Check in</Text>
               </Pressable>
             ) : null}
           </View>
         )}
 
-        <Text style={[styles.highlightsTitle, compactDashboard && styles.highlightsTitleCompact]}>Highlights</Text>
+        <Text style={[styles.subsectionTitle, styles.highlightsTitle, compactDashboard && styles.highlightsTitleCompact]}>Highlights</Text>
         {visibleHighlights.length ? (
           <View>
             {visibleHighlights.map((highlight, index) => (
@@ -229,7 +277,7 @@ export default function HomeScreen() {
           <Text style={styles.noHighlights}>No highlights yet. Keep getting those reps in.</Text>
         )}
       </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -270,6 +318,64 @@ function deriveWeeklyHighlights(
     .slice(0, 3);
 }
 
+function getGreetingFirstName(displayName: string) {
+  return resolveUserDisplayName({ displayName }).split(/\s+/)[0];
+}
+
+function isWorkoutFromToday(workout: WorkoutFeedItem) {
+  const occurredAt = resolveWorkoutDate(workout);
+  if (!occurredAt) return false;
+  const today = new Date();
+  return occurredAt.getFullYear() === today.getFullYear()
+    && occurredAt.getMonth() === today.getMonth()
+    && occurredAt.getDate() === today.getDate();
+}
+
+function buildWeeklyConsistencyDays(workoutOccurredAtThisWeek: string[]) {
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const monday = new Date(todayStart);
+  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const completedDateKeys = new Set(
+    workoutOccurredAtThisWeek
+      .map((value) => new Date(value))
+      .filter((date) => !Number.isNaN(date.getTime()))
+      .map(getLocalDateKey),
+  );
+
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = new Date(monday);
+    date.setDate(monday.getDate() + index);
+    const key = getLocalDateKey(date);
+    const completed = completedDateKeys.has(key);
+    const isToday = date.getTime() === todayStart.getTime();
+    const isFuture = date.getTime() > todayStart.getTime();
+    const status = completed
+      ? "workout completed"
+      : isToday
+        ? "today, no workout logged"
+        : "no workout logged";
+
+    return {
+      accessibilityLabel: `${new Intl.DateTimeFormat(undefined, {
+        day: "numeric",
+        month: "long",
+        weekday: "long",
+      }).format(date)}, ${status}`,
+      completed,
+      dateLabel: `${date.getMonth() + 1}/${date.getDate()}`,
+      isFuture,
+      isToday,
+      key,
+      weekday: new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(date).toLocaleUpperCase(),
+    };
+  });
+}
+
+function getLocalDateKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
 function isStandaloneIosWebApp() {
   if (Platform.OS !== "web" || typeof window === "undefined") return false;
   return (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
@@ -278,8 +384,8 @@ function isStandaloneIosWebApp() {
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 }, centered: { justifyContent: "center" },
   homeSafeArea: { backgroundColor: "#F7F2F2", ...Platform.select({ web: { paddingBottom: 0 } }) },
-  dashboard: { backgroundColor: colors.surface, flex: 1, paddingBottom: spacing.huge + spacing.xxxl, paddingHorizontal: spacing.xxl },
-  dashboardCompact: { paddingBottom: spacing.xxxl * 2 },
+  dashboard: { backgroundColor: colors.surface, flexGrow: 1, paddingBottom: 160, paddingHorizontal: spacing.xxl },
+  dashboardCompact: { paddingBottom: 160 },
   personalZone: { backgroundColor: "#F7F2F2", marginHorizontal: -spacing.xxl, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
   personalZoneCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
   personalZoneStandalone: { paddingTop: spacing.xxl },
@@ -292,21 +398,35 @@ const styles = StyleSheet.create({
   snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 }, snapshotMessage: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: spacing.xs },
   weekStat: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.md, marginLeft: spacing.md, minWidth: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, weekNumber: { color: colors.brand, fontFamily: fonts.bold, fontSize: 26, lineHeight: 30 }, weekLabel: { color: colors.brandPressed, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8 },
   latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 13, marginTop: spacing.md, paddingTop: spacing.md },
+  consistencyRow: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.lg },
+  consistencyDay: { alignItems: "center", flex: 1 },
+  consistencyWeekday: { color: colors.muted, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.6, lineHeight: 12 },
+  consistencyDate: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 11, lineHeight: 16, marginTop: 2 },
+  consistencyRing: { alignItems: "center", borderColor: "transparent", borderRadius: radii.pill, borderWidth: 1, height: 34, justifyContent: "center", marginTop: spacing.xs, width: 34 },
+  consistencyRingToday: { borderColor: colors.inkSoft },
+  consistencyRingTodayCompleted: { borderColor: colors.brandPressed },
+  consistencyCircle: { alignItems: "center", borderRadius: radii.pill, borderWidth: 1, height: 26, justifyContent: "center", width: 26 },
+  consistencyCircleCompleted: { backgroundColor: colors.brand, borderColor: colors.brand },
+  consistencyCircleToday: { backgroundColor: colors.surface, borderColor: colors.inkSoft },
+  consistencyCirclePast: { backgroundColor: colors.border, borderColor: colors.borderStrong },
+  consistencyCircleFuture: { backgroundColor: colors.surface, borderColor: colors.border },
   communityZone: { backgroundColor: colors.surface, marginHorizontal: -spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.sm },
   communityZoneCompact: { paddingTop: spacing.xs },
-  crewEyebrow: { color: colors.brand, ...type.eyebrow },
+  crewEyebrow: { color: colors.brand, ...type.heading },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xs },
   sectionHeaderCompact: { marginTop: 0 },
-  sectionTitle: { color: colors.ink, ...type.title },
+  subsectionTitle: { color: colors.ink, ...type.bodyMedium, fontFamily: fonts.semibold },
   sectionAction: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
   latestWorkout: { marginTop: spacing.lg },
   latestWorkoutCompact: { marginTop: spacing.sm },
-  emptySnapshot: { borderBottomColor: colors.border, borderBottomWidth: 1, paddingBottom: spacing.xl, paddingTop: spacing.lg },
+  emptySnapshot: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, marginTop: spacing.lg, padding: spacing.lg },
   emptySnapshotCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
-  emptyTitle: { color: colors.ink, ...type.heading },
-  emptyCopy: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  emptyAction: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, marginTop: spacing.md },
-  highlightsTitle: { color: colors.ink, ...type.title, marginTop: spacing.xl },
+  emptyTitle: { alignSelf: "center", color: colors.ink, ...type.heading, marginTop: spacing.sm },
+  emptyCopy: { alignSelf: "center", color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
+  emptyAction: { alignItems: "center", alignSelf: "center", backgroundColor: colors.brand, borderRadius: radii.sm, flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.md, minHeight: 36, paddingHorizontal: spacing.md },
+  emptyActionPressed: { backgroundColor: colors.brandPressed },
+  emptyActionText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 13 },
+  highlightsTitle: { marginTop: spacing.xl },
   highlightsTitleCompact: { marginTop: spacing.xs },
   highlightRow: { alignItems: "center", flexDirection: "row", minHeight: 64, paddingVertical: spacing.md },
   highlightRowCompact: { minHeight: 44, paddingVertical: spacing.xs },

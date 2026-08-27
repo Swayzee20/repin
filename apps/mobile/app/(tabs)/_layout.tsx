@@ -22,10 +22,14 @@ export default function MainTabsLayout() {
 function MainTabsNavigator() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { selectedGroupId } = useMainTabs();
+  const {
+    openWorkoutChooser,
+    selectedGroupId,
+    setWorkoutChooserVisible,
+    workoutChooserVisible,
+  } = useMainTabs();
   const [session, setSession] = useState<Session | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [workoutChooserVisible, setWorkoutChooserVisible] = useState(false);
   const authUserId = useRef<string | null>(null);
 
   useEffect(() => {
@@ -82,7 +86,7 @@ function MainTabsNavigator() {
       {session && selectedGroupId && !keyboardVisible ? (
         <Pressable
           accessibilityRole="button"
-          onPress={() => setWorkoutChooserVisible(true)}
+          onPress={openWorkoutChooser}
           style={({ pressed }) => [
             styles.logWorkout,
             { bottom: tabBarHeight + spacing.md },

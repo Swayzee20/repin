@@ -33,19 +33,29 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.repin.mobile"
+      "bundleIdentifier": "com.repin.mobile",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#FFFFFF",
         "foregroundImage": "./assets/branding/repin-app-icon.png"
       },
-      "package": "com.repin.mobile"
+      "package": "com.repin.mobile",
+      "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "bundler": "metro",
       "favicon": "./assets/branding/repin-app-icon.png",
       "output": "single"
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "e88e4ec2-8133-4ef9-9909-40dd1f6c9f3b"
+      }
     }
   }
 }

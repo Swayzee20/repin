@@ -1,3 +1,4 @@
+import { Feather } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
@@ -7,7 +8,6 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
   useWindowDimensions,
   type ViewStyle,
@@ -15,7 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 
-import { colors, fonts, radii, spacing } from "./theme";
+import { colors, radii, spacing } from "./theme";
 import { WorkoutDetailView } from "./workout-detail";
 
 const webScrollerStyle = Platform.OS === "web"
@@ -143,6 +143,7 @@ export function WorkoutDetailModal({
           ]}
         >
           <View style={styles.handle} />
+          <ModalCloseButton onPress={close} />
           <ScrollView
             automaticallyAdjustKeyboardInsets
             contentContainerStyle={[
@@ -157,7 +158,7 @@ export function WorkoutDetailModal({
           >
             {groupId && sessionId ? (
               <WorkoutDetailView
-                closeAction={<ModalCloseButton onPress={close} />}
+                detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
                 groupId={groupId}
                 seedWorkout={initialWorkout ?? undefined}
                 onCommentCountChange={onCommentCountChange}
@@ -182,7 +183,7 @@ function ModalCloseButton({ onPress }: { onPress: () => void }) {
       onPress={onPress}
       style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
     >
-      <Text style={styles.closeText}>×</Text>
+      <Feather color={colors.inkSoft} name="x" size={20} />
     </Pressable>
   );
 }
@@ -193,8 +194,7 @@ const styles = StyleSheet.create({
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   panel: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" },
   handle: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: 4, marginTop: spacing.md, width: 38 },
-  closeButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 36, justifyContent: "center", width: 36 },
-  closeText: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 26, lineHeight: 29, marginTop: -2 },
+  closeButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, elevation: 5, height: 36, justifyContent: "center", position: "absolute", right: spacing.lg, top: spacing.lg, width: 36, zIndex: 20 },
   pressed: { opacity: 0.66 },
   scroller: { flex: 1 },
   scrollContent: { flexGrow: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },

@@ -220,6 +220,7 @@ export interface HomeData {
   snapshot: {
     hasWorkoutToday: boolean;
     mostRecentWorkoutToday: WorkoutFeedItem | null;
+    workoutOccurredAtThisWeek: string[];
     workoutsThisWeek: number;
     message: string;
   };
