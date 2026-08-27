@@ -117,10 +117,12 @@ export default function HomeScreen() {
     const now = new Date();
     const nextLocalDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const timeout = setTimeout(() => {
+      lastSuccessfulLoad.current = null;
       setLocalDayKey(getLocalDateKey(new Date()));
+      void loadHome();
     }, nextLocalDay.getTime() - now.getTime() + 1_000);
     return () => clearTimeout(timeout);
-  }, [localDayKey]);
+  }, [loadHome, localDayKey]);
 
   const signIn = useCallback(async () => {
     if (!supabase) return;
@@ -203,7 +205,6 @@ export default function HomeScreen() {
               style={styles.consistencyDay}
             >
               <Text style={styles.consistencyWeekday}>{day.weekday}</Text>
-              <Text style={styles.consistencyDate}>{day.dateLabel}</Text>
               <View style={[styles.consistencyRing, day.isToday && (day.completed ? styles.consistencyRingTodayCompleted : styles.consistencyRingToday)]}>
                 <View style={[
                   styles.consistencyCircle,
@@ -334,8 +335,8 @@ function isWorkoutFromToday(workout: WorkoutFeedItem) {
 function buildWeeklyConsistencyDays(workoutOccurredAtThisWeek: string[]) {
   const now = new Date();
   const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const monday = new Date(todayStart);
-  monday.setDate(monday.getDate() - ((monday.getDay() + 6) % 7));
+  const sunday = new Date(todayStart);
+  sunday.setDate(sunday.getDate() - sunday.getDay());
   const completedDateKeys = new Set(
     workoutOccurredAtThisWeek
       .map((value) => new Date(value))
@@ -344,17 +345,13 @@ function buildWeeklyConsistencyDays(workoutOccurredAtThisWeek: string[]) {
   );
 
   return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(monday);
-    date.setDate(monday.getDate() + index);
+    const date = new Date(sunday);
+    date.setDate(sunday.getDate() + index);
     const key = getLocalDateKey(date);
     const completed = completedDateKeys.has(key);
     const isToday = date.getTime() === todayStart.getTime();
     const isFuture = date.getTime() > todayStart.getTime();
-    const status = completed
-      ? "workout completed"
-      : isToday
-        ? "today, no workout logged"
-        : "no workout logged";
+    const status = `${isToday ? "today, " : ""}${completed ? "workout completed" : "no workout logged"}`;
 
     return {
       accessibilityLabel: `${new Intl.DateTimeFormat(undefined, {
@@ -363,7 +360,6 @@ function buildWeeklyConsistencyDays(workoutOccurredAtThisWeek: string[]) {
         weekday: "long",
       }).format(date)}, ${status}`,
       completed,
-      dateLabel: `${date.getMonth() + 1}/${date.getDate()}`,
       isFuture,
       isToday,
       key,
@@ -400,8 +396,7 @@ const styles = StyleSheet.create({
   latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 13, marginTop: spacing.md, paddingTop: spacing.md },
   consistencyRow: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.lg },
   consistencyDay: { alignItems: "center", flex: 1 },
-  consistencyWeekday: { color: colors.muted, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.6, lineHeight: 12 },
-  consistencyDate: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 11, lineHeight: 16, marginTop: 2 },
+  consistencyWeekday: { color: colors.muted, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.6, lineHeight: 16 },
   consistencyRing: { alignItems: "center", borderColor: "transparent", borderRadius: radii.pill, borderWidth: 1, height: 34, justifyContent: "center", marginTop: spacing.xs, width: 34 },
   consistencyRingToday: { borderColor: colors.inkSoft },
   consistencyRingTodayCompleted: { borderColor: colors.brandPressed },

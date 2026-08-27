@@ -45,11 +45,16 @@ function getDatabaseUrl() {
 
 export function getDatabase() {
   if (!databaseGlobals.repinPool) {
+    const isVercelRuntime = Boolean(process.env.VERCEL);
     databaseGlobals.repinPool = new Pool({
+      allowExitOnIdle: isVercelRuntime,
       connectionString: getDatabaseUrl(),
-      max: 10,
+      // A Vercel instance must not reserve most of Supabase's session-pool
+      // capacity. Queries still share this singleton and queue briefly when a
+      // request performs independent reads concurrently.
+      max: isVercelRuntime ? 1 : 10,
       connectionTimeoutMillis: 5_000,
-      idleTimeoutMillis: 30_000,
+      idleTimeoutMillis: isVercelRuntime ? 5_000 : 30_000,
     });
   }
 

@@ -180,9 +180,9 @@ function getLocalBoundaries(now: Date, timezoneOffsetMinutes: number) {
   const todayStart = new Date(
     localMidnight + timezoneOffsetMinutes * 60 * 1_000,
   );
-  const daysSinceMonday = (localNow.getUTCDay() + 6) % 7;
+  const daysSinceSunday = localNow.getUTCDay();
   const weekStart = new Date(
-    todayStart.getTime() - daysSinceMonday * 24 * 60 * 60 * 1_000,
+    todayStart.getTime() - daysSinceSunday * 24 * 60 * 60 * 1_000,
   );
 
   return { todayStart, weekStart };
