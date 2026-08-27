@@ -1,12 +1,13 @@
 import {
   communityReactionTypes,
+  formatGroupedIntervalSegment,
   getUserInitials,
+  groupConsecutiveIntervalSegments,
   resolveUserDisplayName,
   type CommunityReactionSummary,
   type CommunityReactionType,
   type CommunityPostComment,
   type CommunityWorkoutDetail,
-  type WorkoutDetailSegment,
   type WorkoutFeedItem,
 } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
@@ -16,7 +17,6 @@ import { ActivityIndicator, Animated, Easing, Image, Pressable, StyleSheet, Text
 
 import { supabase } from "../lib/supabase";
 import {
-  formatDurationSeconds,
   formatWorkoutMetric,
   formatWorkoutSet,
 } from "../lib/workout-detail-format";
@@ -449,6 +449,7 @@ export function WorkoutDetailContent({
     .map(formatWorkoutMetric)
     .filter((metric): metric is NonNullable<typeof metric> => metric !== null);
   const hasResults = formattedMetrics.length > 0 || workout.movements.length > 0 || workout.segments.length > 0;
+  const groupedIntervals = groupConsecutiveIntervalSegments(workout.segments);
   const isCommunityModal = presentation === "community-modal";
   const [commentInputHeight, setCommentInputHeight] = useState(44);
   const [workoutExpanded, setWorkoutExpanded] = useState(false);
@@ -484,15 +485,17 @@ export function WorkoutDetailContent({
           ]}
         >
           <Text style={styles.intervalHeading}>Intervals</Text>
-          {workout.segments.map((segment, index) => (
-            <View key={segment.id} style={[styles.intervalRow, index > 0 && styles.dividedRow, isCommunityModal && index > 0 && styles.modalDividedRow]}>
-              <Text style={[styles.intervalNumber, isCommunityModal && styles.modalResultLabel]}>{index + 1}</Text>
+          {groupedIntervals.map((group, index) => {
+            const formatted = formatGroupedIntervalSegment(group);
+            return (
+            <View key={`${group.segment.segmentType}-${index}`} style={[styles.intervalRow, index > 0 && styles.dividedRow, isCommunityModal && index > 0 && styles.modalDividedRow]}>
               <View style={styles.intervalResult}>
-                <Text style={styles.intervalValue}>{formatIntervalSegment(segment)}</Text>
-                {segment.recoverySeconds != null ? <Text style={styles.intervalRecovery}>{segment.recoverySeconds} sec recovery</Text> : null}
+                <Text style={styles.intervalValue}>{formatted.main}</Text>
+                {formatted.recovery ? <Text style={styles.intervalRecovery}>{formatted.recovery}</Text> : null}
               </View>
             </View>
-          ))}
+            );
+          })}
         </Card>
       ) : null}
 
@@ -967,15 +970,6 @@ function getLocalDateKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
-function formatIntervalSegment(segment: WorkoutDetailSegment) {
-  const parts: string[] = [];
-  if (segment.distance != null && segment.distanceUnit) {
-    parts.push(`${new Intl.NumberFormat("en-US", { maximumFractionDigits: 3, useGrouping: false }).format(segment.distance)} ${segment.distanceUnit}`);
-  }
-  if (segment.durationSeconds != null) parts.push(formatDurationSeconds(segment.durationSeconds));
-  return parts.length ? parts.join(" · ") : "Work interval";
-}
-
 const styles = StyleSheet.create({
   authorRow: { alignItems: "center", flexDirection: "row" },
   modalAuthorRow: { paddingRight: 48 },
@@ -1005,7 +999,6 @@ const styles = StyleSheet.create({
   modalIntervalCard: { backgroundColor: colors.surfaceMuted, borderWidth: 0, marginTop: 0 },
   intervalHeading: { color: colors.ink, ...type.heading, marginBottom: spacing.xs },
   intervalRow: { alignItems: "flex-start", flexDirection: "row", minHeight: 54, paddingVertical: spacing.md },
-  intervalNumber: { color: colors.muted, ...type.label, width: 32 },
   intervalResult: { flex: 1 },
   intervalValue: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
   intervalRecovery: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },

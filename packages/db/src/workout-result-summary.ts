@@ -1,3 +1,10 @@
+import {
+  formatGroupedIntervalSegment,
+  groupConsecutiveIntervalSegments,
+  type IntervalPresentationSegment,
+  type RunWorkoutSubtype,
+} from "@repin/types";
+
 interface WorkoutResultMetric {
   metricType: string;
   numericValue: number | null;
@@ -18,11 +25,26 @@ export interface WorkoutResultMovement {
 
 export function formatWorkoutResultSummary(input: {
   workoutType: string;
+  workoutSubtype?: RunWorkoutSubtype | null;
   metrics: WorkoutResultMetric[];
   movements: WorkoutResultMovement[];
+  segments?: IntervalPresentationSegment[];
 }) {
   switch (input.workoutType) {
-    case "run":
+    case "run": {
+      if (input.workoutSubtype === "interval" && input.segments?.length) {
+        const groups = groupConsecutiveIntervalSegments(input.segments);
+        const first = groups[0];
+        if (first) {
+          const summary = formatGroupedIntervalSegment(first).summary;
+          return truncateSummary(groups.length > 1 ? `${summary} · +${groups.length - 1} more` : summary);
+        }
+      }
+      return joinSummaryParts([
+        formatDistance(findMetric(input.metrics, "distance")),
+        formatDuration(findMetric(input.metrics, "duration")),
+      ]);
+    }
     case "walk":
       return joinSummaryParts([
         formatDistance(findMetric(input.metrics, "distance")),

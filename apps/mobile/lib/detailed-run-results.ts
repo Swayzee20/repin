@@ -18,6 +18,12 @@ export interface IntervalDraft {
   quantity: number;
 }
 
+export interface IntervalValidationIssue {
+  field: "distance" | "interval" | "quantity" | "recovery" | "time";
+  intervalIndex: number;
+  message: string;
+}
+
 let nextIntervalId = 1;
 
 export function createEmptyInterval(): IntervalDraft {
@@ -33,28 +39,36 @@ export function createEmptyInterval(): IntervalDraft {
 }
 
 export function validateIntervals(intervals: IntervalDraft[]) {
+  return getIntervalValidationIssue(intervals)?.message ?? null;
+}
+
+export function getIntervalValidationIssue(intervals: IntervalDraft[]): IntervalValidationIssue | null {
   const meaningful = intervals.filter(isMeaningfulInterval);
-  if (!meaningful.length) return "Add results for at least one interval.";
+  if (!meaningful.length) return { field: "interval", intervalIndex: 0, message: "Add results for at least one interval." };
 
   for (const [index, interval] of intervals.entries()) {
     if (!isMeaningfulInterval(interval)) continue;
     if (!Number.isSafeInteger(interval.quantity) || interval.quantity < 1) {
-      return `Interval ${index + 1} repeats must be a positive whole number.`;
+      return { field: "quantity", intervalIndex: index, message: "Repeats must be a positive whole number." };
     }
     if (interval.distance.trim()) {
       const distance = Number(interval.distance);
-      if (!Number.isFinite(distance) || distance <= 0) return `Interval ${index + 1} distance must be greater than zero.`;
+      if (!Number.isFinite(distance) || distance <= 0) {
+        return { field: "distance", intervalIndex: index, message: "Distance must be greater than zero." };
+      }
     }
     const timeIssue = validateTimeParts(interval.timeMinutes, interval.timeSeconds);
-    if (timeIssue) return `Interval ${index + 1}: ${timeIssue}`;
+    if (timeIssue) return { field: "time", intervalIndex: index, message: timeIssue };
     if (interval.recoverySeconds.trim()) {
       const recoverySeconds = Number(interval.recoverySeconds);
       if (!/^\d+$/.test(interval.recoverySeconds.trim()) || !Number.isSafeInteger(recoverySeconds) || recoverySeconds <= 0) {
-        return `Interval ${index + 1} recovery must be a positive whole number of seconds.`;
+        return { field: "recovery", intervalIndex: index, message: "Recovery must be a positive whole number of seconds." };
       }
     }
   }
-  if (getExpandedSegmentCount(meaningful) > 500) return "Intervals cannot exceed 500 total repeats.";
+  if (getExpandedSegmentCount(meaningful) > 500) {
+    return { field: "quantity", intervalIndex: 0, message: "Intervals cannot exceed 500 total repeats." };
+  }
   return null;
 }
 

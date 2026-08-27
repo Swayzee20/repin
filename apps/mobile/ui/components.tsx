@@ -132,6 +132,7 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 }
 
 export function TextField({
+  compact = false,
   containerStyle,
   label,
   hint,
@@ -140,6 +141,7 @@ export function TextField({
   style,
   ...props
 }: TextInputProps & {
+  compact?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
   label?: string;
   hint?: string;
@@ -147,7 +149,7 @@ export function TextField({
   const [focused, setFocused] = useState(false);
 
   return (
-    <View style={[styles.field, containerStyle]}>
+    <View style={[styles.field, compact && styles.fieldCompact, containerStyle]}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
       <TextInput
         onBlur={(event) => {
@@ -162,6 +164,7 @@ export function TextField({
         selectionColor={colors.brand}
         style={[
           styles.input,
+          compact && styles.inputCompact,
           focused && styles.inputFocused,
           props.multiline && styles.multiline,
           style,
@@ -566,8 +569,10 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.48 },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg },
   field: { gap: spacing.sm },
+  fieldCompact: { gap: spacing.xs },
   fieldLabel: { color: colors.inkSoft, ...type.label },
   input: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: radii.input, borderWidth: 1, color: colors.ink, fontFamily: fonts.regular, fontSize: 16, minHeight: controls.inputHeight, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  inputCompact: { minHeight: 48, paddingVertical: spacing.sm },
   inputFocused: { borderColor: colors.brand },
   multiline: { minHeight: 108, textAlignVertical: "top" },
   hint: { color: colors.muted, ...type.bodySmall },

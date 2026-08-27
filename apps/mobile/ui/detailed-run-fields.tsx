@@ -10,6 +10,7 @@ import {
   createEmptyInterval,
   getExpandedSegmentCount,
   type IntervalDraft,
+  type IntervalValidationIssue,
 } from "../lib/detailed-run-results";
 import { type QuickLogResultsDraft, WorkoutTimeInput } from "./quick-log-results";
 import { colors, fonts, radii, spacing, type } from "./theme";
@@ -56,6 +57,7 @@ export function RunResultEditor({
   onResultsChange,
   results,
   subtype,
+  validationError,
 }: {
   expanded: boolean;
   intervals: IntervalDraft[];
@@ -65,6 +67,7 @@ export function RunResultEditor({
   onResultsChange: (results: QuickLogResultsDraft) => void;
   results: QuickLogResultsDraft;
   subtype: RunWorkoutSubtype;
+  validationError: IntervalValidationIssue | { message: string } | null;
 }) {
   if (!expanded) {
     return (
@@ -87,12 +90,16 @@ export function RunResultEditor({
     <View style={styles.editorSection}>
       <View style={styles.editorSurface}>
         {subtype === "interval" ? (
-          <IntervalEditor intervals={intervals} onChange={onIntervalsChange} />
+          <IntervalEditor
+            intervals={intervals}
+            onChange={onIntervalsChange}
+            validationError={validationError && "intervalIndex" in validationError ? validationError : null}
+          />
         ) : (
           <>
             <Text style={styles.fieldLabelNoMargin}>Distance</Text>
             <View style={styles.metricRow}>
-              <TextField containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" value={results.distance} />
+              <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" value={results.distance} />
               <DistanceUnitToggle onChange={(distanceUnit) => updateResults({ distanceUnit })} value={results.distanceUnit} />
             </View>
             <Text style={styles.fieldLabelSpaced}>Time</Text>
@@ -102,6 +109,7 @@ export function RunResultEditor({
               onSecondsChange={(timeSeconds) => updateResults({ timeSeconds })}
               seconds={results.timeSeconds}
             />
+            {validationError ? <Text accessibilityRole="alert" style={styles.inlineError}>{validationError.message}</Text> : null}
           </>
         )}
         <Pressable accessibilityRole="button" onPress={onDone} style={({ pressed }) => [styles.doneAction, pressed && styles.pressed]}>
@@ -115,9 +123,11 @@ export function RunResultEditor({
 function IntervalEditor({
   intervals,
   onChange,
+  validationError,
 }: {
   intervals: IntervalDraft[];
   onChange: (intervals: IntervalDraft[]) => void;
+  validationError: IntervalValidationIssue | null;
 }) {
   const updateInterval = (id: number, change: Partial<IntervalDraft>) => {
     onChange(intervals.map((interval) => interval.id === id ? { ...interval, ...change } : interval));
@@ -127,7 +137,7 @@ function IntervalEditor({
     <View>
       <Text style={styles.sectionTitle}>Intervals</Text>
       {intervals.map((interval, index) => (
-        <View key={interval.id} style={styles.intervalCard}>
+        <View key={interval.id} style={[styles.intervalScheme, index > 0 && styles.dividedScheme]}>
           <View style={styles.intervalHeader}>
             <Text style={styles.intervalTitle}>Interval {index + 1}</Text>
             {intervals.length > 1 ? (
@@ -136,12 +146,14 @@ function IntervalEditor({
               </Pressable>
             ) : null}
           </View>
+          <InlineError field="interval" index={index} issue={validationError} />
 
           <Text style={styles.fieldLabel}>Distance</Text>
           <View style={styles.metricRow}>
-            <TextField containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" value={interval.distance} />
+            <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" value={interval.distance} />
             <UnitToggle onChange={(distanceUnit) => updateInterval(interval.id, { distanceUnit })} value={interval.distanceUnit} />
           </View>
+          <InlineError field="distance" index={index} issue={validationError} />
 
           <Text style={styles.fieldLabelSpaced}>Time</Text>
           <WorkoutTimeInput
@@ -150,12 +162,14 @@ function IntervalEditor({
             onSecondsChange={(timeSeconds) => updateInterval(interval.id, { timeSeconds })}
             seconds={interval.timeSeconds}
           />
+          <InlineError field="time" index={index} issue={validationError} />
 
           <Text style={styles.fieldLabelSpaced}>Recovery</Text>
           <View style={styles.recoveryRow}>
-            <TextField accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" value={interval.recoverySeconds} />
+            <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" value={interval.recoverySeconds} />
             <Text style={styles.unitLabel}>sec</Text>
           </View>
+          <InlineError field="recovery" index={index} issue={validationError} />
 
           <View style={styles.quantityRow}>
             <View>
@@ -186,6 +200,7 @@ function IntervalEditor({
               </Pressable>
             </View>
           </View>
+          <InlineError field="quantity" index={index} issue={validationError} />
         </View>
       ))}
       <Pressable accessibilityRole="button" onPress={() => onChange([...intervals, createEmptyInterval()])} style={({ pressed }) => [styles.addInterval, pressed && styles.pressed]}>
@@ -193,6 +208,16 @@ function IntervalEditor({
       </Pressable>
     </View>
   );
+}
+
+function InlineError({ field, index, issue }: {
+  field: IntervalValidationIssue["field"];
+  index: number;
+  issue: IntervalValidationIssue | null;
+}) {
+  return issue?.intervalIndex === index && issue.field === field
+    ? <Text accessibilityRole="alert" style={styles.inlineError}>{issue.message}</Text>
+    : null;
 }
 
 function DistanceUnitToggle({ onChange, value }: { onChange: (value: "mi" | "km") => void; value: "mi" | "km" }) {
@@ -220,22 +245,23 @@ function UnitToggle({ onChange, value }: { onChange: (value: WorkoutDistanceUnit
 }
 
 const styles = StyleSheet.create({
-  section: { marginTop: spacing.xxl },
-  editorSection: { marginTop: spacing.xxl },
+  section: { marginTop: spacing.xl },
+  editorSection: { marginTop: spacing.xl },
   sectionTitle: { color: colors.ink, ...type.heading },
   subtypeToggle: { alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexDirection: "row", marginTop: spacing.sm, padding: 3 },
   subtypeOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.md },
   subtypeOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
   subtypeText: { color: colors.muted, ...type.label },
   subtypeTextSelected: { color: colors.ink },
-  editorSurface: { backgroundColor: colors.surfaceMuted, borderRadius: radii.md, padding: spacing.lg },
-  intervalCard: { backgroundColor: colors.surface, borderRadius: radii.md, marginTop: spacing.md, padding: spacing.lg },
+  editorSurface: { backgroundColor: colors.surfaceMuted, borderRadius: radii.md, padding: spacing.md },
+  intervalScheme: { marginTop: spacing.md },
+  dividedScheme: { borderTopColor: colors.borderStrong, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.lg, paddingTop: spacing.lg },
   intervalHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   intervalTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 17, lineHeight: 22 },
   removeAction: { color: colors.muted, ...type.label },
-  fieldLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginTop: spacing.lg },
+  fieldLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginTop: spacing.md },
   fieldLabelNoMargin: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
-  fieldLabelSpaced: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginTop: spacing.lg },
+  fieldLabelSpaced: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginTop: spacing.md },
   metricRow: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   metricField: { flex: 1, marginTop: 0 },
   unitToggle: { backgroundColor: colors.surface, borderRadius: radii.sm, flexDirection: "row", padding: 3 },
@@ -246,7 +272,8 @@ const styles = StyleSheet.create({
   recoveryRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   recoveryField: { marginTop: 0, width: 96 },
   unitLabel: { color: colors.muted, ...type.bodySmall },
-  quantityRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.lg },
+  inlineError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.xs },
+  quantityRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md },
   quantityHelper: { color: colors.muted, ...type.bodySmall, marginTop: 2 },
   quantityControl: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   quantityButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, height: 36, justifyContent: "center", width: 36 },
@@ -258,9 +285,9 @@ const styles = StyleSheet.create({
   doneAction: { alignItems: "center", alignSelf: "flex-end", justifyContent: "center", marginTop: spacing.md, minHeight: 40, paddingHorizontal: spacing.sm },
   doneActionText: { color: colors.brand, ...type.label },
   collapsedSurface: { alignItems: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, flexDirection: "row", gap: spacing.md, justifyContent: "space-between", marginTop: spacing.xxl, padding: spacing.lg },
-  collapsedCopy: { flex: 1, gap: spacing.xs },
-  summaryText: { color: colors.ink, ...type.bodyMedium },
-  editAction: { alignItems: "center", justifyContent: "center", minHeight: 32, paddingHorizontal: spacing.xs },
+  collapsedCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
+  summaryText: { color: colors.ink, flexShrink: 1, ...type.bodyMedium },
+  editAction: { alignItems: "center", flexShrink: 0, justifyContent: "center", minHeight: 32, paddingHorizontal: spacing.xs },
   editActionText: { color: colors.brand, ...type.label },
   pressed: { opacity: 0.72 },
 });

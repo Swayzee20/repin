@@ -20,9 +20,11 @@ export const workoutTypeLabels = Object.fromEntries(
 ) as Record<WorkoutType, string>;
 
 export function WorkoutTypeSelector({
+  compact = false,
   onChange,
   value,
 }: {
+  compact?: boolean;
   onChange: (value: WorkoutType) => void;
   value: WorkoutType | null;
 }) {
@@ -82,7 +84,7 @@ export function WorkoutTypeSelector({
         accessibilityLabel={value ? `Workout type, ${workoutTypeLabels[value]}` : "Select workout type"}
         accessibilityRole="button"
         onPress={() => setVisible(true)}
-        style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.selector, compact && styles.selectorCompact, pressed && styles.pressed]}
       >
         <Text style={[styles.selectorText, !value && styles.placeholder]}>
           {value ? workoutTypeLabels[value] : "Select workout type"}
@@ -148,6 +150,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   selectorText: { color: colors.ink, fontFamily: fonts.medium, fontSize: 16, lineHeight: 23 },
+  selectorCompact: { borderRadius: radii.input, minHeight: 48, paddingHorizontal: spacing.md },
   placeholder: { color: colors.muted },
   selectorChevron: { color: colors.muted, fontFamily: fonts.medium, fontSize: 22, lineHeight: 24, marginLeft: spacing.md },
   overlay: { flex: 1, justifyContent: "flex-end" },

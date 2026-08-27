@@ -130,6 +130,66 @@ export type WorkoutSessionSegmentType = (typeof workoutSessionSegmentTypes)[numb
 export const workoutDistanceUnits = ["m", "km", "mi"] as const;
 export type WorkoutDistanceUnit = (typeof workoutDistanceUnits)[number];
 
+export interface IntervalPresentationSegment {
+  segmentType: WorkoutSessionSegmentType;
+  distance: number | null;
+  distanceUnit: WorkoutDistanceUnit | null;
+  durationSeconds: number | null;
+  recoverySeconds: number | null;
+}
+
+export interface GroupedIntervalSegment {
+  quantity: number;
+  segment: IntervalPresentationSegment;
+}
+
+export function groupConsecutiveIntervalSegments(segments: IntervalPresentationSegment[]) {
+  return segments.reduce<GroupedIntervalSegment[]>((groups, segment) => {
+    const previous = groups.at(-1);
+    if (previous && intervalSegmentsMatch(previous.segment, segment)) previous.quantity += 1;
+    else groups.push({ quantity: 1, segment });
+    return groups;
+  }, []);
+}
+
+export function formatGroupedIntervalSegment(group: GroupedIntervalSegment) {
+  const { segment } = group;
+  const parts: string[] = [];
+  if (segment.distance != null && segment.distanceUnit) {
+    parts.push(`${formatIntervalNumber(segment.distance)} ${segment.distanceUnit}`);
+  }
+  if (segment.durationSeconds != null) {
+    const duration = formatIntervalDuration(segment.durationSeconds);
+    parts.push(segment.distance == null ? `${duration} ${segment.segmentType}` : duration);
+  }
+  if (!parts.length) parts.push(segment.segmentType === "recovery" ? "Recovery" : "Work interval");
+  const main = `${group.quantity > 1 ? `${group.quantity} × ` : ""}${parts.join(" · ")}`;
+  const recovery = segment.recoverySeconds != null ? `${segment.recoverySeconds}s recovery` : null;
+  return { main, recovery, summary: [main, recovery].filter(Boolean).join(" · ") };
+}
+
+function intervalSegmentsMatch(left: IntervalPresentationSegment, right: IntervalPresentationSegment) {
+  return left.segmentType === right.segmentType
+    && left.distance === right.distance
+    && left.distanceUnit === right.distanceUnit
+    && left.durationSeconds === right.durationSeconds
+    && left.recoverySeconds === right.recoverySeconds;
+}
+
+function formatIntervalDuration(totalSeconds: number) {
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = totalSeconds % 60;
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`
+    : `${minutes}:${String(seconds).padStart(2, "0")}`;
+}
+
+function formatIntervalNumber(value: number) {
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 3, useGrouping: false }).format(value);
+}
+
 export interface QuickLogMetricInput {
   metricType: WorkoutMetricType;
   label?: string | null;

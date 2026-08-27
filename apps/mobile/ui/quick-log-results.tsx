@@ -50,7 +50,7 @@ export function WorkoutMetricFields({
         <View style={styles.section}>
           <FieldLabel label="Distance" />
           <View style={styles.metricRow}>
-            <TextField containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => update({ distance })} placeholder="3.2" value={value.distance} />
+            <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => update({ distance })} placeholder="3.2" value={value.distance} />
             <ChoiceToggle<DistanceUnit> onChange={(distanceUnit) => distanceUnit && update({ distanceUnit })} options={["mi", "km"]} value={value.distanceUnit} />
           </View>
         </View>
@@ -66,10 +66,10 @@ export function WorkoutMetricFields({
             value={value.functionalResultType}
           />
           {value.functionalResultType === "rounds" ? (
-            <TextField containerStyle={styles.resultField} inputMode="numeric" onChangeText={(rounds) => update({ rounds })} placeholder="5" value={value.rounds} />
+            <TextField compact containerStyle={styles.resultField} inputMode="numeric" onChangeText={(rounds) => update({ rounds })} placeholder="5" value={value.rounds} />
           ) : null}
           {value.functionalResultType === "score" ? (
-            <TextField containerStyle={styles.resultField} maxLength={500} onChangeText={(score) => update({ score })} placeholder="5 rounds + 12 reps" value={value.score} />
+            <TextField compact containerStyle={styles.resultField} maxLength={500} onChangeText={(score) => update({ score })} placeholder="5 rounds + 12 reps" value={value.score} />
           ) : null}
         </View>
       ) : null}
@@ -140,11 +140,11 @@ export function WorkoutTimeInput({
   return (
     <View style={styles.timeRow}>
       <View style={styles.timePart}>
-        <TextField accessibilityLabel="Minutes" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" onChangeText={onMinutesChange} placeholder="28" value={minutes} />
+        <TextField compact accessibilityLabel="Minutes" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" onChangeText={onMinutesChange} placeholder="28" value={minutes} />
         <Text style={styles.timeUnit}>min</Text>
       </View>
       <View style={styles.timePart}>
-        <TextField accessibilityLabel="Seconds" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" maxLength={2} onChangeText={onSecondsChange} placeholder="14" value={seconds} />
+        <TextField compact accessibilityLabel="Seconds" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" maxLength={2} onChangeText={onSecondsChange} placeholder="14" value={seconds} />
         <Text style={styles.timeUnit}>sec</Text>
       </View>
     </View>
@@ -202,9 +202,9 @@ function capitalize(value: string) {
 }
 
 const styles = StyleSheet.create({
-  section: { marginTop: spacing.xl },
+  section: { marginTop: spacing.lg },
   sectionTitle: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
-  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm },
+  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.xs },
   optional: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
   metricRow: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   metricField: { flex: 1, marginTop: 0 },

@@ -958,6 +958,7 @@ async function listRecentWorkouts(input: {
       userId: schema.workoutSessions.userId,
       groupId: schema.communityPosts.groupId,
       workoutType: schema.workoutSessions.workoutType,
+      workoutSubtype: schema.workoutSessions.workoutSubtype,
       name: schema.workoutSessions.name,
       durationMinutes: schema.workoutSessions.durationMinutes,
       effort: schema.workoutSessions.effort,
@@ -1038,7 +1039,14 @@ async function listRecentWorkouts(input: {
         .map((post) => post.id),
     ),
   ];
-  const [metrics, movementSetRows] = await Promise.all([
+  const intervalSessionIds = [
+    ...new Set(
+      posts
+        .filter((post) => post.workoutType === "run" && post.workoutSubtype === "interval")
+        .map((post) => post.id),
+    ),
+  ];
+  const [metrics, movementSetRows, intervalSegments] = await Promise.all([
     metricSessionIds.length
       ? database
           .select({
@@ -1093,6 +1101,23 @@ async function listRecentWorkouts(input: {
             asc(schema.setResults.position),
           )
       : Promise.resolve([]),
+    intervalSessionIds.length
+      ? database
+          .select({
+            workoutSessionId: schema.workoutSessionSegments.workoutSessionId,
+            segmentType: schema.workoutSessionSegments.segmentType,
+            distance: schema.workoutSessionSegments.distance,
+            distanceUnit: schema.workoutSessionSegments.distanceUnit,
+            durationSeconds: schema.workoutSessionSegments.durationSeconds,
+            recoverySeconds: schema.workoutSessionSegments.recoverySeconds,
+          })
+          .from(schema.workoutSessionSegments)
+          .where(inArray(schema.workoutSessionSegments.workoutSessionId, intervalSessionIds))
+          .orderBy(
+            asc(schema.workoutSessionSegments.workoutSessionId),
+            asc(schema.workoutSessionSegments.position),
+          )
+      : Promise.resolve([]),
   ]);
 
   const metricsBySession = new Map<
@@ -1103,6 +1128,13 @@ async function listRecentWorkouts(input: {
     const sessionMetrics = metricsBySession.get(metric.workoutSessionId) ?? [];
     sessionMetrics.push(metric);
     metricsBySession.set(metric.workoutSessionId, sessionMetrics);
+  }
+
+  const segmentsBySession = new Map<string, Array<(typeof intervalSegments)[number]>>();
+  for (const segment of intervalSegments) {
+    const sessionSegments = segmentsBySession.get(segment.workoutSessionId) ?? [];
+    sessionSegments.push(segment);
+    segmentsBySession.set(segment.workoutSessionId, sessionSegments);
   }
 
   const movementsBySession = new Map<
@@ -1136,6 +1168,7 @@ async function listRecentWorkouts(input: {
     strongReactionCount,
     clapReactionCount,
     commentCount,
+    workoutSubtype,
     ...post
   }) => ({
     ...post,
@@ -1144,8 +1177,10 @@ async function listRecentWorkouts(input: {
     completedAt: post.occurredAt,
     resultSummary: formatWorkoutResultSummary({
       workoutType: post.workoutType,
+      workoutSubtype,
       metrics: metricsBySession.get(post.id) ?? [],
       movements: [...(movementsBySession.get(post.id)?.values() ?? [])],
+      segments: segmentsBySession.get(post.id) ?? [],
     }),
     ...(input.includeReactionCounts
       ? {
@@ -1379,8 +1414,10 @@ export async function getCommunityWorkoutDetailForMember(input: {
     completedAt: post.occurredAt,
     resultSummary: formatWorkoutResultSummary({
       workoutType: post.workoutType,
+      workoutSubtype: post.workoutSubtype,
       metrics,
       movements: summaryMovements,
+      segments,
     }),
     metrics,
     movements: [...movements.values()],

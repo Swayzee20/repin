@@ -99,6 +99,7 @@ function DetailedExerciseEditor({
         </Pressable>
       </View>
       <TextField
+        compact
         label="Exercise name"
         onChangeText={(movementName) => {
           onChange({ ...exercise, movementId: null, movementName });
@@ -155,8 +156,8 @@ function DetailedExerciseEditor({
             </Pressable>
           </View>
           <View style={styles.setFields}>
-            <TextField containerStyle={styles.setInput} inputMode="numeric" keyboardType="number-pad" label="Reps" onChangeText={(reps) => updateSet(set.id, { reps })} placeholder="10" value={set.reps} />
-            <TextField containerStyle={styles.setInput} inputMode="decimal" keyboardType="decimal-pad" label={`Weight (${exercise.loadUnit})`} onChangeText={(load) => updateSet(set.id, { load })} placeholder="185" value={set.load} />
+            <TextField compact containerStyle={styles.setInput} inputMode="numeric" keyboardType="number-pad" label="Reps" onChangeText={(reps) => updateSet(set.id, { reps })} placeholder="10" value={set.reps} />
+            <TextField compact containerStyle={styles.setInput} inputMode="decimal" keyboardType="decimal-pad" label={`Weight (${exercise.loadUnit})`} onChangeText={(load) => updateSet(set.id, { load })} placeholder="185" value={set.load} />
           </View>
         </View>
       ))}

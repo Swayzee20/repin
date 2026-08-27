@@ -2,7 +2,7 @@ import DateTimePicker, { type DateTimePickerEvent } from "@react-native-communit
 import type { RunWorkoutSubtype, WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Image,
   KeyboardAvoidingView,
@@ -20,7 +20,9 @@ import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import {
   buildIntervalSegments,
   createEmptyInterval,
+  getIntervalValidationIssue,
   type IntervalDraft,
+  type IntervalValidationIssue,
   validateIntervals,
 } from "../../../lib/detailed-run-results";
 import { BackButton, Button, TextField } from "../../../ui/components";
@@ -58,6 +60,10 @@ export default function DetailedWorkoutScreen() {
   const [results, setResults] = useState<QuickLogResultsDraft>(emptyQuickLogResults);
   const [intervals, setIntervals] = useState<IntervalDraft[]>(() => [createEmptyInterval()]);
   const [runResultsExpanded, setRunResultsExpanded] = useState(true);
+  const [runResultError, setRunResultError] = useState<IntervalValidationIssue | { message: string } | null>(null);
+  const scrollViewRef = useRef<ScrollView>(null);
+  const workoutCardY = useRef(0);
+  const runEditorY = useRef(0);
   const [name, setName] = useState("");
   const [exercises, setExercises] = useState<DetailedExerciseDraft[]>([]);
   const [effort, setEffort] = useState<number | null>(null);
@@ -78,11 +84,13 @@ export default function DetailedWorkoutScreen() {
       setRunSubtype(null);
       setIntervals([createEmptyInterval()]);
       setRunResultsExpanded(true);
+      setRunResultError(null);
     }
   }, []);
 
   const handleRunSubtypeChange = useCallback((nextSubtype: RunWorkoutSubtype) => {
     setError(null);
+    setRunResultError(null);
     setRunResultsExpanded(true);
     setRunSubtype((previousSubtype) => {
       if (nextSubtype === "interval" && previousSubtype !== "interval") {
@@ -97,14 +105,15 @@ export default function DetailedWorkoutScreen() {
 
   const handleRunResultsDone = useCallback(() => {
     if (!runSubtype) return;
-    const issue = runSubtype === "interval"
-      ? validateIntervals(intervals)
-      : validateQuickLogResults(results, "run");
+    const intervalIssue = runSubtype === "interval" ? getIntervalValidationIssue(intervals) : null;
+    const issue = intervalIssue?.message ?? (runSubtype === "interval" ? null : validateQuickLogResults(results, "run"));
     if (issue) {
-      setError(issue);
+      setRunResultError(intervalIssue ?? { message: issue });
+      requestAnimationFrame(() => scrollViewRef.current?.scrollTo({ animated: true, y: Math.max(0, runEditorY.current - spacing.lg) }));
       return;
     }
     setError(null);
+    setRunResultError(null);
     setRunResultsExpanded(false);
   }, [intervals, results, runSubtype]);
 
@@ -145,7 +154,13 @@ export default function DetailedWorkoutScreen() {
       ? validateIntervals(intervals)
       : validateQuickLogResults(results, workoutType);
     if (resultsIssue) {
-      setError(resultsIssue);
+      if (workoutType === "run") {
+        setRunResultError(runSubtype === "interval" ? getIntervalValidationIssue(intervals) : { message: resultsIssue });
+        setRunResultsExpanded(true);
+        requestAnimationFrame(() => scrollViewRef.current?.scrollTo({ animated: true, y: Math.max(0, runEditorY.current - spacing.lg) }));
+      } else {
+        setError(resultsIssue);
+      }
       return;
     }
     if (isStrengthWorkout) {
@@ -249,59 +264,72 @@ export default function DetailedWorkoutScreen() {
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
+        <View style={styles.header}>
+          <BackButton label="Cancel" onPress={() => router.back()} />
+          <Text style={styles.eyebrow}>DETAILED WORKOUT</Text>
+          <Text style={styles.title}>Track your workout</Text>
+        </View>
+        <View style={styles.headerDivider} />
         <ScrollView
           automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.container}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
+          ref={scrollViewRef}
           style={styles.scrollView}
         >
-          <BackButton label="Cancel" onPress={() => router.back()} />
-          <Text style={styles.eyebrow}>DETAILED WORKOUT</Text>
-          <Text style={styles.title}>Track your workout</Text>
-
-          <View style={styles.section}>
+          <View onLayout={(event) => { workoutCardY.current = event.nativeEvent.layout.y; }} style={styles.formCard}>
             <Text style={styles.sectionTitle}>What&apos;d you do?</Text>
-            <WorkoutTypeSelector onChange={handleWorkoutTypeChange} value={workoutType} />
-          </View>
+            <WorkoutTypeSelector compact onChange={handleWorkoutTypeChange} value={workoutType} />
 
-          {workoutType === "run" ? <RunSubtypeSelector onChange={handleRunSubtypeChange} value={runSubtype} /> : null}
+            {workoutType === "run" ? <RunSubtypeSelector onChange={handleRunSubtypeChange} value={runSubtype} /> : null}
 
-          {workoutType === "run" && runSubtype ? (
-            <RunResultEditor
-              expanded={runResultsExpanded}
-              intervals={intervals}
-              onDone={handleRunResultsDone}
-              onEdit={() => {
-                setError(null);
-                setRunResultsExpanded(true);
-              }}
-              onIntervalsChange={setIntervals}
-              onResultsChange={setResults}
-              results={results}
-              subtype={runSubtype}
-            />
-          ) : (
-            <WorkoutMetricFields
-              onChange={setResults}
-              value={results}
-              workoutType={workoutType === "run" && !runSubtype ? null : workoutType}
-            />
-          )}
+            {workoutType === "run" && runSubtype ? (
+              <View onLayout={(event) => { runEditorY.current = workoutCardY.current + event.nativeEvent.layout.y; }}>
+                <RunResultEditor
+                  expanded={runResultsExpanded}
+                  intervals={intervals}
+                  onDone={handleRunResultsDone}
+                  onEdit={() => {
+                    setError(null);
+                    setRunResultError(null);
+                    setRunResultsExpanded(true);
+                  }}
+                  onIntervalsChange={(nextIntervals) => {
+                    setRunResultError(null);
+                    setIntervals(nextIntervals);
+                  }}
+                  onResultsChange={(nextResults) => {
+                    setRunResultError(null);
+                    setResults(nextResults);
+                  }}
+                  results={results}
+                  subtype={runSubtype}
+                  validationError={runResultError}
+                />
+              </View>
+            ) : (
+              <WorkoutMetricFields
+                onChange={setResults}
+                value={results}
+                workoutType={workoutType === "run" && !runSubtype ? null : workoutType}
+              />
+            )}
 
-          {isStrengthWorkout ? (
-            <View style={styles.section}>
-              <Text style={styles.sectionTitle}>Exercises</Text>
-              <DetailedExerciseFields exercises={exercises} onChange={setExercises} />
+            {isStrengthWorkout ? (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Exercises</Text>
+                <DetailedExerciseFields exercises={exercises} onChange={setExercises} />
+              </View>
+            ) : null}
+
+            <View style={styles.secondarySection}>
+              <FieldLabel label="Workout name" optional />
+              <TextField compact containerStyle={styles.controlSpacing} maxLength={120} onChangeText={setName} placeholder="Push day, Murph, morning run..." returnKeyType="next" value={name} />
             </View>
-          ) : null}
-
-          <View style={styles.secondarySection}>
-            <FieldLabel label="Workout name" optional />
-            <TextField containerStyle={styles.controlSpacing} maxLength={120} onChangeText={setName} placeholder="Push day, Murph, morning run..." returnKeyType="next" value={name} />
           </View>
 
-          <View style={styles.section}>
+          <View style={styles.formCard}>
             <FieldLabel hierarchy="primary" label="How'd it feel?" optional />
             <View style={styles.effortRow}>
               {[1, 2, 3, 4, 5].map((level) => (
@@ -319,7 +347,7 @@ export default function DetailedWorkoutScreen() {
             <Text style={[styles.effortLabel, !effort && styles.effortLabelEmpty]}>{effort ? effortLabels[effort - 1] : "Tap a flame to rate your effort"}</Text>
           </View>
 
-          <View style={styles.postSection}>
+          <View style={styles.formCard}>
             <Text style={styles.subsectionTitle}>Add to your post</Text>
             <View style={styles.postField}>
               <FieldLabel label="Photo" optional />
@@ -338,13 +366,13 @@ export default function DetailedWorkoutScreen() {
             </View>
           </View>
 
-          <View style={styles.section}>
+          <View style={[styles.formCard, styles.completedCard]}>
             {Platform.OS === "web" ? (
               <>
                 <Text style={styles.sectionTitle}>Completed</Text>
                 <View style={styles.webDateRow}>
-                  <View style={styles.webDateField}><TextField autoCapitalize="none" label="Date" onBlur={() => setOccurredAt(fromLocalParts(webDate, webTime, occurredAt))} onChangeText={setWebDate} placeholder="YYYY-MM-DD" value={webDate} /></View>
-                  <View style={styles.webDateField}><TextField autoCapitalize="none" label="Time" onBlur={() => setOccurredAt(fromLocalParts(webDate, webTime, occurredAt))} onChangeText={setWebTime} placeholder="HH:MM" value={webTime} /></View>
+                  <View style={styles.webDateField}><TextField compact autoCapitalize="none" label="Date" onBlur={() => setOccurredAt(fromLocalParts(webDate, webTime, occurredAt))} onChangeText={setWebDate} placeholder="YYYY-MM-DD" value={webDate} /></View>
+                  <View style={styles.webDateField}><TextField compact autoCapitalize="none" label="Time" onBlur={() => setOccurredAt(fromLocalParts(webDate, webTime, occurredAt))} onChangeText={setWebTime} placeholder="HH:MM" value={webTime} /></View>
                 </View>
               </>
             ) : (
@@ -407,20 +435,23 @@ function decodeBase64(value: string) {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  keyboardAvoidingView: { flex: 1 },
-  scrollView: { flex: 1 },
-  container: { padding: spacing.xxl, paddingBottom: 144 },
+  keyboardAvoidingView: { backgroundColor: colors.surfaceMuted, flex: 1 },
+  header: { backgroundColor: colors.surface, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
+  headerDivider: { backgroundColor: colors.border, height: StyleSheet.hairlineWidth },
+  scrollView: { backgroundColor: colors.surfaceMuted, flex: 1 },
+  container: { paddingBottom: 144, paddingHorizontal: spacing.md, paddingTop: spacing.xxl },
+  formCard: { backgroundColor: colors.surface, borderRadius: radii.md, marginBottom: spacing.lg, padding: spacing.xxl },
+  completedCard: { paddingVertical: spacing.lg },
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   section: { marginTop: spacing.xxl },
-  secondarySection: { marginTop: spacing.xl },
-  postSection: { marginTop: spacing.xxxl },
+  secondarySection: { marginTop: spacing.lg },
   sectionTitle: { color: colors.ink, ...type.heading },
   subsectionTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 },
   fieldLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
-  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm },
-  optional: { color: colors.muted, ...type.bodySmall },
-  controlSpacing: { marginTop: spacing.sm },
+  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.xs },
+  optional: { color: colors.subtle, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
+  controlSpacing: { marginTop: spacing.xs },
   effortRow: { flexDirection: "row", gap: spacing.xs, marginTop: spacing.sm },
   flameButton: { alignItems: "center", borderColor: "transparent", borderRadius: radii.md, borderWidth: 1, height: 48, justifyContent: "center", width: 48 },
   flameButtonActive: { backgroundColor: colors.brandSoft },
@@ -431,7 +462,7 @@ const styles = StyleSheet.create({
   effortLabelEmpty: { color: colors.muted },
   webDateRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
   webDateField: { flex: 1 },
-  whenRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 52 },
+  whenRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 48 },
   whenLabel: { color: colors.ink, ...type.heading },
   whenValue: { alignItems: "center", flexDirection: "row", flexShrink: 1, marginLeft: spacing.md },
   whenText: { color: colors.muted, ...type.bodySmall },
