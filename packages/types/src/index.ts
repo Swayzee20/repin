@@ -121,6 +121,15 @@ export const workoutMetricTypes = [
 
 export type WorkoutMetricType = (typeof workoutMetricTypes)[number];
 
+export const runWorkoutSubtypes = ["distance", "tempo", "interval"] as const;
+export type RunWorkoutSubtype = (typeof runWorkoutSubtypes)[number];
+export type WorkoutSubtype = RunWorkoutSubtype;
+
+export const workoutSessionSegmentTypes = ["work", "recovery"] as const;
+export type WorkoutSessionSegmentType = (typeof workoutSessionSegmentTypes)[number];
+export const workoutDistanceUnits = ["m", "km", "mi"] as const;
+export type WorkoutDistanceUnit = (typeof workoutDistanceUnits)[number];
+
 export interface QuickLogMetricInput {
   metricType: WorkoutMetricType;
   label?: string | null;
@@ -139,6 +148,17 @@ export interface QuickLogMovementInput {
   movementId?: string | null;
   movementName: string;
   sets: QuickLogSetInput[];
+}
+
+export interface WorkoutSessionSegmentInput {
+  position: number;
+  segmentType: WorkoutSessionSegmentType;
+  distance?: number | null;
+  distanceUnit?: WorkoutDistanceUnit | null;
+  durationSeconds?: number | null;
+  recoverySeconds?: number | null;
+  notes?: string | null;
+  configuration?: Record<string, unknown> | null;
 }
 
 export interface MovementSummary {
@@ -204,10 +224,24 @@ export interface WorkoutDetailMovement {
   sets: WorkoutDetailSet[];
 }
 
+export interface WorkoutDetailSegment {
+  id: string;
+  position: number;
+  segmentType: WorkoutSessionSegmentType;
+  distance: number | null;
+  distanceUnit: WorkoutDistanceUnit | null;
+  durationSeconds: number | null;
+  recoverySeconds: number | null;
+  notes: string | null;
+  configuration: Record<string, unknown> | null;
+}
+
 export interface CommunityWorkoutDetail extends WorkoutFeedItem {
   communityPostId: string;
+  workoutSubtype: WorkoutSubtype | null;
   metrics: WorkoutDetailMetric[];
   movements: WorkoutDetailMovement[];
+  segments: WorkoutDetailSegment[];
   reactions: CommunityReactionSummary;
 }
 

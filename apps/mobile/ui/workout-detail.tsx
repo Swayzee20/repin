@@ -6,6 +6,7 @@ import {
   type CommunityReactionType,
   type CommunityPostComment,
   type CommunityWorkoutDetail,
+  type WorkoutDetailSegment,
   type WorkoutFeedItem,
 } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
@@ -15,6 +16,7 @@ import { ActivityIndicator, Animated, Easing, Image, Pressable, StyleSheet, Text
 
 import { supabase } from "../lib/supabase";
 import {
+  formatDurationSeconds,
   formatWorkoutMetric,
   formatWorkoutSet,
 } from "../lib/workout-detail-format";
@@ -446,7 +448,7 @@ export function WorkoutDetailContent({
   const formattedMetrics = workout.metrics
     .map(formatWorkoutMetric)
     .filter((metric): metric is NonNullable<typeof metric> => metric !== null);
-  const hasResults = formattedMetrics.length > 0 || workout.movements.length > 0;
+  const hasResults = formattedMetrics.length > 0 || workout.movements.length > 0 || workout.segments.length > 0;
   const isCommunityModal = presentation === "community-modal";
   const [commentInputHeight, setCommentInputHeight] = useState(44);
   const [workoutExpanded, setWorkoutExpanded] = useState(false);
@@ -465,9 +467,30 @@ export function WorkoutDetailContent({
       {formattedMetrics.length ? (
         <Card style={[styles.metricsCard, isCommunityModal && styles.modalMetricsCard]}>
           {formattedMetrics.map((metric, index) => (
-            <View key={`${metric.label}-${index}`} style={[styles.metricRow, index > 0 && styles.dividedRow]}>
-              <Text style={styles.metricLabel}>{metric.label}</Text>
+            <View key={`${metric.label}-${index}`} style={[styles.metricRow, index > 0 && styles.dividedRow, isCommunityModal && index > 0 && styles.modalDividedRow]}>
+              <Text style={[styles.metricLabel, isCommunityModal && styles.modalResultLabel]}>{metric.label}</Text>
               <Text style={styles.metricValue}>{metric.value}</Text>
+            </View>
+          ))}
+        </Card>
+      ) : null}
+
+      {workout.segments.length ? (
+        <Card
+          style={[
+            styles.intervalCard,
+            isCommunityModal && styles.modalIntervalCard,
+            isCommunityModal && formattedMetrics.length > 0 && styles.modalStackedResultCard,
+          ]}
+        >
+          <Text style={styles.intervalHeading}>Intervals</Text>
+          {workout.segments.map((segment, index) => (
+            <View key={segment.id} style={[styles.intervalRow, index > 0 && styles.dividedRow, isCommunityModal && index > 0 && styles.modalDividedRow]}>
+              <Text style={[styles.intervalNumber, isCommunityModal && styles.modalResultLabel]}>{index + 1}</Text>
+              <View style={styles.intervalResult}>
+                <Text style={styles.intervalValue}>{formatIntervalSegment(segment)}</Text>
+                {segment.recoverySeconds != null ? <Text style={styles.intervalRecovery}>{segment.recoverySeconds} sec recovery</Text> : null}
+              </View>
             </View>
           ))}
         </Card>
@@ -479,14 +502,14 @@ export function WorkoutDetailContent({
           style={[
             styles.movementCard,
             isCommunityModal && styles.modalMovementCard,
-            isCommunityModal && (formattedMetrics.length > 0 || movementIndex > 0) && styles.modalStackedResultCard,
+            isCommunityModal && (formattedMetrics.length > 0 || workout.segments.length > 0 || movementIndex > 0) && styles.modalStackedResultCard,
           ]}
         >
           <Text style={styles.movementName}>{movement.movementName}</Text>
           {movement.notes ? <Text style={styles.movementNotes}>{movement.notes}</Text> : null}
           {movement.sets.map((set, index) => (
-            <View key={set.id} style={[styles.setRow, index > 0 && styles.dividedRow]}>
-              <Text style={styles.setLabel}>Set {set.position + 1}</Text>
+            <View key={set.id} style={[styles.setRow, index > 0 && styles.dividedRow, isCommunityModal && index > 0 && styles.modalDividedRow]}>
+              <Text style={[styles.setLabel, isCommunityModal && styles.modalResultLabel]}>Set {set.position + 1}</Text>
               <View style={styles.setResult}>
                 <Text style={styles.setValue}>{formatWorkoutSet(set)}</Text>
                 {set.notes ? <Text style={styles.setNotes}>{set.notes}</Text> : null}
@@ -551,7 +574,7 @@ export function WorkoutDetailContent({
             style={({ pressed }) => [styles.workoutDisclosureButton, pressed && styles.reactionButtonPressed]}
           >
             <Text style={styles.workoutDisclosureText}>{workoutExpanded ? "Hide workout" : "View workout"}</Text>
-            <Feather color={colors.muted} name={workoutExpanded ? "chevron-up" : "chevron-down"} size={14} />
+            <Feather color={colors.inkSoft} name={workoutExpanded ? "chevron-up" : "chevron-down"} size={16} />
           </Pressable>
           {workoutExpanded ? workoutResults : null}
         </View>
@@ -872,8 +895,10 @@ function createSeedWorkoutDetail(
   return {
     ...workout,
     communityPostId: "",
+    workoutSubtype: null,
     metrics: [],
     movements: [],
+    segments: [],
     reactions: cachedReactions ?? {
       counts,
       total: counts.fire + counts.strong + counts.clap,
@@ -942,6 +967,15 @@ function getLocalDateKey(date: Date) {
   return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
 }
 
+function formatIntervalSegment(segment: WorkoutDetailSegment) {
+  const parts: string[] = [];
+  if (segment.distance != null && segment.distanceUnit) {
+    parts.push(`${new Intl.NumberFormat("en-US", { maximumFractionDigits: 3, useGrouping: false }).format(segment.distance)} ${segment.distanceUnit}`);
+  }
+  if (segment.durationSeconds != null) parts.push(formatDurationSeconds(segment.durationSeconds));
+  return parts.length ? parts.join(" · ") : "Work interval";
+}
+
 const styles = StyleSheet.create({
   authorRow: { alignItems: "center", flexDirection: "row" },
   modalAuthorRow: { paddingRight: 48 },
@@ -957,16 +991,26 @@ const styles = StyleSheet.create({
   effort: { fontSize: 18, lineHeight: 24, marginTop: spacing.sm },
   detailError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.sm },
   resultsSection: { marginTop: spacing.xxxl },
-  modalResultsSection: { marginTop: spacing.lg },
+  modalResultsSection: { marginTop: spacing.sm },
   sectionEyebrow: { color: colors.brand, ...type.eyebrow },
   metricsCard: { marginTop: spacing.md, paddingVertical: spacing.xs },
-  modalMetricsCard: { marginTop: 0 },
+  modalMetricsCard: { backgroundColor: colors.surfaceMuted, borderWidth: 0, marginTop: 0 },
   metricRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", minHeight: 52, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   metricLabel: { color: colors.muted, ...type.bodySmall },
+  modalResultLabel: { color: colors.inkSoft },
   metricValue: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 17 },
   dividedRow: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
+  modalDividedRow: { borderTopColor: colors.borderStrong },
+  intervalCard: { marginTop: spacing.md, padding: spacing.lg },
+  modalIntervalCard: { backgroundColor: colors.surfaceMuted, borderWidth: 0, marginTop: 0 },
+  intervalHeading: { color: colors.ink, ...type.heading, marginBottom: spacing.xs },
+  intervalRow: { alignItems: "flex-start", flexDirection: "row", minHeight: 54, paddingVertical: spacing.md },
+  intervalNumber: { color: colors.muted, ...type.label, width: 32 },
+  intervalResult: { flex: 1 },
+  intervalValue: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
+  intervalRecovery: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
   movementCard: { marginTop: spacing.md, padding: spacing.lg },
-  modalMovementCard: { marginTop: 0 },
+  modalMovementCard: { backgroundColor: colors.surfaceMuted, borderWidth: 0, marginTop: 0 },
   modalStackedResultCard: { marginTop: spacing.md },
   movementName: { color: colors.ink, ...type.heading },
   movementNotes: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
@@ -980,9 +1024,9 @@ const styles = StyleSheet.create({
   modalCaption: { marginTop: spacing.lg },
   photo: { aspectRatio: 16 / 10, borderRadius: radii.md, marginTop: spacing.lg, width: "100%" },
   compatibilityDuration: { color: colors.muted, fontFamily: fonts.medium, fontSize: 14, marginTop: spacing.lg },
-  workoutDisclosure: { marginTop: spacing.md },
-  workoutDisclosureButton: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: spacing.xs, minHeight: 36 },
-  workoutDisclosureText: { color: colors.muted, ...type.bodySmall },
+  workoutDisclosure: { marginTop: spacing.lg },
+  workoutDisclosureButton: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: spacing.sm, minHeight: 40 },
+  workoutDisclosureText: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
   reactionSection: { marginTop: spacing.xxxl },
   modalReactionSection: { marginTop: spacing.md },
   reactionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },

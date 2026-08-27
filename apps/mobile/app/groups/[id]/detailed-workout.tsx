@@ -1,5 +1,5 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import type { WorkoutType } from "@repin/types";
+import type { RunWorkoutSubtype, WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
@@ -17,6 +17,12 @@ import {
 
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
+import {
+  buildIntervalSegments,
+  createEmptyInterval,
+  type IntervalDraft,
+  validateIntervals,
+} from "../../../lib/detailed-run-results";
 import { BackButton, Button, TextField } from "../../../ui/components";
 import {
   buildDetailedMovements,
@@ -24,6 +30,10 @@ import {
   type DetailedExerciseDraft,
   validateDetailedExercises,
 } from "../../../ui/detailed-workout-exercises";
+import {
+  RunResultEditor,
+  RunSubtypeSelector,
+} from "../../../ui/detailed-run-fields";
 import {
   buildQuickLogResults,
   emptyQuickLogResults,
@@ -44,7 +54,10 @@ export default function DetailedWorkoutScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [workoutType, setWorkoutType] = useState<WorkoutType | null>(null);
+  const [runSubtype, setRunSubtype] = useState<RunWorkoutSubtype | null>(null);
   const [results, setResults] = useState<QuickLogResultsDraft>(emptyQuickLogResults);
+  const [intervals, setIntervals] = useState<IntervalDraft[]>(() => [createEmptyInterval()]);
+  const [runResultsExpanded, setRunResultsExpanded] = useState(true);
   const [name, setName] = useState("");
   const [exercises, setExercises] = useState<DetailedExerciseDraft[]>([]);
   const [effort, setEffort] = useState<number | null>(null);
@@ -58,6 +71,42 @@ export default function DetailedWorkoutScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isStrengthWorkout = workoutType === "strength_training" || workoutType === "powerlifting";
+
+  const handleWorkoutTypeChange = useCallback((nextWorkoutType: WorkoutType) => {
+    setWorkoutType(nextWorkoutType);
+    if (nextWorkoutType !== "run") {
+      setRunSubtype(null);
+      setIntervals([createEmptyInterval()]);
+      setRunResultsExpanded(true);
+    }
+  }, []);
+
+  const handleRunSubtypeChange = useCallback((nextSubtype: RunWorkoutSubtype) => {
+    setError(null);
+    setRunResultsExpanded(true);
+    setRunSubtype((previousSubtype) => {
+      if (nextSubtype === "interval" && previousSubtype !== "interval") {
+        setResults(emptyQuickLogResults);
+        setIntervals([createEmptyInterval()]);
+      } else if (previousSubtype === "interval" && nextSubtype !== "interval") {
+        setIntervals([createEmptyInterval()]);
+      }
+      return nextSubtype;
+    });
+  }, []);
+
+  const handleRunResultsDone = useCallback(() => {
+    if (!runSubtype) return;
+    const issue = runSubtype === "interval"
+      ? validateIntervals(intervals)
+      : validateQuickLogResults(results, "run");
+    if (issue) {
+      setError(issue);
+      return;
+    }
+    setError(null);
+    setRunResultsExpanded(false);
+  }, [intervals, results, runSubtype]);
 
   const pickPhoto = useCallback(async () => {
     setError(null);
@@ -88,7 +137,13 @@ export default function DetailedWorkoutScreen() {
       setError("Choose a workout type.");
       return;
     }
-    const resultsIssue = validateQuickLogResults(results, workoutType);
+    if (workoutType === "run" && !runSubtype) {
+      setError("Choose a Run type.");
+      return;
+    }
+    const resultsIssue = workoutType === "run" && runSubtype === "interval"
+      ? validateIntervals(intervals)
+      : validateQuickLogResults(results, workoutType);
     if (resultsIssue) {
       setError(resultsIssue);
       return;
@@ -121,7 +176,11 @@ export default function DetailedWorkoutScreen() {
         if (uploadError) throw new Error(`Photo upload failed: ${uploadError.message}`);
       }
 
-      const structuredResults = buildQuickLogResults(results, workoutType);
+      const isIntervalRun = workoutType === "run" && runSubtype === "interval";
+      const structuredResults = isIntervalRun
+        ? { durationSeconds: null, metrics: [] }
+        : buildQuickLogResults(results, workoutType);
+      const segments = isIntervalRun ? buildIntervalSegments(intervals) : [];
       const durationMinutes = structuredResults.durationSeconds == null
         ? null
         : Math.max(1, Math.round(structuredResults.durationSeconds / 60));
@@ -134,6 +193,7 @@ export default function DetailedWorkoutScreen() {
         },
         body: JSON.stringify({
           workoutType,
+          workoutSubtype: workoutType === "run" ? runSubtype : null,
           name,
           durationMinutes,
           effort,
@@ -142,6 +202,7 @@ export default function DetailedWorkoutScreen() {
           occurredAt: occurredAt.toISOString(),
           metrics: structuredResults.metrics,
           movements: isStrengthWorkout ? buildDetailedMovements(exercises) : [],
+          segments,
           title: name.trim() || workoutTypeLabels[workoutType],
           notes: caption,
           completedAt: occurredAt.toISOString(),
@@ -168,7 +229,7 @@ export default function DetailedWorkoutScreen() {
       setError(submitError instanceof Error ? submitError.message : "Workout could not be created.");
       setSubmitting(false);
     }
-  }, [caption, effort, exercises, groupId, isStrengthWorkout, name, occurredAt, photo, results, router, workoutType]);
+  }, [caption, effort, exercises, groupId, intervals, isStrengthWorkout, name, occurredAt, photo, results, router, runSubtype, workoutType]);
 
   const handleNativeDateChange = useCallback((event: DateTimePickerEvent, value?: Date) => {
     if (event.type === "dismissed" || !value) {
@@ -201,10 +262,32 @@ export default function DetailedWorkoutScreen() {
 
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>What&apos;d you do?</Text>
-            <WorkoutTypeSelector onChange={setWorkoutType} value={workoutType} />
+            <WorkoutTypeSelector onChange={handleWorkoutTypeChange} value={workoutType} />
           </View>
 
-          <WorkoutMetricFields onChange={setResults} value={results} workoutType={workoutType} />
+          {workoutType === "run" ? <RunSubtypeSelector onChange={handleRunSubtypeChange} value={runSubtype} /> : null}
+
+          {workoutType === "run" && runSubtype ? (
+            <RunResultEditor
+              expanded={runResultsExpanded}
+              intervals={intervals}
+              onDone={handleRunResultsDone}
+              onEdit={() => {
+                setError(null);
+                setRunResultsExpanded(true);
+              }}
+              onIntervalsChange={setIntervals}
+              onResultsChange={setResults}
+              results={results}
+              subtype={runSubtype}
+            />
+          ) : (
+            <WorkoutMetricFields
+              onChange={setResults}
+              value={results}
+              workoutType={workoutType === "run" && !runSubtype ? null : workoutType}
+            />
+          )}
 
           {isStrengthWorkout ? (
             <View style={styles.section}>
@@ -276,7 +359,7 @@ export default function DetailedWorkoutScreen() {
           </View>
 
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
-          <Button disabled={!workoutType} loading={submitting} onPress={() => void submitWorkout()} style={styles.submitButton}>Log workout</Button>
+          <Button disabled={!workoutType || (workoutType === "run" && !runSubtype)} loading={submitting} onPress={() => void submitWorkout()} style={styles.submitButton}>Log workout</Button>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -9,7 +9,7 @@ import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { BackButton, Button, TextField } from "../../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
-import { WorkoutTypeSelector, workoutTypeLabels } from "../../../ui/workout-type-selector";
+import { WorkoutTypeSelector } from "../../../ui/workout-type-selector";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const effortLabels = ["Light work", "Felt good", "Solid work", "That was rough", "I'm cooked"];
@@ -20,7 +20,6 @@ export default function LogWorkoutScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [workoutType, setWorkoutType] = useState<WorkoutType | null>(null);
-  const [name, setName] = useState("");
   const [effort, setEffort] = useState<number | null>(null);
   const [caption, setCaption] = useState("");
   const [photo, setPhoto] = useState<SelectedPhoto | null>(null);
@@ -69,7 +68,6 @@ export default function LogWorkoutScreen() {
         headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           workoutType,
-          name,
           durationMinutes: null,
           effort,
           caption,
@@ -78,7 +76,6 @@ export default function LogWorkoutScreen() {
           metrics: [],
           movements: [],
           // Keep aliases during the v1 rollout so an older API deployment can validate the request.
-          title: name.trim() || workoutTypeLabels[workoutType],
           notes: caption,
           completedAt: occurredAt.toISOString(),
         }),
@@ -97,7 +94,7 @@ export default function LogWorkoutScreen() {
       setError(submitError instanceof Error ? submitError.message : "Workout could not be created.");
       setSubmitting(false);
     }
-  }, [caption, effort, groupId, name, occurredAt, photo, router, workoutType]);
+  }, [caption, effort, groupId, occurredAt, photo, router, workoutType]);
 
   const handleNativeDateChange = useCallback((event: DateTimePickerEvent, value?: Date) => {
     if (event.type === "dismissed" || !value) { setShowPicker(false); return; }
@@ -126,10 +123,6 @@ export default function LogWorkoutScreen() {
               <Pressable accessibilityLabel={`${level}: ${effortLabels[level - 1]}`} accessibilityRole="button" key={level} onPress={() => setEffort(effort === level ? null : level)} style={[styles.flameButton, (effort ?? 0) >= level && styles.flameButtonActive, effort === level && styles.flameButtonSelected]}><Text style={[styles.flame, (effort ?? 0) < level && styles.flameInactive]}>🔥</Text></Pressable>
             ))}</View>
             <Text style={[styles.effortLabel, !effort && styles.effortLabelEmpty]}>{effort ? effortLabels[effort - 1] : "Tap a flame to rate your effort"}</Text>
-          </View>
-          <View style={styles.secondarySection}>
-            <FieldLabel hierarchy="primary" label="Workout name" optional />
-            <TextField containerStyle={styles.controlSpacing} maxLength={120} onChangeText={setName} placeholder="Push day, Murph, morning run..." returnKeyType="next" value={name} />
           </View>
           <View style={styles.postSection}>
             <Text style={styles.subsectionTitle}>Add to your post</Text>
@@ -176,7 +169,7 @@ function decodeBase64(value: string) { const binary = globalThis.atob(value); re
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, keyboardAvoidingView: { flex: 1 }, scrollView: { flex: 1 }, container: { padding: spacing.xxl, paddingBottom: 144 },
-  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, section: { marginTop: spacing.xxl }, secondarySection: { marginTop: spacing.xxl }, postSection: { marginTop: spacing.xxxl }, sectionTitle: { color: colors.ink, ...type.heading }, subsectionTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 }, fieldLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
+  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, section: { marginTop: spacing.xxl }, postSection: { marginTop: spacing.xxxl }, sectionTitle: { color: colors.ink, ...type.heading }, subsectionTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 }, fieldLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
   labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm }, optional: { color: colors.muted, ...type.bodySmall }, controlSpacing: { marginTop: spacing.sm },
   pressed: { opacity: 0.76 },
   effortRow: { flexDirection: "row", gap: spacing.xs, marginTop: spacing.xs }, flameButton: { alignItems: "center", borderColor: "transparent", borderRadius: radii.md, borderWidth: 1, height: 48, justifyContent: "center", width: 48 }, flameButtonActive: { backgroundColor: colors.brandSoft }, flameButtonSelected: { borderColor: colors.brand }, flame: { fontSize: 25 }, flameInactive: { opacity: 0.18 }, effortLabel: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.xs }, effortLabelEmpty: { color: colors.muted }, captionInput: { maxHeight: 144, minHeight: 88, textAlignVertical: "top" },

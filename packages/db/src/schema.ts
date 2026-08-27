@@ -45,6 +45,10 @@ export const workoutSessionMetricTypes = [
   "other",
 ] as const;
 
+export const runWorkoutSubtypes = ["distance", "tempo", "interval"] as const;
+export const workoutSessionSegmentTypes = ["work", "recovery"] as const;
+export const workoutDistanceUnits = ["m", "km", "mi"] as const;
+
 export const communityPostReactionTypes = ["fire", "strong", "clap"] as const;
 
 export const users = pgTable("users", {
@@ -321,6 +325,7 @@ export const workoutSessions = pgTable(
       { onDelete: "set null" },
     ),
     workoutType: text("workout_type").notNull(),
+    workoutSubtype: text("workout_subtype").$type<(typeof runWorkoutSubtypes)[number]>(),
     name: text(),
     durationMinutes: integer("duration_minutes"),
     effort: integer(),
@@ -344,6 +349,10 @@ export const workoutSessions = pgTable(
     check(
       "workout_sessions_effort_range_check",
       sql`${table.effort} is null or ${table.effort} between 1 and 5`,
+    ),
+    check(
+      "workout_sessions_subtype_check",
+      sql`${table.workoutSubtype} is null or (${table.workoutType} = 'run' and ${table.workoutSubtype} in ('distance', 'tempo', 'interval'))`,
     ),
   ],
 );
@@ -391,6 +400,62 @@ export const workoutSessionMetrics = pgTable(
     check(
       "workout_session_metrics_value_check",
       sql`${table.numericValue} is not null or ${table.textValue} is not null`,
+    ),
+  ],
+);
+
+export const workoutSessionSegments = pgTable(
+  "workout_session_segments",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    workoutSessionId: uuid("workout_session_id")
+      .notNull()
+      .references(() => workoutSessions.id, { onDelete: "cascade" }),
+    position: integer().notNull(),
+    segmentType: text("segment_type")
+      .$type<(typeof workoutSessionSegmentTypes)[number]>()
+      .notNull(),
+    distance: numeric({ precision: 12, scale: 3, mode: "number" }),
+    distanceUnit: text("distance_unit").$type<(typeof workoutDistanceUnits)[number]>(),
+    durationSeconds: integer("duration_seconds"),
+    recoverySeconds: integer("recovery_seconds"),
+    notes: text(),
+    configuration: jsonb().$type<WorkoutConfig>(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("workout_session_segments_workout_session_id_idx").on(
+      table.workoutSessionId,
+    ),
+    uniqueIndex("workout_session_segments_session_position_unique").on(
+      table.workoutSessionId,
+      table.position,
+    ),
+    check("workout_session_segments_position_check", sql`${table.position} >= 0`),
+    check(
+      "workout_session_segments_type_check",
+      sql`${table.segmentType} in ('work', 'recovery')`,
+    ),
+    check(
+      "workout_session_segments_distance_check",
+      sql`(${table.distance} is null and ${table.distanceUnit} is null) or (${table.distance} > 0 and ${table.distanceUnit} in ('m', 'km', 'mi'))`,
+    ),
+    check(
+      "workout_session_segments_duration_check",
+      sql`${table.durationSeconds} is null or ${table.durationSeconds} > 0`,
+    ),
+    check(
+      "workout_session_segments_recovery_check",
+      sql`${table.recoverySeconds} is null or ${table.recoverySeconds} > 0`,
+    ),
+    check(
+      "workout_session_segments_result_check",
+      sql`${table.distance} is not null or ${table.durationSeconds} is not null or ${table.recoverySeconds} is not null`,
     ),
   ],
 );
@@ -609,6 +674,8 @@ export type WorkoutSession = typeof workoutSessions.$inferSelect;
 export type NewWorkoutSession = typeof workoutSessions.$inferInsert;
 export type WorkoutSessionMetric = typeof workoutSessionMetrics.$inferSelect;
 export type NewWorkoutSessionMetric = typeof workoutSessionMetrics.$inferInsert;
+export type WorkoutSessionSegment = typeof workoutSessionSegments.$inferSelect;
+export type NewWorkoutSessionSegment = typeof workoutSessionSegments.$inferInsert;
 export type SessionMovementResult = typeof sessionMovementResults.$inferSelect;
 export type NewSessionMovementResult = typeof sessionMovementResults.$inferInsert;
 export type SetResult = typeof setResults.$inferSelect;

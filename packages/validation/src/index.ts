@@ -2,7 +2,10 @@ import { z } from "zod";
 
 import {
   communityReactionTypes,
+  runWorkoutSubtypes,
+  workoutDistanceUnits,
   workoutMetricTypes,
+  workoutSessionSegmentTypes,
   workoutTypes,
 } from "@repin/types";
 
@@ -127,8 +130,30 @@ const workoutMovementSchema = z
   })
   .strict();
 
+const workoutSessionSegmentSchema = z
+  .object({
+    position: z.number().int().nonnegative(),
+    segmentType: z.enum(workoutSessionSegmentTypes),
+    distance: z.number().finite().positive().nullable().optional(),
+    distanceUnit: z.enum(workoutDistanceUnits).nullable().optional(),
+    durationSeconds: z.number().int().positive().nullable().optional(),
+    recoverySeconds: z.number().int().positive().nullable().optional(),
+    notes: z.string().trim().max(2_000).nullable().optional(),
+    configuration: z.record(z.string(), z.unknown()).nullable().optional(),
+  })
+  .strict()
+  .superRefine((segment, context) => {
+    if ((segment.distance == null) !== (segment.distanceUnit == null)) {
+      context.addIssue({ code: "custom", message: "Segment distance and unit must be provided together", path: ["distance"] });
+    }
+    if (segment.distance == null && segment.durationSeconds == null && segment.recoverySeconds == null) {
+      context.addIssue({ code: "custom", message: "Add at least one result to this segment" });
+    }
+  });
+
 const canonicalWorkoutSchema = z.object({
   workoutType: z.enum(workoutTypes),
+  workoutSubtype: z.enum(runWorkoutSubtypes).nullable(),
   name: z.string().nullable(),
   durationMinutes: z.number().int().min(1).max(1_440).nullable(),
   effort: z.number().int().min(1).max(5).nullable(),
@@ -137,6 +162,7 @@ const canonicalWorkoutSchema = z.object({
   occurredAt: z.iso.datetime(),
   metrics: z.array(workoutMetricSchema).max(20),
   movements: z.array(workoutMovementSchema).max(50),
+  segments: z.array(workoutSessionSegmentSchema).max(500),
 }).superRefine((workout, context) => {
   const seen = new Set<string>();
   const allowedMetricTypes: Record<(typeof workoutTypes)[number], Set<string>> = {
@@ -160,10 +186,27 @@ const canonicalWorkoutSchema = z.object({
   if (workout.movements.length && !["strength_training", "powerlifting"].includes(workout.workoutType)) {
     context.addIssue({ code: "custom", message: "Exercises are only supported for strength workouts", path: ["movements"] });
   }
+  if (workout.workoutSubtype && workout.workoutType !== "run") {
+    context.addIssue({ code: "custom", message: "Workout subtype is only supported for Run", path: ["workoutSubtype"] });
+  }
+  if (workout.segments.length && (workout.workoutType !== "run" || workout.workoutSubtype !== "interval")) {
+    context.addIssue({ code: "custom", message: "Segments currently require an Interval Run", path: ["segments"] });
+  }
+  if (workout.workoutSubtype === "interval" && workout.segments.length === 0) {
+    context.addIssue({ code: "custom", message: "Add at least one interval segment", path: ["segments"] });
+  }
+  const segmentPositions = new Set<number>();
+  workout.segments.forEach((segment, index) => {
+    if (segmentPositions.has(segment.position)) {
+      context.addIssue({ code: "custom", message: "Segment positions must be unique", path: ["segments", index, "position"] });
+    }
+    segmentPositions.add(segment.position);
+  });
 });
 
 export const createWorkoutSchema = z.object({
   workoutType: canonicalWorkoutTypeSchema,
+  workoutSubtype: z.enum(runWorkoutSubtypes).nullable().optional().default(null),
   name: z
     .string()
     .trim()
@@ -184,6 +227,7 @@ export const createWorkoutSchema = z.object({
   completedAt: z.iso.datetime().optional(),
   metrics: z.array(workoutMetricSchema).max(20).optional().default([]),
   movements: z.array(workoutMovementSchema).max(50).optional().default([]),
+  segments: z.array(workoutSessionSegmentSchema).max(500).optional().default([]),
 }).superRefine((workout, context) => {
   if (!workout.occurredAt && !workout.completedAt) {
     context.addIssue({ code: "custom", message: "Workout date and time are required", path: ["occurredAt"] });
@@ -192,6 +236,7 @@ export const createWorkoutSchema = z.object({
   const durationSeconds = workout.metrics.find((metric) => metric.metricType === "duration")?.numericValue;
   return {
     workoutType: workout.workoutType,
+    workoutSubtype: workout.workoutSubtype,
     name: workout.name !== undefined ? workout.name || null : workout.title ?? null,
     durationMinutes: durationSeconds == null
       ? workout.durationMinutes
@@ -202,6 +247,7 @@ export const createWorkoutSchema = z.object({
     occurredAt: workout.occurredAt ?? workout.completedAt ?? "",
     metrics: workout.metrics,
     movements: workout.movements,
+    segments: workout.segments,
   };
 }).pipe(canonicalWorkoutSchema);
 

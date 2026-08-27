@@ -93,6 +93,7 @@ function MainTabsNavigator() {
             pressed && styles.logWorkoutPressed,
           ]}
         >
+          <Feather color={colors.surface} name="plus" size={14} />
           <Text style={styles.logWorkoutText}>Check in</Text>
         </Pressable>
       ) : null}
@@ -121,7 +122,7 @@ const styles = StyleSheet.create({
   tabLabel: { fontFamily: fonts.semibold, fontSize: 12 },
   tabIcon: { fontFamily: fonts.medium, fontSize: 23, lineHeight: 25 },
   activeIcon: { fontFamily: fonts.bold },
-  logWorkout: { alignItems: "center", alignSelf: "center", backgroundColor: colors.brand, borderRadius: radii.pill, elevation: 4, justifyContent: "center", minHeight: 46, paddingHorizontal: spacing.xl, position: "absolute", shadowColor: colors.ink, shadowOffset: { height: 5, width: 0 }, shadowOpacity: 0.12, shadowRadius: 12 },
+  logWorkout: { alignItems: "center", alignSelf: "center", backgroundColor: colors.brand, borderRadius: radii.pill, elevation: 4, flexDirection: "row", gap: spacing.xs, justifyContent: "center", minHeight: 46, paddingHorizontal: spacing.xl, position: "absolute", shadowColor: colors.ink, shadowOffset: { height: 5, width: 0 }, shadowOpacity: 0.12, shadowRadius: 12 },
   logWorkoutPressed: { backgroundColor: colors.brandPressed, transform: [{ scale: 0.98 }] },
   logWorkoutText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 15 },
 });

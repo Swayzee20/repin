@@ -204,8 +204,8 @@ export default function HomeScreen() {
               key={day.key}
               style={styles.consistencyDay}
             >
-              <Text style={styles.consistencyWeekday}>{day.weekday}</Text>
-              <View style={[styles.consistencyRing, day.isToday && (day.completed ? styles.consistencyRingTodayCompleted : styles.consistencyRingToday)]}>
+              <Text style={[styles.consistencyWeekday, day.isToday && styles.consistencyWeekdayToday]}>{day.weekday}</Text>
+              <View style={styles.consistencyMarker}>
                 <View style={[
                   styles.consistencyCircle,
                   day.completed
@@ -351,7 +351,8 @@ function buildWeeklyConsistencyDays(workoutOccurredAtThisWeek: string[]) {
     const completed = completedDateKeys.has(key);
     const isToday = date.getTime() === todayStart.getTime();
     const isFuture = date.getTime() > todayStart.getTime();
-    const status = `${isToday ? "today, " : ""}${completed ? "workout completed" : "no workout logged"}`;
+    const temporalStatus = isToday ? "today, " : isFuture ? "future day, " : "";
+    const status = `${temporalStatus}${completed ? "workout completed" : "no workout logged"}`;
 
     return {
       accessibilityLabel: `${new Intl.DateTimeFormat(undefined, {
@@ -397,13 +398,12 @@ const styles = StyleSheet.create({
   consistencyRow: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.lg },
   consistencyDay: { alignItems: "center", flex: 1 },
   consistencyWeekday: { color: colors.muted, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.6, lineHeight: 16 },
-  consistencyRing: { alignItems: "center", borderColor: "transparent", borderRadius: radii.pill, borderWidth: 1, height: 34, justifyContent: "center", marginTop: spacing.xs, width: 34 },
-  consistencyRingToday: { borderColor: colors.inkSoft },
-  consistencyRingTodayCompleted: { borderColor: colors.brandPressed },
+  consistencyWeekdayToday: { color: colors.inkSoft },
+  consistencyMarker: { alignItems: "center", height: 34, justifyContent: "center", marginTop: spacing.xs, width: 34 },
   consistencyCircle: { alignItems: "center", borderRadius: radii.pill, borderWidth: 1, height: 26, justifyContent: "center", width: 26 },
   consistencyCircleCompleted: { backgroundColor: colors.brand, borderColor: colors.brand },
-  consistencyCircleToday: { backgroundColor: colors.surface, borderColor: colors.inkSoft },
-  consistencyCirclePast: { backgroundColor: colors.border, borderColor: colors.borderStrong },
+  consistencyCircleToday: { backgroundColor: colors.surfaceMuted, borderColor: colors.inkSoft },
+  consistencyCirclePast: { backgroundColor: colors.borderStrong, borderColor: colors.borderStrong },
   consistencyCircleFuture: { backgroundColor: colors.surface, borderColor: colors.border },
   communityZone: { backgroundColor: colors.surface, marginHorizontal: -spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.sm },
   communityZoneCompact: { paddingTop: spacing.xs },

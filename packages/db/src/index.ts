@@ -293,6 +293,17 @@ export interface CreateWorkoutSessionMetricInput {
   unit?: string | null;
 }
 
+export interface CreateWorkoutSessionSegmentInput {
+  position: number;
+  segmentType: (typeof schema.workoutSessionSegmentTypes)[number];
+  distance?: number | null;
+  distanceUnit?: (typeof schema.workoutDistanceUnits)[number] | null;
+  durationSeconds?: number | null;
+  recoverySeconds?: number | null;
+  notes?: string | null;
+  configuration?: schema.WorkoutConfig | null;
+}
+
 export interface CreateSetResultInput {
   position: number;
   reps?: number | null;
@@ -323,6 +334,7 @@ export interface CreateWorkoutSessionWithResultsInput {
     userId: string;
     workoutDefinitionId?: string | null;
     workoutType: string;
+    workoutSubtype?: (typeof schema.runWorkoutSubtypes)[number] | null;
     name?: string | null;
     durationMinutes?: number | null;
     effort?: number | null;
@@ -333,6 +345,7 @@ export interface CreateWorkoutSessionWithResultsInput {
   };
   metrics?: CreateWorkoutSessionMetricInput[];
   movements?: CreateSessionMovementResultInput[];
+  segments?: CreateWorkoutSessionSegmentInput[];
 }
 
 async function insertWorkoutSessionWithResults(
@@ -346,6 +359,7 @@ async function insertWorkoutSessionWithResults(
         userId: input.session.userId,
         workoutDefinitionId: input.session.workoutDefinitionId ?? null,
         workoutType: input.session.workoutType,
+        workoutSubtype: input.session.workoutSubtype ?? null,
         name: input.session.name ?? null,
         durationMinutes: input.session.durationMinutes ?? null,
         effort: input.session.effort ?? null,
@@ -417,6 +431,25 @@ async function insertWorkoutSessionWithResults(
           .returning()
       : [];
 
+    const segments = input.segments?.length
+      ? await transaction
+          .insert(schema.workoutSessionSegments)
+          .values(
+            input.segments.map((segment) => ({
+              workoutSessionId: session.id,
+              position: segment.position,
+              segmentType: segment.segmentType,
+              distance: segment.distance ?? null,
+              distanceUnit: segment.distanceUnit ?? null,
+              durationSeconds: segment.durationSeconds ?? null,
+              recoverySeconds: segment.recoverySeconds ?? null,
+              notes: segment.notes ?? null,
+              configuration: segment.configuration ?? null,
+            })),
+          )
+          .returning()
+      : [];
+
     const movements = [];
     for (const movementInput of movementInputs) {
       const [movement] = await transaction
@@ -461,7 +494,7 @@ async function insertWorkoutSessionWithResults(
       movements.push({ ...movement, sets });
     }
 
-    return { ...session, metrics, movements };
+    return { ...session, metrics, movements, segments };
 }
 
 export async function createWorkoutSessionWithResults(
@@ -482,7 +515,7 @@ export async function getWorkoutSessionWithResults(workoutSessionId: string) {
 
   if (!session) return null;
 
-  const [metrics, movements] = await Promise.all([
+  const [metrics, movements, segments] = await Promise.all([
     database
       .select()
       .from(schema.workoutSessionMetrics)
@@ -497,6 +530,13 @@ export async function getWorkoutSessionWithResults(workoutSessionId: string) {
         eq(schema.sessionMovementResults.workoutSessionId, workoutSessionId),
       )
       .orderBy(asc(schema.sessionMovementResults.position)),
+    database
+      .select()
+      .from(schema.workoutSessionSegments)
+      .where(
+        eq(schema.workoutSessionSegments.workoutSessionId, workoutSessionId),
+      )
+      .orderBy(asc(schema.workoutSessionSegments.position)),
   ]);
 
   const sets = movements.length
@@ -518,6 +558,7 @@ export async function getWorkoutSessionWithResults(workoutSessionId: string) {
   return {
     ...session,
     metrics,
+    segments,
     movements: movements.map((movement) => ({
       ...movement,
       sets: sets.filter(
@@ -764,6 +805,7 @@ export async function createWorkoutForMember(input: {
   displayName: string;
   groupId: string;
   workoutType: string;
+  workoutSubtype?: (typeof schema.runWorkoutSubtypes)[number] | null;
   title: string;
   name: string | null;
   durationMinutes: number | null;
@@ -777,6 +819,7 @@ export async function createWorkoutForMember(input: {
       sets: Omit<CreateSetResultInput, "position">[];
     }
   >;
+  segments?: CreateWorkoutSessionSegmentInput[];
 }) {
   return getDatabase().transaction(async (transaction) => {
     const [membership] = await transaction
@@ -803,6 +846,7 @@ export async function createWorkoutForMember(input: {
         id: sessionId,
         userId: input.userId,
         workoutType: input.workoutType,
+        workoutSubtype: input.workoutSubtype ?? null,
         name: input.name ?? input.title,
         durationMinutes: input.durationMinutes,
         effort: input.effort,
@@ -820,6 +864,7 @@ export async function createWorkoutForMember(input: {
           position: setPosition,
         })),
       })),
+      segments: input.segments,
     });
 
     const [post] = await transaction
@@ -1130,6 +1175,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
       userId: schema.workoutSessions.userId,
       groupId: schema.communityPosts.groupId,
       workoutType: schema.workoutSessions.workoutType,
+      workoutSubtype: schema.workoutSessions.workoutSubtype,
       name: schema.workoutSessions.name,
       durationMinutes: schema.workoutSessions.durationMinutes,
       effort: schema.workoutSessions.effort,
@@ -1166,7 +1212,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
 
   if (!post) return null;
 
-  const [metrics, movementSetRows, reactionCountRows, viewerReactionRows] = await Promise.all([
+  const [metrics, segments, movementSetRows, reactionCountRows, viewerReactionRows] = await Promise.all([
     database
       .select({
         id: schema.workoutSessionMetrics.id,
@@ -1185,6 +1231,26 @@ export async function getCommunityWorkoutDetailForMember(input: {
         ),
       )
       .orderBy(asc(schema.workoutSessionMetrics.position)),
+    database
+      .select({
+        id: schema.workoutSessionSegments.id,
+        position: schema.workoutSessionSegments.position,
+        segmentType: schema.workoutSessionSegments.segmentType,
+        distance: schema.workoutSessionSegments.distance,
+        distanceUnit: schema.workoutSessionSegments.distanceUnit,
+        durationSeconds: schema.workoutSessionSegments.durationSeconds,
+        recoverySeconds: schema.workoutSessionSegments.recoverySeconds,
+        notes: schema.workoutSessionSegments.notes,
+        configuration: schema.workoutSessionSegments.configuration,
+      })
+      .from(schema.workoutSessionSegments)
+      .where(
+        eq(
+          schema.workoutSessionSegments.workoutSessionId,
+          input.workoutSessionId,
+        ),
+      )
+      .orderBy(asc(schema.workoutSessionSegments.position)),
     database
       .select({
         movementResultId: schema.sessionMovementResults.id,
@@ -1318,6 +1384,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
     }),
     metrics,
     movements: [...movements.values()],
+    segments,
     reactions: buildReactionSummary(
       reactionCountRows,
       viewerReactionRows[0]?.reactionType ?? null,
@@ -1620,5 +1687,6 @@ export {
   workoutBlocks,
   workoutDefinitions,
   workoutSessionMetrics,
+  workoutSessionSegments,
   workoutSessions,
 } from "./schema";

@@ -29,6 +29,7 @@ WORKOUT SESSION
 "What did I actually do?"
         │
         ├── workout_session_metrics
+        ├── workout_session_segments
         └── session_movement_results
                     └── set_results
         │
@@ -132,6 +133,7 @@ workout_definitions
 └───────┬───────────┬─────┘
         │           │
         │           ├── workout_session_metrics
+        │           ├── workout_session_segments
         │           └── session_movement_results
         │                       └── set_results
         │
@@ -167,6 +169,7 @@ id
 user_id
 workout_definition_id      nullable
 workout_type
+workout_subtype            nullable
 name
 duration_minutes
 effort
@@ -191,6 +194,12 @@ Effort: 4/5
 ```
 
 is still a legitimate workout session even if RepIn does not know every exercise that was performed.
+
+`workout_subtype` is also nullable. It refines a top-level workout type without
+creating parallel top-level types. Run currently supports `distance`, `tempo`,
+and `interval`; historical runs remain valid with a null subtype. The column is
+generic so other workout types can gain their own explicitly validated subtype
+sets later.
 
 ## Ownership
 
@@ -868,6 +877,77 @@ A result can describe strength work, timed work, distance work, bodyweight repet
 
 Deleting a session cascades to its metrics, movement results, and sets. Deleting a movement result cascades to its sets.
 
+## Ordered session segments
+
+`workout_session_segments` stores ordered actual portions of a completed
+session. It is separate from workout definitions because it describes what the
+athlete completed, not what was prescribed.
+
+```text
+workout_session_segments
+------------------------
+id
+workout_session_id
+position
+segment_type             work | recovery
+distance                 nullable
+distance_unit            m | km | mi, nullable
+duration_seconds         nullable
+recovery_seconds         nullable
+notes                    nullable
+configuration            nullable JSONB
+created_at
+updated_at
+```
+
+Positions are non-negative and unique within a session. Reads always order by
+position. Segment distance and duration belong to that segment and do not need
+to use the same distance unit as session-level totals. Duration and recovery
+are stored as seconds, never formatted time strings.
+
+V1 interval runs use ordered `work` segments with an optional
+`recovery_seconds` value on each work segment. A standalone `recovery` segment
+is also supported for cases where recovery needs its own ordered result. This
+keeps the model reusable for future cycling, rowing, swimming, and other
+interval-based sessions without introducing a Run-only table.
+
+## Run result representations
+
+### Distance Run
+
+- `workout_type = run`
+- `workout_subtype = distance`
+- overall distance and duration remain in `workout_session_metrics`
+- no segment rows are required
+
+### Tempo Run
+
+- `workout_type = run`
+- `workout_subtype = tempo`
+- overall distance and duration remain in `workout_session_metrics`
+- no segment rows are required in V1
+
+The current metric model has one session-level `distance` metric and therefore
+does not distinguish tempo-portion distance from total distance. That remains a
+future structured-segment concern rather than adding an ambiguous second
+distance metric now.
+
+### Interval Run
+
+- `workout_type = run`
+- `workout_subtype = interval`
+- optional overall distance/duration remain in `workout_session_metrics`
+- one or more completed interval results live in `workout_session_segments`
+
+An interval session may contain only segments and no overall metrics. Community
+feed summaries continue using session-level metrics, so segment details do not
+make feed cards verbose.
+
+Future prescribed intervals remain in `workout_definitions`, `workout_blocks`,
+and `block_movements`. Actual interval outcomes remain session-owned segments.
+V1 deliberately does not link those layers; a safe association can be added
+later without changing either model's ownership.
+
 ---
 
 # 14. Current Quick Workout Logging
@@ -877,6 +957,7 @@ RepIn's Quick Log form transactionally creates:
 ```text
 workout_session
       ├── optional workout_session_metrics
+      ├── optional workout_session_segments
       └── optional session_movement_results
                         └── optional set_results
       ↓
@@ -887,7 +968,10 @@ It does not currently create a structured workout definition.
 
 This is intentional.
 
-A user can still log a minimal workout with only a workout type and occurred timestamp. Depending on the selected workout type, Quick Log can also capture precise duration, distance, rounds, a text score, or shorthand strength sets without creating a prescription.
+A user can still log a minimal workout with only a workout type and occurred
+timestamp. Detailed Workout can add metrics and movement results through the
+same transaction without creating a prescription. The segment-capable backend
+is additive; Quick Log does not submit segment rows.
 
 For example:
 
@@ -1073,6 +1157,7 @@ workout_blocks
 block_movements
 movements
 workout_session_metrics
+workout_session_segments
 session_movement_results
 set_results
 ```
@@ -1126,6 +1211,7 @@ Canonical exercise information
 
 Structured actual workout results
     → workout_session_metrics
+       + workout_session_segments
        + session_movement_results
        + set_results
 

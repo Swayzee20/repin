@@ -92,6 +92,13 @@
       "when": 1787631202552,
       "tag": "0012_pink_mysterio",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787856823163,
+      "tag": "0013_known_franklin_richards",
+      "breakpoints": true
     }
   ]
 }
