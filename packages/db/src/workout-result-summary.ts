@@ -36,7 +36,7 @@ export function formatWorkoutResultSummary(input: {
         const groups = groupConsecutiveIntervalSegments(input.segments);
         const first = groups[0];
         if (first) {
-          const summary = formatGroupedIntervalSegment(first).summary;
+          const summary = formatGroupedIntervalSegment(first).main;
           return truncateSummary(groups.length > 1 ? `${summary} · +${groups.length - 1} more` : summary);
         }
       }
