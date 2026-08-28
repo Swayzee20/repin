@@ -259,6 +259,21 @@ export const homeQuerySchema = z.object({
   view: z.enum(["home", "community", "profile"]).optional(),
   groupId: z.uuid().optional(),
   timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840),
+  start: z.iso.datetime().optional(),
+  end: z.iso.datetime().optional(),
   includeReactions: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
   includeComments: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
+}).superRefine((query, context) => {
+  if (Boolean(query.start) !== Boolean(query.end)) {
+    context.addIssue({ code: "custom", message: "Start and end must be supplied together", path: [query.start ? "end" : "start"] });
+    return;
+  }
+  if (!query.start || !query.end) return;
+  const start = new Date(query.start).getTime();
+  const end = new Date(query.end).getTime();
+  if (end <= start) {
+    context.addIssue({ code: "custom", message: "End must be after start", path: ["end"] });
+  } else if (end - start > 26 * 60 * 60 * 1_000) {
+    context.addIssue({ code: "custom", message: "The requested range must represent one calendar day", path: ["end"] });
+  }
 });

@@ -1,6 +1,7 @@
 import type {
   RunWorkoutSubtype,
   WorkoutDistanceUnit,
+  WorkoutDetailSegment,
   WorkoutSessionSegmentInput,
 } from "@repin/types";
 
@@ -36,6 +37,35 @@ export function createEmptyInterval(): IntervalDraft {
     recoverySeconds: "",
     quantity: 1,
   };
+}
+
+export function hydrateIntervalDrafts(segments: WorkoutDetailSegment[]): IntervalDraft[] {
+  const drafts: IntervalDraft[] = [];
+  for (const segment of segments) {
+    const previous = drafts.at(-1);
+    const minutes = segment.durationSeconds == null ? "" : String(Math.floor(segment.durationSeconds / 60));
+    const seconds = segment.durationSeconds == null ? "" : String(segment.durationSeconds % 60);
+    const matches = previous
+      && previous.distance === (segment.distance == null ? "" : String(segment.distance))
+      && previous.distanceUnit === (segment.distanceUnit ?? "m")
+      && previous.timeMinutes === minutes
+      && previous.timeSeconds === seconds
+      && previous.recoverySeconds === (segment.recoverySeconds == null ? "" : String(segment.recoverySeconds));
+    if (matches) {
+      previous.quantity += 1;
+      continue;
+    }
+    drafts.push({
+      id: nextIntervalId++,
+      distance: segment.distance == null ? "" : String(segment.distance),
+      distanceUnit: segment.distanceUnit ?? "m",
+      timeMinutes: minutes,
+      timeSeconds: seconds,
+      recoverySeconds: segment.recoverySeconds == null ? "" : String(segment.recoverySeconds),
+      quantity: 1,
+    });
+  }
+  return drafts.length ? drafts : [createEmptyInterval()];
 }
 
 export function validateIntervals(intervals: IntervalDraft[]) {

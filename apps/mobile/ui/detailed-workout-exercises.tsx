@@ -1,4 +1,4 @@
-import type { MovementSummary, QuickLogMovementInput } from "@repin/types";
+import type { MovementSummary, QuickLogMovementInput, WorkoutDetailMovement } from "@repin/types";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
@@ -18,6 +18,25 @@ export type DetailedExerciseDraft = {
   loadUnit: LoadUnit;
   sets: DetailedSetDraft[];
 };
+
+export function hydrateDetailedExercises(movements: WorkoutDetailMovement[]): DetailedExerciseDraft[] {
+  return movements.map((movement) => {
+    const loadUnit: LoadUnit = movement.sets.find((set) => set.loadUnit === "kg") ? "kg" : "lb";
+    return {
+      id: movement.id,
+      movementId: movement.movementId,
+      movementName: movement.movementName,
+      loadUnit,
+      sets: movement.sets.length
+        ? movement.sets.map((set) => ({
+            id: set.id,
+            reps: set.reps == null ? "" : String(set.reps),
+            load: set.load == null ? "" : String(set.load),
+          }))
+        : [createDetailedSet()],
+    };
+  });
+}
 
 export function DetailedExerciseFields({
   exercises,

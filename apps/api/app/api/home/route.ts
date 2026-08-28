@@ -27,6 +27,8 @@ export async function GET(request: Request) {
       view: url.searchParams.get("view") ?? undefined,
       groupId: url.searchParams.get("groupId") ?? undefined,
       timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes"),
+      start: url.searchParams.get("start") ?? undefined,
+      end: url.searchParams.get("end") ?? undefined,
       includeReactions: url.searchParams.get("includeReactions") ?? undefined,
       includeComments: url.searchParams.get("includeComments") ?? undefined,
     });
@@ -84,6 +86,8 @@ export async function GET(request: Request) {
             limit: 20,
             includeReactionCounts: view === "community",
             includeCommentCounts: view === "community",
+            occurredAtStart: query.data.start ? new Date(query.data.start) : undefined,
+            occurredAtEnd: query.data.end ? new Date(query.data.end) : undefined,
           }))) ?? [])
       : [];
     const workoutsWithPhotos = view === "community"

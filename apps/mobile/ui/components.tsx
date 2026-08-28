@@ -1,10 +1,12 @@
 import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
+import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useState, type ReactNode } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
   Image,
+  Modal,
   Platform,
   Pressable,
   SafeAreaView,
@@ -13,6 +15,7 @@ import {
   Text,
   TextInput,
   View,
+  useWindowDimensions,
 } from "react-native";
 import Animated, {
   Extrapolation,
@@ -229,6 +232,8 @@ export function WorkoutCard({
   focalY,
   layoutY,
   onPress,
+  onDelete,
+  onEdit,
   scrollY,
   showReactionSummary = false,
   showCommentCount = false,
@@ -239,6 +244,8 @@ export function WorkoutCard({
   focalY: number;
   layoutY: SharedValue<number>;
   onPress?: () => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
   scrollY: SharedValue<number>;
   showReactionSummary?: boolean;
   showCommentCount?: boolean;
@@ -307,21 +314,25 @@ export function WorkoutCard({
           onPress={onPress}
           style={({ pressed }) => pressed && styles.workoutCardPressed}
         >
-          <WorkoutSummaryCard showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} variant="full" workout={workout} />
+          <WorkoutSummaryCard onDelete={onDelete} onEdit={onEdit} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} variant="full" workout={workout} />
         </Pressable>
       ) : (
-        <WorkoutSummaryCard showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} variant="full" workout={workout} />
+        <WorkoutSummaryCard onDelete={onDelete} onEdit={onEdit} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} variant="full" workout={workout} />
       )}
     </Animated.View>
   );
 }
 
 export function WorkoutSummaryCard({
+  onDelete,
+  onEdit,
   showCommentCount = false,
   showReactionSummary = false,
   variant = "full",
   workout,
 }: {
+  onDelete?: () => void;
+  onEdit?: () => void;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
   variant?: "compact" | "full";
@@ -365,6 +376,7 @@ export function WorkoutSummaryCard({
           <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
         {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
+        {onEdit && onDelete ? <PostOptionsMenu onDelete={onDelete} onEdit={onEdit} /> : null}
       </View>
       <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
       {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
@@ -385,8 +397,11 @@ export function CommunityFeed({
   focusOffsetY = 0,
   mode = "full",
   onWorkoutPress,
+  onWorkoutDelete,
+  onWorkoutEdit,
   showCommentCount = false,
   showReactionSummary = false,
+  viewerUserId,
   viewportHeight,
   workouts,
 }: {
@@ -394,8 +409,11 @@ export function CommunityFeed({
   focusOffsetY?: number;
   mode?: "preview" | "full";
   onWorkoutPress?: (workout: WorkoutFeedItem) => void;
+  onWorkoutDelete?: (workout: WorkoutFeedItem) => void;
+  onWorkoutEdit?: (workout: WorkoutFeedItem) => void;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
+  viewerUserId?: string | null;
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
 }) {
@@ -428,6 +446,8 @@ export function CommunityFeed({
             itemHeights={itemHeights}
             key={workout.id}
             onPress={onWorkoutPress ? () => onWorkoutPress(workout) : undefined}
+            onDelete={viewerUserId === workout.userId && onWorkoutDelete ? () => onWorkoutDelete(workout) : undefined}
+            onEdit={viewerUserId === workout.userId && onWorkoutEdit ? () => onWorkoutEdit(workout) : undefined}
             orderedWorkoutIds={orderedWorkoutIds}
             scrollY={scrollY}
             showCommentCount={showCommentCount}
@@ -466,6 +486,8 @@ function CommunityFeedItem({
   focalY,
   itemHeights,
   onPress,
+  onDelete,
+  onEdit,
   orderedWorkoutIds,
   scrollY,
   showCommentCount,
@@ -477,6 +499,8 @@ function CommunityFeedItem({
   focalY: number;
   itemHeights: SharedValue<Record<string, number>>;
   onPress?: () => void;
+  onDelete?: () => void;
+  onEdit?: () => void;
   orderedWorkoutIds: string[];
   scrollY: SharedValue<number>;
   showCommentCount: boolean;
@@ -518,6 +542,8 @@ function CommunityFeedItem({
         focalY={focalY}
         layoutY={layoutY}
         onPress={onPress}
+        onDelete={onDelete}
+        onEdit={onEdit}
         scrollY={scrollY}
         showCommentCount={showCommentCount}
         showReactionSummary={showReactionSummary}
@@ -526,6 +552,53 @@ function CommunityFeedItem({
         workout={workout}
       />
     </View>
+  );
+}
+
+function PostOptionsMenu({ onDelete, onEdit }: { onDelete: () => void; onEdit: () => void }) {
+  const anchor = useRef<View>(null);
+  const { width: viewportWidth } = useWindowDimensions();
+  const [position, setPosition] = useState<{ left: number; top: number }>({ left: spacing.md, top: 0 });
+  const [visible, setVisible] = useState(false);
+  const open = () => {
+    anchor.current?.measureInWindow((x, y, width, height) => {
+      setPosition({ left: Math.max(spacing.md, Math.min(x + width - 176, viewportWidth - 176 - spacing.md)), top: y + height + spacing.xs });
+      setVisible(true);
+    });
+  };
+  const choose = (action: () => void) => {
+    setVisible(false);
+    action();
+  };
+
+  return (
+    <>
+      <View ref={anchor}>
+        <Pressable
+          accessibilityLabel="Post options"
+          accessibilityRole="button"
+          hitSlop={8}
+          onPress={(event) => { event.stopPropagation(); open(); }}
+          style={({ pressed }) => [styles.postOptionsButton, pressed && styles.workoutCardPressed]}
+        >
+          <Feather color={colors.muted} name="more-horizontal" size={19} />
+        </Pressable>
+      </View>
+      <Modal animationType="fade" onRequestClose={() => setVisible(false)} transparent visible={visible}>
+        <Pressable accessibilityLabel="Close post options" onPress={() => setVisible(false)} style={styles.postMenuBackdrop}>
+          <View style={[styles.postMenu, position]}>
+            <Pressable accessibilityRole="button" onPress={(event) => { event.stopPropagation(); choose(onEdit); }} style={styles.postMenuRow}>
+              <Feather color={colors.inkSoft} name="edit-2" size={16} />
+              <Text style={styles.postMenuText}>Edit</Text>
+            </Pressable>
+            <Pressable accessibilityRole="button" onPress={(event) => { event.stopPropagation(); choose(onDelete); }} style={styles.postMenuRow}>
+              <Feather color={colors.danger} name="trash-2" size={16} />
+              <Text style={styles.postMenuDeleteText}>Delete</Text>
+            </Pressable>
+          </View>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -595,6 +668,12 @@ const styles = StyleSheet.create({
   timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
   typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
+  postOptionsButton: { alignItems: "center", height: 36, justifyContent: "center", marginLeft: spacing.xs, width: 36 },
+  postMenuBackdrop: { flex: 1 },
+  postMenu: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, elevation: 5, padding: spacing.xs, position: "absolute", shadowColor: colors.ink, shadowOffset: { height: 3, width: 0 }, shadowOpacity: 0.1, shadowRadius: 10, width: 176 },
+  postMenuRow: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md },
+  postMenuText: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
+  postMenuDeleteText: { color: colors.danger, fontFamily: fonts.semibold, fontSize: 15 },
   workoutTitle: { color: colors.ink, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25, marginTop: spacing.lg },
   compactWorkoutTitle: { marginTop: spacing.md },
   workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },

@@ -1,8 +1,8 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import type { RunWorkoutSubtype, WorkoutType } from "@repin/types";
+import type { CommunityWorkoutDetail, RunWorkoutSubtype, WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Image,
   KeyboardAvoidingView,
@@ -17,10 +17,12 @@ import {
 
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
+import { clearWorkoutDetailCaches } from "../../../lib/workout-detail-cache";
 import {
   buildIntervalSegments,
   createEmptyInterval,
   getIntervalValidationIssue,
+  hydrateIntervalDrafts,
   type IntervalDraft,
   type IntervalValidationIssue,
   validateIntervals,
@@ -29,6 +31,7 @@ import { BackButton, Button, TextField } from "../../../ui/components";
 import {
   buildDetailedMovements,
   DetailedExerciseFields,
+  hydrateDetailedExercises,
   type DetailedExerciseDraft,
   validateDetailedExercises,
 } from "../../../ui/detailed-workout-exercises";
@@ -39,6 +42,7 @@ import {
 import {
   buildQuickLogResults,
   emptyQuickLogResults,
+  hydrateQuickLogResults,
   type QuickLogResultsDraft,
   validateQuickLogResults,
   WorkoutMetricFields,
@@ -53,8 +57,10 @@ type SelectedPhoto = { base64: string; mimeType: string; uri: string };
 
 export default function DetailedWorkoutScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ id?: string | string[] }>();
+  const params = useLocalSearchParams<{ id?: string | string[]; sessionId?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
+  const editSessionId = Array.isArray(params.sessionId) ? params.sessionId[0] : params.sessionId;
+  const editing = Boolean(editSessionId);
   const [workoutType, setWorkoutType] = useState<WorkoutType | null>(null);
   const [runSubtype, setRunSubtype] = useState<RunWorkoutSubtype | null>(null);
   const [results, setResults] = useState<QuickLogResultsDraft>(emptyQuickLogResults);
@@ -74,9 +80,54 @@ export default function DetailedWorkoutScreen() {
   const [showPicker, setShowPicker] = useState(false);
   const [caption, setCaption] = useState("");
   const [photo, setPhoto] = useState<SelectedPhoto | null>(null);
+  const [existingPhotoPath, setExistingPhotoPath] = useState<string | null>(null);
+  const [existingPhotoUrl, setExistingPhotoUrl] = useState<string | null>(null);
+  const [photoRemoved, setPhotoRemoved] = useState(false);
+  const [loadingExisting, setLoadingExisting] = useState(Boolean(editSessionId));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isStrengthWorkout = workoutType === "strength_training" || workoutType === "powerlifting";
+
+  useEffect(() => {
+    if (!editSessionId || !groupId || !supabase) return;
+    let active = true;
+    void supabase.auth.getSession().then(async ({ data, error: sessionError }) => {
+      try {
+        if (sessionError || !data.session) throw new Error("Sign in to edit this workout.");
+        const response = await fetch(`${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts/${encodeURIComponent(editSessionId)}`, {
+          headers: { Authorization: `Bearer ${data.session.access_token}` },
+          signal: AbortSignal.timeout(7_500),
+        });
+        const body = (await response.json()) as { error?: string; workout?: CommunityWorkoutDetail };
+        if (!response.ok || !body.workout) throw new Error(body.error ?? "Workout could not be loaded.");
+        if (!active) return;
+        const workout = body.workout;
+        const nextOccurredAt = new Date(workout.occurredAt ?? workout.completedAt ?? "");
+        setWorkoutType(workout.workoutType as WorkoutType);
+        setRunSubtype(workout.workoutSubtype);
+        setResults(hydrateQuickLogResults(workout.metrics));
+        setIntervals(hydrateIntervalDrafts(workout.segments));
+        setExercises(hydrateDetailedExercises(workout.movements));
+        setName(workout.name ?? "");
+        setEffort(workout.effort);
+        if (!Number.isNaN(nextOccurredAt.getTime())) {
+          const parts = getLocalDateParts(nextOccurredAt);
+          setOccurredAt(nextOccurredAt);
+          setWebDate(parts.date);
+          setWebTime(parts.time);
+        }
+        setCaption(workout.caption ?? "");
+        setExistingPhotoPath(workout.photoPath);
+        setExistingPhotoUrl(workout.photoUrl ?? null);
+        setRunResultsExpanded(false);
+      } catch (loadError) {
+        if (active) setError(loadError instanceof Error ? loadError.message : "Workout could not be loaded.");
+      } finally {
+        if (active) setLoadingExisting(false);
+      }
+    });
+    return () => { active = false; };
+  }, [editSessionId, groupId]);
 
   const handleWorkoutTypeChange = useCallback((nextWorkoutType: WorkoutType) => {
     setWorkoutType(nextWorkoutType);
@@ -137,6 +188,7 @@ export default function DetailedWorkoutScreen() {
       setError("That photo could not be read. Try another image.");
       return;
     }
+    setPhotoRemoved(false);
     setPhoto({ base64: asset.base64, mimeType: asset.mimeType ?? "image/jpeg", uri: asset.uri });
   }, []);
 
@@ -146,7 +198,7 @@ export default function DetailedWorkoutScreen() {
       setError("Choose a workout type.");
       return;
     }
-    if (workoutType === "run" && !runSubtype) {
+    if (workoutType === "run" && !runSubtype && !editing) {
       setError("Choose a Run type.");
       return;
     }
@@ -200,8 +252,12 @@ export default function DetailedWorkoutScreen() {
         ? null
         : Math.max(1, Math.round(structuredResults.durationSeconds / 60));
 
-      const response = await fetch(`${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts`, {
-        method: "POST",
+      const endpoint = editSessionId
+        ? `${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts/${encodeURIComponent(editSessionId)}`
+        : `${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts`;
+      const nextPhotoPath = uploadedPhotoPath ?? (photoRemoved ? null : existingPhotoPath);
+      const response = await fetch(endpoint, {
+        method: editSessionId ? "PATCH" : "POST",
         headers: {
           Authorization: `Bearer ${data.session.access_token}`,
           "Content-Type": "application/json",
@@ -213,7 +269,7 @@ export default function DetailedWorkoutScreen() {
           durationMinutes,
           effort,
           caption,
-          photoPath: uploadedPhotoPath,
+          photoPath: nextPhotoPath,
           occurredAt: occurredAt.toISOString(),
           metrics: structuredResults.metrics,
           movements: isStrengthWorkout ? buildDetailedMovements(exercises) : [],
@@ -235,7 +291,11 @@ export default function DetailedWorkoutScreen() {
         if (__DEV__ && body.issues?.length) console.warn("Detailed workout validation failed", body.issues);
         throw new Error(validationMessage || body.error || "Workout could not be created.");
       }
+      if (editSessionId && existingPhotoPath && existingPhotoPath !== nextPhotoPath) {
+        await supabase.storage.from("workout-photos").remove([existingPhotoPath]);
+      }
       markWorkoutDataStale();
+      clearWorkoutDetailCaches();
       router.back();
     } catch (submitError) {
       if (uploadedPhotoPath && supabase) {
@@ -244,7 +304,7 @@ export default function DetailedWorkoutScreen() {
       setError(submitError instanceof Error ? submitError.message : "Workout could not be created.");
       setSubmitting(false);
     }
-  }, [caption, effort, exercises, groupId, intervals, isStrengthWorkout, name, occurredAt, photo, results, router, runSubtype, workoutType]);
+  }, [caption, editSessionId, editing, effort, exercises, existingPhotoPath, groupId, intervals, isStrengthWorkout, name, occurredAt, photo, photoRemoved, results, router, runSubtype, workoutType]);
 
   const handleNativeDateChange = useCallback((event: DateTimePickerEvent, value?: Date) => {
     if (event.type === "dismissed" || !value) {
@@ -266,8 +326,8 @@ export default function DetailedWorkoutScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
         <View style={styles.header}>
           <BackButton label="Cancel" onPress={() => router.back()} />
-          <Text style={styles.eyebrow}>DETAILED WORKOUT</Text>
-          <Text style={styles.title}>Track your workout</Text>
+          <Text style={styles.eyebrow}>{editing ? "EDIT WORKOUT" : "DETAILED WORKOUT"}</Text>
+          <Text style={styles.title}>{editing ? "Update your check-in" : "Track your workout"}</Text>
         </View>
         <View style={styles.headerDivider} />
         <ScrollView
@@ -351,10 +411,10 @@ export default function DetailedWorkoutScreen() {
             <Text style={styles.subsectionTitle}>Add to your post</Text>
             <View style={styles.postField}>
               <FieldLabel label="Photo" optional />
-              {photo ? (
+              {photo || (existingPhotoUrl && !photoRemoved) ? (
                 <View>
-                  <Image accessibilityLabel="Selected workout" source={{ uri: photo.uri }} style={styles.photoPreview} />
-                  <View style={styles.photoActions}><Pressable accessibilityRole="button" onPress={() => void pickPhoto()}><Text style={styles.textAction}>Change</Text></Pressable><Pressable accessibilityRole="button" onPress={() => setPhoto(null)}><Text style={styles.removeAction}>Remove</Text></Pressable></View>
+                  <Image accessibilityLabel="Selected workout" source={{ uri: photo?.uri ?? existingPhotoUrl ?? "" }} style={styles.photoPreview} />
+                  <View style={styles.photoActions}><Pressable accessibilityRole="button" onPress={() => void pickPhoto()}><Text style={styles.textAction}>Change</Text></Pressable><Pressable accessibilityRole="button" onPress={() => { setPhoto(null); setPhotoRemoved(true); }}><Text style={styles.removeAction}>Remove</Text></Pressable></View>
                 </View>
               ) : (
                 <Pressable accessibilityRole="button" onPress={() => void pickPhoto()} style={({ pressed }) => [styles.addPhoto, pressed && styles.pressed]}><Text style={styles.addPhotoText}>+ Add photo</Text></Pressable>
@@ -387,7 +447,7 @@ export default function DetailedWorkoutScreen() {
           </View>
 
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
-          <Button disabled={!workoutType || (workoutType === "run" && !runSubtype)} loading={submitting} onPress={() => void submitWorkout()} style={styles.submitButton}>Log workout</Button>
+          <Button disabled={loadingExisting || !workoutType || (!editing && workoutType === "run" && !runSubtype)} loading={submitting || loadingExisting} onPress={() => void submitWorkout()} style={styles.submitButton}>{editing ? "Save changes" : "Log workout"}</Button>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

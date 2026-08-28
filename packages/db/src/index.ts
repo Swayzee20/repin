@@ -12,6 +12,8 @@ import {
   ilike,
   inArray,
   lte,
+  lt,
+  ne,
   sql,
 } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/node-postgres";
@@ -906,6 +908,209 @@ export async function createWorkoutForMember(input: {
   });
 }
 
+export async function updateWorkoutForOwner(input: {
+  userId: string;
+  groupId: string;
+  workoutSessionId: string;
+  workoutType: string;
+  workoutSubtype?: (typeof schema.runWorkoutSubtypes)[number] | null;
+  name: string | null;
+  durationMinutes: number | null;
+  effort: number | null;
+  caption: string | null;
+  photoPath: string | null;
+  occurredAt: Date;
+  metrics?: Omit<CreateWorkoutSessionMetricInput, "position">[];
+  movements?: Array<
+    Omit<CreateSessionMovementResultInput, "position" | "sets"> & {
+      sets: Omit<CreateSetResultInput, "position">[];
+    }
+  >;
+  segments?: CreateWorkoutSessionSegmentInput[];
+}) {
+  return getDatabase().transaction(async (transaction) => {
+    const [owned] = await transaction
+      .select({
+        postId: schema.communityPosts.id,
+        sessionId: schema.workoutSessions.id,
+      })
+      .from(schema.communityPosts)
+      .innerJoin(
+        schema.workoutSessions,
+        eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
+      )
+      .where(and(
+        eq(schema.communityPosts.groupId, input.groupId),
+        eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        eq(schema.communityPosts.userId, input.userId),
+        eq(schema.workoutSessions.userId, input.userId),
+      ))
+      .limit(1);
+
+    if (!owned) return null;
+
+    const now = new Date();
+    await transaction
+      .update(schema.workoutSessions)
+      .set({
+        workoutType: input.workoutType,
+        workoutSubtype: input.workoutSubtype ?? null,
+        name: input.name,
+        durationMinutes: input.durationMinutes,
+        effort: input.effort,
+        occurredAt: input.occurredAt,
+        updatedAt: now,
+      })
+      .where(eq(schema.workoutSessions.id, owned.sessionId));
+    await transaction
+      .update(schema.communityPosts)
+      .set({ caption: input.caption, photoPath: input.photoPath, updatedAt: now })
+      .where(eq(schema.communityPosts.id, owned.postId));
+
+    // Sets cascade from movement results. The other canonical result tables
+    // are direct session children and are replaced in the same transaction.
+    await transaction.delete(schema.workoutSessionMetrics).where(
+      eq(schema.workoutSessionMetrics.workoutSessionId, owned.sessionId),
+    );
+    await transaction.delete(schema.workoutSessionSegments).where(
+      eq(schema.workoutSessionSegments.workoutSessionId, owned.sessionId),
+    );
+    await transaction.delete(schema.sessionMovementResults).where(
+      eq(schema.sessionMovementResults.workoutSessionId, owned.sessionId),
+    );
+
+    if (input.metrics?.length) {
+      await transaction.insert(schema.workoutSessionMetrics).values(
+        input.metrics.map((metric, position) => ({
+          workoutSessionId: owned.sessionId,
+          position,
+          metricType: metric.metricType,
+          label: metric.label ?? null,
+          numericValue: metric.numericValue ?? null,
+          textValue: metric.textValue ?? null,
+          unit: metric.unit ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      );
+    }
+    if (input.segments?.length) {
+      await transaction.insert(schema.workoutSessionSegments).values(
+        input.segments.map((segment) => ({
+          workoutSessionId: owned.sessionId,
+          position: segment.position,
+          segmentType: segment.segmentType,
+          distance: segment.distance ?? null,
+          distanceUnit: segment.distanceUnit ?? null,
+          durationSeconds: segment.durationSeconds ?? null,
+          recoverySeconds: segment.recoverySeconds ?? null,
+          notes: segment.notes ?? null,
+          configuration: segment.configuration ?? null,
+          createdAt: now,
+          updatedAt: now,
+        })),
+      );
+    }
+    for (const [position, movementInput] of (input.movements ?? []).entries()) {
+      const [movement] = await transaction.insert(schema.sessionMovementResults).values({
+        workoutSessionId: owned.sessionId,
+        movementId: movementInput.movementId ?? null,
+        movementName: movementInput.movementName,
+        position,
+        notes: movementInput.notes ?? null,
+        config: movementInput.config ?? null,
+        createdAt: now,
+        updatedAt: now,
+      }).returning({ id: schema.sessionMovementResults.id });
+      if (!movement) throw new Error("Workout movement could not be updated");
+      if (movementInput.sets.length) {
+        await transaction.insert(schema.setResults).values(
+          movementInput.sets.map((set, setPosition) => ({
+            sessionMovementResultId: movement.id,
+            position: setPosition,
+            reps: set.reps ?? null,
+            load: set.load ?? null,
+            loadUnit: set.loadUnit ?? null,
+            durationSeconds: set.durationSeconds ?? null,
+            distance: set.distance ?? null,
+            distanceUnit: set.distanceUnit ?? null,
+            calories: set.calories ?? null,
+            completed: set.completed ?? true,
+            notes: set.notes ?? null,
+            config: set.config ?? null,
+            createdAt: now,
+            updatedAt: now,
+          })),
+        );
+      }
+    }
+
+    return { postId: owned.postId, sessionId: owned.sessionId };
+  });
+}
+
+export async function deleteCommunityPostForOwner(input: {
+  userId: string;
+  groupId: string;
+  workoutSessionId: string;
+  deleteWorkout: boolean;
+}) {
+  return getDatabase().transaction(async (transaction) => {
+    const [owned] = await transaction
+      .select({
+        photoPath: schema.communityPosts.photoPath,
+        postId: schema.communityPosts.id,
+        sessionId: schema.workoutSessions.id,
+      })
+      .from(schema.communityPosts)
+      .innerJoin(
+        schema.workoutSessions,
+        eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
+      )
+      .where(and(
+        eq(schema.communityPosts.groupId, input.groupId),
+        eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        eq(schema.communityPosts.userId, input.userId),
+        eq(schema.workoutSessions.userId, input.userId),
+      ))
+      .limit(1);
+
+    if (!owned) return null;
+    const photoPaths = input.deleteWorkout
+      ? (await transaction
+          .select({ photoPath: schema.communityPosts.photoPath })
+          .from(schema.communityPosts)
+          .where(eq(schema.communityPosts.workoutSessionId, owned.sessionId)))
+          .flatMap((post) => post.photoPath ? [post.photoPath] : [])
+      : owned.photoPath ? [owned.photoPath] : [];
+    if (input.deleteWorkout) {
+      const [foreignPost] = await transaction
+        .select({ id: schema.communityPosts.id })
+        .from(schema.communityPosts)
+        .where(and(
+          eq(schema.communityPosts.workoutSessionId, owned.sessionId),
+          ne(schema.communityPosts.userId, input.userId),
+        ))
+        .limit(1);
+      if (foreignPost) throw new Error("Workout session has an inconsistent post owner");
+      await transaction.delete(schema.workoutSessions).where(
+        and(
+          eq(schema.workoutSessions.id, owned.sessionId),
+          eq(schema.workoutSessions.userId, input.userId),
+        ),
+      );
+    } else {
+      await transaction.delete(schema.communityPosts).where(
+        and(
+          eq(schema.communityPosts.id, owned.postId),
+          eq(schema.communityPosts.userId, input.userId),
+        ),
+      );
+    }
+    return { photoPaths };
+  });
+}
+
 export async function listRecentWorkoutsForMember(input: {
   userId: string;
   groupId: string;
@@ -921,6 +1126,8 @@ export async function listRecentWorkoutsForAuthorizedGroup(input: {
   limit?: number;
   includeReactionCounts?: boolean;
   includeCommentCounts?: boolean;
+  occurredAtStart?: Date;
+  occurredAtEnd?: Date;
 }) {
   return listRecentWorkouts({ ...input, verifyMembership: false });
 }
@@ -931,6 +1138,8 @@ async function listRecentWorkouts(input: {
   limit?: number;
   includeReactionCounts?: boolean;
   includeCommentCounts?: boolean;
+  occurredAtStart?: Date;
+  occurredAtEnd?: Date;
   verifyMembership: boolean;
 }) {
   const database = getDatabase();
@@ -1012,7 +1221,11 @@ async function listRecentWorkouts(input: {
       schema.users,
       eq(schema.workoutSessions.userId, schema.users.id),
     )
-    .where(eq(schema.communityPosts.groupId, input.groupId))
+    .where(and(
+      eq(schema.communityPosts.groupId, input.groupId),
+      input.occurredAtStart ? gte(schema.workoutSessions.occurredAt, input.occurredAtStart) : undefined,
+      input.occurredAtEnd ? lt(schema.workoutSessions.occurredAt, input.occurredAtEnd) : undefined,
+    ))
     .orderBy(
       desc(schema.workoutSessions.occurredAt),
       desc(schema.communityPosts.createdAt),

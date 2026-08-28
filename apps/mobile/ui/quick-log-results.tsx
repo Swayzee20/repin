@@ -1,4 +1,4 @@
-import type { QuickLogMetricInput, WorkoutType } from "@repin/types";
+import type { QuickLogMetricInput, WorkoutDetailMetric, WorkoutType } from "@repin/types";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { TextField } from "./components";
@@ -27,6 +27,23 @@ export const emptyQuickLogResults: QuickLogResultsDraft = {
   rounds: "",
   score: "",
 };
+
+export function hydrateQuickLogResults(metrics: WorkoutDetailMetric[]): QuickLogResultsDraft {
+  const distance = metrics.find((metric) => metric.metricType === "distance");
+  const duration = metrics.find((metric) => metric.metricType === "duration");
+  const rounds = metrics.find((metric) => metric.metricType === "rounds");
+  const score = metrics.find((metric) => metric.metricType === "score");
+  const durationSeconds = duration?.numericValue == null ? null : Math.round(duration.numericValue);
+  return {
+    distance: distance?.numericValue == null ? "" : String(distance.numericValue),
+    distanceUnit: distance?.unit === "km" ? "km" : "mi",
+    timeMinutes: durationSeconds == null ? "" : String(Math.floor(durationSeconds / 60)),
+    timeSeconds: durationSeconds == null ? "" : String(durationSeconds % 60),
+    functionalResultType: duration ? "time" : rounds ? "rounds" : score ? "score" : null,
+    rounds: rounds?.numericValue == null ? "" : String(rounds.numericValue),
+    score: score?.textValue ?? "",
+  };
+}
 
 export function WorkoutMetricFields({
   onChange,
