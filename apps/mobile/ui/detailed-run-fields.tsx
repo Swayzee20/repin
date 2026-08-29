@@ -149,33 +149,42 @@ function IntervalEditor({
           </View>
           <InlineError field="interval" index={index} issue={validationError} />
 
-          <Text style={styles.fieldLabel}>Distance</Text>
-          <View style={styles.metricRow}>
-            <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" style={styles.resultInput} value={interval.distance} />
-            <UnitToggle onChange={(distanceUnit) => updateInterval(interval.id, { distanceUnit })} value={interval.distanceUnit} />
+          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+            <Text style={styles.intervalMetricLabel}>Distance</Text>
+            <View style={styles.intervalMetricControls}>
+              <TextField compact containerStyle={styles.metricField} focusedStyle={styles.integratedInputFocused} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" style={styles.integratedInput} value={interval.distance} />
+              <UnitToggle onChange={(distanceUnit) => updateInterval(interval.id, { distanceUnit })} value={interval.distanceUnit} />
+            </View>
           </View>
           <InlineError field="distance" index={index} issue={validationError} />
 
-          <Text style={styles.fieldLabelSpaced}>Time</Text>
-          <WorkoutTimeInput
-            elevated
-            minutes={interval.timeMinutes}
-            onMinutesChange={(timeMinutes) => updateInterval(interval.id, { timeMinutes })}
-            onSecondsChange={(timeSeconds) => updateInterval(interval.id, { timeSeconds })}
-            seconds={interval.timeSeconds}
-          />
+          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+            <Text style={styles.intervalMetricLabel}>Time</Text>
+            <WorkoutTimeInput
+              containerStyle={styles.intervalTimeControls}
+              fieldStyle={styles.intervalTimeField}
+              focusedInputStyle={styles.integratedInputFocused}
+              inputStyle={styles.integratedInput}
+              minutes={interval.timeMinutes}
+              onMinutesChange={(timeMinutes) => updateInterval(interval.id, { timeMinutes })}
+              onSecondsChange={(timeSeconds) => updateInterval(interval.id, { timeSeconds })}
+              seconds={interval.timeSeconds}
+            />
+          </View>
           <InlineError field="time" index={index} issue={validationError} />
 
-          <Text style={styles.fieldLabelSpaced}>Recovery</Text>
-          <View style={styles.recoveryRow}>
-            <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" style={styles.resultInput} value={interval.recoverySeconds} />
-            <Text style={styles.unitLabel}>sec</Text>
+          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+            <Text style={styles.intervalMetricLabel}>Recovery</Text>
+            <View style={styles.recoveryRow}>
+              <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} focusedStyle={styles.integratedInputFocused} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" style={styles.integratedInput} value={interval.recoverySeconds} />
+              <Text style={styles.unitLabel}>sec</Text>
+            </View>
           </View>
           <InlineError field="recovery" index={index} issue={validationError} />
 
           <View style={styles.quantityRow}>
-            <View>
-              <Text style={styles.fieldLabelNoMargin}>Repeats</Text>
+            <View style={styles.intervalMetricHeading}>
+              <Text style={styles.intervalMetricLabel}>Repeats</Text>
               <Text style={styles.quantityHelper}>Identical intervals</Text>
             </View>
             <View style={styles.quantityControl}>
@@ -256,41 +265,49 @@ const styles = StyleSheet.create({
   subtypeText: { color: colors.muted, ...type.label },
   subtypeTextSelected: { color: colors.brand },
   editorSurface: { backgroundColor: colors.surfaceMuted, borderRadius: radii.md, padding: spacing.md },
-  intervalScheme: { marginTop: spacing.md },
-  dividedScheme: { borderTopColor: colors.borderStrong, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.lg, paddingTop: spacing.lg },
+  intervalScheme: { marginTop: spacing.sm },
+  dividedScheme: { borderTopColor: colors.borderStrong, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.md, paddingTop: spacing.md },
   intervalHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  intervalTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 17, lineHeight: 22 },
+  intervalTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   removeAction: { color: colors.muted, ...type.label },
-  fieldLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginTop: spacing.md },
   fieldLabelNoMargin: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20 },
   fieldLabelSpaced: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginTop: spacing.md },
   metricRow: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   metricField: { flex: 1, marginTop: 0 },
   resultInput: { ...compactControlShadowStyle },
-  unitToggle: { ...compactControlShadowStyle, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, flexDirection: "row", padding: 3 },
-  unitOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 38, minWidth: 42, paddingHorizontal: spacing.sm },
-  unitOptionSelected: { backgroundColor: colors.brandSoft },
+  unitToggle: { backgroundColor: "transparent", borderRadius: radii.sm, flexDirection: "row", padding: 2 },
+  unitOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 38, minWidth: 38, paddingHorizontal: spacing.xs },
+  unitOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, elevation: 1, shadowColor: "#101318", shadowOffset: { height: 1, width: 0 }, shadowOpacity: 0.1, shadowRadius: 3, zIndex: 1 },
   unitText: { color: colors.muted, ...type.label },
   unitTextSelected: { color: colors.brand },
-  recoveryRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
+  intervalMetricRow: { alignItems: "center", columnGap: spacing.sm, flexDirection: "row", flexWrap: "wrap", marginTop: spacing.sm, rowGap: spacing.xs },
+  metricRowSurface: { ...compactControlShadowStyle, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, minHeight: 56, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  intervalMetricLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, width: 64 },
+  intervalMetricHeading: { flex: 1, minWidth: 120 },
+  intervalMetricControls: { alignItems: "center", flex: 1, flexDirection: "row", gap: spacing.xs, minWidth: 182 },
+  intervalTimeControls: { flex: 1, gap: spacing.sm, marginTop: 0, minWidth: 168 },
+  intervalTimeField: { width: 52 },
+  integratedInput: { backgroundColor: "transparent", borderColor: colors.borderStrong, borderRadius: 0, borderWidth: 0, borderBottomWidth: 1, elevation: 0, minHeight: 44, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs, shadowOpacity: 0 },
+  integratedInputFocused: { borderBottomColor: colors.brand, borderBottomWidth: 2 },
+  recoveryRow: { alignItems: "center", flex: 1, flexDirection: "row", gap: spacing.sm, minWidth: 132 },
   recoveryField: { marginTop: 0, width: 96 },
   unitLabel: { color: colors.muted, ...type.bodySmall },
   inlineError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.xs },
-  quantityRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md },
+  quantityRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between", marginTop: spacing.sm },
   quantityHelper: { color: colors.muted, ...type.bodySmall, marginTop: 2 },
   quantityControl: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   quantityButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, height: 36, justifyContent: "center", width: 36 },
   quantityButtonDisabled: { opacity: 0.35 },
   quantitySymbol: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 20, lineHeight: 22 },
   quantityValue: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16, minWidth: 24, textAlign: "center" },
-  addInterval: { alignItems: "center", alignSelf: "flex-start", minHeight: 44, justifyContent: "center", marginTop: spacing.md, paddingHorizontal: spacing.sm },
+  addInterval: { alignItems: "center", alignSelf: "flex-start", minHeight: 44, justifyContent: "center", marginTop: spacing.xs, paddingHorizontal: spacing.sm },
   addIntervalText: { color: colors.brand, ...type.label },
-  doneAction: { alignItems: "center", alignSelf: "flex-end", justifyContent: "center", marginTop: spacing.md, minHeight: 40, paddingHorizontal: spacing.sm },
+  doneAction: { alignItems: "center", alignSelf: "flex-end", justifyContent: "center", marginTop: spacing.xs, minHeight: 44, paddingHorizontal: spacing.sm },
   doneActionText: { color: colors.brand, ...type.label },
-  collapsedSurface: { alignItems: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, flexDirection: "row", gap: spacing.md, justifyContent: "space-between", marginTop: spacing.xxl, padding: spacing.lg },
-  collapsedCopy: { flex: 1, gap: spacing.xs, minWidth: 0 },
+  collapsedSurface: { alignItems: "flex-start", alignSelf: "stretch", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, flexDirection: "row", gap: spacing.md, justifyContent: "space-between", marginTop: spacing.xxl, maxWidth: "100%", padding: spacing.lg, width: "100%" },
+  collapsedCopy: { flex: 1, flexBasis: 0, gap: spacing.xs, minWidth: 0 },
   summaryText: { color: colors.ink, flexShrink: 1, ...type.bodyMedium },
-  editAction: { alignItems: "center", flexShrink: 0, justifyContent: "center", minHeight: 32, paddingHorizontal: spacing.xs },
+  editAction: { alignItems: "center", flexShrink: 0, justifyContent: "center", minHeight: 32, minWidth: 44, paddingHorizontal: spacing.xs, zIndex: 1 },
   editActionText: { color: colors.brand, ...type.label },
   pressed: { opacity: 0.72 },
 });

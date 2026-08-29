@@ -138,6 +138,7 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
 export function TextField({
   compact = false,
   containerStyle,
+  focusedStyle,
   label,
   hint,
   onBlur,
@@ -147,6 +148,7 @@ export function TextField({
 }: TextInputProps & {
   compact?: boolean;
   containerStyle?: StyleProp<ViewStyle>;
+  focusedStyle?: TextInputProps["style"];
   label?: string;
   hint?: string;
 }) {
@@ -172,6 +174,7 @@ export function TextField({
           focused && styles.inputFocused,
           props.multiline && styles.multiline,
           style,
+          focused && focusedStyle,
         ]}
         {...props}
       />

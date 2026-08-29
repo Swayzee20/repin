@@ -1,6 +1,6 @@
 import type { CommunityData, CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
-import { useFocusEffect, useRouter } from "expo-router";
+import { useFocusEffect, useRouter, useSegments } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -32,6 +32,7 @@ const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").repl
 
 export default function CommunityTabScreen() {
   const router = useRouter();
+  const segments = useSegments();
   const { openWorkoutChooser, selectedGroupId, setSelectedGroupId } = useMainTabs();
   const [data, setData] = useState<CommunityData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -54,6 +55,15 @@ export default function CommunityTabScreen() {
   const inFlightRequests = useRef(new Map<string, Promise<void>>());
   const latestRequestKey = useRef<string | null>(null);
   const loadedUserId = useRef<string | null>(null);
+  const resetDateOnNextFocus = useRef(false);
+
+  const activeRoute = segments.join("/");
+
+  useEffect(() => {
+    if (activeRoute === "(tabs)" || activeRoute === "(tabs)/index" || activeRoute === "(tabs)/profile") {
+      resetDateOnNextFocus.current = true;
+    }
+  }, [activeRoute]);
 
   const loadCommunity = useCallback(async () => {
     if (!supabase) {
@@ -126,8 +136,6 @@ export default function CommunityTabScreen() {
     return request;
   }, [selectedDate, selectedGroupId, setSelectedGroupId]);
 
-  useFocusEffect(useCallback(() => { void loadCommunity(); }, [loadCommunity]));
-
   useEffect(() => {
     const now = new Date();
     const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
@@ -166,6 +174,28 @@ export default function CommunityTabScreen() {
       return next;
     });
   }, []);
+
+  useFocusEffect(useCallback(() => {
+    if (!resetDateOnNextFocus.current) {
+      void loadCommunity();
+      return;
+    }
+
+    resetDateOnNextFocus.current = false;
+    const today = startOfLocalDay(new Date());
+    const dateChanged = !isSameLocalDay(selectedDate, today);
+
+    setCurrentDay(today);
+    lastSuccessfulLoad.current = null;
+    clearFeed();
+
+    if (dateChanged) {
+      setSelectedDate(today);
+      return;
+    }
+
+    void loadCommunity();
+  }, [clearFeed, loadCommunity, selectedDate]));
 
   const selectDate = useCallback((nextDate: Date) => {
     const normalized = startOfLocalDay(nextDate);

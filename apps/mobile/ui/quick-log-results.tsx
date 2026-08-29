@@ -1,5 +1,5 @@
 import type { QuickLogMetricInput, WorkoutDetailMetric, WorkoutType } from "@repin/types";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 
 import { TextField } from "./components";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
@@ -144,26 +144,34 @@ function FieldLabel({ label }: { label: string }) {
 }
 
 export function WorkoutTimeInput({
+  containerStyle,
   elevated = false,
+  fieldStyle,
+  focusedInputStyle,
+  inputStyle,
   minutes,
   onMinutesChange,
   onSecondsChange,
   seconds,
 }: {
+  containerStyle?: StyleProp<ViewStyle>;
   elevated?: boolean;
+  fieldStyle?: StyleProp<ViewStyle>;
+  focusedInputStyle?: StyleProp<TextStyle>;
+  inputStyle?: StyleProp<TextStyle>;
   minutes: string;
   onMinutesChange: (value: string) => void;
   onSecondsChange: (value: string) => void;
   seconds: string;
 }) {
   return (
-    <View style={styles.timeRow}>
+    <View style={[styles.timeRow, containerStyle]}>
       <View style={styles.timePart}>
-        <TextField compact accessibilityLabel="Minutes" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" onChangeText={onMinutesChange} placeholder="28" style={elevated ? styles.elevatedInput : undefined} value={minutes} />
+        <TextField compact accessibilityLabel="Minutes" containerStyle={[styles.timeField, fieldStyle]} focusedStyle={focusedInputStyle} inputMode="numeric" keyboardType="number-pad" onChangeText={onMinutesChange} placeholder="28" style={[elevated && styles.elevatedInput, inputStyle]} value={minutes} />
         <Text style={styles.timeUnit}>min</Text>
       </View>
       <View style={styles.timePart}>
-        <TextField compact accessibilityLabel="Seconds" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" maxLength={2} onChangeText={onSecondsChange} placeholder="14" style={elevated ? styles.elevatedInput : undefined} value={seconds} />
+        <TextField compact accessibilityLabel="Seconds" containerStyle={[styles.timeField, fieldStyle]} focusedStyle={focusedInputStyle} inputMode="numeric" keyboardType="number-pad" maxLength={2} onChangeText={onSecondsChange} placeholder="14" style={[elevated && styles.elevatedInput, inputStyle]} value={seconds} />
         <Text style={styles.timeUnit}>sec</Text>
       </View>
     </View>
