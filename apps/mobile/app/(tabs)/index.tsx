@@ -15,7 +15,8 @@ import {
 } from "../../lib/data-freshness";
 import { useMainTabs } from "../../ui/main-tabs-context";
 import { BrandHeader, Button, Card, LoadingState, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
-import { colors, fonts, radii, spacing, type } from "../../ui/theme";
+import { CheckInEmptyContent } from "../../ui/check-in-empty-content";
+import { colors, floatingSurfaceStyle, fonts, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -182,7 +183,7 @@ export default function HomeScreen() {
           <View style={styles.headerCopy}><BrandHeader /><Text numberOfLines={1} style={styles.greeting}>Hey, {getGreetingFirstName(homeData.user.displayName)}</Text></View>
         </View>
 
-        <Card style={[styles.snapshot, compactDashboard && styles.snapshotCompact]}>
+        <Card style={[styles.snapshot, styles.floatingSurface, compactDashboard && styles.snapshotCompact]}>
           <View style={styles.snapshotTop}>
             <View style={[styles.statusIcon, homeData.snapshot.hasWorkoutToday ? styles.doneIcon : styles.pendingIcon]}>
               <Text style={homeData.snapshot.hasWorkoutToday ? styles.doneGlyph : styles.pendingGlyph}>{homeData.snapshot.hasWorkoutToday ? "✓" : "·"}</Text>
@@ -196,7 +197,7 @@ export default function HomeScreen() {
           {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title}{homeData.snapshot.mostRecentWorkoutToday.durationMinutes ? ` · ${homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min` : ""}</Text> : null}
         </Card>
 
-        <View accessibilityRole="list" style={styles.consistencyRow}>
+        <View accessibilityRole="list" style={[styles.consistencyRow, styles.floatingSurface]}>
           {consistencyDays.map((day) => (
             <View
               accessibilityLabel={day.accessibilityLabel}
@@ -245,19 +246,11 @@ export default function HomeScreen() {
         {homeError ? <Text style={styles.error}>{homeError}</Text> : null}
         {latestWorkoutToday ? (
           <View style={[styles.latestWorkout, compactDashboard && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard variant="compact" workout={latestWorkoutToday} />
+            <WorkoutSummaryCard style={styles.floatingSurface} variant="compact" workout={latestWorkoutToday} />
           </View>
         ) : (
-          <View style={[styles.emptySnapshot, compactDashboard && styles.emptySnapshotCompact]}>
-            <Feather color={colors.brand} name="activity" size={18} />
-            <Text style={styles.emptyCopy}>No workouts logged yet</Text>
-            <Text style={styles.emptyTitle}>Be the first to check in</Text>
-            {selectedGroup ? (
-              <Pressable accessibilityRole="button" hitSlop={8} onPress={openWorkoutChooser} style={({ pressed }) => [styles.emptyAction, pressed && styles.emptyActionPressed]}>
-                <Feather color={colors.surface} name="plus" size={14} />
-                <Text style={styles.emptyActionText}>Check in</Text>
-              </Pressable>
-            ) : null}
+          <View style={[styles.emptySnapshot, styles.floatingSurface, compactDashboard && styles.emptySnapshotCompact]}>
+            <CheckInEmptyContent onCheckIn={selectedGroup ? openWorkoutChooser : undefined} />
           </View>
         )}
 
@@ -380,10 +373,10 @@ function isStandaloneIosWebApp() {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 }, centered: { justifyContent: "center" },
-  homeSafeArea: { backgroundColor: "#F7F2F2", ...Platform.select({ web: { paddingBottom: 0 } }) },
+  homeSafeArea: { backgroundColor: colors.surface, ...Platform.select({ web: { paddingBottom: 0 } }) },
   dashboard: { backgroundColor: colors.surface, flexGrow: 1, paddingBottom: 160, paddingHorizontal: spacing.xxl },
   dashboardCompact: { paddingBottom: 160 },
-  personalZone: { backgroundColor: "#F7F2F2", marginHorizontal: -spacing.xxl, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
+  personalZone: { backgroundColor: colors.surface, marginHorizontal: -spacing.xxl, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
   personalZoneCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
   personalZoneStandalone: { paddingTop: spacing.xxl },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
@@ -395,7 +388,7 @@ const styles = StyleSheet.create({
   snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 }, snapshotMessage: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: spacing.xs },
   weekStat: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.md, marginLeft: spacing.md, minWidth: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, weekNumber: { color: colors.brand, fontFamily: fonts.bold, fontSize: 26, lineHeight: 30 }, weekLabel: { color: colors.brandPressed, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8 },
   latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 13, marginTop: spacing.md, paddingTop: spacing.md },
-  consistencyRow: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.lg },
+  consistencyRow: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm },
   consistencyDay: { alignItems: "center", flex: 1 },
   consistencyWeekday: { color: colors.muted, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.6, lineHeight: 16 },
   consistencyWeekdayToday: { color: colors.inkSoft },
@@ -414,13 +407,9 @@ const styles = StyleSheet.create({
   sectionAction: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
   latestWorkout: { marginTop: spacing.lg },
   latestWorkoutCompact: { marginTop: spacing.sm },
-  emptySnapshot: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, marginTop: spacing.lg, padding: spacing.lg },
+  emptySnapshot: { alignItems: "center", marginTop: spacing.lg, padding: spacing.lg },
+  floatingSurface: { ...floatingSurfaceStyle },
   emptySnapshotCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
-  emptyTitle: { alignSelf: "center", color: colors.ink, ...type.heading, marginTop: spacing.sm },
-  emptyCopy: { alignSelf: "center", color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  emptyAction: { alignItems: "center", alignSelf: "center", backgroundColor: colors.brand, borderRadius: radii.sm, flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.md, minHeight: 36, paddingHorizontal: spacing.md },
-  emptyActionPressed: { backgroundColor: colors.brandPressed },
-  emptyActionText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 13 },
   highlightsTitle: { marginTop: spacing.xl },
   highlightsTitleCompact: { marginTop: spacing.xs },
   highlightRow: { alignItems: "center", flexDirection: "row", minHeight: 64, paddingVertical: spacing.md },

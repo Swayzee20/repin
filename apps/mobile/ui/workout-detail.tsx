@@ -13,7 +13,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Easing, Image, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { supabase } from "../lib/supabase";
 import {
@@ -38,11 +38,14 @@ import {
   StateCard,
 } from "./components";
 import { colors, fonts, radii, spacing, type } from "./theme";
+import { PhotoViewer } from "./photo-viewer";
+import { WorkoutPhoto } from "./workout-photo";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export function WorkoutDetailView({
   detailExpansionResetKey,
+  detailPhotoMaxHeight,
   groupId,
   onCommentCountChange,
   onReactionSummaryChange,
@@ -52,6 +55,7 @@ export function WorkoutDetailView({
   sessionId,
 }: {
   detailExpansionResetKey?: string;
+  detailPhotoMaxHeight?: number;
   groupId: string;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
@@ -390,6 +394,7 @@ export function WorkoutDetailView({
   return workout ? (
     <WorkoutDetailContent
       detailExpansionResetKey={detailExpansionResetKey}
+      detailPhotoMaxHeight={detailPhotoMaxHeight}
       onReactionPress={(reactionType) => void toggleReaction(reactionType)}
       detailError={error}
       commentError={commentError}
@@ -415,6 +420,7 @@ export function WorkoutDetailContent({
   comments = [],
   commentsLoading = false,
   detailExpansionResetKey,
+  detailPhotoMaxHeight,
   detailError,
   onCommentChange,
   onCommentSubmit,
@@ -431,6 +437,7 @@ export function WorkoutDetailContent({
   comments?: CommunityPostComment[];
   commentsLoading?: boolean;
   detailExpansionResetKey?: string;
+  detailPhotoMaxHeight?: number;
   detailError?: string | null;
   onCommentChange?: (text: string) => void;
   onCommentSubmit?: () => void;
@@ -452,6 +459,7 @@ export function WorkoutDetailContent({
   const groupedIntervals = groupConsecutiveIntervalSegments(workout.segments);
   const isCommunityModal = presentation === "community-modal";
   const [commentInputHeight, setCommentInputHeight] = useState(44);
+  const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
   const [workoutExpanded, setWorkoutExpanded] = useState(false);
 
   useEffect(() => {
@@ -558,11 +566,11 @@ export function WorkoutDetailContent({
       ) : null}
 
       {workout.photoUrl ? (
-        <Image
-          accessibilityLabel="Workout photo"
-          resizeMode="cover"
-          source={{ uri: workout.photoUrl }}
-          style={styles.photo}
+        <WorkoutPhoto
+          detailMaxHeight={detailPhotoMaxHeight}
+          onPress={isCommunityModal ? () => setPhotoViewerVisible(true) : undefined}
+          uri={workout.photoUrl}
+          variant="detail"
         />
       ) : null}
 
@@ -706,6 +714,14 @@ export function WorkoutDetailContent({
           </View>
         ) : null}
       </View>
+      {isCommunityModal && workout.photoUrl ? (
+        <PhotoViewer
+          images={[{ accessibilityLabel: `${title} workout photo`, uri: workout.photoUrl }]}
+          initialIndex={0}
+          onRequestClose={() => setPhotoViewerVisible(false)}
+          visible={photoViewerVisible}
+        />
+      ) : null}
     </View>
   );
 }
@@ -1015,7 +1031,6 @@ const styles = StyleSheet.create({
   postSection: { marginTop: spacing.xxxl },
   caption: { color: colors.inkSoft, ...type.body, marginTop: spacing.md },
   modalCaption: { marginTop: spacing.lg },
-  photo: { aspectRatio: 16 / 10, borderRadius: radii.md, marginTop: spacing.lg, width: "100%" },
   compatibilityDuration: { color: colors.muted, fontFamily: fonts.medium, fontSize: 14, marginTop: spacing.lg },
   workoutDisclosure: { marginTop: spacing.lg },
   workoutDisclosureButton: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: spacing.sm, minHeight: 40 },

@@ -13,7 +13,7 @@ import {
   type IntervalValidationIssue,
 } from "../lib/detailed-run-results";
 import { type QuickLogResultsDraft, WorkoutTimeInput } from "./quick-log-results";
-import { colors, fonts, radii, spacing, type } from "./theme";
+import { colors, compactControlShadowStyle, compactSelectorShadowStyle, fonts, radii, spacing, type } from "./theme";
 
 const runSubtypeOptions: { label: string; value: RunWorkoutSubtype }[] = [
   { label: "Distance", value: "distance" },
@@ -99,11 +99,12 @@ export function RunResultEditor({
           <>
             <Text style={styles.fieldLabelNoMargin}>Distance</Text>
             <View style={styles.metricRow}>
-              <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" value={results.distance} />
+            <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" style={styles.resultInput} value={results.distance} />
               <DistanceUnitToggle onChange={(distanceUnit) => updateResults({ distanceUnit })} value={results.distanceUnit} />
             </View>
             <Text style={styles.fieldLabelSpaced}>Time</Text>
             <WorkoutTimeInput
+              elevated
               minutes={results.timeMinutes}
               onMinutesChange={(timeMinutes) => updateResults({ timeMinutes })}
               onSecondsChange={(timeSeconds) => updateResults({ timeSeconds })}
@@ -150,13 +151,14 @@ function IntervalEditor({
 
           <Text style={styles.fieldLabel}>Distance</Text>
           <View style={styles.metricRow}>
-            <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" value={interval.distance} />
+            <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" style={styles.resultInput} value={interval.distance} />
             <UnitToggle onChange={(distanceUnit) => updateInterval(interval.id, { distanceUnit })} value={interval.distanceUnit} />
           </View>
           <InlineError field="distance" index={index} issue={validationError} />
 
           <Text style={styles.fieldLabelSpaced}>Time</Text>
           <WorkoutTimeInput
+            elevated
             minutes={interval.timeMinutes}
             onMinutesChange={(timeMinutes) => updateInterval(interval.id, { timeMinutes })}
             onSecondsChange={(timeSeconds) => updateInterval(interval.id, { timeSeconds })}
@@ -166,7 +168,7 @@ function IntervalEditor({
 
           <Text style={styles.fieldLabelSpaced}>Recovery</Text>
           <View style={styles.recoveryRow}>
-            <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" value={interval.recoverySeconds} />
+            <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" style={styles.resultInput} value={interval.recoverySeconds} />
             <Text style={styles.unitLabel}>sec</Text>
           </View>
           <InlineError field="recovery" index={index} issue={validationError} />
@@ -248,11 +250,11 @@ const styles = StyleSheet.create({
   section: { marginTop: spacing.xl },
   editorSection: { marginTop: spacing.xl },
   sectionTitle: { color: colors.ink, ...type.heading },
-  subtypeToggle: { alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexDirection: "row", marginTop: spacing.sm, padding: 3 },
+  subtypeToggle: { ...compactSelectorShadowStyle, alignSelf: "flex-start", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, flexDirection: "row", marginTop: spacing.sm, padding: 3 },
   subtypeOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.md },
-  subtypeOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
+  subtypeOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, elevation: 1, shadowColor: "#101318", shadowOffset: { height: 1, width: 0 }, shadowOpacity: 0.1, shadowRadius: 3, zIndex: 1 },
   subtypeText: { color: colors.muted, ...type.label },
-  subtypeTextSelected: { color: colors.ink },
+  subtypeTextSelected: { color: colors.brand },
   editorSurface: { backgroundColor: colors.surfaceMuted, borderRadius: radii.md, padding: spacing.md },
   intervalScheme: { marginTop: spacing.md },
   dividedScheme: { borderTopColor: colors.borderStrong, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.lg, paddingTop: spacing.lg },
@@ -264,7 +266,8 @@ const styles = StyleSheet.create({
   fieldLabelSpaced: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15, lineHeight: 20, marginTop: spacing.md },
   metricRow: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   metricField: { flex: 1, marginTop: 0 },
-  unitToggle: { backgroundColor: colors.surface, borderRadius: radii.sm, flexDirection: "row", padding: 3 },
+  resultInput: { ...compactControlShadowStyle },
+  unitToggle: { ...compactControlShadowStyle, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, flexDirection: "row", padding: 3 },
   unitOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 38, minWidth: 42, paddingHorizontal: spacing.sm },
   unitOptionSelected: { backgroundColor: colors.brandSoft },
   unitText: { color: colors.muted, ...type.label },

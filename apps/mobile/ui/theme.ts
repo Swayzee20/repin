@@ -36,6 +36,34 @@ export const spacing = {
 
 export const radii = { sm: 8, input: 9, md: 10, lg: 14, xl: 18, pill: 999 } as const;
 
+export const floatingSurfaceStyle = {
+  backgroundColor: colors.surface,
+  borderColor: colors.border,
+  borderRadius: radii.lg,
+  borderWidth: 1,
+  elevation: 2,
+  shadowColor: "#101318",
+  shadowOffset: { height: 4, width: 0 },
+  shadowOpacity: 0.12,
+  shadowRadius: 10,
+} as const;
+
+export const compactSelectorShadowStyle = {
+  elevation: 2,
+  shadowColor: "#101318",
+  shadowOffset: { height: 2, width: 0 },
+  shadowOpacity: 0.09,
+  shadowRadius: 6,
+} as const;
+
+export const compactControlShadowStyle = {
+  elevation: 1,
+  shadowColor: "#101318",
+  shadowOffset: { height: 1, width: 0 },
+  shadowOpacity: 0.08,
+  shadowRadius: 4,
+} as const;
+
 export const controls = {
   buttonHeight: 52,
   inputHeight: 50,

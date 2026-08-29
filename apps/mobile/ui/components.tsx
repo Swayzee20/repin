@@ -31,6 +31,7 @@ import Animated, {
 import repinHeaderMark from "../assets/branding/repin-header-mark.png";
 import { formatWorkoutDate } from "../lib/workout-date";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
+import { WorkoutPhoto } from "./workout-photo";
 
 const webFeedScrollerStyle =
   Platform.OS === "web"
@@ -328,6 +329,7 @@ export function WorkoutSummaryCard({
   onEdit,
   showCommentCount = false,
   showReactionSummary = false,
+  style,
   variant = "full",
   workout,
 }: {
@@ -335,6 +337,7 @@ export function WorkoutSummaryCard({
   onEdit?: () => void;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
+  style?: StyleProp<ViewStyle>;
   variant?: "compact" | "full";
   workout: WorkoutFeedItem;
 }) {
@@ -368,7 +371,7 @@ export function WorkoutSummaryCard({
   ];
 
   return (
-    <Card style={variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard}>
+    <Card style={[variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard, style]}>
       <View style={styles.workoutTopline}>
         <View style={styles.avatar}><Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text></View>
         <View style={styles.workoutAuthor}>
@@ -382,7 +385,7 @@ export function WorkoutSummaryCard({
       {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
       {resultSummary ? <Text numberOfLines={1} style={styles.workoutResultSummary}>{resultSummary}</Text> : null}
       {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
-      {workout.photoUrl && variant === "full" ? <Image accessibilityLabel="Workout photo" onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} resizeMode="cover" source={{ uri: workout.photoUrl }} style={styles.workoutPhoto} /> : null}
+      {workout.photoUrl && variant === "full" ? <WorkoutPhoto onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} uri={workout.photoUrl} variant="feed" /> : null}
       {socialSummary.length ? (
         <Text accessibilityLabel={socialSummary.map((item) => item.accessibility).join(", ")} numberOfLines={1} style={styles.reactionSummary}>
           {socialSummary.map((item) => item.text).join("   ")}
@@ -681,7 +684,6 @@ const styles = StyleSheet.create({
   reactionSummary: { alignSelf: "flex-end", color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.sm },
   workoutCardPressed: { opacity: 0.94 },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
-  workoutPhoto: { aspectRatio: 16 / 10, borderRadius: radii.md, marginTop: spacing.md, width: "100%" },
   floatingWorkout: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,

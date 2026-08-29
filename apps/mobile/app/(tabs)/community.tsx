@@ -22,6 +22,7 @@ import {
   type FreshnessRecord,
 } from "../../lib/data-freshness";
 import { BrandHeader, CommunityFeed, LoadingState, StateCard } from "../../ui/components";
+import { CheckInEmptyContent } from "../../ui/check-in-empty-content";
 import { CommunityDatePicker } from "../../ui/community-date-picker";
 import { useMainTabs } from "../../ui/main-tabs-context";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
@@ -384,13 +385,7 @@ export default function CommunityTabScreen() {
                 boardHeight > 0 ? <CommunityFeed edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} showCommentCount showReactionSummary viewerUserId={loadedUserId.current} viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
               ) : isSameLocalDay(selectedDate, currentDay) ? (
                 <View style={styles.todayEmpty}>
-                  <Feather color={colors.brand} name="activity" size={20} />
-                  <Text style={styles.emptyTitle}>No workouts logged yet</Text>
-                  <Text style={styles.emptyMessage}>Be the first to check in</Text>
-                  <Pressable accessibilityRole="button" hitSlop={8} onPress={openWorkoutChooser} style={({ pressed }) => [styles.checkInAction, pressed && styles.pressed]}>
-                    <Feather color={colors.surface} name="plus" size={14} />
-                    <Text style={styles.checkInText}>Check in</Text>
-                  </Pressable>
+                  <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
                 </View>
               ) : (
                 <View style={styles.historicalEmpty}><Text style={styles.historicalEmptyText}>No workouts were logged this day</Text></View>
@@ -514,10 +509,6 @@ const styles = StyleSheet.create({
   feedState: { flex: 1, gap: spacing.md, justifyContent: "center", padding: spacing.xxl },
   feedStateText: { color: colors.muted, ...type.bodySmall, textAlign: "center" },
   todayEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
-  emptyTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 17, lineHeight: 23, marginTop: spacing.md },
-  emptyMessage: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  checkInAction: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.md, flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.lg, minHeight: 44, paddingHorizontal: spacing.lg },
-  checkInText: { color: colors.surface, ...type.label },
   historicalEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
   historicalEmptyText: { color: colors.muted, ...type.body, textAlign: "center" },
   deleteOverlay: { backgroundColor: "rgba(34,34,34,0.28)", flex: 1, justifyContent: "flex-end" },

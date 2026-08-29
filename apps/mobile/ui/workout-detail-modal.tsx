@@ -1,4 +1,5 @@
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
@@ -44,24 +45,30 @@ export function WorkoutDetailModal({
   sessionId: string | null;
   visible: boolean;
 }) {
-  const { height: viewportHeight } = useWindowDimensions();
+  const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const panelOpacity = useRef(new Animated.Value(0)).current;
-  const panelTranslateY = useRef(new Animated.Value(44)).current;
+  const panelScale = useRef(new Animated.Value(0.96)).current;
   const closing = useRef(false);
   const useNativeDriver = Platform.OS !== "web";
-  const panelHeight = useMemo(
-    () => Math.min(viewportHeight * 0.9, Math.max(0, viewportHeight - insets.top - spacing.md)),
-    [insets.top, viewportHeight],
+  const panelLayout = useMemo(
+    () => ({
+      maxHeight: Math.min(
+        viewportHeight * 0.8,
+        Math.max(0, viewportHeight - Math.max(insets.top, spacing.lg) - Math.max(insets.bottom, spacing.lg) - spacing.xl),
+      ),
+      width: Math.min(620, Math.max(0, viewportWidth - spacing.md * 2)),
+    }),
+    [insets.bottom, insets.top, viewportHeight, viewportWidth],
   );
 
   useEffect(() => {
     if (!visible) return;
     closing.current = false;
     backdropOpacity.setValue(0);
-    panelOpacity.setValue(0.96);
-    panelTranslateY.setValue(44);
+    panelOpacity.setValue(0);
+    panelScale.setValue(0.96);
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         duration: 180,
@@ -75,14 +82,14 @@ export function WorkoutDetailModal({
         toValue: 1,
         useNativeDriver,
       }),
-      Animated.timing(panelTranslateY, {
-        duration: 220,
+      Animated.timing(panelScale, {
+        duration: 210,
         easing: Easing.out(Easing.cubic),
-        toValue: 0,
+        toValue: 1,
         useNativeDriver,
       }),
     ]).start();
-  }, [backdropOpacity, panelOpacity, panelTranslateY, useNativeDriver, visible]);
+  }, [backdropOpacity, panelOpacity, panelScale, useNativeDriver, visible]);
 
   const close = () => {
     if (closing.current) return;
@@ -97,13 +104,13 @@ export function WorkoutDetailModal({
       Animated.timing(panelOpacity, {
         duration: 180,
         easing: Easing.in(Easing.quad),
-        toValue: 0.96,
+        toValue: 0,
         useNativeDriver,
       }),
-      Animated.timing(panelTranslateY, {
-        duration: 200,
+      Animated.timing(panelScale, {
+        duration: 180,
         easing: Easing.in(Easing.cubic),
-        toValue: 44,
+        toValue: 0.96,
         useNativeDriver,
       }),
     ]).start(onDismiss);
@@ -135,14 +142,13 @@ export function WorkoutDetailModal({
         <Animated.View
           style={[
             styles.panel,
+            panelLayout,
             {
-              height: panelHeight,
               opacity: panelOpacity,
-              transform: [{ translateY: panelTranslateY }],
+              transform: [{ scale: panelScale }],
             },
           ]}
         >
-          <View style={styles.handle} />
           <ModalCloseButton onPress={close} />
           <ScrollView
             automaticallyAdjustKeyboardInsets
@@ -159,6 +165,7 @@ export function WorkoutDetailModal({
             {groupId && sessionId ? (
               <WorkoutDetailView
                 detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
+                detailPhotoMaxHeight={panelLayout.maxHeight * 0.4}
                 groupId={groupId}
                 seedWorkout={initialWorkout ?? undefined}
                 onCommentCountChange={onCommentCountChange}
@@ -168,6 +175,12 @@ export function WorkoutDetailModal({
               />
             ) : null}
           </ScrollView>
+          <LinearGradient
+            colors={[colors.surface, "rgba(255,255,255,0)"]}
+            locations={[0, 1]}
+            pointerEvents="none"
+            style={styles.topScrollFade}
+          />
         </Animated.View>
       </View>
     </Modal>
@@ -189,13 +202,13 @@ function ModalCloseButton({ onPress }: { onPress: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "flex-end" },
+  overlay: { alignItems: "center", flex: 1, justifyContent: "center", paddingVertical: spacing.lg },
   backdrop: { backgroundColor: "rgba(34,34,34,0.28)", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
-  panel: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, overflow: "hidden" },
-  handle: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: 4, marginTop: spacing.md, width: 38 },
+  panel: { backgroundColor: colors.surface, borderColor: "rgba(34,34,34,0.16)", borderRadius: radii.xl, borderWidth: 1, overflow: "hidden" },
   closeButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, elevation: 5, height: 36, justifyContent: "center", position: "absolute", right: spacing.lg, top: spacing.lg, width: 36, zIndex: 20 },
   pressed: { opacity: 0.66 },
-  scroller: { flex: 1 },
-  scrollContent: { flexGrow: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
+  scroller: { flexGrow: 0, flexShrink: 1 },
+  scrollContent: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
+  topScrollFade: { height: 32, left: 0, position: "absolute", right: 0, top: 0, zIndex: 10 },
 });

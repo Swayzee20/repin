@@ -47,7 +47,7 @@ import {
   validateQuickLogResults,
   WorkoutMetricFields,
 } from "../../../ui/quick-log-results";
-import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
+import { colors, floatingSurfaceStyle, fonts, radii, spacing, type } from "../../../ui/theme";
 import { WorkoutTypeSelector, workoutTypeLabels } from "../../../ui/workout-type-selector";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -340,7 +340,7 @@ export default function DetailedWorkoutScreen() {
         >
           <View onLayout={(event) => { workoutCardY.current = event.nativeEvent.layout.y; }} style={styles.formCard}>
             <Text style={styles.sectionTitle}>What&apos;d you do?</Text>
-            <WorkoutTypeSelector compact onChange={handleWorkoutTypeChange} value={workoutType} />
+            <WorkoutTypeSelector compact elevated onChange={handleWorkoutTypeChange} value={workoutType} />
 
             {workoutType === "run" ? <RunSubtypeSelector onChange={handleRunSubtypeChange} value={runSubtype} /> : null}
 
@@ -495,12 +495,12 @@ function decodeBase64(value: string) {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  keyboardAvoidingView: { backgroundColor: colors.surfaceMuted, flex: 1 },
+  keyboardAvoidingView: { backgroundColor: colors.surface, flex: 1 },
   header: { backgroundColor: colors.surface, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
-  headerDivider: { backgroundColor: colors.border, height: StyleSheet.hairlineWidth },
-  scrollView: { backgroundColor: colors.surfaceMuted, flex: 1 },
+  headerDivider: { alignSelf: "flex-start", backgroundColor: "rgba(34,34,34,0.32)", height: 1, marginLeft: spacing.xxl, shadowColor: colors.ink, shadowOffset: { height: 1, width: 0 }, shadowOpacity: 0.16, shadowRadius: 1, width: "86%" },
+  scrollView: { backgroundColor: colors.surface, flex: 1 },
   container: { paddingBottom: 144, paddingHorizontal: spacing.md, paddingTop: spacing.xxl },
-  formCard: { backgroundColor: colors.surface, borderRadius: radii.md, marginBottom: spacing.lg, padding: spacing.xxl },
+  formCard: { ...floatingSurfaceStyle, marginBottom: spacing.lg, padding: spacing.xxl },
   completedCard: { paddingVertical: spacing.lg },
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },

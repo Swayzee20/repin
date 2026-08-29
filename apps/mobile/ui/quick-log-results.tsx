@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { TextField } from "./components";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
-import { colors, fonts, radii, spacing, type } from "./theme";
+import { colors, compactControlShadowStyle, fonts, radii, spacing, type } from "./theme";
 
 type DistanceUnit = "mi" | "km";
 type FunctionalResultType = "time" | "rounds" | "score";
@@ -144,11 +144,13 @@ function FieldLabel({ label }: { label: string }) {
 }
 
 export function WorkoutTimeInput({
+  elevated = false,
   minutes,
   onMinutesChange,
   onSecondsChange,
   seconds,
 }: {
+  elevated?: boolean;
   minutes: string;
   onMinutesChange: (value: string) => void;
   onSecondsChange: (value: string) => void;
@@ -157,11 +159,11 @@ export function WorkoutTimeInput({
   return (
     <View style={styles.timeRow}>
       <View style={styles.timePart}>
-        <TextField compact accessibilityLabel="Minutes" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" onChangeText={onMinutesChange} placeholder="28" value={minutes} />
+        <TextField compact accessibilityLabel="Minutes" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" onChangeText={onMinutesChange} placeholder="28" style={elevated ? styles.elevatedInput : undefined} value={minutes} />
         <Text style={styles.timeUnit}>min</Text>
       </View>
       <View style={styles.timePart}>
-        <TextField compact accessibilityLabel="Seconds" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" maxLength={2} onChangeText={onSecondsChange} placeholder="14" value={seconds} />
+        <TextField compact accessibilityLabel="Seconds" containerStyle={styles.timeField} inputMode="numeric" keyboardType="number-pad" maxLength={2} onChangeText={onSecondsChange} placeholder="14" style={elevated ? styles.elevatedInput : undefined} value={seconds} />
         <Text style={styles.timeUnit}>sec</Text>
       </View>
     </View>
@@ -229,6 +231,7 @@ const styles = StyleSheet.create({
   timeRow: { alignItems: "center", flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
   timePart: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   timeField: { width: 84 },
+  elevatedInput: { ...compactControlShadowStyle },
   timeUnit: { color: colors.muted, ...type.bodySmall },
   toggle: { alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexDirection: "row", marginTop: spacing.sm, padding: 3 },
   toggleOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 36, minWidth: 48, paddingHorizontal: spacing.md },
