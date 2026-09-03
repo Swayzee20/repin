@@ -1,4 +1,4 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, FontAwesome6 } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 import { Tabs, useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
@@ -71,8 +71,10 @@ function MainTabsNavigator() {
           tabBarLabelStyle: styles.tabLabel,
           tabBarIcon: ({ color, focused }) => route.name === "index" ? (
             <Text style={[styles.tabIcon, { color }, focused && styles.activeIcon]}>⌂</Text>
+          ) : route.name === "community" ? (
+            <Feather color={color} name="users" size={23} />
           ) : (
-            <Feather color={color} name={route.name === "community" ? "activity" : "user"} size={23} />
+            <FontAwesome6 color={color} name="circle-user" size={23} />
           ),
           tabBarStyle: session
             ? [styles.tabBar, { height: tabBarHeight, paddingBottom: insets.bottom }]

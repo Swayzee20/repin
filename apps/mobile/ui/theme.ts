@@ -18,9 +18,9 @@ export const colors = {
   warningSoft: "#FFF4DE",
   danger: "#C94A4A",
   dangerSoft: "#FBEAEA",
-  board: "#FBEAEA",
-  boardBorder: "#F2CCCC",
-  boardTransparent: "rgba(251,234,234,0)",
+  board: "#FFF7F7",
+  boardBorder: "#F6DDDD",
+  boardTransparent: "rgba(255,247,247,0)",
 } as const;
 
 export const spacing = {
