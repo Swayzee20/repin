@@ -36,6 +36,10 @@ pnpm --filter @repin/db db:migrate
 
 After changing the schema, generate a migration with `pnpm --filter @repin/db db:generate`.
 
+Supabase SQL that Drizzle does not apply lives in `supabase/migrations` (the private `workout-photos` bucket and row level security). Apply those files to the Supabase database separately, for example with the SQL editor or `supabase db push`. `DATABASE_URL` must stay on a role that bypasses row level security, which is the standard Supabase `postgres` connection. The publishable key cannot read or write application tables.
+
+`pnpm --filter @repin/db test:security` recreates a local `repin_security_test` database, applies the Drizzle and Supabase migrations, and checks invite-only joins plus row level security. It needs PostgreSQL at `DATABASE_URL`, or at `postgresql://postgres:postgres@127.0.0.1:5432/postgres` when that variable is unset. The test never connects to a hosted Supabase project.
+
 ### Supabase Auth
 
 Copy the environment examples and add the project URL and publishable key from
@@ -67,14 +71,12 @@ protected routes:
 - `POST /api/groups` with `{ "name": "Group name" }`
 - `GET /api/groups` to list the current user's memberships
 - `GET /api/groups/:id` to fetch a group only when the current user is a member
-- `GET /api/groups/search?q=<name>` to search by name (minimum 2 characters)
-- `GET /api/groups/invite/:code` to resolve an invite code to a safe preview
-- `POST /api/groups/join` to join a group directly with an invite code
-- `POST /api/groups/:id/join` to idempotently join as a `member`
+- `GET /api/groups/search?q=<name>` to search names of groups the caller has already joined (minimum 2 characters). Groups the caller has not joined, including their ids, are not returned.
+- `GET /api/groups/invite/:code` to resolve an invite code the caller already has to a safe preview
+- `POST /api/groups/join` to join a group with an invite code
+- `POST /api/groups/:id/join` with `{ "inviteCode": "..." }` to join that group only when the code matches it
 
-Creating a group atomically adds its creator to `group_members` with the
-`owner` role. Membership checks are performed in the API's database queries;
-non-members receive HTTP 404 for individual groups.
+Joining is invite-only. A signed-in user cannot join by group id alone or by searching for a name. Creating a group atomically adds its creator to `group_members` with the `owner` role. Membership checks are performed in the API's database queries; non-members receive HTTP 404 for individual groups.
 
 Each group receives a random, non-sequential eight-character invite code at creation. Codes use an unambiguous uppercase alphabet, and creation retries safely if a database uniqueness conflict occurs. Codes are
 stored and matched in uppercase, accepted case-insensitively, and returned only

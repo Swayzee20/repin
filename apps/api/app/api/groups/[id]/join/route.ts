@@ -1,5 +1,5 @@
 import { joinGroup } from "@repin/db";
-import { groupIdSchema } from "@repin/validation";
+import { groupIdSchema, joinGroupByInviteCodeSchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
 import {
@@ -23,10 +23,27 @@ export async function POST(
       return NextResponse.json({ error: "Invalid group ID" }, { status: 400 });
     }
 
-    const result = await joinGroup({ userId: user.id, groupId: groupId.data });
+    const body: unknown = await request.json().catch(() => null);
+    const inviteCode = joinGroupByInviteCodeSchema.safeParse(body);
+
+    if (!inviteCode.success) {
+      return NextResponse.json(
+        { error: "A valid invite code is required to join" },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+
+    const result = await joinGroup({
+      userId: user.id,
+      groupId: groupId.data,
+      inviteCode: inviteCode.data.inviteCode,
+    });
 
     if (!result) {
-      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+      return NextResponse.json(
+        { error: "Invite code is invalid" },
+        { status: 404, headers: { "Cache-Control": "no-store" } },
+      );
     }
 
     return NextResponse.json(result, {
