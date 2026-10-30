@@ -157,7 +157,7 @@ const styles = StyleSheet.create({
   placeholder: { color: colors.muted },
   selectorChevron: { color: colors.muted, fontFamily: fonts.medium, fontSize: 22, lineHeight: 24, marginLeft: spacing.md },
   overlay: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { backgroundColor: "rgba(34,34,34,0.28)", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
+  backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingHorizontal: spacing.xxl, paddingTop: spacing.md },
   handle: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: 4, marginBottom: spacing.lg, width: 38 },

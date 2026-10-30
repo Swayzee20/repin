@@ -203,9 +203,9 @@ function ModalCloseButton({ onPress }: { onPress: () => void }) {
 
 const styles = StyleSheet.create({
   overlay: { alignItems: "center", flex: 1, justifyContent: "center", paddingVertical: spacing.lg },
-  backdrop: { backgroundColor: "rgba(34,34,34,0.28)", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
+  backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
-  panel: { backgroundColor: colors.surface, borderColor: "rgba(34,34,34,0.16)", borderRadius: radii.xl, borderWidth: 1, overflow: "hidden" },
+  panel: { backgroundColor: colors.surface, borderColor: colors.overlaySoft, borderRadius: radii.xl, borderWidth: 1, overflow: "hidden" },
   closeButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, elevation: 5, height: 36, justifyContent: "center", position: "absolute", right: spacing.lg, top: spacing.lg, width: 36, zIndex: 20 },
   pressed: { opacity: 0.66 },
   scroller: { flexGrow: 0, flexShrink: 1 },

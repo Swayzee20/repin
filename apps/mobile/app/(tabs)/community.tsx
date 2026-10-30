@@ -491,7 +491,7 @@ function DeleteWorkoutModal({
             <>
               <Pressable accessibilityRole="button" disabled={pending} onPress={onDeletePost} style={styles.deleteChoice}>
                 <Text style={styles.deleteChoiceTitle}>Delete post only</Text>
-                <Text style={styles.deleteChoiceCopy}>Remove this check-in from the group. Your workout will stay in your history.</Text>
+                <Text style={styles.deleteChoiceCopy}>Remove this rep-in from the group. Your workout will stay in your history.</Text>
               </Pressable>
               <Pressable accessibilityRole="button" disabled={pending} onPress={onDeleteWorkout} style={styles.deleteChoice}>
                 <Text style={styles.destructiveTitle}>Delete post and workout</Text>
@@ -535,13 +535,13 @@ const styles = StyleSheet.create({
   dateLabelButton: { alignItems: "center", justifyContent: "center", minHeight: 44, minWidth: 128, paddingHorizontal: spacing.md },
   dateLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
   boardTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 17, lineHeight: 23, marginBottom: spacing.sm, marginTop: spacing.sm },
-  boardArea: { backgroundColor: "#F7F2F2", borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
+  boardArea: { backgroundColor: colors.feed, borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
   feedState: { flex: 1, gap: spacing.md, justifyContent: "center", padding: spacing.xxl },
   feedStateText: { color: colors.muted, ...type.bodySmall, textAlign: "center" },
   todayEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
   historicalEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
   historicalEmptyText: { color: colors.muted, ...type.body, textAlign: "center" },
-  deleteOverlay: { backgroundColor: "rgba(34,34,34,0.28)", flex: 1, justifyContent: "flex-end" },
+  deleteOverlay: { backgroundColor: colors.overlay, flex: 1, justifyContent: "flex-end" },
   deletePanel: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: spacing.xxl, paddingBottom: 40 },
   deleteTitle: { color: colors.ink, ...type.title },
   deleteMessage: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },

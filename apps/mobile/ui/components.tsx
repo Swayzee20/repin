@@ -28,7 +28,9 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
-import repinHeaderMark from "../assets/branding/repin-header-mark.png";
+import repinLockup from "../assets/branding/repin-lockup.png";
+import repinLockupReversed from "../assets/branding/repin-lockup-reversed.png";
+import repinMark from "../assets/branding/repin-mark.png";
 import { formatWorkoutDate } from "../lib/workout-date";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
@@ -44,16 +46,57 @@ const webFeedScrollerStyle =
       } as ViewStyle)
     : undefined;
 
+export function Wordmark({
+  size = 22,
+  tone = "default",
+}: {
+  size?: number;
+  tone?: "default" | "onBrand";
+}) {
+  const onBrand = tone === "onBrand";
+  return (
+    <Text
+      accessibilityLabel="repin"
+      style={[
+        styles.wordmark,
+        { fontFamily: fonts.display },
+        {
+          color: onBrand ? colors.surface : colors.ink,
+          fontSize: size,
+          letterSpacing: size * -0.02,
+          lineHeight: Math.round(size * 1.32),
+        },
+      ]}
+    >
+      rep
+      <Text style={[styles.wordmark, { color: onBrand ? colors.ink : colors.brand, fontFamily: fonts.display }]}>in</Text>
+    </Text>
+  );
+}
+
+export function Lockup({ tone = "default" }: { tone?: "default" | "onBrand" }) {
+  const onBrand = tone === "onBrand";
+  return (
+    <Image
+      accessibilityLabel="repin"
+      accessible
+      resizeMode="contain"
+      source={onBrand ? repinLockupReversed : repinLockup}
+      style={styles.lockup}
+    />
+  );
+}
+
 export function BrandHeader() {
   return (
     <View style={styles.brandHeader}>
       <Image
         accessible={false}
         resizeMode="contain"
-        source={repinHeaderMark}
+        source={repinMark}
         style={styles.brandHeaderMark}
       />
-      <Text style={styles.brandHeaderText}>REPIN</Text>
+      <Wordmark />
     </View>
   );
 }
@@ -466,9 +509,9 @@ export function CommunityFeed({
       </Animated.ScrollView>
       <LinearGradient
         colors={[
-          "#F7F2F2",
-          "rgba(247,242,242,0.58)",
-          "rgba(247,242,242,0)",
+          colors.feed,
+          colors.feedFade,
+          colors.boardTransparent,
         ]}
         locations={[0, 0.38, 1]}
         pointerEvents="none"
@@ -476,9 +519,9 @@ export function CommunityFeed({
       />
       <LinearGradient
         colors={[
-          "rgba(247,242,242,0)",
-          "rgba(247,242,242,0.54)",
-          "#F7F2F2",
+          colors.boardTransparent,
+          colors.feedFadeSoft,
+          colors.feed,
         ]}
         locations={[0, 0.64, 1]}
         pointerEvents="none"
@@ -629,8 +672,9 @@ function normalizeLabel(value: string) {
 
 const styles = StyleSheet.create({
   brandHeader: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
-  brandHeaderMark: { height: 16, width: 27 },
-  brandHeaderText: { color: colors.brand, ...type.eyebrow },
+  brandHeaderMark: { height: 29, width: 36 },
+  lockup: { height: 29, width: 88 },
+  wordmark: { fontFamily: fonts.display },
   safeArea: { backgroundColor: colors.background, flex: 1 },
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
   transformedScreenContent: { overflow: "visible", paddingBottom: 96 },
@@ -642,8 +686,8 @@ const styles = StyleSheet.create({
   primaryButtonPressed: { backgroundColor: colors.brandPressed },
   secondaryButton: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderWidth: 1 },
   quietButton: { backgroundColor: "transparent" },
-  primaryButtonText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 16 },
-  secondaryButtonText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16 },
+  primaryButtonText: { color: colors.surface, ...type.button },
+  secondaryButtonText: { color: colors.inkSoft, ...type.button },
   pressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.48 },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg },
@@ -691,7 +735,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     elevation: 2,
-    shadowColor: "#101318",
+    shadowColor: colors.ink,
     shadowOffset: { height: 5, width: 0 },
     shadowOpacity: 0.055,
     shadowRadius: 17,
@@ -708,7 +752,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "100%",
   },
-  edgeToEdgeFeedViewport: { backgroundColor: "#F7F2F2", borderRadius: 0 },
+  edgeToEdgeFeedViewport: { backgroundColor: colors.feed, borderRadius: 0 },
   feedScroller: { overflow: "visible" },
   feedContent: { paddingBottom: 132, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
   feedSlot: { minWidth: 0, overflow: "visible", paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },

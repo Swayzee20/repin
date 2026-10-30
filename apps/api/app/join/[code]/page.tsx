@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export const metadata: Metadata = {
-  title: "Group invite | RepIn",
-  description: "Open a group invite in RepIn.",
+  title: "Group invite | repin",
+  description: "Open a group invite in repin.",
 };
 
 export default async function GroupInviteLandingPage({
@@ -27,15 +27,15 @@ export default async function GroupInviteLandingPage({
   if (!invite) {
     return (
       <InvitePage>
-        <div className={styles.brand}>REPIN</div>
+        <BrandWordmark />
         <p className={styles.eyebrow}>GROUP INVITE</p>
         <h1 className={styles.title}>This invite is no longer available</h1>
         <p className={styles.body}>
           The invite code may be incorrect or unavailable. Ask the group for a
-          current RepIn invite and try again.
+          current repin invite and try again.
         </p>
         <a className={styles.secondaryAction} href="/">
-          Visit RepIn
+          Visit repin
         </a>
       </InvitePage>
     );
@@ -45,11 +45,11 @@ export default async function GroupInviteLandingPage({
 
   return (
     <InvitePage>
-      <div className={styles.brand}>REPIN</div>
+      <BrandWordmark />
       <p className={styles.eyebrow}>YOU’VE BEEN INVITED TO JOIN</p>
       <h1 className={styles.title}>{invite.name}</h1>
       <p className={styles.body}>
-        Open this invite in RepIn to sign in and join the group. You can also
+        Open this invite in repin to sign in and join the group. You can also
         enter the invite code manually in the app.
       </p>
       <div className={styles.codePanel}>
@@ -57,12 +57,20 @@ export default async function GroupInviteLandingPage({
         <strong className={styles.code}>{invite.inviteCode}</strong>
       </div>
       <a className={styles.primaryAction} href={mobileInviteUrl}>
-        Open in RepIn
+        Open in repin
       </a>
       <p className={styles.helper}>
-        Joining requires the RepIn mobile app and an authenticated account.
+        Joining requires the repin mobile app and an authenticated account.
       </p>
     </InvitePage>
+  );
+}
+
+function BrandWordmark() {
+  return (
+    <div aria-label="repin" className={styles.brand}>
+      rep<span className={styles.brandIn}>in</span>
+    </div>
   );
 }
 

@@ -1,4 +1,4 @@
-# RepIn
+# repin
 
 Minimal pnpm/Turborepo monorepo containing an Expo mobile app, a Next.js API, and shared TypeScript packages.
 

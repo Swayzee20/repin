@@ -10,7 +10,7 @@ const workoutLogOptions = [
     key: "quick",
     icon: "zap",
     title: "Quick Log",
-    description: "Fast check-in with optional details",
+    description: "Rep in fast, add details if you want",
   },
   {
     key: "detailed",
@@ -91,7 +91,7 @@ export function LogWorkoutChooser({
         <Pressable accessibilityLabel="Close workout options" accessibilityRole="button" onPress={() => close(onDismiss)} style={styles.backdropPressable} />
         <Animated.View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg), transform: [{ translateY: sheetTranslateY }] }]}>
           <View style={styles.handle} />
-          <Text style={styles.title}>Check in</Text>
+          <Text style={styles.title}>Rep in</Text>
           <View style={styles.options}>
             {workoutLogOptions.map((option) => (
               <Pressable
@@ -122,7 +122,7 @@ export function LogWorkoutChooser({
 
 const styles = StyleSheet.create({
   overlay: { flex: 1, justifyContent: "flex-end" },
-  backdrop: { backgroundColor: "rgba(34,34,34,0.28)", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
+  backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingHorizontal: spacing.xxl, paddingTop: spacing.md },
   handle: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: 4, marginBottom: spacing.lg, width: 38 },

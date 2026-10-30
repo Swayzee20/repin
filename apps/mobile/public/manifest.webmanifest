@@ -1,0 +1,27 @@
+{
+  "name": "repin",
+  "short_name": "repin",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#FFFAF4",
+  "theme_color": "#FFFAF4",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "16x16 32x32 48x48",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

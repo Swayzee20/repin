@@ -26,7 +26,7 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content}>
         <BackButton onPress={() => router.back()} />
         <Text style={styles.title}>Settings</Text>
-        <Text style={styles.intro}>Manage your RepIn account.</Text>
+        <Text style={styles.intro}>Manage your repin account.</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <Button loading={signingOut} onPress={() => void signOut()} variant="secondary">Sign out</Button>
       </ScrollView>

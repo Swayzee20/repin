@@ -327,7 +327,7 @@ export default function DetailedWorkoutScreen() {
         <View style={styles.header}>
           <BackButton label="Cancel" onPress={() => router.back()} />
           <Text style={styles.eyebrow}>{editing ? "EDIT WORKOUT" : "DETAILED WORKOUT"}</Text>
-          <Text style={styles.title}>{editing ? "Update your check-in" : "Track your workout"}</Text>
+          <Text style={styles.title}>{editing ? "Update your rep-in" : "Track your workout"}</Text>
         </View>
         <View style={styles.headerDivider} />
         <ScrollView
@@ -497,7 +497,7 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   keyboardAvoidingView: { backgroundColor: colors.surface, flex: 1 },
   header: { backgroundColor: colors.surface, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
-  headerDivider: { alignSelf: "flex-start", backgroundColor: "rgba(34,34,34,0.32)", height: 1, marginLeft: spacing.xxl, shadowColor: colors.ink, shadowOffset: { height: 1, width: 0 }, shadowOpacity: 0.16, shadowRadius: 1, width: "86%" },
+  headerDivider: { alignSelf: "flex-start", backgroundColor: colors.overlayLine, height: 1, marginLeft: spacing.xxl, shadowColor: colors.ink, shadowOffset: { height: 1, width: 0 }, shadowOpacity: 0.16, shadowRadius: 1, width: "86%" },
   scrollView: { backgroundColor: colors.surface, flex: 1 },
   container: { paddingBottom: 144, paddingHorizontal: spacing.md, paddingTop: spacing.xxl },
   formCard: { ...floatingSurfaceStyle, marginBottom: spacing.lg, padding: spacing.xxl },

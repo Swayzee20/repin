@@ -69,9 +69,12 @@ importers:
 
   apps/mobile:
     dependencies:
-      '@expo-google-fonts/outfit':
-        specifier: ^0.4.3
-        version: 0.4.3
+      '@expo-google-fonts/fredoka':
+        specifier: ^0.4.1
+        version: 0.4.1
+      '@expo-google-fonts/nunito':
+        specifier: ^0.4.2
+        version: 0.4.2
       '@expo/metro-runtime':
         specifier: ~57.0.11
         version: 57.0.11(@expo/log-box@57.0.3)(expo@57.0.14)(react-dom@19.2.3(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)
@@ -1088,11 +1091,14 @@ packages:
     resolution: {integrity: sha512-43/qtrDUokr7LJqoF2c3+RInu/t4zfrpYdoSDfYyhg52rwLV6TnOvdG4fXm7IkSB3wErkcmJS9iEhjVtOSEjjA==}
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
 
+  '@expo-google-fonts/fredoka@0.4.1':
+    resolution: {integrity: sha512-px3uHDidG1RI7mMAjfKQktK9yZoVn/Uvqgp1G/Zkd6ZN9flXFxhUoPDRZdcCj2knFvkKmlvOx96SD3j4fxq7ig==}
+
   '@expo-google-fonts/material-symbols@0.4.44':
     resolution: {integrity: sha512-36JP9Chcy/QEVZ9ZGY4i6zInlyFPbQjkIm6gRNuWWltScIj0WR8rddcD57EIjSC5YKCe2ZKLO6eO/N5r8Jit0A==}
 
-  '@expo-google-fonts/outfit@0.4.3':
-    resolution: {integrity: sha512-2uQmDVJencWLllxds6SG92E+SjxyZfvg7eZKZ5XLHggmm5AuUyQK7lzMAFOUzT6kheq2kJ7BAiubMdjKT32fJg==}
+  '@expo-google-fonts/nunito@0.4.2':
+    resolution: {integrity: sha512-1KCWphw/I2ugqfs9iRHUCkPTnomNgGPtF4AvqVquoEKxr0EL+mcLNLgeixsslbaSFevRR6/KJAE3sc8g0VaY0Q==}
 
   '@expo/cli@57.0.16':
     resolution: {integrity: sha512-+HyMY2nAS6QBJb0nSeMz92p11bZ1AtWSRnhWnklznN07IRoQirisnKq2vr18Ayjb/fnb5F/um+n6FRhF0fZm1Q==}
@@ -2039,10 +2045,12 @@ packages:
   '@xmldom/xmldom@0.8.14':
     resolution: {integrity: sha512-T4EDRUBVZYRldYApjEJiU0e1stYWaRAX7CuSnKzrpwdZKo53zGV8/pqfzV6FfwNl9YThD2OumQYvqtvjvgG7aQ==}
     engines: {node: '>=10.0.0'}
+    deprecated: this version has critical issues, please update to the latest version
 
   '@xmldom/xmldom@0.9.11':
     resolution: {integrity: sha512-tW8bcK3hsG0/uqSnNz6TK4BkcuZSezoU7DlnYssILmZDktPnSHHuDJJFM0AJv+13gz2r0iGdrj6qqKeUnxXEDg==}
     engines: {node: '>=14.6'}
+    deprecated: this version has critical issues, please update to the latest version
 
   abort-controller@3.0.0:
     resolution: {integrity: sha512-h8lQ8tacZYnR3vNQTgibj+tODHI5/+l06Au2Pcriv/Gmet0eaj4TwWH41sO9wnHDiQsEj19q0drzdWdeAHtweg==}
@@ -5043,9 +5051,11 @@ snapshots:
       '@eslint/core': 0.17.0
       levn: 0.4.1
 
+  '@expo-google-fonts/fredoka@0.4.1': {}
+
   '@expo-google-fonts/material-symbols@0.4.44': {}
 
-  '@expo-google-fonts/outfit@0.4.3': {}
+  '@expo-google-fonts/nunito@0.4.2': {}
 
   '@expo/cli@57.0.16(@expo/dom-webview@57.0.1)(@expo/metro-runtime@57.0.11)(expo-constants@57.0.12)(expo-font@57.0.1)(expo-router@57.0.14)(expo@57.0.14)(react-dom@19.2.3(react@19.2.3))(react-native@0.86.2(@babel/core@7.29.7)(@react-native/metro-config@0.86.2(@babel/core@7.29.7))(@types/react@19.2.18)(react@19.2.3))(react@19.2.3)(typescript@6.0.3)':
     dependencies:

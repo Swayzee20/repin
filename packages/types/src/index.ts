@@ -12,6 +12,13 @@ export interface UserDisplayNameInput {
 
 const namePartPattern = /^[\p{L}\p{M}][\p{L}\p{M}\p{N}'’-]*$/u;
 
+export const PLACEHOLDER_DISPLAY_NAME = "repin member";
+const LEGACY_PLACEHOLDER_DISPLAY_NAMES = ["RepIn member"];
+
+export function isPlaceholderDisplayName(value: string | null | undefined) {
+  return value === PLACEHOLDER_DISPLAY_NAME || LEGACY_PLACEHOLDER_DISPLAY_NAMES.includes(value ?? "");
+}
+
 export function resolveUserDisplayName(input: UserDisplayNameInput) {
   const firstName = cleanNameValue(input.firstName);
   const lastName = cleanNameValue(input.lastName);
@@ -22,7 +29,7 @@ export function resolveUserDisplayName(input: UserDisplayNameInput) {
 
   const displayName = cleanNameValue(input.displayName);
   if (displayName) {
-    if (displayName === "RepIn member") return displayName;
+    if (isPlaceholderDisplayName(displayName)) return PLACEHOLDER_DISPLAY_NAME;
 
     const parts = displayName.split(/\s+/);
     if (parts.length >= 2 && parts.every((part) => namePartPattern.test(part))) {
@@ -34,7 +41,7 @@ export function resolveUserDisplayName(input: UserDisplayNameInput) {
 
   const email = cleanNameValue(input.email);
   const emailPrefix = email?.split("@")[0]?.trim();
-  return emailPrefix || "RepIn member";
+  return emailPrefix || PLACEHOLDER_DISPLAY_NAME;
 }
 
 export function getUserInitials(input: UserDisplayNameInput) {

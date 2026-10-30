@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
+import { Lockup } from "../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 export default function GroupOnboardingScreen() {
@@ -35,7 +36,7 @@ export default function GroupOnboardingScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.topRow}>
-          <Text style={styles.brand}>REPIN</Text>
+          <Lockup />
           <Pressable accessibilityRole="button" hitSlop={10} onPress={() => void signOut()}><Text style={styles.signOut}>Sign out</Text></Pressable>
         </View>
 
@@ -76,7 +77,7 @@ function OptionCard({ icon, onPress, subtitle, title }: { icon: string; onPress:
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flex: 1, padding: spacing.xxl }, centered: { alignItems: "center", flex: 1, justifyContent: "center" },
-  topRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, brand: { color: colors.brand, ...type.eyebrow }, signOut: { color: colors.muted, fontFamily: fonts.semibold, fontSize: 13 },
+  topRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, signOut: { color: colors.muted, fontFamily: fonts.semibold, fontSize: 13 },
   intro: { marginTop: spacing.huge }, eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.sm }, subtitle: { color: colors.muted, ...type.body, marginTop: spacing.md, maxWidth: 340 },
   options: { gap: spacing.lg, marginTop: spacing.xxxl }, option: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, flexDirection: "row", minHeight: 112, padding: spacing.lg },
   optionPressed: { backgroundColor: colors.brandSoft, borderColor: colors.boardBorder, transform: [{ scale: 0.99 }] }, optionIcon: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.md, height: 48, justifyContent: "center", width: 48 },

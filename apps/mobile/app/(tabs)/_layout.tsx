@@ -9,7 +9,7 @@ import { supabase } from "../../lib/supabase";
 import { clearWorkoutDetailCaches } from "../../lib/workout-detail-cache";
 import { LogWorkoutChooser } from "../../ui/log-workout-chooser";
 import { MainTabsProvider, useMainTabs } from "../../ui/main-tabs-context";
-import { colors, fonts, radii, spacing } from "../../ui/theme";
+import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 export default function MainTabsLayout() {
   return (
@@ -96,7 +96,7 @@ function MainTabsNavigator() {
           ]}
         >
           <Feather color={colors.surface} name="plus" size={14} />
-          <Text style={styles.logWorkoutText}>Check in</Text>
+          <Text style={styles.logWorkoutText}>Rep in</Text>
         </Pressable>
       ) : null}
       {session && selectedGroupId ? (
@@ -126,5 +126,5 @@ const styles = StyleSheet.create({
   activeIcon: { fontFamily: fonts.bold },
   logWorkout: { alignItems: "center", alignSelf: "center", backgroundColor: colors.brand, borderRadius: radii.pill, elevation: 4, flexDirection: "row", gap: spacing.xs, justifyContent: "center", minHeight: 46, paddingHorizontal: spacing.xl, position: "absolute", shadowColor: colors.ink, shadowOffset: { height: 5, width: 0 }, shadowOpacity: 0.12, shadowRadius: 12 },
   logWorkoutPressed: { backgroundColor: colors.brandPressed, transform: [{ scale: 0.98 }] },
-  logWorkoutText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 15 },
+  logWorkoutText: { color: colors.surface, ...type.button },
 });
