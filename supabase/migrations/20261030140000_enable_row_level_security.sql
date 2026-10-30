@@ -776,24 +776,29 @@ grant execute on function public.join_group_by_invite_code(text) to authenticate
 
 -- Storage. The bucket and owner-folder policies are created in
 -- 20260822000000_workout_photos.sql. Repeat them only when missing so this
--- migration still enforces them, and keep the bucket private. Do not force
--- RLS on storage.objects: Supabase Storage's owner role relies on the
--- default owner bypass for service operations. User requests run as
--- authenticated, so the policies still apply. Group members do not get a
--- direct object read; the API signs photo URLs with the service role after
--- it has checked membership.
+-- migration still enforces them, and keep the bucket private. RLS on
+-- storage.objects is managed by Supabase and is already on, so this
+-- migration doesn't touch it. Group members do not get a direct object
+-- read; the API signs photo URLs with the service role after it has
+-- checked membership. On hosted Supabase the storage tables are owned by
+-- supabase_storage_admin, so a role that cannot update the bucket or create
+-- policies (the SQL editor's postgres role) skips those statements and
+-- continues instead of aborting the migration.
 do $$
 begin
   if to_regclass('storage.objects') is null then
     return;
   end if;
 
-  execute 'alter table storage.objects enable row level security';
-
   if to_regclass('storage.buckets') is not null then
-    update storage.buckets
-    set public = false
-    where id = 'workout-photos';
+    begin
+      update storage.buckets
+      set public = false
+      where id = 'workout-photos';
+    exception
+      when insufficient_privilege then
+        raise notice 'Could not update storage.buckets (insufficient privilege). Set the workout-photos bucket to private from the Supabase dashboard (Storage) or confirm it is already private from 20260822000000_workout_photos.sql.';
+    end;
   end if;
 
   if not exists (
@@ -803,14 +808,19 @@ begin
       and tablename = 'objects'
       and policyname = 'Workout photo owners can read'
   ) then
-    create policy "Workout photo owners can read"
-    on storage.objects
-    for select
-    to authenticated
-    using (
-      bucket_id = 'workout-photos'
-      and (storage.foldername(name))[1] = auth.uid()::text
-    );
+    begin
+      create policy "Workout photo owners can read"
+      on storage.objects
+      for select
+      to authenticated
+      using (
+        bucket_id = 'workout-photos'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      );
+    exception
+      when insufficient_privilege then
+        raise notice 'Could not create policy "Workout photo owners can read" on storage.objects (insufficient privilege). Create that policy from the Supabase dashboard (Storage > Policies) or confirm it already exists from 20260822000000_workout_photos.sql.';
+    end;
   end if;
 
   if not exists (
@@ -820,14 +830,19 @@ begin
       and tablename = 'objects'
       and policyname = 'Workout photo owners can upload'
   ) then
-    create policy "Workout photo owners can upload"
-    on storage.objects
-    for insert
-    to authenticated
-    with check (
-      bucket_id = 'workout-photos'
-      and (storage.foldername(name))[1] = auth.uid()::text
-    );
+    begin
+      create policy "Workout photo owners can upload"
+      on storage.objects
+      for insert
+      to authenticated
+      with check (
+        bucket_id = 'workout-photos'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      );
+    exception
+      when insufficient_privilege then
+        raise notice 'Could not create policy "Workout photo owners can upload" on storage.objects (insufficient privilege). Create that policy from the Supabase dashboard (Storage > Policies) or confirm it already exists from 20260822000000_workout_photos.sql.';
+    end;
   end if;
 
   if not exists (
@@ -837,18 +852,23 @@ begin
       and tablename = 'objects'
       and policyname = 'Workout photo owners can update'
   ) then
-    create policy "Workout photo owners can update"
-    on storage.objects
-    for update
-    to authenticated
-    using (
-      bucket_id = 'workout-photos'
-      and (storage.foldername(name))[1] = auth.uid()::text
-    )
-    with check (
-      bucket_id = 'workout-photos'
-      and (storage.foldername(name))[1] = auth.uid()::text
-    );
+    begin
+      create policy "Workout photo owners can update"
+      on storage.objects
+      for update
+      to authenticated
+      using (
+        bucket_id = 'workout-photos'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      )
+      with check (
+        bucket_id = 'workout-photos'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      );
+    exception
+      when insufficient_privilege then
+        raise notice 'Could not create policy "Workout photo owners can update" on storage.objects (insufficient privilege). Create that policy from the Supabase dashboard (Storage > Policies) or confirm it already exists from 20260822000000_workout_photos.sql.';
+    end;
   end if;
 
   if not exists (
@@ -858,13 +878,18 @@ begin
       and tablename = 'objects'
       and policyname = 'Workout photo owners can delete'
   ) then
-    create policy "Workout photo owners can delete"
-    on storage.objects
-    for delete
-    to authenticated
-    using (
-      bucket_id = 'workout-photos'
-      and (storage.foldername(name))[1] = auth.uid()::text
-    );
+    begin
+      create policy "Workout photo owners can delete"
+      on storage.objects
+      for delete
+      to authenticated
+      using (
+        bucket_id = 'workout-photos'
+        and (storage.foldername(name))[1] = auth.uid()::text
+      );
+    exception
+      when insufficient_privilege then
+        raise notice 'Could not create policy "Workout photo owners can delete" on storage.objects (insufficient privilege). Create that policy from the Supabase dashboard (Storage > Policies) or confirm it already exists from 20260822000000_workout_photos.sql.';
+    end;
   end if;
 end $$;
