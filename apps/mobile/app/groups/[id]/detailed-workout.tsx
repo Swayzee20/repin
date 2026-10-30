@@ -8,13 +8,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   type ScrollViewInstance,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
@@ -323,14 +323,16 @@ export default function DetailedWorkoutScreen() {
   }, [pickerMode]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
+        <SafeAreaView edges={["left", "right"]}>
         <View style={styles.header}>
           <BackButton label="Cancel" onPress={() => router.back()} />
           <Text style={styles.eyebrow}>{editing ? "EDIT WORKOUT" : "DETAILED WORKOUT"}</Text>
           <Text style={styles.title}>{editing ? "Update your rep-in" : "Track your workout"}</Text>
         </View>
         <View style={styles.headerDivider} />
+        </SafeAreaView>
         <ScrollView
           automaticallyAdjustKeyboardInsets
           contentContainerStyle={styles.container}
@@ -339,6 +341,7 @@ export default function DetailedWorkoutScreen() {
           ref={scrollViewRef}
           style={styles.scrollView}
         >
+          <SafeAreaView edges={["left", "right"]}>
           <View onLayout={(event) => { workoutCardY.current = event.nativeEvent.layout.y; }} style={styles.formCard}>
             <Text style={styles.sectionTitle}>What&apos;d you do?</Text>
             <WorkoutTypeSelector compact elevated onChange={handleWorkoutTypeChange} value={workoutType} />
@@ -449,6 +452,7 @@ export default function DetailedWorkoutScreen() {
 
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
           <Button disabled={loadingExisting || !workoutType || (!editing && workoutType === "run" && !runSubtype)} loading={submitting || loadingExisting} onPress={() => void submitWorkout()} style={styles.submitButton}>{editing ? "Save changes" : "Log workout"}</Button>
+          </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

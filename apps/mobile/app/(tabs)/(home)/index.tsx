@@ -2,37 +2,37 @@ import { getUserInitials, resolveUserDisplayName, type HomeData, type WorkoutFee
 import { Feather } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useVerticalBarEdgeIOS } from "expo-status-bar";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ActivityIndicator, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { ActivityIndicator, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { isSupabaseConfigured, supabase } from "../../lib/supabase";
-import { normalizeInviteRedirect } from "../../lib/invite-route";
-import { resolveWorkoutDate } from "../../lib/workout-date";
+import { supabase } from "../../../lib/supabase";
+import { normalizeInviteRedirect } from "../../../lib/invite-route";
+import { resolveWorkoutDate } from "../../../lib/workout-date";
 import {
   getWorkoutDataRevision,
   isFresh,
   type FreshnessRecord,
-} from "../../lib/data-freshness";
-import { useMainTabs } from "../../ui/main-tabs-context";
-import { BrandHeader, Button, Card, LoadingState, Lockup, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
-import { CheckInEmptyContent } from "../../ui/check-in-empty-content";
-import { colors, floatingSurfaceStyle, fonts, radii, spacing, type } from "../../ui/theme";
+} from "../../../lib/data-freshness";
+import { useMainTabs } from "../../../ui/main-tabs-context";
+import { BrandHeader, Card, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
+import { RepInPill } from "../../../ui/rep-in-pill";
+import { colors, floatingSurfaceStyle, fonts, radii, spacing, type } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export default function HomeScreen() {
   const router = useRouter();
   const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const verticalBarEdge = useVerticalBarEdgeIOS();
   const { openWorkoutChooser, setSelectedGroupId: setTabGroupId } = useMainTabs();
   const params = useLocalSearchParams<{ redirect?: string | string[] }>();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
-  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [homeData, setHomeData] = useState<HomeData | null>(null);
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(false);
@@ -84,7 +84,7 @@ export default function HomeScreen() {
       const body = (await response.json()) as HomeData & { error?: string };
       if (!response.ok) throw new Error(body.error ?? "Home could not be loaded.");
       if (body.groups.length === 0) {
-        router.replace("./onboarding/groups");
+        router.replace("/onboarding/groups");
         return;
       }
       if (latestRequestKey.current !== requestKey) return;
@@ -125,43 +125,11 @@ export default function HomeScreen() {
     return () => clearTimeout(timeout);
   }, [loadHome, localDayKey]);
 
-  const signIn = useCallback(async () => {
-    if (!supabase) return;
-    setAuthLoading(true); setAuthMessage(null);
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    setAuthLoading(false);
-    if (error) setAuthMessage(error.message);
-    else if (data.session && inviteRedirect) router.replace(inviteRedirect);
-  }, [email, inviteRedirect, password, router]);
-
   const selectedGroup = useMemo(() => homeData?.groups.find((group) => group.id === homeData.selectedGroupId), [homeData]);
+  const dashboardBottomPadding = verticalBarEdge !== null ? insets.bottom + spacing.xxl : 160;
 
-  if (!isSupabaseConfigured) return <Shell><StateCard title="Supabase is not configured" message="Add the Expo public Supabase URL and publishable key to the mobile environment file." /></Shell>;
   if (authLoading && !session) return <Shell><LoadingState message="Checking your account…" /></Shell>;
-  if (!session) return (
-    <Shell flat>
-      <View style={styles.authIntro}>
-        <Lockup />
-        <Text style={styles.authTitle}>Welcome back</Text>
-        <Text style={styles.authCopy}>Log in to your repin account.</Text>
-      </View>
-      <View style={styles.authForm}>
-        <TextField autoCapitalize="none" autoComplete="email" inputMode="email" label="Email" onBlur={() => setEmailFocused(false)} onChangeText={setEmail} onFocus={() => setEmailFocused(true)} placeholder="you@example.com" style={[styles.authInput, emailFocused && styles.authInputFocused]} value={email} />
-        <TextField autoCapitalize="none" autoComplete="password" label="Password" onBlur={() => setPasswordFocused(false)} onChangeText={setPassword} onFocus={() => setPasswordFocused(true)} placeholder="Enter your password" secureTextEntry style={[styles.authInput, passwordFocused && styles.authInputFocused]} value={password} />
-        <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push("/forgot-password")} style={styles.forgotPassword}>
-          <Text style={styles.forgotPasswordText}>Forgot password?</Text>
-        </Pressable>
-        {authMessage ? <Text style={styles.error}>{authMessage}</Text> : null}
-        <Button disabled={!email || !password} loading={authLoading} onPress={() => void signIn()} style={styles.authButton}>Sign in</Button>
-      </View>
-      <View style={styles.signupPrompt}>
-        <Text style={styles.signupCopy}>Don’t have an account?</Text>
-        <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push({ pathname: "/signup", params: inviteRedirect ? { redirect: inviteRedirect } : undefined })}>
-          <Text style={styles.signupLink}>Create account</Text>
-        </Pressable>
-      </View>
-    </Shell>
-  );
+  if (!session) return null;
   if (homeLoading && !homeData) return <Shell><LoadingState message="Loading your community…" /></Shell>;
   if (homeError && !homeData) return <Shell><StateCard actionLabel="Try again" message={homeError} onAction={() => void loadHome()} title="Home unavailable" /></Shell>;
   if (!homeData) return null;
@@ -176,11 +144,15 @@ export default function HomeScreen() {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, styles.homeSafeArea]}>
+    <View style={[styles.safeArea, styles.homeSafeArea]}>
+      <SafeAreaView edges={["top"]} style={styles.flex}>
       <ScrollView
-        contentContainerStyle={[styles.dashboard, compactDashboard && styles.dashboardCompact]}
+        contentContainerStyle={[styles.dashboardScroll, { paddingBottom: dashboardBottomPadding }]}
         showsVerticalScrollIndicator={false}
+        style={styles.dashboardScroll}
       >
+      <SafeAreaView edges={["left", "right"]} style={styles.flexGrow}>
+      <View style={styles.dashboard}>
       <View style={[styles.personalZone, compactDashboard && styles.personalZoneCompact, standaloneIosWeb && styles.personalZoneStandalone]}>
         <View style={[styles.header, compactDashboard && styles.headerCompact]}>
           <View style={styles.headerCopy}><BrandHeader /><Text numberOfLines={1} style={styles.greeting}>Hey, {getGreetingFirstName(homeData.user.displayName)}</Text></View>
@@ -274,13 +246,23 @@ export default function HomeScreen() {
           <Text style={styles.noHighlights}>No highlights yet. Keep getting those reps in.</Text>
         )}
       </View>
+      </View>
+      </SafeAreaView>
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+      <RepInPill />
+    </View>
   );
 }
 
-function Shell({ children, centered = false, flat = false }: { children: ReactNode; centered?: boolean; flat?: boolean }) {
-  return <SafeAreaView style={[styles.safeArea, flat && styles.loginBackground]}><ScrollView contentContainerStyle={[styles.container, centered && styles.centered]} keyboardShouldPersistTaps="handled" nestedScrollEnabled style={flat ? styles.loginBackground : undefined}>{children}</ScrollView></SafeAreaView>;
+function Shell({ children }: { children: ReactNode }) {
+  return (
+    <View style={styles.safeArea}>
+      <SafeAreaView edges={["top", "bottom"]} style={styles.flex}>
+        <SafeAreaView edges={["left", "right"]} style={styles.flex}>{children}</SafeAreaView>
+      </SafeAreaView>
+    </View>
+  );
 }
 
 function deriveWeeklyHighlights(
@@ -375,10 +357,12 @@ function isStandaloneIosWebApp() {
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 }, centered: { justifyContent: "center" },
+  safeArea: { backgroundColor: colors.background, flex: 1 },
+  flex: { flex: 1 },
+  flexGrow: { flexGrow: 1 },
   homeSafeArea: { backgroundColor: colors.background, ...Platform.select({ web: { paddingBottom: 0 } }) },
-  dashboard: { backgroundColor: colors.background, flexGrow: 1, paddingBottom: 160, paddingHorizontal: spacing.xxl },
-  dashboardCompact: { paddingBottom: 160 },
+  dashboardScroll: { backgroundColor: colors.background, flexGrow: 1 },
+  dashboard: { flexGrow: 1, paddingHorizontal: spacing.xxl },
   personalZone: { backgroundColor: colors.background, marginHorizontal: -spacing.xxl, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
   personalZoneCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
   personalZoneStandalone: { paddingTop: spacing.xxl },
@@ -424,8 +408,4 @@ const styles = StyleSheet.create({
   highlightName: { color: colors.ink, fontFamily: fonts.semibold },
   noHighlights: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
   refreshing: { marginTop: spacing.md }, error: { color: colors.danger, ...type.bodySmall, marginTop: spacing.md },
-  authIntro: { alignItems: "flex-start", marginBottom: spacing.xxxl, marginTop: spacing.huge },
-  authTitle: { color: colors.ink, ...type.display, marginTop: spacing.xxl }, authCopy: { color: colors.muted, ...type.body, marginTop: spacing.sm }, authForm: { gap: spacing.lg }, authInput: { borderRadius: 9 }, authInputFocused: { borderColor: colors.brand }, authButton: { borderRadius: 10 }, loginBackground: { backgroundColor: colors.background },
-  signupPrompt: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.xxl }, signupCopy: { color: colors.muted, ...type.bodySmall }, signupLink: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
-  forgotPassword: { alignSelf: "flex-end" }, forgotPasswordText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
 });

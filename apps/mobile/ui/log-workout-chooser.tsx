@@ -89,7 +89,7 @@ export function LogWorkoutChooser({
       <View style={styles.overlay}>
         <Animated.View pointerEvents="none" style={[styles.backdrop, { opacity: backdropOpacity }]} />
         <Pressable accessibilityLabel="Close workout options" accessibilityRole="button" onPress={() => close(onDismiss)} style={styles.backdropPressable} />
-        <Animated.View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg), transform: [{ translateY: sheetTranslateY }] }]}>
+        <Animated.View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg), paddingLeft: Math.max(insets.left, spacing.xxl), paddingRight: Math.max(insets.right, spacing.xxl), transform: [{ translateY: sheetTranslateY }] }]}>
           <View style={styles.handle} />
           <Text style={styles.title}>Rep in</Text>
           <View style={styles.options}>

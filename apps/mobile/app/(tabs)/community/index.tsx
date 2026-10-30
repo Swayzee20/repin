@@ -5,8 +5,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { supabase } from "../../lib/supabase";
-import { clearWorkoutDetailCaches } from "../../lib/workout-detail-cache";
+import { supabase } from "../../../lib/supabase";
+import { clearWorkoutDetailCaches } from "../../../lib/workout-detail-cache";
 import {
   addLocalDays,
   formatCommunityDayLabel,
@@ -14,19 +14,20 @@ import {
   isSameLocalDay,
   startOfLocalDay,
   toLocalDateInputValue,
-} from "../../lib/community-date";
+} from "../../../lib/community-date";
 import {
   getWorkoutDataRevision,
   isFresh,
   markWorkoutDataStale,
   type FreshnessRecord,
-} from "../../lib/data-freshness";
-import { BrandHeader, CommunityFeed, LoadingState, StateCard } from "../../ui/components";
-import { CheckInEmptyContent } from "../../ui/check-in-empty-content";
-import { CommunityDatePicker } from "../../ui/community-date-picker";
-import { useMainTabs } from "../../ui/main-tabs-context";
-import { colors, fonts, radii, spacing, type } from "../../ui/theme";
-import { WorkoutDetailModal } from "../../ui/workout-detail-modal";
+} from "../../../lib/data-freshness";
+import { BrandHeader, CommunityFeed, LoadingState, StateCard } from "../../../ui/components";
+import { RepInPill } from "../../../ui/rep-in-pill";
+import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
+import { CommunityDatePicker } from "../../../ui/community-date-picker";
+import { useMainTabs } from "../../../ui/main-tabs-context";
+import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
+import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -60,9 +61,8 @@ export default function CommunityTabScreen() {
   const activeRoute = segments.join("/");
 
   useEffect(() => {
-    if (activeRoute === "(tabs)" || activeRoute === "(tabs)/index" || activeRoute === "(tabs)/profile") {
-      resetDateOnNextFocus.current = true;
-    }
+    const [root, tab] = activeRoute.split("/");
+    if (root === "(tabs)" && tab !== "community") resetDateOnNextFocus.current = true;
   }, [activeRoute]);
 
   const loadCommunity = useCallback(async () => {
@@ -290,7 +290,8 @@ export default function CommunityTabScreen() {
   if (error && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" /></View></SafeAreaView>;
 
   return (
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}>
+    <View style={styles.safeArea}>
+    <SafeAreaView edges={["top", "left", "right"]} style={styles.flex}>
       <View style={styles.content}>
         <BrandHeader />
 
@@ -460,6 +461,8 @@ export default function CommunityTabScreen() {
         visible={deleteTarget !== null}
       />
     </SafeAreaView>
+    <RepInPill />
+    </View>
   );
 }
 
@@ -513,6 +516,7 @@ function DeleteWorkoutModal({
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
+  flex: { flex: 1 },
   content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   pickerBackdrop: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0, zIndex: 10 },

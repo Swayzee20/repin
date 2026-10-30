@@ -1,7 +1,8 @@
 import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useRef, useState, type ReactNode } from "react";
+import { useVerticalBarEdgeIOS } from "expo-status-bar";
+import { useRef, useState, type ComponentRef, type ReactNode, type Ref } from "react";
 import type { StyleProp, TextInputProps, ViewInstance, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
@@ -9,7 +10,6 @@ import {
   Modal,
   Platform,
   Pressable,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
@@ -17,6 +17,7 @@ import {
   View,
   useWindowDimensions,
 } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   Extrapolation,
   interpolate,
@@ -109,19 +110,25 @@ export function Screen({
   preserveTransformedContent?: boolean;
 }) {
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <ScrollView
-        contentContainerStyle={[
-          styles.screenContent,
-          preserveTransformedContent && styles.transformedScreenContent,
-        ]}
+        contentContainerStyle={styles.screenScroll}
         keyboardDismissMode="on-drag"
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
         removeClippedSubviews={false}
         style={preserveTransformedContent ? styles.overflowVisible : undefined}
       >
-        {children}
+        <SafeAreaView edges={["left", "right"]} style={styles.sideInset}>
+          <View
+            style={[
+              styles.screenContent,
+              preserveTransformedContent && styles.transformedScreenContent,
+            ]}
+          >
+            {children}
+          </View>
+        </SafeAreaView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -186,6 +193,7 @@ export function TextField({
   hint,
   onBlur,
   onFocus,
+  ref,
   style,
   ...props
 }: TextInputProps & {
@@ -194,6 +202,7 @@ export function TextField({
   focusedStyle?: TextInputProps["style"];
   label?: string;
   hint?: string;
+  ref?: Ref<ComponentRef<typeof TextInput>>;
 }) {
   const [focused, setFocused] = useState(false);
 
@@ -201,6 +210,7 @@ export function TextField({
     <View style={[styles.field, compact && styles.fieldCompact, containerStyle]}>
       {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
       <TextInput
+        ref={ref}
         onBlur={(event) => {
           setFocused(false);
           onBlur?.(event);
@@ -466,6 +476,9 @@ export function CommunityFeed({
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
 }) {
+  const insets = useSafeAreaInsets();
+  const verticalBarEdge = useVerticalBarEdgeIOS();
+  const feedBottomPadding = verticalBarEdge !== null ? insets.bottom + spacing.xxl : 132;
   const resolvedViewportHeight = viewportHeight ?? (mode === "preview" ? 320 : 340);
   const visibleWorkouts = mode === "preview" ? workouts.slice(0, 4) : workouts;
   const scrollY = useSharedValue(0);
@@ -478,7 +491,7 @@ export function CommunityFeed({
   return (
     <View style={[styles.feedViewport, edgeToEdge && styles.edgeToEdgeFeedViewport, { height: resolvedViewportHeight }]}>
       <Animated.ScrollView
-        contentContainerStyle={styles.feedContent}
+        contentContainerStyle={[styles.feedContent, { paddingBottom: feedBottomPadding }]}
         directionalLockEnabled
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
@@ -606,12 +619,16 @@ function CommunityFeedItem({
 
 function PostOptionsMenu({ onDelete, onEdit }: { onDelete: () => void; onEdit: () => void }) {
   const anchor = useRef<ViewInstance>(null);
+  const insets = useSafeAreaInsets();
   const { width: viewportWidth } = useWindowDimensions();
   const [position, setPosition] = useState<{ left: number; top: number }>({ left: spacing.md, top: 0 });
   const [visible, setVisible] = useState(false);
   const open = () => {
     anchor.current?.measureInWindow((x, y, width, height) => {
-      setPosition({ left: Math.max(spacing.md, Math.min(x + width - 176, viewportWidth - 176 - spacing.md)), top: y + height + spacing.xs });
+      setPosition({
+        left: Math.max(insets.left + spacing.md, Math.min(x + width - 176, viewportWidth - insets.right - 176 - spacing.md)),
+        top: Math.max(insets.top + spacing.xs, y + height + spacing.xs),
+      });
       setVisible(true);
     });
   };
@@ -676,6 +693,8 @@ const styles = StyleSheet.create({
   lockup: { height: 29, width: 88 },
   wordmark: { fontFamily: fonts.display },
   safeArea: { backgroundColor: colors.background, flex: 1 },
+  screenScroll: { flexGrow: 1 },
+  sideInset: { flexGrow: 1 },
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
   transformedScreenContent: { overflow: "visible", paddingBottom: 96 },
   overflowVisible: { overflow: "visible" },
@@ -755,7 +774,7 @@ const styles = StyleSheet.create({
   },
   edgeToEdgeFeedViewport: { backgroundColor: colors.feed, borderRadius: 0 },
   feedScroller: { overflow: "visible" },
-  feedContent: { paddingBottom: 132, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
+  feedContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
   feedSlot: { minWidth: 0, overflow: "visible", paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },
   edgeFade: { height: 20, left: 0, position: "absolute", right: 0, zIndex: 10 },
   topFade: { top: 0 },
