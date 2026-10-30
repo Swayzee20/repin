@@ -64,7 +64,7 @@ function SignedOutRedirect() {
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ redirect?: string | string[] }>();
   const { ready, session } = useAuthSession();
-  if (isLayoutPreview()) return null;
+  if (__DEV__ && isLayoutPreview()) return null;
   if (!ready || session || !signedOutTabPaths.has(pathname)) return null;
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
   return (

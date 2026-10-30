@@ -34,7 +34,7 @@ export default function HomeScreen() {
   const verticalBarEdge = useVerticalBarEdgeIOS();
   const { openWorkoutChooser, setSelectedGroupId: setTabGroupId } = useMainTabs();
   const params = useLocalSearchParams<{ redirect?: string | string[] }>();
-  const layoutPreview = isLayoutPreview();
+  const layoutPreview = __DEV__ && isLayoutPreview();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
@@ -130,7 +130,7 @@ export default function HomeScreen() {
     return () => clearTimeout(timeout);
   }, [loadHome, localDayKey]);
 
-  const dashboardData = layoutPreview ? layoutPreviewHome() : homeData;
+  const dashboardData = __DEV__ && layoutPreview ? layoutPreviewHome() : homeData;
   const selectedGroup = useMemo(() => dashboardData?.groups.find((group) => group.id === dashboardData.selectedGroupId), [dashboardData]);
   const dashboardBottomPadding = verticalBarEdge !== null ? insets.bottom + spacing.xxl : 160;
   if (!layoutPreview && authLoading && !session) return <Shell><LoadingState message="Checking your account…" /></Shell>;
@@ -383,6 +383,9 @@ function deriveWeeklyHighlights(
 }
 
 function layoutPreviewHome(): HomeData {
+  if (!__DEV__) {
+    throw new Error("Home layout preview is development-only.");
+  }
   const maya = "Maya L.";
   const jordan = "Jordan P.";
   const sam = "Sam R.";

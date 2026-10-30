@@ -4,15 +4,11 @@ import { Image, Pressable, StyleSheet, Text, useWindowDimensions, View, type Tex
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import repinMarkLarge from "../assets/branding/repin-mark-large.png";
-import repinWordmark from "../assets/branding/repin-wordmark.png";
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { Button, Lockup, StateCard, TextField } from "../ui/components";
+import { Button, Lockup, StateCard, TextField, Wordmark } from "../ui/components";
 import { TwoPane, useLayoutMode } from "../ui/layout";
 import { colors, fonts, layout, spacing, type } from "../ui/theme";
-
-const wordmarkWidth = 148;
-const wordmarkHeight = Math.round(wordmarkWidth * (24 / 54));
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -160,7 +156,7 @@ function BrandPanel() {
   return (
     <View accessible={false} importantForAccessibility="no-hide-descendants" style={[styles.brandPanel, { minHeight: height }]}>
       <Image accessible={false} resizeMode="contain" source={repinMarkLarge} style={styles.brandMark} />
-      <Image accessible={false} resizeMode="contain" source={repinWordmark} style={styles.brandWordmark} />
+      <Wordmark decorative size={40} />
     </View>
   );
 }
@@ -169,8 +165,7 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   centered: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   brandPanel: { alignItems: "center", flexGrow: 1, justifyContent: "center", padding: spacing.xxl },
-  brandMark: { height: 96, width: 118 },
-  brandWordmark: { height: wordmarkHeight, marginTop: spacing.lg, width: wordmarkWidth },
+  brandMark: { height: 96, marginBottom: spacing.lg, width: 118 },
   formColumn: { flexGrow: 1, maxWidth: layout.formMax, paddingBottom: spacing.xxl, paddingTop: spacing.xxl + spacing.huge, width: "100%" },
   authIntro: { alignItems: "flex-start", marginBottom: spacing.xxxl },
   authTitle: { color: colors.ink, ...type.display, marginTop: spacing.xxl },

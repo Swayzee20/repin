@@ -49,16 +49,19 @@ const webFeedScrollerStyle =
     : undefined;
 
 export function Wordmark({
+  decorative = false,
   size = 22,
   tone = "default",
 }: {
+  decorative?: boolean;
   size?: number;
   tone?: "default" | "onBrand";
 }) {
   const onBrand = tone === "onBrand";
   return (
     <Text
-      accessibilityLabel="repin"
+      accessibilityLabel={decorative ? undefined : "repin"}
+      accessible={decorative ? false : undefined}
       style={[
         styles.wordmark,
         { fontFamily: fonts.display },
@@ -71,7 +74,7 @@ export function Wordmark({
       ]}
     >
       rep
-      <Text style={[styles.wordmark, { color: onBrand ? colors.ink : colors.brand, fontFamily: fonts.display }]}>in</Text>
+      <Text accessible={decorative ? false : undefined} style={[styles.wordmark, { color: onBrand ? colors.ink : colors.brand, fontFamily: fonts.display }]}>in</Text>
     </Text>
   );
 }
