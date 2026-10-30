@@ -147,7 +147,7 @@ export function Button({
   disabled?: boolean;
   loading?: boolean;
   onPress: () => void;
-  variant?: "primary" | "secondary" | "quiet";
+  variant?: "primary" | "secondary" | "quiet" | "danger";
   style?: ViewStyle;
 }) {
   const isDisabled = disabled || loading;
@@ -158,7 +158,7 @@ export function Button({
       onPress={onPress}
       style={({ pressed }) => [
         styles.button,
-        variant === "primary" ? styles.primaryButton : variant === "secondary" ? styles.secondaryButton : styles.quietButton,
+        variant === "primary" ? styles.primaryButton : variant === "danger" ? styles.dangerButton : variant === "secondary" ? styles.secondaryButton : styles.quietButton,
         pressed && !isDisabled && styles.pressed,
         pressed && !isDisabled && variant === "primary" && styles.primaryButtonPressed,
         isDisabled && styles.disabled,
@@ -166,9 +166,9 @@ export function Button({
       ]}
     >
       {loading ? (
-        <ActivityIndicator color={variant === "primary" ? colors.surface : colors.brand} />
+        <ActivityIndicator color={variant === "primary" || variant === "danger" ? colors.surface : colors.brand} />
       ) : (
-        <Text style={variant === "primary" ? styles.primaryButtonText : styles.secondaryButtonText}>{children}</Text>
+        <Text style={variant === "primary" || variant === "danger" ? styles.primaryButtonText : styles.secondaryButtonText}>{children}</Text>
       )}
     </Pressable>
   );
@@ -683,6 +683,7 @@ const styles = StyleSheet.create({
   backText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 15 },
   button: { alignItems: "center", borderRadius: radii.md, justifyContent: "center", minHeight: controls.buttonHeight, paddingHorizontal: spacing.lg },
   primaryButton: { backgroundColor: colors.brand },
+  dangerButton: { backgroundColor: colors.danger },
   primaryButtonPressed: { backgroundColor: colors.brandPressed },
   secondaryButton: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderWidth: 1 },
   quietButton: { backgroundColor: "transparent" },

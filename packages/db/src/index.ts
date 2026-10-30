@@ -1136,6 +1136,115 @@ export async function deleteCommunityPostForOwner(input: {
   });
 }
 
+export type AccountDeletionResult = {
+  deletedUser: boolean;
+  deletedGroupIds: string[];
+  transferredGroups: Array<{ groupId: string; newOwnerId: string }>;
+};
+
+// Removes one application user. Groups they own move to the longest-standing
+// other member (earliest joined_at, then user id). A group with nobody else
+// left is deleted, which removes its invite code, memberships, posts, and
+// legacy workout rows. Personal workout sessions of former members stay.
+// Definitions are deleted explicitly because their user foreign key is
+// ON DELETE SET NULL. Metrics, segments, movement results, and set results
+// cascade from the user's workout sessions.
+export async function deleteUserAccount(userId: string): Promise<AccountDeletionResult> {
+  return getDatabase().transaction(async (transaction) => {
+    const [existingUser] = await transaction
+      .select({ id: schema.users.id })
+      .from(schema.users)
+      .where(eq(schema.users.id, userId))
+      .limit(1)
+      .for("update");
+
+    if (!existingUser) {
+      return { deletedUser: false, deletedGroupIds: [], transferredGroups: [] };
+    }
+
+    const ownership = await releaseOwnedGroups(transaction, userId);
+    await deleteRowsOwnedByUser(transaction, userId);
+    return { deletedUser: true, ...ownership };
+  });
+}
+
+async function releaseOwnedGroups(
+  transaction: DatabaseTransaction,
+  userId: string,
+): Promise<Pick<AccountDeletionResult, "deletedGroupIds" | "transferredGroups">> {
+  const ownedGroups = await transaction
+    .select({ id: schema.groups.id })
+    .from(schema.groups)
+    .where(eq(schema.groups.ownerId, userId))
+    .orderBy(asc(schema.groups.id))
+    .for("update");
+
+  const deletedGroupIds: string[] = [];
+  const transferredGroups: AccountDeletionResult["transferredGroups"] = [];
+
+  for (const group of ownedGroups) {
+    const [successor] = await transaction
+      .select({ userId: schema.groupMembers.userId })
+      .from(schema.groupMembers)
+      .where(and(
+        eq(schema.groupMembers.groupId, group.id),
+        ne(schema.groupMembers.userId, userId),
+      ))
+      .orderBy(asc(schema.groupMembers.joinedAt), asc(schema.groupMembers.userId))
+      .limit(1);
+
+    if (!successor) {
+      await transaction.delete(schema.groups).where(eq(schema.groups.id, group.id));
+      deletedGroupIds.push(group.id);
+      continue;
+    }
+
+    await transaction
+      .update(schema.groupMembers)
+      .set({ role: "owner" })
+      .where(and(
+        eq(schema.groupMembers.groupId, group.id),
+        eq(schema.groupMembers.userId, successor.userId),
+      ));
+    await transaction
+      .update(schema.groups)
+      .set({ ownerId: successor.userId })
+      .where(eq(schema.groups.id, group.id));
+    await transaction
+      .delete(schema.groupMembers)
+      .where(and(
+        eq(schema.groupMembers.groupId, group.id),
+        eq(schema.groupMembers.userId, userId),
+      ));
+    transferredGroups.push({ groupId: group.id, newOwnerId: successor.userId });
+  }
+
+  return { deletedGroupIds, transferredGroups };
+}
+
+async function deleteRowsOwnedByUser(transaction: DatabaseTransaction, userId: string) {
+  await transaction
+    .delete(schema.communityPostReactions)
+    .where(eq(schema.communityPostReactions.userId, userId));
+  await transaction
+    .delete(schema.communityPostComments)
+    .where(eq(schema.communityPostComments.userId, userId));
+  await transaction
+    .delete(schema.communityPosts)
+    .where(eq(schema.communityPosts.userId, userId));
+  await transaction.delete(schema.workouts).where(eq(schema.workouts.userId, userId));
+  await transaction
+    .delete(schema.workoutSessions)
+    .where(eq(schema.workoutSessions.userId, userId));
+  await transaction
+    .delete(schema.workoutDefinitions)
+    .where(eq(schema.workoutDefinitions.createdByUserId, userId));
+  await transaction
+    .delete(schema.groupMembers)
+    .where(eq(schema.groupMembers.userId, userId));
+  await transaction.delete(schema.users).where(eq(schema.users.id, userId));
+}
+
 export async function listRecentWorkoutsForMember(input: {
   userId: string;
   groupId: string;
