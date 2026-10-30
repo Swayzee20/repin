@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
-import { Wordmark } from "../../ui/components";
+import { Lockup } from "../../ui/components";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 export default function GroupOnboardingScreen() {
@@ -36,7 +36,7 @@ export default function GroupOnboardingScreen() {
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
         <View style={styles.topRow}>
-          <Wordmark />
+          <Lockup />
           <Pressable accessibilityRole="button" hitSlop={10} onPress={() => void signOut()}><Text style={styles.signOut}>Sign out</Text></Pressable>
         </View>
 

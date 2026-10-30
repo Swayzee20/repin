@@ -1,12 +1,18 @@
 import { Feather } from "@expo/vector-icons";
-import { Pressable, StyleSheet, Text } from "react-native";
+import { Image, Pressable, StyleSheet, Text } from "react-native";
 
+import repinMarkLarge from "../assets/branding/repin-mark-large.png";
 import { colors, radii, spacing, type } from "./theme";
 
 export function CheckInEmptyContent({ onCheckIn }: { onCheckIn?: () => void }) {
   return (
     <>
-      <Feather color={colors.brand} name="activity" size={18} />
+      <Image
+        accessible={false}
+        resizeMode="contain"
+        source={repinMarkLarge}
+        style={styles.mark}
+      />
       <Text style={styles.secondary}>No one’s repped in yet</Text>
       <Text style={styles.primary}>Be the first to rep in</Text>
       {onCheckIn ? (
@@ -25,6 +31,7 @@ export function CheckInEmptyContent({ onCheckIn }: { onCheckIn?: () => void }) {
 }
 
 const styles = StyleSheet.create({
+  mark: { height: 96, width: 118 },
   secondary: { alignSelf: "center", color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
   primary: { alignSelf: "center", color: colors.ink, ...type.heading, marginTop: spacing.sm },
   action: {

@@ -3,7 +3,7 @@
     "name": "repin",
     "slug": "repin",
     "version": "1.0.0",
-    "icon": "./assets/branding/repin-app-icon.png",
+    "icon": "./assets/branding/icon.png",
     "orientation": "portrait",
     "scheme": "repin",
     "userInterfaceStyle": "light",
@@ -21,9 +21,9 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#FFFFFF",
-          "image": "./assets/branding/repin-splash-logo.png",
-          "imageWidth": 280,
+          "backgroundColor": "#FFFAF4",
+          "image": "./assets/branding/splash-icon.png",
+          "imageWidth": 200,
           "resizeMode": "contain"
         }
       ]
@@ -40,15 +40,17 @@
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#FFFFFF",
-        "foregroundImage": "./assets/branding/repin-app-icon.png"
+        "backgroundColor": "#2B211C",
+        "backgroundImage": "./assets/branding/adaptive-background.png",
+        "foregroundImage": "./assets/branding/adaptive-foreground.png",
+        "monochromeImage": "./assets/branding/adaptive-monochrome.png"
       },
       "package": "com.repin.mobile",
       "permissions": ["android.permission.RECORD_AUDIO"]
     },
     "web": {
       "bundler": "metro",
-      "favicon": "./assets/branding/repin-app-icon.png",
+      "favicon": "./assets/branding/favicon.png",
       "output": "single",
       "backgroundColor": "#FFFAF4",
       "themeColor": "#FFFAF4"

@@ -79,20 +79,23 @@ export const controls = {
 } as const;
 
 export const fonts = {
-  regular: "Outfit_400Regular",
-  medium: "Outfit_500Medium",
-  semibold: "Outfit_600SemiBold",
-  bold: "Outfit_700Bold",
+  regular: "Nunito_400Regular",
+  medium: "Nunito_500Medium",
+  semibold: "Nunito_600SemiBold",
+  bold: "Nunito_700Bold",
+  extrabold: "Nunito_800ExtraBold",
+  display: "Fredoka_700Bold",
 } as const;
 
 export const type = {
-  display: { fontFamily: fonts.bold, fontSize: 32, letterSpacing: -0.8, lineHeight: 39 },
-  screenTitle: { fontFamily: fonts.bold, fontSize: 26, letterSpacing: -0.5, lineHeight: 33 },
-  title: { fontFamily: fonts.bold, fontSize: 22, letterSpacing: -0.35, lineHeight: 29 },
-  heading: { fontFamily: fonts.bold, fontSize: 19, lineHeight: 25 },
+  display: { fontFamily: fonts.display, fontSize: 32, letterSpacing: -0.64, lineHeight: 39 },
+  screenTitle: { fontFamily: fonts.display, fontSize: 26, letterSpacing: -0.52, lineHeight: 33 },
+  title: { fontFamily: fonts.display, fontSize: 22, letterSpacing: -0.44, lineHeight: 29 },
+  heading: { fontFamily: fonts.display, fontSize: 19, letterSpacing: -0.38, lineHeight: 25 },
   body: { fontFamily: fonts.regular, fontSize: 16, lineHeight: 23 },
   bodyMedium: { fontFamily: fonts.medium, fontSize: 16, lineHeight: 23 },
   bodySmall: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
-  eyebrow: { fontFamily: fonts.bold, fontSize: 13, letterSpacing: 1.1, lineHeight: 18 },
+  eyebrow: { fontFamily: fonts.extrabold, fontSize: 13, letterSpacing: 1.1, lineHeight: 18 },
+  button: { fontFamily: fonts.extrabold, fontSize: 16, lineHeight: 20 },
 } as const;

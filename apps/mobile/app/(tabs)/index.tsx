@@ -14,7 +14,7 @@ import {
   type FreshnessRecord,
 } from "../../lib/data-freshness";
 import { useMainTabs } from "../../ui/main-tabs-context";
-import { BrandHeader, Button, Card, LoadingState, StateCard, TextField, Wordmark, WorkoutSummaryCard } from "../../ui/components";
+import { BrandHeader, Button, Card, LoadingState, Lockup, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
 import { CheckInEmptyContent } from "../../ui/check-in-empty-content";
 import { colors, floatingSurfaceStyle, fonts, radii, spacing, type } from "../../ui/theme";
 
@@ -141,7 +141,7 @@ export default function HomeScreen() {
   if (!session) return (
     <Shell flat>
       <View style={styles.authIntro}>
-        <Wordmark />
+        <Lockup />
         <Text style={styles.authTitle}>Welcome back</Text>
         <Text style={styles.authCopy}>Log in to your repin account.</Text>
       </View>

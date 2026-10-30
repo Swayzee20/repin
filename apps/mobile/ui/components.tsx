@@ -28,7 +28,9 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
-import repinHeaderMark from "../assets/branding/repin-header-mark.png";
+import repinLockup from "../assets/branding/repin-lockup.png";
+import repinLockupReversed from "../assets/branding/repin-lockup-reversed.png";
+import repinMark from "../assets/branding/repin-mark.png";
 import { formatWorkoutDate } from "../lib/workout-date";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
@@ -57,6 +59,7 @@ export function Wordmark({
       accessibilityLabel="repin"
       style={[
         styles.wordmark,
+        { fontFamily: fonts.display },
         {
           color: onBrand ? colors.surface : colors.ink,
           fontSize: size,
@@ -66,8 +69,21 @@ export function Wordmark({
       ]}
     >
       rep
-      <Text style={[styles.wordmark, { color: onBrand ? colors.ink : colors.brand }]}>in</Text>
+      <Text style={[styles.wordmark, { color: onBrand ? colors.ink : colors.brand, fontFamily: fonts.display }]}>in</Text>
     </Text>
+  );
+}
+
+export function Lockup({ tone = "default" }: { tone?: "default" | "onBrand" }) {
+  const onBrand = tone === "onBrand";
+  return (
+    <Image
+      accessibilityLabel="repin"
+      accessible
+      resizeMode="contain"
+      source={onBrand ? repinLockupReversed : repinLockup}
+      style={styles.lockup}
+    />
   );
 }
 
@@ -77,7 +93,7 @@ export function BrandHeader() {
       <Image
         accessible={false}
         resizeMode="contain"
-        source={repinHeaderMark}
+        source={repinMark}
         style={styles.brandHeaderMark}
       />
       <Wordmark />
@@ -656,8 +672,9 @@ function normalizeLabel(value: string) {
 
 const styles = StyleSheet.create({
   brandHeader: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
-  brandHeaderMark: { height: 16, width: 27 },
-  wordmark: { fontFamily: fonts.bold },
+  brandHeaderMark: { height: 29, width: 36 },
+  lockup: { height: 29, width: 88 },
+  wordmark: { fontFamily: fonts.display },
   safeArea: { backgroundColor: colors.background, flex: 1 },
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
   transformedScreenContent: { overflow: "visible", paddingBottom: 96 },
@@ -669,8 +686,8 @@ const styles = StyleSheet.create({
   primaryButtonPressed: { backgroundColor: colors.brandPressed },
   secondaryButton: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderWidth: 1 },
   quietButton: { backgroundColor: "transparent" },
-  primaryButtonText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 16 },
-  secondaryButtonText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16 },
+  primaryButtonText: { color: colors.surface, ...type.button },
+  secondaryButtonText: { color: colors.inkSoft, ...type.button },
   pressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
   disabled: { opacity: 0.48 },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg },
