@@ -7,11 +7,13 @@ import {
   Nunito_800ExtraBold,
   useFonts,
 } from "@expo-google-fonts/nunito";
-import { Stack } from "expo-router";
+import { Redirect, Stack, useGlobalSearchParams, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 
+import { normalizeInviteRedirect } from "../lib/invite-route";
+import { useAuthSession } from "../lib/use-auth-session";
 import { colors } from "../ui/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -43,7 +45,23 @@ export default function RootLayout() {
           headerShown: false,
         }}
       />
+      <SignedOutRedirect />
       <StatusBar style="dark" />
     </>
+  );
+}
+
+const signedOutTabPaths = new Set(["/", "/community", "/profile"]);
+
+function SignedOutRedirect() {
+  const pathname = usePathname();
+  const params = useGlobalSearchParams<{ redirect?: string | string[] }>();
+  const { ready, session } = useAuthSession();
+  if (!ready || session || !signedOutTabPaths.has(pathname)) return null;
+  const inviteRedirect = normalizeInviteRedirect(params.redirect);
+  return (
+    <Redirect
+      href={inviteRedirect ? { pathname: "/sign-in", params: { redirect: inviteRedirect } } : "/sign-in"}
+    />
   );
 }

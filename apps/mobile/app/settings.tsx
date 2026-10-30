@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../lib/supabase";
 import { BackButton, Button, TextField } from "../ui/components";
@@ -57,8 +58,9 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <SafeAreaView edges={["left", "right"]}>
         <BackButton onPress={() => router.back()} />
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.intro}>Manage your repin account.</Text>
@@ -111,6 +113,7 @@ export default function SettingsScreen() {
             <Button onPress={() => setConfirmingDelete(true)} variant="danger">Delete account</Button>
           )}
         </View>
+        </SafeAreaView>
       </ScrollView>
     </SafeAreaView>
   );
