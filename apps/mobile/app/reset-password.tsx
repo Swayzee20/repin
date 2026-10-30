@@ -18,6 +18,7 @@ import {
 } from "../lib/password-reset";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { BackButton, Button, LoadingState, StateCard, TextField } from "../ui/components";
+import { WideColumn } from "../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../ui/theme";
 
 type Phase = "checking" | "invalid" | "form" | "success";
@@ -182,6 +183,7 @@ export default function ResetPasswordScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn max="form">
           <BackButton
             label="Sign In"
             onPress={() => void returnToSignIn(phase === "form" && sessionEstablishedFromLink)}
@@ -257,6 +259,7 @@ export default function ResetPasswordScreen() {
               </Button>
             </View>
           ) : null}
+          </WideColumn>
           </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>

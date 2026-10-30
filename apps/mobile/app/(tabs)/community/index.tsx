@@ -22,6 +22,7 @@ import {
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
 import { BrandHeader, CommunityFeed, LoadingState, StateCard } from "../../../ui/components";
+import { CenteredCard, WideColumn } from "../../../ui/layout";
 import { RepInPill } from "../../../ui/rep-in-pill";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { CommunityDatePicker } from "../../../ui/community-date-picker";
@@ -286,12 +287,13 @@ export default function CommunityTabScreen() {
     }
   }, [deleteTarget, selectedGroup]);
 
-  if (loading && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><LoadingState message="Loading Community…" /></SafeAreaView>;
-  if (error && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" /></View></SafeAreaView>;
+  if (loading && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><WideColumn fill><LoadingState message="Loading Community…" /></WideColumn></SafeAreaView>;
+  if (error && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><WideColumn fill><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" /></View></WideColumn></SafeAreaView>;
 
   return (
     <View style={styles.safeArea}>
     <SafeAreaView edges={["top", "left", "right"]} style={styles.flex}>
+      <WideColumn fill>
       <View style={styles.content}>
         <BrandHeader />
 
@@ -427,6 +429,7 @@ export default function CommunityTabScreen() {
           <StateCard actionLabel="Join a group" message="Join or create a group to start training with your community." onAction={() => router.push("/groups/join")} title="Find your crew" />
         )}
       </View>
+      </WideColumn>
       <CommunityDatePicker
         maximumDate={currentDay}
         onChange={selectDate}
@@ -486,7 +489,8 @@ function DeleteWorkoutModal({
   return (
     <Modal animationType="fade" onRequestClose={onDismiss} transparent visible={visible}>
       <View style={styles.deleteOverlay}>
-        <Pressable accessibilityLabel="Cancel deletion" disabled={pending} onPress={onDismiss} style={StyleSheet.absoluteFill} />
+        <Pressable accessibilityLabel="Cancel deletion" disabled={pending} onPress={onDismiss} style={[StyleSheet.absoluteFill, styles.deleteBackdrop]} />
+        <CenteredCard>
         <View accessibilityViewIsModal style={styles.deletePanel}>
           <Text style={styles.deleteTitle}>{stage === "choose" ? "Delete workout?" : "Permanently delete workout?"}</Text>
           <Text style={styles.deleteMessage}>{stage === "choose" ? "Choose what you want to remove." : "This removes the workout from your history and every Community post. This cannot be undone."}</Text>
@@ -509,6 +513,7 @@ function DeleteWorkoutModal({
           {error ? <Text style={styles.deleteError}>{error}</Text> : null}
           <Pressable accessibilityRole="button" disabled={pending} onPress={onDismiss} style={styles.cancelDelete}><Text style={styles.cancelDeleteText}>Cancel</Text></Pressable>
         </View>
+        </CenteredCard>
       </View>
     </Modal>
   );
@@ -545,8 +550,9 @@ const styles = StyleSheet.create({
   todayEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
   historicalEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
   historicalEmptyText: { color: colors.muted, ...type.body, textAlign: "center" },
-  deleteOverlay: { backgroundColor: colors.overlay, flex: 1, justifyContent: "flex-end" },
-  deletePanel: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, padding: spacing.xxl, paddingBottom: 40 },
+  deleteOverlay: { flex: 1 },
+  deleteBackdrop: { backgroundColor: colors.overlay },
+  deletePanel: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.xxl, width: "100%" },
   deleteTitle: { color: colors.ink, ...type.title },
   deleteMessage: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
   deleteChoice: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, minHeight: 72, paddingVertical: spacing.md },

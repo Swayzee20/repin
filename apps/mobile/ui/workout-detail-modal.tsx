@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 
+import { CenteredCard } from "./layout";
 import { colors, radii, spacing } from "./theme";
 import { WorkoutDetailView } from "./workout-detail";
 
@@ -45,22 +46,19 @@ export function WorkoutDetailModal({
   sessionId: string | null;
   visible: boolean;
 }) {
-  const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
+  const { height: viewportHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const panelOpacity = useRef(new Animated.Value(0)).current;
   const panelScale = useRef(new Animated.Value(0.96)).current;
   const closing = useRef(false);
   const useNativeDriver = Platform.OS !== "web";
-  const panelLayout = useMemo(
-    () => ({
-      maxHeight: Math.min(
-        viewportHeight * 0.8,
-        Math.max(0, viewportHeight - Math.max(insets.top, spacing.lg) - Math.max(insets.bottom, spacing.lg) - spacing.xl),
-      ),
-      width: Math.min(620, Math.max(0, viewportWidth - spacing.md * 2)),
-    }),
-    [insets.bottom, insets.top, viewportHeight, viewportWidth],
+  const panelMaxHeight = useMemo(
+    () => Math.min(
+      viewportHeight * 0.8,
+      Math.max(0, viewportHeight - Math.max(insets.top, spacing.lg) - Math.max(insets.bottom, spacing.lg) - spacing.xl),
+    ),
+    [insets.bottom, insets.top, viewportHeight],
   );
 
   useEffect(() => {
@@ -139,13 +137,15 @@ export function WorkoutDetailModal({
           onPress={close}
           style={styles.backdropPressable}
         />
+        <CenteredCard>
         <Animated.View
           style={[
             styles.panel,
-            panelLayout,
             {
+              maxHeight: panelMaxHeight,
               opacity: panelOpacity,
               transform: [{ scale: panelScale }],
+              width: "100%",
             },
           ]}
         >
@@ -165,7 +165,7 @@ export function WorkoutDetailModal({
             {groupId && sessionId ? (
               <WorkoutDetailView
                 detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
-                detailPhotoMaxHeight={panelLayout.maxHeight * 0.4}
+                detailPhotoMaxHeight={panelMaxHeight * 0.4}
                 groupId={groupId}
                 seedWorkout={initialWorkout ?? undefined}
                 onCommentCountChange={onCommentCountChange}
@@ -182,6 +182,7 @@ export function WorkoutDetailModal({
             style={styles.topScrollFade}
           />
         </Animated.View>
+        </CenteredCard>
       </View>
     </Modal>
   );

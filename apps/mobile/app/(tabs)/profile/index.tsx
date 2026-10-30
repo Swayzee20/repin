@@ -11,6 +11,7 @@ import {
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
 import { BrandHeader, LoadingState, StateCard } from "../../../ui/components";
+import { WideColumn } from "../../../ui/layout";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { RepInPill } from "../../../ui/rep-in-pill";
 import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
@@ -99,8 +100,8 @@ export default function ProfileTabScreen() {
   const initials = useMemo(() => getUserInitials({ displayName: data?.user.displayName }), [data]);
   const insets = useSafeAreaInsets();
 
-  if (loading && !data) return <SafeAreaView style={styles.safeArea}><LoadingState message="Loading profile…" /></SafeAreaView>;
-  if (error && !data) return <SafeAreaView style={styles.safeArea}><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadProfile()} title="Profile unavailable" /></View></SafeAreaView>;
+  if (loading && !data) return <SafeAreaView style={styles.safeArea}><WideColumn fill><LoadingState message="Loading profile…" /></WideColumn></SafeAreaView>;
+  if (error && !data) return <SafeAreaView style={styles.safeArea}><WideColumn fill><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadProfile()} title="Profile unavailable" /></View></WideColumn></SafeAreaView>;
   if (!data) return null;
 
   return (
@@ -108,6 +109,7 @@ export default function ProfileTabScreen() {
       <SafeAreaView edges={["top"]} style={styles.flex}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <SafeAreaView edges={["left", "right"]} style={styles.flexGrow}>
+        <WideColumn>
         <View style={styles.content}>
         <BrandHeader />
         <View style={styles.identity}>
@@ -179,6 +181,7 @@ export default function ProfileTabScreen() {
           </Pressable>
         </View>
         </View>
+        </WideColumn>
         </SafeAreaView>
       </ScrollView>
       </SafeAreaView>

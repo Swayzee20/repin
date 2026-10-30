@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { BackButton, Button, TextField } from "../../ui/components";
+import { WideColumn } from "../../ui/layout";
 import { colors, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -43,6 +44,7 @@ export default function CreateFirstGroupScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn max="form">
           <BackButton label="Get Started" onPress={() => router.back()} />
           <Text style={styles.eyebrow}>BUILD YOUR CREW</Text>
           <Text style={styles.title}>Create a group</Text>
@@ -52,6 +54,7 @@ export default function CreateFirstGroupScreen() {
             {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
             <Button disabled={!name.trim()} loading={submitting} onPress={() => void createGroup()}>Create Group</Button>
           </View>
+          </WideColumn>
           </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>

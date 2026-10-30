@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../lib/supabase";
 import { BackButton, Button, TextField } from "../ui/components";
+import { WideColumn } from "../ui/layout";
 import { colors, radii, spacing, type } from "../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -61,6 +62,7 @@ export default function SettingsScreen() {
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SafeAreaView edges={["left", "right"]}>
+        <WideColumn max="form">
         <BackButton onPress={() => router.back()} />
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.intro}>Manage your repin account.</Text>
@@ -113,6 +115,7 @@ export default function SettingsScreen() {
             <Button onPress={() => setConfirmingDelete(true)} variant="danger">Delete account</Button>
           )}
         </View>
+        </WideColumn>
         </SafeAreaView>
       </ScrollView>
     </SafeAreaView>
