@@ -72,19 +72,19 @@ export function WorkoutDetailModal({
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         duration: 180,
-        easing: Easing.out(Easing.quad),
+        easing: Easing.out((value) => Easing.quad(value)),
         toValue: 1,
         useNativeDriver,
       }),
       Animated.timing(panelOpacity, {
         duration: 210,
-        easing: Easing.out(Easing.quad),
+        easing: Easing.out((value) => Easing.quad(value)),
         toValue: 1,
         useNativeDriver,
       }),
       Animated.timing(panelScale, {
         duration: 210,
-        easing: Easing.out(Easing.cubic),
+        easing: Easing.out((value) => Easing.cubic(value)),
         toValue: 1,
         useNativeDriver,
       }),
@@ -97,19 +97,19 @@ export function WorkoutDetailModal({
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         duration: 160,
-        easing: Easing.in(Easing.quad),
+        easing: Easing.in((value) => Easing.quad(value)),
         toValue: 0,
         useNativeDriver,
       }),
       Animated.timing(panelOpacity, {
         duration: 180,
-        easing: Easing.in(Easing.quad),
+        easing: Easing.in((value) => Easing.quad(value)),
         toValue: 0,
         useNativeDriver,
       }),
       Animated.timing(panelScale, {
         duration: 180,
-        easing: Easing.in(Easing.cubic),
+        easing: Easing.in((value) => Easing.cubic(value)),
         toValue: 0.96,
         useNativeDriver,
       }),

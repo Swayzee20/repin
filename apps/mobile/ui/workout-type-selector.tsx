@@ -47,13 +47,13 @@ export function WorkoutTypeSelector({
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         duration: 180,
-        easing: Easing.out(Easing.quad),
+        easing: Easing.out((value) => Easing.quad(value)),
         toValue: 1,
         useNativeDriver,
       }),
       Animated.timing(sheetTranslateY, {
         duration: 220,
-        easing: Easing.out(Easing.cubic),
+        easing: Easing.out((value) => Easing.cubic(value)),
         toValue: 0,
         useNativeDriver,
       }),
@@ -66,13 +66,13 @@ export function WorkoutTypeSelector({
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         duration: 160,
-        easing: Easing.in(Easing.quad),
+        easing: Easing.in((value) => Easing.quad(value)),
         toValue: 0,
         useNativeDriver,
       }),
       Animated.timing(sheetTranslateY, {
         duration: 200,
-        easing: Easing.in(Easing.cubic),
+        easing: Easing.in((value) => Easing.cubic(value)),
         toValue: windowHeight,
         useNativeDriver,
       }),

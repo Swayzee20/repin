@@ -2,7 +2,7 @@ import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRef, useState, type ReactNode } from "react";
-import type { StyleProp, TextInputProps, ViewStyle } from "react-native";
+import type { StyleProp, TextInputProps, ViewInstance, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
   Image,
@@ -605,7 +605,7 @@ function CommunityFeedItem({
 }
 
 function PostOptionsMenu({ onDelete, onEdit }: { onDelete: () => void; onEdit: () => void }) {
-  const anchor = useRef<View>(null);
+  const anchor = useRef<ViewInstance>(null);
   const { width: viewportWidth } = useWindowDimensions();
   const [position, setPosition] = useState<{ left: number; top: number }>({ left: spacing.md, top: 0 });
   const [visible, setVisible] = useState(false);
