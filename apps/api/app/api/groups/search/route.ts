@@ -12,6 +12,8 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   try {
+    // Search only returns groups the caller has already joined. It is not a
+    // way to discover groups or their ids. Joining requires an invite code.
     const user = await requireApplicationUser(request);
     const url = new URL(request.url);
     const input = groupSearchQuerySchema.safeParse({ q: url.searchParams.get("q") });

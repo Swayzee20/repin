@@ -668,7 +668,17 @@ export function searchGroupsForUser(input: {
       schema.groupMembers,
       eq(schema.groupMembers.groupId, schema.groups.id),
     )
-    .where(ilike(schema.groups.name, `%${escapedQuery}%`))
+    .where(
+      and(
+        ilike(schema.groups.name, `%${escapedQuery}%`),
+        sql`exists (
+          select 1
+          from ${schema.groupMembers} as member_self
+          where member_self.group_id = ${schema.groups.id}
+            and member_self.user_id = ${input.userId}
+        )`,
+      ),
+    )
     .groupBy(schema.groups.id)
     .orderBy(asc(schema.groups.name))
     .limit(input.limit ?? 10);
@@ -711,15 +721,30 @@ export async function joinGroupByInviteCode(input: {
 }) {
   const group = await getGroupPreviewByInviteCode(input);
   if (!group) return null;
-  return joinGroup({ userId: input.userId, groupId: group.id });
+  return joinGroup({
+    userId: input.userId,
+    groupId: group.id,
+    inviteCode: input.inviteCode,
+  });
 }
 
-export async function joinGroup(input: { userId: string; groupId: string }) {
+export async function joinGroup(input: {
+  userId: string;
+  groupId: string;
+  inviteCode: string;
+}) {
+  const inviteCode = input.inviteCode.trim().toUpperCase();
+
   return getDatabase().transaction(async (transaction) => {
     const [group] = await transaction
       .select({ id: schema.groups.id, name: schema.groups.name })
       .from(schema.groups)
-      .where(eq(schema.groups.id, input.groupId))
+      .where(
+        and(
+          eq(schema.groups.id, input.groupId),
+          eq(schema.groups.inviteCode, inviteCode),
+        ),
+      )
       .limit(1);
 
     if (!group) return null;

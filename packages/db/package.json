@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
+    "test:security": "node --conditions=react-server --import ./test/register.mjs --test --test-concurrency=1 test/security.test.mjs",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

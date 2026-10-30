@@ -12,6 +12,7 @@
     "dev:api": "turbo dev --filter=@repin/api",
     "dev:mobile": "turbo dev --filter=@repin/mobile",
     "lint": "eslint . --max-warnings=0",
+    "test:security": "pnpm --filter @repin/db test:security",
     "typecheck": "turbo typecheck",
     "build:web": "pnpm --dir apps/mobile run build:web"
   },
