@@ -1,48 +1,25 @@
 import "server-only";
 
-import { createClient } from "@supabase/supabase-js";
+import { getSupabaseAdminClient } from "./supabase-admin";
 
 const SIGNED_URL_LIFETIME_SECONDS = 60 * 60;
 
 type WorkoutWithPhotoPath = { id: string; photoPath: string | null };
 
 function getStorageAdminClient() {
-  const supabaseUrl = process.env.SUPABASE_URL?.trim();
-  const secretKey = process.env.SUPABASE_SECRET_KEY?.trim();
-  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim();
-  const storageAdminKey = secretKey || serviceRoleKey;
-  const keySource: "secret" | "service_role" | null = secretKey
-    ? "secret"
-    : serviceRoleKey
-      ? "service_role"
-      : null;
-  const publishableKey = process.env.SUPABASE_PUBLISHABLE_KEY?.trim();
-
-  if (!supabaseUrl || !storageAdminKey) {
+  try {
+    return getSupabaseAdminClient();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "";
+    if (message.includes("publishable key")) {
+      throw new Error(
+        "Supabase workout photo signing is configured with a publishable key instead of a server secret",
+      );
+    }
     throw new Error(
       "Supabase workout photo signing requires SUPABASE_SECRET_KEY or SUPABASE_SERVICE_ROLE_KEY",
     );
   }
-
-  if (
-    storageAdminKey === publishableKey ||
-    storageAdminKey.startsWith("sb_publishable_")
-  ) {
-    throw new Error(
-      "Supabase workout photo signing is configured with a publishable key instead of a server secret",
-    );
-  }
-
-  return {
-    client: createClient(supabaseUrl, storageAdminKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    }),
-    keySource,
-  };
 }
 
 export async function addAuthorizedWorkoutPhotoUrls<T extends WorkoutWithPhotoPath>(

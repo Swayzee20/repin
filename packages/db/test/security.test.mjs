@@ -808,6 +808,350 @@ test("invite-only groups and row level security", async () => {
   }
 });
 
+test("account deletion transfers ownership and deletes an empty group", async () => {
+  const testUrl = await recreateDatabase();
+  process.env.DATABASE_URL = testUrl;
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+    const db = await import("../src/index.ts");
+
+    const ownerId = "10000000-0000-4000-8000-000000000001";
+    const earlyId = "10000000-0000-4000-8000-000000000002";
+    const lateId = "10000000-0000-4000-8000-000000000003";
+    const tieOwnerId = "20000000-0000-4000-8000-0000000000aa";
+    const tieLowId = "20000000-0000-4000-8000-000000000001";
+    const tieHighId = "20000000-0000-4000-8000-000000000002";
+    const soleId = "30000000-0000-4000-8000-000000000001";
+    const formerId = "30000000-0000-4000-8000-000000000002";
+    const bareId = "40000000-0000-4000-8000-000000000001";
+
+    const missing = await db.deleteUserAccount(crypto.randomUUID());
+    assert.deepEqual(missing, {
+      deletedUser: false,
+      deletedGroupIds: [],
+      transferredGroups: [],
+    });
+
+    const owner = await db.getOrCreateUser({ id: ownerId, displayName: "Owner" });
+    const early = await db.getOrCreateUser({ id: earlyId, displayName: "Early" });
+    const late = await db.getOrCreateUser({ id: lateId, displayName: "Late" });
+    const tieOwner = await db.getOrCreateUser({ id: tieOwnerId, displayName: "Tie Owner" });
+    const tieLow = await db.getOrCreateUser({ id: tieLowId, displayName: "Tie Low" });
+    const tieHigh = await db.getOrCreateUser({ id: tieHighId, displayName: "Tie High" });
+    const sole = await db.getOrCreateUser({ id: soleId, displayName: "Sole" });
+    const former = await db.getOrCreateUser({ id: formerId, displayName: "Former" });
+    const bare = await db.getOrCreateUser({ id: bareId, displayName: "Bare" });
+    await db.createMovement({ name: "Back Squat", slug: "back-squat" });
+
+    const shared = await db.createGroup({ ownerId: owner.id, name: "Shared Crew" });
+    await db.joinGroup({ userId: early.id, groupId: shared.id, inviteCode: shared.inviteCode });
+    await db.joinGroup({ userId: late.id, groupId: shared.id, inviteCode: shared.inviteCode });
+    await client.query(
+      "update group_members set joined_at = $1 where group_id = $2 and user_id = $3",
+      ["2019-01-01T00:00:00.000Z", shared.id, early.id],
+    );
+    await client.query(
+      "update group_members set joined_at = $1 where group_id = $2 and user_id = $3",
+      ["2024-06-01T00:00:00.000Z", shared.id, late.id],
+    );
+    await client.query(
+      "update group_members set joined_at = $1 where group_id = $2 and user_id = $3",
+      ["2021-01-01T00:00:00.000Z", shared.id, owner.id],
+    );
+
+    const ownerPost = await loggedWorkout(db, owner, shared.id, "Owner workout");
+    const earlyPost = await loggedWorkout(db, early, shared.id, "Early workout");
+    const latePost = await loggedWorkout(db, late, shared.id, "Late workout");
+    assert.ok(ownerPost && earlyPost && latePost);
+    await client.query(
+      "update community_posts set photo_path = $1 where workout_session_id = $2",
+      [`${owner.id}/photo.jpg`, ownerPost.id],
+    );
+    await db.createCommunityPostCommentForMember({
+      userId: owner.id,
+      displayName: owner.displayName,
+      groupId: shared.id,
+      workoutSessionId: earlyPost.id,
+      text: "Owner note",
+    });
+    await db.createCommunityPostCommentForMember({
+      userId: early.id,
+      displayName: early.displayName,
+      groupId: shared.id,
+      workoutSessionId: ownerPost.id,
+      text: "On owner",
+    });
+    await db.createCommunityPostCommentForMember({
+      userId: early.id,
+      displayName: early.displayName,
+      groupId: shared.id,
+      workoutSessionId: earlyPost.id,
+      text: "On mine",
+    });
+    await db.setCommunityPostReactionForMember({
+      userId: owner.id,
+      groupId: shared.id,
+      workoutSessionId: earlyPost.id,
+      reactionType: "fire",
+    });
+    await db.setCommunityPostReactionForMember({
+      userId: early.id,
+      groupId: shared.id,
+      workoutSessionId: earlyPost.id,
+      reactionType: "clap",
+    });
+
+    const ownerDefinition = await db.createWorkoutDefinition({
+      createdByUserId: owner.id,
+      title: "Owner plan",
+      sourceType: "manual",
+      blocks: [{
+        position: 0,
+        type: "straight_sets",
+        movements: [{ movementName: "Squat", position: 0 }],
+      }],
+    });
+    const earlyDefinition = await db.createWorkoutDefinition({
+      createdByUserId: early.id,
+      title: "Early plan",
+      sourceType: "manual",
+      blocks: [],
+    });
+    const blockMovementId = ownerDefinition.blocks[0]?.movements[0]?.id;
+    assert.ok(blockMovementId);
+    await client.query(
+      "update workout_sessions set workout_definition_id = $1 where id = $2",
+      [ownerDefinition.id, earlyPost.id],
+    );
+    const linked = await client.query(
+      "update session_movement_results set block_movement_id = $1 where workout_session_id = $2",
+      [blockMovementId, earlyPost.id],
+    );
+    assert.equal(linked.rowCount, 1);
+    await client.query(
+      `insert into workouts (user_id, group_id, workout_type, title, occurred_at, completed_at)
+       values ($1, $2, 'run', 'Owner legacy', now(), now()),
+              ($3, $2, 'run', 'Early legacy', now(), now())`,
+      [owner.id, shared.id, early.id],
+    );
+
+    const tie = await db.createGroup({ ownerId: tieOwner.id, name: "Tie Crew" });
+    await db.joinGroup({ userId: tieHigh.id, groupId: tie.id, inviteCode: tie.inviteCode });
+    await db.joinGroup({ userId: tieLow.id, groupId: tie.id, inviteCode: tie.inviteCode });
+    await client.query(
+      "update group_members set joined_at = $1 where group_id = $2 and user_id = any($3::uuid[])",
+      ["2020-01-01T00:00:00.000Z", tie.id, [tieLow.id, tieHigh.id]],
+    );
+
+    const empty = await db.createGroup({ ownerId: sole.id, name: "Empty Crew" });
+    await db.joinGroup({ userId: former.id, groupId: empty.id, inviteCode: empty.inviteCode });
+    const formerPost = await loggedWorkout(db, former, empty.id, "Former workout");
+    assert.ok(formerPost);
+    await client.query(
+      "delete from group_members where group_id = $1 and user_id = $2",
+      [empty.id, former.id],
+    );
+    const solePost = await loggedWorkout(db, sole, empty.id, "Sole workout");
+    assert.ok(solePost);
+    await client.query(
+      `insert into workouts (user_id, group_id, workout_type, title, occurred_at, completed_at)
+       values ($1, $2, 'run', 'Former legacy', now(), now()),
+              ($3, $2, 'run', 'Sole legacy', now(), now())`,
+      [former.id, empty.id, sole.id],
+    );
+
+    const removedLate = await db.deleteUserAccount(late.id);
+    assert.deepEqual(removedLate, {
+      deletedUser: true,
+      deletedGroupIds: [],
+      transferredGroups: [],
+    });
+    assert.equal(await countRows(client, "users", "id = $1", [late.id]), 0);
+    assert.equal(await countRows(client, "community_posts", "workout_session_id = $1", [latePost.id]), 0);
+    assert.equal(await countRows(client, "workout_sessions", "id = $1", [latePost.id]), 0);
+    assert.equal(
+      await scalar(client, "postgres", null, "select owner_id from groups where id = $1", [shared.id]),
+      owner.id,
+    );
+    assert.equal(
+      await scalar(client, "postgres", null, "select caption from community_posts where workout_session_id = $1", [earlyPost.id]),
+      "Early workout",
+    );
+    assert.equal(
+      await scalar(client, "postgres", null, "select invite_code from groups where id = $1", [shared.id]),
+      shared.inviteCode,
+    );
+
+    const removedOwner = await db.deleteUserAccount(owner.id);
+    assert.equal(removedOwner.deletedUser, true);
+    assert.deepEqual(removedOwner.deletedGroupIds, []);
+    assert.deepEqual(removedOwner.transferredGroups, [{
+      groupId: shared.id,
+      newOwnerId: early.id,
+    }]);
+    assert.equal(await countRows(client, "users", "id = $1", [owner.id]), 0);
+    assert.equal(
+      await scalar(client, "postgres", null, "select owner_id from groups where id = $1", [shared.id]),
+      early.id,
+    );
+    assert.equal(
+      await scalar(client, "postgres", null, "select role from group_members where group_id = $1 and user_id = $2", [shared.id, early.id]),
+      "owner",
+    );
+    assert.equal(await countRows(client, "group_members", "group_id = $1 and user_id = $2", [shared.id, owner.id]), 0);
+    assert.equal(await countRows(client, "group_members", "group_id = $1 and role = 'owner'", [shared.id]), 1);
+    assert.equal(
+      await scalar(client, "postgres", null, "select invite_code from groups where id = $1", [shared.id]),
+      shared.inviteCode,
+    );
+    assert.deepEqual(await db.getPublicGroupInviteByCode(shared.inviteCode), {
+      name: "Shared Crew",
+      inviteCode: shared.inviteCode,
+    });
+    assert.equal(await countRows(client, "community_posts", "workout_session_id = $1", [ownerPost.id]), 0);
+    assert.equal(await countRows(client, "workout_sessions", "id = $1", [ownerPost.id]), 0);
+    assert.equal(await countRows(client, "workout_session_metrics", "workout_session_id = $1", [ownerPost.id]), 0);
+    assert.equal(await countRows(client, "workout_session_segments", "workout_session_id = $1", [ownerPost.id]), 0);
+    assert.equal(await countRows(client, "set_results", "session_movement_result_id in (select id from session_movement_results where workout_session_id = $1)", [ownerPost.id]), 0);
+    assert.equal(
+      await scalar(client, "postgres", null, "select caption from community_posts where workout_session_id = $1", [earlyPost.id]),
+      "Early workout",
+    );
+    assert.equal(await countRows(client, "workout_sessions", "id = $1", [earlyPost.id]), 1);
+    assert.equal(await countRows(client, "workout_session_metrics", "workout_session_id = $1", [earlyPost.id]), 1);
+    assert.equal(await countRows(client, "set_results", "session_movement_result_id in (select id from session_movement_results where workout_session_id = $1)", [earlyPost.id]), 1);
+    assert.equal(await countRows(client, "community_post_comments", "text = 'Owner note'"), 0);
+    assert.equal(await countRows(client, "community_post_comments", "text = 'On owner'"), 0);
+    assert.equal(
+      await scalar(client, "postgres", null, "select text from community_post_comments where text = 'On mine'"),
+      "On mine",
+    );
+    assert.equal(await countRows(client, "community_post_reactions", "user_id = $1", [owner.id]), 0);
+    assert.equal(
+      await scalar(client, "postgres", null, "select reaction_type from community_post_reactions where user_id = $1", [early.id]),
+      "clap",
+    );
+    assert.equal(await countRows(client, "workout_definitions", "id = $1", [ownerDefinition.id]), 0);
+    assert.equal(await countRows(client, "workout_blocks", "workout_definition_id = $1", [ownerDefinition.id]), 0);
+    assert.equal(await countRows(client, "block_movements", "id = $1", [blockMovementId]), 0);
+    assert.equal(
+      await scalar(client, "postgres", null, "select workout_definition_id from workout_sessions where id = $1", [earlyPost.id]),
+      null,
+    );
+    assert.equal(
+      await scalar(client, "postgres", null, "select block_movement_id from session_movement_results where workout_session_id = $1", [earlyPost.id]),
+      null,
+    );
+    assert.equal(
+      await scalar(client, "postgres", null, "select title from workout_definitions where id = $1", [earlyDefinition.id]),
+      "Early plan",
+    );
+    assert.equal(await countRows(client, "workouts", "user_id = $1", [owner.id]), 0);
+    assert.equal(await countRows(client, "workouts", "user_id = $1 and group_id = $2", [early.id, shared.id]), 1);
+    assert.equal(
+      await scalar(client, "postgres", null, "select name from movements where slug = 'back-squat'"),
+      "Back Squat",
+    );
+
+    const removedTieOwner = await db.deleteUserAccount(tieOwner.id);
+    assert.deepEqual(removedTieOwner.transferredGroups, [{
+      groupId: tie.id,
+      newOwnerId: tieLow.id,
+    }]);
+    assert.equal(
+      await scalar(client, "postgres", null, "select owner_id from groups where id = $1", [tie.id]),
+      tieLow.id,
+    );
+    assert.equal(
+      await scalar(client, "postgres", null, "select role from group_members where group_id = $1 and user_id = $2", [tie.id, tieHigh.id]),
+      "member",
+    );
+    const tieInvite = await db.getPublicGroupInviteByCode(tie.inviteCode);
+    assert.equal(tieInvite?.inviteCode, tie.inviteCode);
+
+    const removedSole = await db.deleteUserAccount(sole.id);
+    assert.equal(removedSole.deletedUser, true);
+    assert.deepEqual(removedSole.deletedGroupIds, [empty.id]);
+    assert.deepEqual(removedSole.transferredGroups, []);
+    assert.equal(await countRows(client, "groups", "id = $1", [empty.id]), 0);
+    assert.equal(await countRows(client, "users", "id = $1", [sole.id]), 0);
+    assert.equal(await db.getPublicGroupInviteByCode(empty.inviteCode), null);
+    assert.equal(await countRows(client, "community_posts", "group_id = $1", [empty.id]), 0);
+    assert.equal(await countRows(client, "community_posts", "workout_session_id = $1", [formerPost.id]), 0);
+    assert.equal(await countRows(client, "workouts", "group_id = $1", [empty.id]), 0);
+    assert.equal(await countRows(client, "workouts", "user_id = $1", [former.id]), 0);
+    assert.equal(await countRows(client, "workout_sessions", "id = $1", [formerPost.id]), 1);
+    assert.equal(await countRows(client, "workout_session_metrics", "workout_session_id = $1", [formerPost.id]), 1);
+    assert.equal(await countRows(client, "users", "id = $1", [former.id]), 1);
+    assert.equal(await countRows(client, "group_members", "user_id = $1", [former.id]), 0);
+
+    const removedBare = await db.deleteUserAccount(bare.id);
+    assert.deepEqual(removedBare, {
+      deletedUser: true,
+      deletedGroupIds: [],
+      transferredGroups: [],
+    });
+    assert.deepEqual(await db.deleteUserAccount(owner.id), {
+      deletedUser: false,
+      deletedGroupIds: [],
+      transferredGroups: [],
+    });
+    assert.deepEqual(await db.deleteUserAccount(sole.id), {
+      deletedUser: false,
+      deletedGroupIds: [],
+      transferredGroups: [],
+    });
+    assert.equal(await countRows(client, "users", "id = $1", [early.id]), 1);
+    assert.equal(await countRows(client, "users", "id = $1", [tieLow.id]), 1);
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
+async function loggedWorkout(db, user, groupId, title) {
+  return db.createWorkoutForMember({
+    userId: user.id,
+    displayName: user.displayName,
+    groupId,
+    workoutType: "run",
+    title,
+    name: title,
+    durationMinutes: 20,
+    effort: 3,
+    caption: title,
+    photoPath: null,
+    occurredAt: new Date("2026-10-01T12:00:00.000Z"),
+    metrics: [{ metricType: "distance", numericValue: 3, unit: "km" }],
+    segments: [{ position: 0, segmentType: "work", durationSeconds: 60 }],
+    movements: [{
+      movementName: "Squat",
+      notes: null,
+      sets: [{ reps: 5, load: 40, loadUnit: "kg" }],
+    }],
+  });
+}
+
+async function countRows(client, table, where, params) {
+  return scalar(
+    client,
+    "postgres",
+    null,
+    `select count(*)::int from ${table} where ${where}`,
+    params,
+  );
+}
+
 async function recreateDatabase() {
   const admin = new Client({ connectionString: withDatabase(sourceUrl, "postgres") });
   await admin.connect();

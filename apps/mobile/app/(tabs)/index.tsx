@@ -148,6 +148,9 @@ export default function HomeScreen() {
       <View style={styles.authForm}>
         <TextField autoCapitalize="none" autoComplete="email" inputMode="email" label="Email" onBlur={() => setEmailFocused(false)} onChangeText={setEmail} onFocus={() => setEmailFocused(true)} placeholder="you@example.com" style={[styles.authInput, emailFocused && styles.authInputFocused]} value={email} />
         <TextField autoCapitalize="none" autoComplete="password" label="Password" onBlur={() => setPasswordFocused(false)} onChangeText={setPassword} onFocus={() => setPasswordFocused(true)} placeholder="Enter your password" secureTextEntry style={[styles.authInput, passwordFocused && styles.authInputFocused]} value={password} />
+        <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push("/forgot-password")} style={styles.forgotPassword}>
+          <Text style={styles.forgotPasswordText}>Forgot password?</Text>
+        </Pressable>
         {authMessage ? <Text style={styles.error}>{authMessage}</Text> : null}
         <Button disabled={!email || !password} loading={authLoading} onPress={() => void signIn()} style={styles.authButton}>Sign in</Button>
       </View>
@@ -424,4 +427,5 @@ const styles = StyleSheet.create({
   authIntro: { alignItems: "flex-start", marginBottom: spacing.xxxl, marginTop: spacing.huge },
   authTitle: { color: colors.ink, ...type.display, marginTop: spacing.xxl }, authCopy: { color: colors.muted, ...type.body, marginTop: spacing.sm }, authForm: { gap: spacing.lg }, authInput: { borderRadius: 9 }, authInputFocused: { borderColor: colors.brand }, authButton: { borderRadius: 10 }, loginBackground: { backgroundColor: colors.background },
   signupPrompt: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.xxl }, signupCopy: { color: colors.muted, ...type.bodySmall }, signupLink: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
+  forgotPassword: { alignSelf: "flex-end" }, forgotPasswordText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
 });
