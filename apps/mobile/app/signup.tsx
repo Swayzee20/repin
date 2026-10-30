@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { BackButton, Button, StateCard, TextField } from "../ui/components";
+import { WideColumn } from "../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../ui/theme";
 
 export default function SignupScreen() {
@@ -114,6 +115,7 @@ export default function SignupScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn max="form">
           <BackButton label="Sign In" onPress={returnToSignIn} />
           <Text style={styles.eyebrow}>JOIN REPIN</Text>
           <Text style={styles.title}>Create your account</Text>
@@ -135,6 +137,7 @@ export default function SignupScreen() {
             <Text style={styles.promptCopy}>Already have an account?</Text>
             <Button onPress={returnToSignIn} variant="secondary">Sign In</Button>
           </View>
+          </WideColumn>
           </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -33,6 +33,7 @@ import repinLockup from "../assets/branding/repin-lockup.png";
 import repinLockupReversed from "../assets/branding/repin-lockup-reversed.png";
 import repinMark from "../assets/branding/repin-mark.png";
 import { formatWorkoutDate } from "../lib/workout-date";
+import { WideColumn } from "./layout";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
 
@@ -120,6 +121,7 @@ export function Screen({
         style={preserveTransformedContent ? styles.overflowVisible : undefined}
       >
         <SafeAreaView edges={["left", "right"]} style={styles.sideInset}>
+          <WideColumn>
           <View
             style={[
               styles.screenContent,
@@ -128,6 +130,7 @@ export function Screen({
           >
             {children}
           </View>
+          </WideColumn>
         </SafeAreaView>
       </ScrollView>
     </SafeAreaView>

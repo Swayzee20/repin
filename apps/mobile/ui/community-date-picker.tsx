@@ -2,6 +2,7 @@ import DateTimePicker, { type DateTimePickerEvent } from "@react-native-communit
 import { useEffect, useState } from "react";
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
+import { CenteredCard } from "./layout";
 import { colors, radii, spacing, type } from "./theme";
 
 export function CommunityDatePicker({
@@ -37,7 +38,8 @@ export function CommunityDatePicker({
   return (
     <Modal animationType="fade" onRequestClose={onDismiss} presentationStyle="overFullScreen" transparent visible>
       <View style={styles.overlay}>
-        <Pressable accessibilityLabel="Close date picker" accessibilityRole="button" onPress={onDismiss} style={StyleSheet.absoluteFill} />
+        <Pressable accessibilityLabel="Close date picker" accessibilityRole="button" onPress={onDismiss} style={[StyleSheet.absoluteFill, styles.backdrop]} />
+        <CenteredCard>
         <View style={styles.panel}>
           <Text style={styles.title}>Choose a day</Text>
           <DateTimePicker display="inline" maximumDate={maximumDate} mode="date" onChange={handleChange} value={draft} />
@@ -46,14 +48,16 @@ export function CommunityDatePicker({
             <Pressable accessibilityRole="button" onPress={() => { onChange(draft); onDismiss(); }} style={styles.action}><Text style={styles.primaryAction}>Done</Text></Pressable>
           </View>
         </View>
+        </CenteredCard>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { alignItems: "center", backgroundColor: colors.overlay, flex: 1, justifyContent: "center", padding: spacing.xxl },
-  panel: { backgroundColor: colors.surface, borderRadius: radii.lg, maxWidth: 420, padding: spacing.lg, width: "100%" },
+  overlay: { flex: 1 },
+  backdrop: { backgroundColor: colors.overlay },
+  panel: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.lg, width: "100%" },
   title: { color: colors.ink, ...type.heading },
   actions: { flexDirection: "row", justifyContent: "flex-end", marginTop: spacing.md },
   action: { alignItems: "center", justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.lg },

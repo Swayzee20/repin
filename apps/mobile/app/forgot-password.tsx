@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { isEmailAddress, PASSWORD_RESET_SENT_MESSAGE, requestPasswordReset } from "../lib/password-reset";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { BackButton, Button, StateCard, TextField } from "../ui/components";
+import { WideColumn } from "../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../ui/theme";
 
 export default function ForgotPasswordScreen() {
@@ -57,6 +58,7 @@ export default function ForgotPasswordScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn max="form">
           <BackButton label="Sign In" onPress={returnToSignIn} />
           <Text style={styles.eyebrow}>ACCOUNT</Text>
           <Text style={styles.title}>Forgot password?</Text>
@@ -86,6 +88,7 @@ export default function ForgotPasswordScreen() {
               <Button disabled={!email.trim()} loading={submitting} onPress={() => void sendReset()}>Send reset link</Button>
             </View>
           )}
+          </WideColumn>
           </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>

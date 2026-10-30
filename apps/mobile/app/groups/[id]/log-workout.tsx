@@ -9,6 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { BackButton, Button, TextField } from "../../../ui/components";
+import { WideColumn } from "../../../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
 import { WorkoutTypeSelector } from "../../../ui/workout-type-selector";
 
@@ -111,6 +112,7 @@ export default function LogWorkoutScreen() {
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
         <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" style={styles.scrollView}>
           <SafeAreaView edges={["left", "right"]}>
+          <WideColumn>
           <BackButton label="Cancel" onPress={() => router.back()} />
           <Text style={styles.eyebrow}>QUICK CHECK-IN</Text><Text style={styles.title}>Log a workout</Text>
 
@@ -146,6 +148,7 @@ export default function LogWorkoutScreen() {
           </View>
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
           <Button disabled={!canSubmit} loading={submitting} onPress={() => void submitWorkout()} style={styles.submitButton}>Log workout</Button>
+          </WideColumn>
           </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>

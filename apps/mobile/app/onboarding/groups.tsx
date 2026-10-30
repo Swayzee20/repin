@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { Lockup } from "../../ui/components";
+import { WideColumn } from "../../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 export default function GroupOnboardingScreen() {
@@ -35,6 +36,7 @@ export default function GroupOnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <WideColumn fill>
       <View style={styles.container}>
         <View style={styles.topRow}>
           <Lockup />
@@ -62,6 +64,7 @@ export default function GroupOnboardingScreen() {
           />
         </View>
       </View>
+      </WideColumn>
     </SafeAreaView>
   );
 }
