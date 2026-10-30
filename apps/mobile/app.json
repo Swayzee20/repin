@@ -7,7 +7,6 @@
     "orientation": "portrait",
     "scheme": "repin",
     "userInterfaceStyle": "light",
-    "newArchEnabled": true,
     "plugins": [
       "expo-router",
       "expo-sqlite",
@@ -26,7 +25,9 @@
           "imageWidth": 200,
           "resizeMode": "contain"
         }
-      ]
+      ],
+      "expo-font",
+      "expo-status-bar"
     ],
     "experiments": {
       "typedRoutes": true
@@ -46,7 +47,9 @@
         "monochromeImage": "./assets/branding/adaptive-monochrome.png"
       },
       "package": "com.repin.mobile",
-      "permissions": ["android.permission.RECORD_AUDIO"]
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
     },
     "web": {
       "bundler": "metro",

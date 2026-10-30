@@ -757,7 +757,7 @@ function CommunityModalReactionRow({
     pickerProgress.setValue(0);
     Animated.timing(pickerProgress, {
       duration: 160,
-      easing: Easing.out(Easing.cubic),
+      easing: Easing.out((value) => Easing.cubic(value)),
       toValue: 1,
       useNativeDriver: true,
     }).start();
@@ -768,7 +768,7 @@ function CommunityModalReactionRow({
     pickerProgress.stopAnimation();
     Animated.timing(pickerProgress, {
       duration: 120,
-      easing: Easing.in(Easing.quad),
+      easing: Easing.in((value) => Easing.quad(value)),
       toValue: 0,
       useNativeDriver: true,
     }).start(({ finished }) => {

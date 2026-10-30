@@ -6,14 +6,23 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "image": "sdk-58"
+      }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "ios": {
+        "image": "sdk-58"
+      }
     },
     "production": {
       "environment": "production",
-      "autoIncrement": true
+      "autoIncrement": true,
+      "ios": {
+        "image": "sdk-58"
+      }
     }
   },
   "submit": {

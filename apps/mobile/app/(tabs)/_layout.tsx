@@ -72,7 +72,7 @@ function MainTabsNavigator() {
           tabBarIcon: ({ color, focused }) => route.name === "index" ? (
             <Text style={[styles.tabIcon, { color }, focused && styles.activeIcon]}>⌂</Text>
           ) : route.name === "community" ? (
-            <Feather color={color} name="users" size={23} />
+            <Feather color={typeof color === "string" ? color : undefined} name="users" size={23} />
           ) : (
             <FontAwesome6 color={color} name="circle-user" size={23} />
           ),

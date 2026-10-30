@@ -10,6 +10,7 @@ import {
   Pressable,
   SafeAreaView,
   ScrollView,
+  type ScrollViewInstance,
   StyleSheet,
   Text,
   View,
@@ -67,7 +68,7 @@ export default function DetailedWorkoutScreen() {
   const [intervals, setIntervals] = useState<IntervalDraft[]>(() => [createEmptyInterval()]);
   const [runResultsExpanded, setRunResultsExpanded] = useState(true);
   const [runResultError, setRunResultError] = useState<IntervalValidationIssue | { message: string } | null>(null);
-  const scrollViewRef = useRef<ScrollView>(null);
+  const scrollViewRef = useRef<ScrollViewInstance>(null);
   const workoutCardY = useRef(0);
   const runEditorY = useRef(0);
   const [name, setName] = useState("");
