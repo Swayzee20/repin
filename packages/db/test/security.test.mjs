@@ -796,6 +796,8 @@ test("invite-only groups and row level security", async () => {
     assert.equal(privileges.rows[0].user_join, true);
     assert.equal(privileges.rows[0].anon_helper, false);
     assert.equal(privileges.rows[0].user_helper, true);
+
+    await assertStorageBlockToleratesNonOwner(client);
   } finally {
     await client.end();
     if (globalThis.repinPool) {
@@ -872,6 +874,9 @@ async function prepareDatabase(client) {
     grant usage on schema storage to anon, authenticated;
     grant select on storage.buckets to anon, authenticated;
     grant select, insert, update, delete on storage.objects to anon, authenticated;
+    -- Hosted Supabase already enables RLS on storage.objects. This migration
+    -- does not, so the harness has to match that default.
+    alter table storage.objects enable row level security;
   `);
 }
 
@@ -974,6 +979,136 @@ async function asRole(client, role, userId, fn) {
     await client.query("rollback");
     throw error;
   }
+}
+
+const storagePolicyNames = [
+  "Workout photo owners can read",
+  "Workout photo owners can upload",
+  "Workout photo owners can update",
+  "Workout photo owners can delete",
+];
+
+async function assertStorageBlockToleratesNonOwner(client) {
+  await createRole(client, "storage_table_owner");
+  await createRole(client, "hosted_sql_editor");
+  await client.query(`
+    alter role hosted_sql_editor nosuperuser nobypassrls noinherit nologin;
+    drop policy if exists "Workout photo owners can read" on storage.objects;
+    drop policy if exists "Workout photo owners can upload" on storage.objects;
+    drop policy if exists "Workout photo owners can update" on storage.objects;
+    drop policy if exists "Workout photo owners can delete" on storage.objects;
+    update storage.buckets set public = true where id = 'workout-photos';
+    alter table storage.objects owner to storage_table_owner;
+    alter table storage.buckets owner to storage_table_owner;
+    grant usage on schema storage to hosted_sql_editor;
+    grant select, insert, update, delete on storage.objects to hosted_sql_editor;
+  `);
+
+  const owner = await client.query(`
+    select pg_get_userbyid(c.relowner) as owner
+    from pg_class as c
+    join pg_namespace as n on n.oid = c.relnamespace
+    where n.nspname = 'storage' and c.relname = 'objects'
+  `);
+  assert.equal(owner.rows[0].owner, "storage_table_owner");
+
+  const block = await storageMigrationBlock();
+  await client.query("set role hosted_sql_editor");
+  let notices;
+  try {
+    notices = await queryNotices(client, block);
+  } finally {
+    await client.query("reset role");
+  }
+
+  for (const name of storagePolicyNames) {
+    assert.ok(
+      notices.some((message) =>
+        message.includes(`Could not create policy "${name}"`)
+        && message.includes("Storage > Policies")
+        && message.includes("20260822000000_workout_photos.sql"),
+      ),
+      notices.join("\n"),
+    );
+  }
+  assert.ok(
+    notices.some((message) =>
+      message.includes("Could not update storage.buckets")
+      && message.includes("20260822000000_workout_photos.sql"),
+    ),
+    notices.join("\n"),
+  );
+
+  const policies = await client.query(`
+    select policyname
+    from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+    order by policyname
+  `);
+  assert.deepEqual(policies.rows, []);
+  assert.equal(
+    await scalar(
+      client,
+      "postgres",
+      null,
+      "select public from storage.buckets where id = 'workout-photos'",
+      [],
+    ),
+    true,
+  );
+
+  await client.query(`
+    alter table storage.objects owner to current_user;
+    alter table storage.buckets owner to current_user;
+  `);
+  const ownerNotices = await queryNotices(client, block);
+  assert.deepEqual(ownerNotices, []);
+  const restored = await client.query(`
+    select policyname
+    from pg_policies
+    where schemaname = 'storage' and tablename = 'objects'
+    order by policyname
+  `);
+  assert.deepEqual(
+    restored.rows.map((row) => row.policyname),
+    [...storagePolicyNames].sort(),
+  );
+  assert.equal(
+    await scalar(
+      client,
+      "postgres",
+      null,
+      "select public from storage.buckets where id = 'workout-photos'",
+      [],
+    ),
+    false,
+  );
+}
+
+async function storageMigrationBlock() {
+  const sql = await readFile(
+    path.join(repoRoot, "supabase/migrations/20261030140000_enable_row_level_security.sql"),
+    "utf8",
+  );
+  const start = sql.lastIndexOf("do $$");
+  assert.ok(start > 0);
+  const block = sql.slice(start).trim();
+  assert.match(block, /^do \$\$/);
+  assert.match(block, /insufficient_privilege/);
+  assert.doesNotMatch(block, /storage\.objects enable row level security/);
+  return block;
+}
+
+async function queryNotices(client, sql) {
+  const notices = [];
+  const onNotice = (notice) => notices.push(notice.message);
+  client.on("notice", onNotice);
+  try {
+    await client.query(sql);
+  } finally {
+    client.off("notice", onNotice);
+  }
+  return notices;
 }
 
 function normalizeRoles(roles) {
