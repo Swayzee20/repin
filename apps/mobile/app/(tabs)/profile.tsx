@@ -108,7 +108,7 @@ export default function ProfileTabScreen() {
           <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
           <View style={styles.identityCopy}>
             <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.memberSince}>RepIn member since {new Date(data.user.createdAt).getFullYear()}</Text>
+            <Text style={styles.memberSince}>repin member since {new Date(data.user.createdAt).getFullYear()}</Text>
           </View>
         </View>
 
@@ -122,7 +122,7 @@ export default function ProfileTabScreen() {
               </View>
               <View style={[styles.todayStatus, data.snapshot.hasWorkoutToday && styles.todayStatusDone]}>
                 <Text style={[styles.todayStatusText, data.snapshot.hasWorkoutToday && styles.todayStatusTextDone]}>
-                  {data.snapshot.hasWorkoutToday ? "✓ Logged today" : "Today is open"}
+                  {data.snapshot.hasWorkoutToday ? "✓ Repped in today" : "Today is open"}
                 </Text>
               </View>
             </View>

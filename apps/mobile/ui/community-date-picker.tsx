@@ -52,7 +52,7 @@ export function CommunityDatePicker({
 }
 
 const styles = StyleSheet.create({
-  overlay: { alignItems: "center", backgroundColor: "rgba(34,34,34,0.28)", flex: 1, justifyContent: "center", padding: spacing.xxl },
+  overlay: { alignItems: "center", backgroundColor: colors.overlay, flex: 1, justifyContent: "center", padding: spacing.xxl },
   panel: { backgroundColor: colors.surface, borderRadius: radii.lg, maxWidth: 420, padding: spacing.lg, width: "100%" },
   title: { color: colors.ink, ...type.heading },
   actions: { flexDirection: "row", justifyContent: "flex-end", marginTop: spacing.md },

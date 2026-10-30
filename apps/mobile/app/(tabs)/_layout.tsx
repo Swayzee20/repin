@@ -96,7 +96,7 @@ function MainTabsNavigator() {
           ]}
         >
           <Feather color={colors.surface} name="plus" size={14} />
-          <Text style={styles.logWorkoutText}>Check in</Text>
+          <Text style={styles.logWorkoutText}>Rep in</Text>
         </Pressable>
       ) : null}
       {session && selectedGroupId ? (

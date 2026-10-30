@@ -7,11 +7,11 @@ export function CheckInEmptyContent({ onCheckIn }: { onCheckIn?: () => void }) {
   return (
     <>
       <Feather color={colors.brand} name="activity" size={18} />
-      <Text style={styles.secondary}>No workouts logged yet</Text>
-      <Text style={styles.primary}>Be the first to check in</Text>
+      <Text style={styles.secondary}>No one’s repped in yet</Text>
+      <Text style={styles.primary}>Be the first to rep in</Text>
       {onCheckIn ? (
         <Pressable
-          accessibilityLabel="Check in"
+          accessibilityLabel="Rep in"
           accessibilityRole="button"
           hitSlop={8}
           onPress={onCheckIn}

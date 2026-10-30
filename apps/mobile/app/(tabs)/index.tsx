@@ -14,7 +14,7 @@ import {
   type FreshnessRecord,
 } from "../../lib/data-freshness";
 import { useMainTabs } from "../../ui/main-tabs-context";
-import { BrandHeader, Button, Card, LoadingState, StateCard, TextField, WorkoutSummaryCard } from "../../ui/components";
+import { BrandHeader, Button, Card, LoadingState, StateCard, TextField, Wordmark, WorkoutSummaryCard } from "../../ui/components";
 import { CheckInEmptyContent } from "../../ui/check-in-empty-content";
 import { colors, floatingSurfaceStyle, fonts, radii, spacing, type } from "../../ui/theme";
 
@@ -141,9 +141,9 @@ export default function HomeScreen() {
   if (!session) return (
     <Shell flat>
       <View style={styles.authIntro}>
-        <Text style={styles.authBrand}>REPIN</Text>
+        <Wordmark />
         <Text style={styles.authTitle}>Welcome back</Text>
-        <Text style={styles.authCopy}>Log in to your RepIn account.</Text>
+        <Text style={styles.authCopy}>Log in to your repin account.</Text>
       </View>
       <View style={styles.authForm}>
         <TextField autoCapitalize="none" autoComplete="email" inputMode="email" label="Email" onBlur={() => setEmailFocused(false)} onChangeText={setEmail} onFocus={() => setEmailFocused(true)} placeholder="you@example.com" style={[styles.authInput, emailFocused && styles.authInputFocused]} value={email} />
@@ -189,7 +189,7 @@ export default function HomeScreen() {
               <Text style={homeData.snapshot.hasWorkoutToday ? styles.doneGlyph : styles.pendingGlyph}>{homeData.snapshot.hasWorkoutToday ? "✓" : "·"}</Text>
             </View>
             <View style={styles.snapshotCopy}>
-              <Text style={styles.snapshotStatus}>{homeData.snapshot.hasWorkoutToday ? "Workout logged today" : "Ready when you are"}</Text>
+              <Text style={styles.snapshotStatus}>{homeData.snapshot.hasWorkoutToday ? "You repped in today" : "Ready when you are"}</Text>
               <Text numberOfLines={2} style={styles.snapshotMessage}>{homeData.snapshot.message}</Text>
             </View>
             <View style={styles.weekStat}><Text style={styles.weekNumber}>{homeData.snapshot.workoutsThisWeek}</Text><Text style={styles.weekLabel}>THIS WEEK</Text></View>
@@ -262,7 +262,7 @@ export default function HomeScreen() {
                 <View style={styles.highlightAvatar}><Text style={styles.highlightAvatarText}>{getUserInitials({ displayName: highlight.displayName })}</Text></View>
                 <Text style={styles.highlightMessage}>
                   <Text style={styles.highlightName}>{resolveUserDisplayName({ displayName: highlight.displayName })}</Text>
-                  {` logged at least ${highlight.count} workouts this week`}
+                  {` repped in at least ${highlight.count} times this week`}
                 </Text>
               </View>
             ))}
@@ -373,10 +373,10 @@ function isStandaloneIosWebApp() {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 160 }, centered: { justifyContent: "center" },
-  homeSafeArea: { backgroundColor: colors.surface, ...Platform.select({ web: { paddingBottom: 0 } }) },
-  dashboard: { backgroundColor: colors.surface, flexGrow: 1, paddingBottom: 160, paddingHorizontal: spacing.xxl },
+  homeSafeArea: { backgroundColor: colors.background, ...Platform.select({ web: { paddingBottom: 0 } }) },
+  dashboard: { backgroundColor: colors.background, flexGrow: 1, paddingBottom: 160, paddingHorizontal: spacing.xxl },
   dashboardCompact: { paddingBottom: 160 },
-  personalZone: { backgroundColor: colors.surface, marginHorizontal: -spacing.xxl, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
+  personalZone: { backgroundColor: colors.background, marginHorizontal: -spacing.xxl, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
   personalZoneCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
   personalZoneStandalone: { paddingTop: spacing.xxl },
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
@@ -398,7 +398,7 @@ const styles = StyleSheet.create({
   consistencyCircleToday: { backgroundColor: colors.surfaceMuted, borderColor: colors.inkSoft },
   consistencyCirclePast: { backgroundColor: colors.borderStrong, borderColor: colors.borderStrong },
   consistencyCircleFuture: { backgroundColor: colors.surface, borderColor: colors.border },
-  communityZone: { backgroundColor: colors.surface, marginHorizontal: -spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.sm },
+  communityZone: { backgroundColor: colors.background, marginHorizontal: -spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.sm },
   communityZoneCompact: { paddingTop: spacing.xs },
   crewEyebrow: { color: colors.brand, ...type.heading },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xs },
@@ -421,7 +421,7 @@ const styles = StyleSheet.create({
   highlightName: { color: colors.ink, fontFamily: fonts.semibold },
   noHighlights: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
   refreshing: { marginTop: spacing.md }, error: { color: colors.danger, ...type.bodySmall, marginTop: spacing.md },
-  authIntro: { alignItems: "flex-start", marginBottom: spacing.xxxl, marginTop: spacing.huge }, authBrand: { color: colors.brand, ...type.eyebrow },
-  authTitle: { color: colors.ink, ...type.display, marginTop: spacing.xxl }, authCopy: { color: colors.muted, ...type.body, marginTop: spacing.sm }, authForm: { gap: spacing.lg }, authInput: { borderRadius: 9 }, authInputFocused: { borderColor: colors.brand }, authButton: { borderRadius: 10 }, loginBackground: { backgroundColor: colors.surface },
+  authIntro: { alignItems: "flex-start", marginBottom: spacing.xxxl, marginTop: spacing.huge },
+  authTitle: { color: colors.ink, ...type.display, marginTop: spacing.xxl }, authCopy: { color: colors.muted, ...type.body, marginTop: spacing.sm }, authForm: { gap: spacing.lg }, authInput: { borderRadius: 9 }, authInputFocused: { borderColor: colors.brand }, authButton: { borderRadius: 10 }, loginBackground: { backgroundColor: colors.background },
   signupPrompt: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.xxl }, signupCopy: { color: colors.muted, ...type.bodySmall }, signupLink: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
 });

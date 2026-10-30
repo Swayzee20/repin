@@ -1,12 +1,12 @@
 {
   "expo": {
-    "name": "RepIn",
+    "name": "repin",
     "slug": "repin",
     "version": "1.0.0",
     "icon": "./assets/branding/repin-app-icon.png",
     "orientation": "portrait",
     "scheme": "repin",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "plugins": [
       "expo-router",
@@ -15,7 +15,7 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow RepIn to attach a photo to your workout."
+          "photosPermission": "Allow repin to attach a photo to your workout."
         }
       ],
       [
@@ -49,7 +49,9 @@
     "web": {
       "bundler": "metro",
       "favicon": "./assets/branding/repin-app-icon.png",
-      "output": "single"
+      "output": "single",
+      "backgroundColor": "#FFFAF4",
+      "themeColor": "#FFFAF4"
     },
     "extra": {
       "router": {},

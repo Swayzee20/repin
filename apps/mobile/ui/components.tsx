@@ -44,6 +44,33 @@ const webFeedScrollerStyle =
       } as ViewStyle)
     : undefined;
 
+export function Wordmark({
+  size = 22,
+  tone = "default",
+}: {
+  size?: number;
+  tone?: "default" | "onBrand";
+}) {
+  const onBrand = tone === "onBrand";
+  return (
+    <Text
+      accessibilityLabel="repin"
+      style={[
+        styles.wordmark,
+        {
+          color: onBrand ? colors.surface : colors.ink,
+          fontSize: size,
+          letterSpacing: size * -0.02,
+          lineHeight: Math.round(size * 1.32),
+        },
+      ]}
+    >
+      rep
+      <Text style={[styles.wordmark, { color: onBrand ? colors.ink : colors.brand }]}>in</Text>
+    </Text>
+  );
+}
+
 export function BrandHeader() {
   return (
     <View style={styles.brandHeader}>
@@ -53,7 +80,7 @@ export function BrandHeader() {
         source={repinHeaderMark}
         style={styles.brandHeaderMark}
       />
-      <Text style={styles.brandHeaderText}>REPIN</Text>
+      <Wordmark />
     </View>
   );
 }
@@ -466,9 +493,9 @@ export function CommunityFeed({
       </Animated.ScrollView>
       <LinearGradient
         colors={[
-          "#F7F2F2",
-          "rgba(247,242,242,0.58)",
-          "rgba(247,242,242,0)",
+          colors.feed,
+          colors.feedFade,
+          colors.boardTransparent,
         ]}
         locations={[0, 0.38, 1]}
         pointerEvents="none"
@@ -476,9 +503,9 @@ export function CommunityFeed({
       />
       <LinearGradient
         colors={[
-          "rgba(247,242,242,0)",
-          "rgba(247,242,242,0.54)",
-          "#F7F2F2",
+          colors.boardTransparent,
+          colors.feedFadeSoft,
+          colors.feed,
         ]}
         locations={[0, 0.64, 1]}
         pointerEvents="none"
@@ -630,7 +657,7 @@ function normalizeLabel(value: string) {
 const styles = StyleSheet.create({
   brandHeader: { alignItems: "center", flexDirection: "row", gap: spacing.xs },
   brandHeaderMark: { height: 16, width: 27 },
-  brandHeaderText: { color: colors.brand, ...type.eyebrow },
+  wordmark: { fontFamily: fonts.bold },
   safeArea: { backgroundColor: colors.background, flex: 1 },
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
   transformedScreenContent: { overflow: "visible", paddingBottom: 96 },
@@ -691,7 +718,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
     elevation: 2,
-    shadowColor: "#101318",
+    shadowColor: colors.ink,
     shadowOffset: { height: 5, width: 0 },
     shadowOpacity: 0.055,
     shadowRadius: 17,
@@ -708,7 +735,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "100%",
   },
-  edgeToEdgeFeedViewport: { backgroundColor: "#F7F2F2", borderRadius: 0 },
+  edgeToEdgeFeedViewport: { backgroundColor: colors.feed, borderRadius: 0 },
   feedScroller: { overflow: "visible" },
   feedContent: { paddingBottom: 132, paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
   feedSlot: { minWidth: 0, overflow: "visible", paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },

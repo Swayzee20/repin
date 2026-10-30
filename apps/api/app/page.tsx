@@ -1,7 +1,7 @@
 export default function HomePage() {
   return (
     <main>
-      <h1>RepIn API</h1>
+      <h1>repin API</h1>
       <p>
         Health check: <a href="/api/health">/api/health</a>
       </p>

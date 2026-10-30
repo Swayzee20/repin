@@ -65,7 +65,7 @@ export default function GroupDetailScreen() {
     try {
       const inviteUrl = `${publicWebUrl}/join/${encodeURIComponent(inviteCode)}`;
       await Share.share({
-        message: `Join my RepIn group ‘${groupName}’. Invite code: ${inviteCode}\n${inviteUrl}`,
+        message: `Join my repin group ‘${groupName}’. Invite code: ${inviteCode}\n${inviteUrl}`,
       });
     } catch {
       setInviteActionError("Invite could not be shared.");
@@ -120,7 +120,7 @@ export default function GroupDetailScreen() {
             } />
             {workouts.length === 0 ? (
               <Card style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>Be the first to check in</Text>
+                <Text style={styles.emptyTitle}>Be the first to rep in</Text>
                 <Text style={styles.emptyCopy}>Log a workout to start this group’s Community Board.</Text>
                 <Button onPress={() => router.push(`./${group.id}/log-workout`)} style={styles.emptyAction}>Log a Workout</Button>
               </Card>

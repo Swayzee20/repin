@@ -201,6 +201,6 @@ const styles = StyleSheet.create({
   unmeasuredMedia: { height: "100%", width: "100%" },
   mediaPressable: { height: "100%", width: "100%" },
   image: { borderRadius: radii.sm, height: "100%", width: "100%" },
-  closeButton: { alignItems: "center", backgroundColor: "rgba(34,34,34,0.72)", borderRadius: radii.pill, height: 44, justifyContent: "center", position: "absolute", width: 44, zIndex: 2 },
+  closeButton: { alignItems: "center", backgroundColor: colors.overlayStrong, borderRadius: radii.pill, height: 44, justifyContent: "center", position: "absolute", width: 44, zIndex: 2 },
   pressed: { opacity: 0.68 },
 });

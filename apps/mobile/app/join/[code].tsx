@@ -159,7 +159,7 @@ export default function GroupInviteScreen() {
       <InviteShell>
         <BackButton label="Home" onPress={() => router.replace("/")} />
         <Text style={styles.eyebrow}>YOU’RE INVITED</Text>
-        <Text style={styles.title}>Join your RepIn crew</Text>
+        <Text style={styles.title}>Join your repin crew</Text>
         <Text style={styles.intro}>
           Sign in or create an account to view this group and accept the invite.
         </Text>
@@ -211,8 +211,8 @@ export default function GroupInviteScreen() {
       <Text style={styles.title}>{preview.name}</Text>
       <Text style={styles.intro}>
         {preview.isMember
-          ? "You’re already part of this RepIn group."
-          : "You’ve been invited to join this RepIn group."}
+          ? "You’re already part of this repin group."
+          : "You’ve been invited to join this repin group."}
       </Text>
       <View style={styles.groupPanel}>
         <View style={styles.groupMark}>
