@@ -4,7 +4,8 @@ import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } fr
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
-import { BackButton, Button, TextField } from "../../ui/components";
+import { Button, TextField } from "../../ui/components";
+import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { WideColumn } from "../../ui/layout";
 import { colors, radii, spacing, type } from "../../ui/theme";
 
@@ -45,14 +46,14 @@ export default function CreateFirstGroupScreen() {
         <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
           <WideColumn max="form">
-          <BackButton label="Get Started" onPress={() => router.back()} />
+          <RoundIconButton accessibilityLabel="Get Started" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
           <Text style={styles.eyebrow}>BUILD YOUR CREW</Text>
           <Text style={styles.title}>Create a group</Text>
           <Text style={styles.intro}>Give your community a name. You’ll become the owner automatically.</Text>
           <View style={styles.formCard}>
             <TextField autoFocus label="Group name" maxLength={80} onChangeText={setName} onSubmitEditing={() => void createGroup()} placeholder="Sunday Strength Club" returnKeyType="done" value={name} />
             {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
-            <Button disabled={!name.trim()} loading={submitting} onPress={() => void createGroup()}>Create Group</Button>
+            <Button disabled={!name.trim()} disabledReason={name.trim() ? undefined : "Enter a group name."} loading={submitting} loadingLabel="Creating group" onPress={() => void createGroup()}>Create Group</Button>
           </View>
           </WideColumn>
           </SafeAreaView>

@@ -5,9 +5,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { normalizeInviteRedirect } from "../lib/invite-route";
-import { BackButton, Button, StateCard, TextField } from "../ui/components";
+import { Button, StateCard, TextField } from "../ui/components";
+import { Icon } from "../ui/icons";
+import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
 import { WideColumn } from "../ui/layout";
-import { colors, fonts, radii, spacing, type } from "../ui/theme";
+import { colors, radii, size, spacing, type } from "../ui/theme";
 
 export default function SignupScreen() {
   const router = useRouter();
@@ -99,7 +101,7 @@ export default function SignupScreen() {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centered}>
-          <View style={styles.confirmationIcon}><Text style={styles.confirmationGlyph}>✓</Text></View>
+          <View style={styles.confirmationIcon}><Icon color={colors.success} name="checkmark" size={size.icon.md} /></View>
           <Text style={styles.title}>Check your email</Text>
           <Text style={styles.confirmationCopy}>
             We sent a confirmation link to {confirmationEmail}. Confirm your account, then sign in to continue.
@@ -116,7 +118,7 @@ export default function SignupScreen() {
         <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
           <WideColumn max="form">
-          <BackButton label="Sign In" onPress={returnToSignIn} />
+          <RoundIconButton accessibilityLabel="Sign In" kind="back" onPress={returnToSignIn} style={roundNavButtonStyle} />
           <Text style={styles.eyebrow}>JOIN REPIN</Text>
           <Text style={styles.title}>Create your account</Text>
           <Text style={styles.intro}>Set up your profile, then find your community.</Text>
@@ -130,7 +132,7 @@ export default function SignupScreen() {
             <TextField autoCapitalize="none" autoComplete="new-password" label="Password" onChangeText={setPassword} placeholder="At least 8 characters" secureTextEntry textContentType="newPassword" value={password} />
             <TextField autoCapitalize="none" autoComplete="new-password" label="Confirm password" onChangeText={setConfirmPassword} onSubmitEditing={() => void createAccount()} placeholder="Enter it again" secureTextEntry textContentType="newPassword" value={confirmPassword} />
             {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
-            <Button disabled={!firstName || !lastName || !email || !password || !confirmPassword} loading={submitting} onPress={() => void createAccount()}>Create Account</Button>
+            <Button disabled={!firstName || !lastName || !email || !password || !confirmPassword} disabledReason={!firstName || !lastName ? "Enter your first and last name." : !email ? "Enter your email." : "Enter and confirm a password."} loading={submitting} loadingLabel="Creating account" onPress={() => void createAccount()}>Create Account</Button>
           </View>
 
           <View style={styles.signinPrompt}>
@@ -153,6 +155,6 @@ const styles = StyleSheet.create({
   formCard: { gap: spacing.lg }, nameRow: { flexDirection: "row", gap: spacing.md }, nameField: { flex: 1 },
   errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, padding: spacing.md }, errorText: { color: colors.danger, ...type.bodySmall },
   signinPrompt: { gap: spacing.md, marginTop: spacing.xl }, promptCopy: { color: colors.muted, ...type.bodySmall, textAlign: "center" },
-  confirmationIcon: { alignItems: "center", backgroundColor: colors.successSoft, borderRadius: radii.pill, height: 64, justifyContent: "center", marginBottom: spacing.xl, width: 64 },
-  confirmationGlyph: { color: colors.success, fontFamily: fonts.bold, fontSize: 28 }, confirmationCopy: { color: colors.muted, ...type.body, marginBottom: spacing.xxl, marginTop: spacing.md, maxWidth: 340, textAlign: "center" }, fullWidth: { alignSelf: "stretch" },
+  confirmationIcon: { alignItems: "center", backgroundColor: colors.successSoft, borderRadius: radii.pill, height: size.avatars.lg, justifyContent: "center", marginBottom: spacing.xl, width: size.avatars.lg },
+  confirmationCopy: { color: colors.muted, ...type.body, marginBottom: spacing.xxl, marginTop: spacing.md, maxWidth: 340, textAlign: "center" }, fullWidth: { alignSelf: "stretch" },
 });

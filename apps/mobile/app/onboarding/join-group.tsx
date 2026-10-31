@@ -14,12 +14,12 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import {
-  BackButton,
   Button,
   LoadingState,
   StateCard,
   TextField,
 } from "../../ui/components";
+import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { WideColumn } from "../../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
@@ -153,7 +153,7 @@ export default function JoinFirstGroupScreen() {
         >
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
           <WideColumn max="form">
-          <BackButton label="Get Started" onPress={() => router.back()} />
+          <RoundIconButton accessibilityLabel="Get Started" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
           <Text style={styles.eyebrow}>JOIN YOUR CREW</Text>
           <Text style={styles.title}>Join a group</Text>
           <Text style={styles.intro}>
@@ -185,7 +185,9 @@ export default function JoinFirstGroupScreen() {
             ) : null}
             <Button
               disabled={!inviteCodePattern.test(inviteCode)}
+              disabledReason={inviteCodePattern.test(inviteCode) ? undefined : "Enter an 8-character invite code."}
               loading={submitting}
+              loadingLabel="Joining"
               onPress={() => void joinGroup()}
             >
               Join Group

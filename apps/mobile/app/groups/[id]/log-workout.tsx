@@ -9,7 +9,9 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { isLayoutPreview } from "../../../lib/layout-preview";
-import { BackButton, Button, TextField, WorkoutSummaryCard } from "../../../ui/components";
+import { Button, TextField, WorkoutSummaryCard } from "../../../ui/components";
+import { Chevron } from "../../../ui/icons";
+import { RoundIconButton, roundNavButtonStyle } from "../../../ui/primitives";
 import { TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
 import { ScrollAnchor, ScrollAnchorProvider, useScrollAnchor, writeStoredScrollAnchor } from "../../../ui/scroll-anchor";
 import { colors, controls, fonts, radii, spacing, type } from "../../../ui/theme";
@@ -287,7 +289,7 @@ export default function LogWorkoutScreen() {
   );
 
   const submit = (
-    <Button disabled={!canSubmit} loading={form.submitting} onPress={() => void submitWorkout()} style={twoPane ? styles.pinnedSubmit : styles.submitButton}>Log workout</Button>
+    <Button disabled={!canSubmit} disabledReason={canSubmit ? undefined : "Choose a workout type."} loading={form.submitting} loadingLabel="Logging" onPress={() => void submitWorkout()} style={twoPane ? styles.pinnedSubmit : styles.submitButton}>Log workout</Button>
   );
 
   const scroll = (children: ReactNode) => (
@@ -319,7 +321,7 @@ export default function LogWorkoutScreen() {
           scrollableRight={false}
           left={(
             <View style={styles.paneBody}>
-              <BackButton label="Cancel" onPress={() => router.back()} />
+              <RoundIconButton accessibilityLabel="Cancel" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
               <Text style={styles.eyebrow}>QUICK CHECK-IN</Text>
               <Text style={styles.title}>Log a workout</Text>
               <View style={styles.section}>
@@ -357,7 +359,7 @@ export default function LogWorkoutScreen() {
         {scroll(
           <SafeAreaView edges={["left", "right"]}>
             <WideColumn>
-              <BackButton label="Cancel" onPress={() => router.back()} />
+              <RoundIconButton accessibilityLabel="Cancel" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
               <Text style={styles.eyebrow}>QUICK CHECK-IN</Text>
               <Text style={styles.title}>Log a workout</Text>
               <View style={styles.section}>
@@ -466,7 +468,7 @@ function CompletedField({
         <Text style={styles.whenLabel}>Completed</Text>
         <View style={styles.whenValue}>
           <Text style={styles.whenText}>{formatFriendlyDate(occurredAt)}</Text>
-          <Text style={styles.whenAction}>›</Text>
+          <View style={styles.whenAction}><Chevron color={colors.brand} /></View>
         </View>
       </Pressable>
       {showPicker ? (
@@ -612,7 +614,7 @@ const styles = StyleSheet.create({
   whenLabel: { color: colors.ink, ...type.heading },
   whenValue: { alignItems: "center", flexDirection: "row", flexShrink: 1, marginLeft: spacing.md },
   whenText: { color: colors.muted, ...type.bodySmall },
-  whenAction: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24, marginLeft: spacing.sm },
+  whenAction: { marginLeft: spacing.sm },
   pickerWrap: { alignItems: "flex-end", marginTop: spacing.sm },
   pickerDone: { color: colors.brand, ...type.label, padding: spacing.md },
   webDateRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },

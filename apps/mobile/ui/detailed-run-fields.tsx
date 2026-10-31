@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { TextField } from "./components";
+import { SegmentedControl } from "./primitives";
 import {
   buildRunResultSummary,
   createEmptyInterval,
@@ -36,19 +37,15 @@ export function RunSubtypeSelector({
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>Run type</Text>
-      <View style={styles.subtypeToggle}>
-        {runSubtypeOptions.map((option) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected: value === option.value }}
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            style={[styles.subtypeOption, value === option.value && styles.subtypeOptionSelected]}
-          >
-            <Text style={[styles.subtypeText, value === option.value && styles.subtypeTextSelected]}>{option.label}</Text>
-          </Pressable>
-        ))}
-      </View>
+      <SegmentedControl
+        accessibilityLabel="Run type"
+        onChange={(next) => {
+          if (next) onChange(next);
+        }}
+        options={runSubtypeOptions}
+        style={styles.subtypeSegment}
+        value={value}
+      />
     </View>
   );
 }
@@ -328,25 +325,31 @@ function InlineError({ field, index, issue }: {
 
 function DistanceUnitToggle({ onChange, value }: { onChange: (value: "mi" | "km") => void; value: "mi" | "km" }) {
   return (
-    <View style={styles.unitToggle}>
-      {(["mi", "km"] as const).map((unit) => (
-        <Pressable key={unit} onPress={() => onChange(unit)} style={[styles.unitOption, value === unit && styles.unitOptionSelected]}>
-          <Text style={[styles.unitText, value === unit && styles.unitTextSelected]}>{unit}</Text>
-        </Pressable>
-      ))}
-    </View>
+    <SegmentedControl
+      accessibilityLabel="Distance unit"
+      onChange={(unit) => {
+        if (unit) onChange(unit);
+      }}
+      options={[{ label: "mi", value: "mi" }, { label: "km", value: "km" }]}
+      size="sm"
+      style={styles.unitSegment}
+      value={value}
+    />
   );
 }
 
 function UnitToggle({ onChange, value }: { onChange: (value: WorkoutDistanceUnit) => void; value: WorkoutDistanceUnit }) {
   return (
-    <View style={styles.unitToggle}>
-      {(["m", "km", "mi"] as const).map((unit) => (
-        <Pressable key={unit} onPress={() => onChange(unit)} style={[styles.unitOption, value === unit && styles.unitOptionSelected]}>
-          <Text style={[styles.unitText, value === unit && styles.unitTextSelected]}>{unit}</Text>
-        </Pressable>
-      ))}
-    </View>
+    <SegmentedControl
+      accessibilityLabel="Distance unit"
+      onChange={(unit) => {
+        if (unit) onChange(unit);
+      }}
+      options={[{ label: "m", value: "m" }, { label: "km", value: "km" }, { label: "mi", value: "mi" }]}
+      size="sm"
+      style={styles.unitSegment}
+      value={value}
+    />
   );
 }
 
@@ -354,11 +357,7 @@ const styles = StyleSheet.create({
   section: { marginTop: spacing.xl },
   editorSection: { marginTop: spacing.xl },
   sectionTitle: { color: colors.ink, ...type.heading },
-  subtypeToggle: { boxShadow: elevation.glass, alignSelf: "flex-start", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, flexDirection: "row", marginTop: spacing.sm, padding: 3 },
-  subtypeOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.md },
-  subtypeOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, boxShadow: elevation.glass, zIndex: 1 },
-  subtypeText: { color: colors.muted, ...type.label },
-  subtypeTextSelected: { color: colors.brand },
+  subtypeSegment: { marginTop: spacing.sm },
   editorSurface: { boxShadow: elevation.glass, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, padding: spacing.md },
   intervalScheme: { marginTop: spacing.sm },
   intervalDivider: { backgroundColor: colors.border, height: StyleSheet.hairlineWidth, marginBottom: spacing.md, marginHorizontal: spacing.sm, marginTop: spacing.md },
@@ -371,11 +370,7 @@ const styles = StyleSheet.create({
   removeButton: { alignItems: "center", flexShrink: 0, justifyContent: "center", minHeight: 44, paddingLeft: spacing.sm },
   removeAction: { color: colors.danger, ...type.label },
   metricField: { flex: 1, marginTop: 0 },
-  unitToggle: { backgroundColor: "transparent", borderRadius: radii.sm, flexDirection: "row", padding: 2 },
-  unitOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 38, minWidth: 38, paddingHorizontal: spacing.xs },
-  unitOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1, boxShadow: elevation.glass, zIndex: 1 },
-  unitText: { color: colors.muted, ...type.label },
-  unitTextSelected: { color: colors.brand },
+  unitSegment: { alignSelf: "center" },
   intervalMetricRow: { alignItems: "center", columnGap: spacing.sm, flexDirection: "row", flexWrap: "wrap", marginTop: spacing.sm, rowGap: spacing.xs },
   firstMetricRow: { marginTop: 0 },
   metricRowSurface: { boxShadow: elevation.glass, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, minHeight: 56, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },

@@ -6,7 +6,8 @@ import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
 import { fetchGroupBoard } from "../../lib/group-board";
-import { BackButton, Button, Card, CommunityFeed, LoadingState, Screen, SectionHeader, StateCard } from "../../ui/components";
+import { Button, Card, CommunityFeed, LoadingState, Screen, SectionHeader, StateCard } from "../../ui/components";
+import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 const configuredPublicWebUrl = (process.env.EXPO_PUBLIC_WEB_URL ?? "").trim().replace(/\/$/, "");
@@ -74,7 +75,7 @@ export default function GroupDetailScreen() {
 
   return (
     <Screen preserveTransformedContent>
-      <BackButton label="Home" onPress={() => router.back()} />
+      <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
       {loading && !group ? <LoadingState message="Loading group…" /> : error && !group ? (
         <StateCard actionLabel="Try again" message={error} onAction={() => void loadGroup()} title="Unable to open group" />
       ) : group ? (

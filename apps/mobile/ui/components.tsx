@@ -39,6 +39,13 @@ import repinLockupReversed from "../assets/branding/repin-lockup-reversed.png";
 import repinMark from "../assets/branding/repin-mark.png";
 import { formatWorkoutDate } from "../lib/workout-date";
 import { WideColumn } from "./layout";
+import { pressableFocused, webFocusRing } from "./focus-ring";
+import {
+  buttonAppearance,
+  buttonShowsDisabledReason,
+  controlHelperGap,
+  type ButtonVariant,
+} from "./primitive-state";
 import { colors, controls, elevation, fonts, radii, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
 
@@ -145,50 +152,65 @@ export function Screen({
   );
 }
 
-export function BackButton({ label = "Back", onPress }: { label?: string; onPress: () => void }) {
-  return (
-    <Pressable accessibilityRole="button" hitSlop={8} onPress={onPress} style={styles.backButton}>
-      <Text style={styles.backText}>‹ {label}</Text>
-    </Pressable>
-  );
-}
-
 export function Button({
   children,
-  disabled,
-  loading,
+  disabled = false,
+  disabledReason,
+  loading = false,
+  loadingLabel,
   onPress,
   variant = "primary",
   style,
 }: {
   children: string;
   disabled?: boolean;
+  disabledReason?: string;
   loading?: boolean;
+  loadingLabel?: string;
   onPress: () => void;
-  variant?: "primary" | "secondary" | "quiet" | "danger";
+  variant?: ButtonVariant;
   style?: ViewStyle;
 }) {
-  const isDisabled = disabled || loading;
+  const showHelper = buttonShowsDisabledReason(disabled, loading, disabledReason);
+  const resting = buttonAppearance({ disabled, loading, pressed: false, variant });
+  const label = loading ? (loadingLabel ?? children) : children;
   return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={isDisabled}
-      onPress={onPress}
-      style={({ pressed }) => [
-        styles.button,
-        variant === "primary" ? styles.primaryButton : variant === "danger" ? styles.dangerButton : variant === "secondary" ? styles.secondaryButton : styles.quietButton,
-        pressed && !isDisabled && styles.pressed,
-        pressed && !isDisabled && variant === "primary" && styles.primaryButtonPressed,
-        isDisabled && styles.disabled,
-        style,
-      ]}
-    >
-      {loading ? (
-        <ActivityIndicator color={variant === "primary" || variant === "danger" ? colors.surface : colors.brand} />
-      ) : (
-        <Text style={variant === "primary" || variant === "danger" ? styles.primaryButtonText : styles.secondaryButtonText}>{children}</Text>
-      )}
-    </Pressable>
+    <View>
+      <Pressable
+        accessibilityHint={showHelper ? disabledReason : undefined}
+        accessibilityRole="button"
+        accessibilityState={{ busy: loading, disabled: disabled || loading }}
+        disabled={disabled || loading}
+        onPress={onPress}
+        style={(state) => {
+          const appearance = buttonAppearance({ disabled, loading, pressed: state.pressed, variant });
+          return [
+            styles.button,
+            {
+              backgroundColor: appearance.backgroundColor,
+              borderColor: appearance.borderColor,
+              borderWidth: appearance.borderWidth,
+              height: appearance.height,
+              minHeight: appearance.height,
+            },
+            webFocusRing(pressableFocused(state)),
+            style,
+          ];
+        }}
+      >
+        <View style={styles.buttonContent}>
+          {resting.showSpinner ? (
+            <ActivityIndicator
+              accessibilityElementsHidden
+              color={resting.color}
+              importantForAccessibility="no-hide-descendants"
+            />
+          ) : null}
+          <Text style={[styles.buttonText, { color: resting.color }]}>{label}</Text>
+        </View>
+      </Pressable>
+      {showHelper ? <Text accessibilityLiveRegion="polite" style={styles.buttonHelper}>{disabledReason}</Text> : null}
+    </View>
   );
 }
 
@@ -762,18 +784,10 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
   transformedScreenContent: { overflow: "visible", paddingBottom: 96 },
   overflowVisible: { overflow: "visible" },
-  backButton: { alignSelf: "flex-start", minHeight: 44, justifyContent: "center", marginBottom: spacing.xl },
-  backText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 15 },
-  button: { alignItems: "center", borderRadius: radii.md, justifyContent: "center", minHeight: controls.buttonHeight, paddingHorizontal: spacing.lg },
-  primaryButton: { backgroundColor: colors.brand },
-  dangerButton: { backgroundColor: colors.danger },
-  primaryButtonPressed: { backgroundColor: colors.brandPressed },
-  secondaryButton: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderWidth: 1 },
-  quietButton: { backgroundColor: "transparent" },
-  primaryButtonText: { color: colors.surface, ...type.button },
-  secondaryButtonText: { color: colors.inkSoft, ...type.button },
-  pressed: { opacity: 0.78, transform: [{ scale: 0.99 }] },
-  disabled: { opacity: 0.48 },
+  button: { alignItems: "center", borderRadius: radii.md, justifyContent: "center", paddingHorizontal: spacing.lg },
+  buttonContent: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "center" },
+  buttonText: { ...type.button, flexShrink: 1, textAlign: "center" },
+  buttonHelper: { color: colors.disabledText, marginTop: controlHelperGap, ...type.bodySmall },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, boxShadow: elevation.e1, padding: spacing.lg },
   cardSelected: { boxShadow: `${elevation.e1}, inset 0 0 0 2px ${colors.brand}` },
   field: { gap: spacing.sm },
