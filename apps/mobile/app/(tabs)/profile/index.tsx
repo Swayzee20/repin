@@ -1,17 +1,20 @@
 import { getUserInitials, resolveUserDisplayName, type ProfileData } from "@repin/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { supabase } from "../../lib/supabase";
+import { supabase } from "../../../lib/supabase";
 import {
   getWorkoutDataRevision,
   isFresh,
   type FreshnessRecord,
-} from "../../lib/data-freshness";
-import { BrandHeader, LoadingState, StateCard } from "../../ui/components";
-import { useMainTabs } from "../../ui/main-tabs-context";
-import { colors, fonts, radii, spacing, type } from "../../ui/theme";
+} from "../../../lib/data-freshness";
+import { BrandHeader, LoadingState, StateCard } from "../../../ui/components";
+import { WideColumn } from "../../../ui/layout";
+import { useMainTabs } from "../../../ui/main-tabs-context";
+import { RepInPill } from "../../../ui/rep-in-pill";
+import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -95,14 +98,19 @@ export default function ProfileTabScreen() {
 
   const displayName = useMemo(() => resolveUserDisplayName({ displayName: data?.user.displayName }), [data]);
   const initials = useMemo(() => getUserInitials({ displayName: data?.user.displayName }), [data]);
+  const insets = useSafeAreaInsets();
 
-  if (loading && !data) return <SafeAreaView style={styles.safeArea}><LoadingState message="Loading profile…" /></SafeAreaView>;
-  if (error && !data) return <SafeAreaView style={styles.safeArea}><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadProfile()} title="Profile unavailable" /></View></SafeAreaView>;
+  if (loading && !data) return <SafeAreaView style={styles.safeArea}><WideColumn fill><LoadingState message="Loading profile…" /></WideColumn></SafeAreaView>;
+  if (error && !data) return <SafeAreaView style={styles.safeArea}><WideColumn fill><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadProfile()} title="Profile unavailable" /></View></WideColumn></SafeAreaView>;
   if (!data) return null;
 
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content}>
+    <View style={styles.safeArea}>
+      <SafeAreaView edges={["top"]} style={styles.flex}>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        <SafeAreaView edges={["left", "right"]} style={styles.flexGrow}>
+        <WideColumn>
+        <View style={styles.content}>
         <BrandHeader />
         <View style={styles.identity}>
           <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
@@ -165,25 +173,37 @@ export default function ProfileTabScreen() {
           <Text style={styles.sectionLabel}>ACCOUNT</Text>
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push("../settings")}
+            onPress={() => router.push("/settings")}
             style={({ pressed }) => [styles.settingsRow, pressed && styles.pressed]}
           >
             <Text style={styles.settingsLabel}>Settings</Text>
             <Text style={styles.rowArrow}>›</Text>
           </Pressable>
         </View>
+        </View>
+        </WideColumn>
+        </SafeAreaView>
       </ScrollView>
+      </SafeAreaView>
       {error ? (
-        <Pressable accessibilityRole="button" onPress={() => void loadProfile()} style={styles.refreshError}>
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void loadProfile()}
+          style={[styles.refreshError, { right: insets.right + spacing.xxl, top: insets.top + spacing.xxl }]}
+        >
           <Text style={styles.refreshErrorText}>Refresh failed · Retry</Text>
         </Pressable>
       ) : null}
-    </SafeAreaView>
+      <RepInPill />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
+  flex: { flex: 1 },
+  flexGrow: { flexGrow: 1 },
+  scroll: { flexGrow: 1 },
   content: { padding: spacing.xxl, paddingBottom: 160 },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   identity: { alignItems: "center", flexDirection: "row", marginTop: spacing.xl },
@@ -220,6 +240,6 @@ const styles = StyleSheet.create({
   settingsLabel: { color: colors.ink, flex: 1, fontFamily: fonts.semibold, fontSize: 16 },
   rowArrow: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24 },
   pressed: { opacity: 0.7 },
-  refreshError: { backgroundColor: colors.dangerSoft, borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, position: "absolute", right: spacing.xxl, top: spacing.xxl },
+  refreshError: { backgroundColor: colors.dangerSoft, borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, position: "absolute" },
   refreshErrorText: { color: colors.danger, ...type.label },
 });

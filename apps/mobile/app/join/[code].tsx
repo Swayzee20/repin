@@ -2,7 +2,10 @@ import type { GroupPreview, JoinGroupResponse } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { WideColumn } from "../../ui/layout";
 
 import { invitePath, normalizeInviteCode } from "../../lib/invite-route";
 import { supabase } from "../../lib/supabase";
@@ -169,7 +172,7 @@ export default function GroupInviteScreen() {
         </View>
         <View style={styles.actions}>
           <Button
-            onPress={() => router.push({ pathname: "/", params: { redirect } })}
+            onPress={() => router.push({ pathname: "/sign-in", params: { redirect } })}
           >
             Sign In to Continue
           </Button>
@@ -246,8 +249,10 @@ export default function GroupInviteScreen() {
 
 function InviteShell({ children }: { children: ReactNode }) {
   return (
-    <SafeAreaView style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>{children}</ScrollView>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+      <ScrollView contentContainerStyle={styles.container}>
+        <SafeAreaView edges={["left", "right"]}><WideColumn max="form">{children}</WideColumn></SafeAreaView>
+      </ScrollView>
     </SafeAreaView>
   );
 }

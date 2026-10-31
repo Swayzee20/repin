@@ -5,12 +5,12 @@ import { useCallback, useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
-  SafeAreaView,
   ScrollView,
   StyleSheet,
   Text,
   View,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import {
@@ -20,6 +20,7 @@ import {
   StateCard,
   TextField,
 } from "../../ui/components";
+import { WideColumn } from "../../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(
@@ -117,7 +118,7 @@ export default function JoinFirstGroupScreen() {
           <StateCard
             actionLabel="Back to Sign In"
             message="Sign in again before using an invite code."
-            onAction={() => router.replace("/")}
+            onAction={() => router.replace("/sign-in")}
             title="Sign in required"
           />
         </View>
@@ -141,7 +142,7 @@ export default function JoinFirstGroupScreen() {
   }
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.flex}
@@ -150,6 +151,8 @@ export default function JoinFirstGroupScreen() {
           contentContainerStyle={styles.container}
           keyboardShouldPersistTaps="handled"
         >
+          <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn max="form">
           <BackButton label="Get Started" onPress={() => router.back()} />
           <Text style={styles.eyebrow}>JOIN YOUR CREW</Text>
           <Text style={styles.title}>Join a group</Text>
@@ -188,6 +191,8 @@ export default function JoinFirstGroupScreen() {
               Join Group
             </Button>
           </View>
+          </WideColumn>
+          </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

@@ -46,8 +46,8 @@ export function PhotoViewer({
   const activeImage = images[activeIndex];
   const stageInsets = {
     bottom: Math.max(insets.bottom, spacing.lg),
-    left: spacing.lg,
-    right: spacing.lg,
+    left: Math.max(insets.left, spacing.lg),
+    right: Math.max(insets.right, spacing.lg),
     top: Math.max(insets.top, spacing.lg),
   };
   const mediaSize = useMemo(() => {
@@ -181,7 +181,7 @@ export function PhotoViewer({
           onPress={close}
           style={({ pressed }) => [
             styles.closeButton,
-            { right: spacing.lg, top: Math.max(insets.top, spacing.lg) },
+            { right: Math.max(insets.right, spacing.lg), top: Math.max(insets.top, spacing.lg) },
             pressed && styles.pressed,
           ]}
         >

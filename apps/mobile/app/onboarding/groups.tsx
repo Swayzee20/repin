@@ -1,10 +1,12 @@
 import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, SafeAreaView, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { Lockup } from "../../ui/components";
+import { WideColumn } from "../../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 export default function GroupOnboardingScreen() {
@@ -34,6 +36,7 @@ export default function GroupOnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
+      <WideColumn fill>
       <View style={styles.container}>
         <View style={styles.topRow}>
           <Lockup />
@@ -61,6 +64,7 @@ export default function GroupOnboardingScreen() {
           />
         </View>
       </View>
+      </WideColumn>
     </SafeAreaView>
   );
 }

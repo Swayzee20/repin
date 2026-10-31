@@ -1,8 +1,8 @@
 import { Feather } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { CenteredCard } from "./layout";
 import { colors, fonts, radii, spacing, type } from "./theme";
 
 const workoutLogOptions = [
@@ -31,7 +31,6 @@ export function LogWorkoutChooser({
   onQuickLog: () => void;
   visible: boolean;
 }) {
-  const insets = useSafeAreaInsets();
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(360)).current;
   const closing = useRef(false);
@@ -89,8 +88,8 @@ export function LogWorkoutChooser({
       <View style={styles.overlay}>
         <Animated.View pointerEvents="none" style={[styles.backdrop, { opacity: backdropOpacity }]} />
         <Pressable accessibilityLabel="Close workout options" accessibilityRole="button" onPress={() => close(onDismiss)} style={styles.backdropPressable} />
-        <Animated.View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg), transform: [{ translateY: sheetTranslateY }] }]}>
-          <View style={styles.handle} />
+        <CenteredCard>
+          <Animated.View style={[styles.card, { transform: [{ translateY: sheetTranslateY }] }]}>
           <Text style={styles.title}>Rep in</Text>
           <View style={styles.options}>
             {workoutLogOptions.map((option) => (
@@ -114,18 +113,18 @@ export function LogWorkoutChooser({
           <Pressable accessibilityRole="button" onPress={() => close(onDismiss)} style={({ pressed }) => [styles.cancel, pressed && styles.optionPressed]}>
             <Text style={styles.cancelText}>Cancel</Text>
           </Pressable>
-        </Animated.View>
+          </Animated.View>
+        </CenteredCard>
       </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: "flex-end" },
+  overlay: { flex: 1 },
   backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radii.xl, borderTopRightRadius: radii.xl, paddingHorizontal: spacing.xxl, paddingTop: spacing.md },
-  handle: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: 4, marginBottom: spacing.lg, width: 38 },
+  card: { backgroundColor: colors.surface, borderRadius: radii.lg, paddingBottom: spacing.lg, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
   title: { color: colors.ink, ...type.title },
   options: { marginTop: spacing.lg },
   option: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", justifyContent: "space-between", minHeight: 72, paddingVertical: spacing.md },

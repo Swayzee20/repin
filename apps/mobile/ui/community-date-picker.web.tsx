@@ -2,6 +2,7 @@ import { createElement, useEffect, useState, type ChangeEvent } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { fromLocalDateInputValue, toLocalDateInputValue } from "../lib/community-date";
+import { CenteredCard } from "./layout";
 import { colors, fonts, radii, spacing, type } from "./theme";
 
 export function CommunityDatePicker({
@@ -24,7 +25,8 @@ export function CommunityDatePicker({
   return (
     <Modal animationType="fade" onRequestClose={onDismiss} presentationStyle="overFullScreen" transparent visible>
       <View style={styles.overlay}>
-        <Pressable accessibilityLabel="Close date picker" accessibilityRole="button" onPress={onDismiss} style={StyleSheet.absoluteFill} />
+        <Pressable accessibilityLabel="Close date picker" accessibilityRole="button" onPress={onDismiss} style={[StyleSheet.absoluteFill, styles.backdrop]} />
+        <CenteredCard>
         <View style={styles.panel}>
           <Text style={styles.title}>Choose a day</Text>
           {createElement("input", {
@@ -40,6 +42,7 @@ export function CommunityDatePicker({
             <Pressable accessibilityRole="button" onPress={() => { const next = fromLocalDateInputValue(draft); if (next) onChange(next); onDismiss(); }} style={styles.action}><Text style={styles.primaryAction}>Done</Text></Pressable>
           </View>
         </View>
+        </CenteredCard>
       </View>
     </Modal>
   );
@@ -59,8 +62,9 @@ const webInputStyle = {
 };
 
 const styles = StyleSheet.create({
-  overlay: { alignItems: "center", backgroundColor: colors.overlay, flex: 1, justifyContent: "center", padding: spacing.xxl },
-  panel: { backgroundColor: colors.surface, borderRadius: radii.lg, maxWidth: 420, padding: spacing.lg, width: "100%" },
+  overlay: { flex: 1 },
+  backdrop: { backgroundColor: colors.overlay },
+  panel: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.lg, width: "100%" },
   title: { color: colors.ink, ...type.heading },
   actions: { flexDirection: "row", justifyContent: "flex-end", marginTop: spacing.md },
   action: { alignItems: "center", justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.lg },

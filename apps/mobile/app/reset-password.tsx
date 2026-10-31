@@ -1,7 +1,8 @@
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import {
   clearRecoveryAddressBar,
@@ -17,6 +18,7 @@ import {
 } from "../lib/password-reset";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { BackButton, Button, LoadingState, StateCard, TextField } from "../ui/components";
+import { WideColumn } from "../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../ui/theme";
 
 type Phase = "checking" | "invalid" | "form" | "success";
@@ -106,8 +108,10 @@ export default function ResetPasswordScreen() {
   const returnToSignIn = async (signOutFirst: boolean) => {
     if (signOutFirst && supabase) {
       await supabase.auth.signOut({ scope: "local" });
+      router.replace("/sign-in");
+      return;
     }
-    router.replace("/");
+    router.replace(signedIn ? "/" : "/sign-in");
   };
 
   const sendAnotherLink = async () => {
@@ -164,7 +168,7 @@ export default function ResetPasswordScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centered}>
           <StateCard message="Add the Expo public Supabase URL and publishable key before resetting a password." title="Supabase is not configured" />
-          <Button onPress={() => router.replace("/")} variant="secondary">Back to Sign In</Button>
+          <Button onPress={() => router.replace("/sign-in")} variant="secondary">Back to Sign In</Button>
         </View>
       </SafeAreaView>
     );
@@ -175,9 +179,11 @@ export default function ResetPasswordScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
         <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
+          <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn max="form">
           <BackButton
             label="Sign In"
             onPress={() => void returnToSignIn(phase === "form" && sessionEstablishedFromLink)}
@@ -253,6 +259,8 @@ export default function ResetPasswordScreen() {
               </Button>
             </View>
           ) : null}
+          </WideColumn>
+          </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
