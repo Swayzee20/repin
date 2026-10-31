@@ -16,7 +16,7 @@ export default function MainTabsLayout() {
             selected: { color: colors.brand },
           }}
           preferredPlacement="tabBar"
-          rippleColor={colors.brandSoft}
+          rippleColor={colors.surfaceMuted}
           tintColor={colors.brand}
         >
           <NativeTabs.Trigger name="(home)">

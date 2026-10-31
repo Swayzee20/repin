@@ -545,7 +545,7 @@ export function CommunityFeed({
         }}
         onScroll={scrollHandler}
         overScrollMode="never"
-        ref={scrollRef as never}
+        ref={scrollRef}
         removeClippedSubviews={false}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={mode === "full"}
@@ -575,7 +575,7 @@ export function CommunityFeed({
       </Animated.ScrollView>
       <LinearGradient
         colors={[
-          colors.feed,
+          colors.surfaceMuted,
           colors.feedFade,
           colors.boardTransparent,
         ]}
@@ -587,7 +587,7 @@ export function CommunityFeed({
         colors={[
           colors.boardTransparent,
           colors.feedFadeSoft,
-          colors.feed,
+          colors.surfaceMuted,
         ]}
         locations={[0, 0.64, 1]}
         pointerEvents="none"
@@ -770,7 +770,7 @@ const styles = StyleSheet.create({
   field: { gap: spacing.sm },
   fieldCompact: { gap: spacing.xs },
   fieldLabel: { color: colors.inkSoft, ...type.label },
-  input: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: radii.input, borderWidth: 1, color: colors.ink, fontFamily: fonts.regular, fontSize: 16, minHeight: controls.inputHeight, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
+  input: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: radii.md, borderWidth: 1, color: colors.ink, fontFamily: fonts.regular, fontSize: 16, minHeight: controls.inputHeight, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
   inputCompact: { minHeight: 48, paddingVertical: spacing.sm },
   inputFocused: { borderColor: colors.brand },
   multiline: { minHeight: 108, textAlignVertical: "top" },
@@ -787,7 +787,7 @@ const styles = StyleSheet.create({
   workoutTopline: { alignItems: "center", flexDirection: "row" },
   compactWorkoutCard: { padding: spacing.lg },
   fullWorkoutCard: { padding: spacing.lg },
-  avatar: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.pill, height: 38, justifyContent: "center", width: 38 },
+  avatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 38, justifyContent: "center", width: 38 },
   avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 12 },
   workoutAuthor: { flex: 1, marginLeft: spacing.md },
   author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15 },
@@ -828,7 +828,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     width: "100%",
   },
-  edgeToEdgeFeedViewport: { backgroundColor: colors.feed, borderRadius: 0 },
+  edgeToEdgeFeedViewport: { backgroundColor: colors.surfaceMuted, borderRadius: 0 },
   feedScroller: { overflow: "visible" },
   feedContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
   feedSlot: { minWidth: 0, overflow: "visible", paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },

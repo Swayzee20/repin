@@ -592,7 +592,7 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.76 },
   effortRow: { flexDirection: "row", gap: spacing.xs, marginTop: spacing.xs },
   flameButton: { alignItems: "center", borderColor: "transparent", borderRadius: radii.md, borderWidth: 1, height: 48, justifyContent: "center", width: 48 },
-  flameButtonActive: { backgroundColor: colors.brandSoft },
+  flameButtonActive: { backgroundColor: colors.surfaceMuted },
   flameButtonSelected: { borderColor: colors.brand },
   flame: { fontSize: 25 },
   flameInactive: { opacity: 0.18 },

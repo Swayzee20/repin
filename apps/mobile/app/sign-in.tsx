@@ -8,7 +8,7 @@ import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { Button, Lockup, StateCard, TextField, Wordmark } from "../ui/components";
 import { TwoPane, useLayoutMode } from "../ui/layout";
-import { colors, fonts, layout, spacing, type } from "../ui/theme";
+import { colors, fonts, layout, radii, spacing, type } from "../ui/theme";
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -143,7 +143,7 @@ export default function SignInScreen() {
         column="form"
         fallback="hide-left"
         keyboardShouldPersistTaps="handled"
-        leadingFill={colors.board}
+        leadingFill={colors.surfaceMuted}
         left={<BrandPanel />}
         right={form}
       />
@@ -172,9 +172,9 @@ const styles = StyleSheet.create({
   authTitleFlush: { marginTop: 0 },
   authCopy: { color: colors.muted, ...type.body, marginTop: spacing.sm },
   authForm: { gap: spacing.lg },
-  authInput: { borderRadius: 9 },
+  authInput: { borderRadius: radii.md },
   authInputFocused: { borderColor: colors.brand },
-  authButton: { borderRadius: 10 },
+  authButton: { borderRadius: radii.md },
   error: { color: colors.danger, ...type.bodySmall },
   signupPrompt: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.xxl },
   signupCopy: { color: colors.muted, ...type.bodySmall },
