@@ -3,7 +3,8 @@ import type { WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { Image, KeyboardAvoidingView, Platform, Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
@@ -106,9 +107,10 @@ export default function LogWorkoutScreen() {
   }, [pickerMode]);
 
   return (
-    <SafeAreaView style={styles.safeArea}>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
         <ScrollView automaticallyAdjustKeyboardInsets contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled" style={styles.scrollView}>
+          <SafeAreaView edges={["left", "right"]}>
           <BackButton label="Cancel" onPress={() => router.back()} />
           <Text style={styles.eyebrow}>QUICK CHECK-IN</Text><Text style={styles.title}>Log a workout</Text>
 
@@ -144,6 +146,7 @@ export default function LogWorkoutScreen() {
           </View>
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
           <Button disabled={!canSubmit} loading={submitting} onPress={() => void submitWorkout()} style={styles.submitButton}>Log workout</Button>
+          </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
