@@ -34,7 +34,7 @@ export default function MainTabsLayout() {
             />
           </NativeTabs.Trigger>
           <NativeTabs.Trigger name="profile">
-            <NativeTabs.Trigger.Label>Me</NativeTabs.Trigger.Label>
+            <NativeTabs.Trigger.Label>Profile</NativeTabs.Trigger.Label>
             <NativeTabs.Trigger.Icon
               md={{ default: "account_circle", selected: "account_circle" }}
               sf={{ default: "person.crop.circle", selected: "person.crop.circle.fill" }}

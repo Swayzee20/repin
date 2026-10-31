@@ -1,9 +1,10 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useEffect, useState } from "react";
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text } from "react-native";
 
-import { CenteredCard } from "./layout";
-import { colors, elevation, radii, spacing, type } from "./theme";
+import { DatePickerActions } from "./date-picker-actions";
+import { Dialog } from "./dialog";
+import { colors, type } from "./theme";
 
 export function CommunityDatePicker({
   maximumDate,
@@ -36,31 +37,14 @@ export function CommunityDatePicker({
   }
 
   return (
-    <Modal animationType="fade" onRequestClose={onDismiss} presentationStyle="overFullScreen" transparent visible>
-      <View style={styles.overlay}>
-        <Pressable accessibilityLabel="Close date picker" accessibilityRole="button" onPress={onDismiss} style={[StyleSheet.absoluteFill, styles.backdrop]} />
-        <CenteredCard>
-        <View style={styles.panel}>
-          <Text style={styles.title}>Choose a day</Text>
-          <DateTimePicker display="inline" maximumDate={maximumDate} mode="date" onChange={handleChange} value={draft} />
-          <View style={styles.actions}>
-            <Pressable accessibilityRole="button" onPress={onDismiss} style={styles.action}><Text style={styles.secondaryAction}>Cancel</Text></Pressable>
-            <Pressable accessibilityRole="button" onPress={() => { onChange(draft); onDismiss(); }} style={styles.action}><Text style={styles.primaryAction}>Done</Text></Pressable>
-          </View>
-        </View>
-        </CenteredCard>
-      </View>
-    </Modal>
+    <Dialog closeLabel="Close date picker" onDismiss={onDismiss} visible>
+      <Text style={styles.title}>Choose a day</Text>
+      <DateTimePicker display="inline" maximumDate={maximumDate} mode="date" onChange={handleChange} value={draft} />
+      <DatePickerActions onCancel={onDismiss} onDone={() => { onChange(draft); onDismiss(); }} />
+    </Dialog>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1 },
-  backdrop: { backgroundColor: colors.overlay },
-  panel: { backgroundColor: colors.surface, borderRadius: radii.lg, boxShadow: elevation.e3, padding: spacing.lg, width: "100%" },
   title: { color: colors.ink, ...type.heading },
-  actions: { flexDirection: "row", justifyContent: "flex-end", marginTop: spacing.md },
-  action: { alignItems: "center", justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.lg },
-  secondaryAction: { color: colors.muted, ...type.label },
-  primaryAction: { color: colors.brand, ...type.label },
 });

@@ -1,10 +1,11 @@
 import type { QuickLogMetricInput, WorkoutDetailMetric, WorkoutType } from "@repin/types";
-import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { TextField } from "./components";
+import { FieldLabel, NumberField, secondsRangeError } from "./form-fields";
 import { SegmentedControl } from "./primitives";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
-import { colors, elevation, fonts, spacing, type } from "./theme";
+import { spacing } from "./theme";
 
 type DistanceUnit = "mi" | "km";
 type FunctionalResultType = "time" | "rounds" | "score";
@@ -66,9 +67,9 @@ export function WorkoutMetricFields({
     <>
       {isDistance ? (
         <View style={styles.section}>
-          <FieldLabel label="Distance" />
+          <FieldLabel label="Distance" optional />
           <View style={styles.metricRow}>
-            <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => update({ distance })} placeholder="3.2" value={value.distance} />
+            <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => update({ distance })} placeholder="3.2" suffix={value.distanceUnit} value={value.distance} />
             <SegmentedControl<DistanceUnit>
               accessibilityLabel="Distance unit"
               onChange={(distanceUnit) => {
@@ -85,7 +86,7 @@ export function WorkoutMetricFields({
 
       {workoutType === "functional_fitness" ? (
         <View style={styles.section}>
-          <FieldLabel label="Result" />
+          <FieldLabel label="Result" optional />
           <SegmentedControl<FunctionalResultType>
             accessibilityLabel="Result"
             allowClear
@@ -96,17 +97,17 @@ export function WorkoutMetricFields({
             value={value.functionalResultType}
           />
           {value.functionalResultType === "rounds" ? (
-            <TextField compact containerStyle={styles.resultField} inputMode="numeric" onChangeText={(rounds) => update({ rounds })} placeholder="5" value={value.rounds} />
+            <NumberField accessibilityLabel="Rounds" containerStyle={styles.resultField} kind="number" onChangeText={(rounds) => update({ rounds })} placeholder="5" value={value.rounds} />
           ) : null}
           {value.functionalResultType === "score" ? (
-            <TextField compact containerStyle={styles.resultField} maxLength={500} onChangeText={(score) => update({ score })} placeholder="5 rounds + 12 reps" value={value.score} />
+            <TextField accessibilityLabel="Score" containerStyle={styles.resultField} maxLength={500} onChangeText={(score) => update({ score })} placeholder="5 rounds + 12 reps" value={value.score} />
           ) : null}
         </View>
       ) : null}
 
       {showTime ? (
         <View style={styles.section}>
-          <FieldLabel label="Time" />
+          <FieldLabel label="Time" optional />
           <WorkoutTimeInput
             minutes={value.timeMinutes}
             onMinutesChange={(timeMinutes) => update({ timeMinutes })}
@@ -119,26 +120,14 @@ export function WorkoutMetricFields({
   );
 }
 
-function FieldLabel({ label }: { label: string }) {
-  return <View style={styles.labelRow}><Text style={styles.sectionTitle}>{label}</Text><Text style={styles.optional}>Optional</Text></View>;
-}
-
 export function WorkoutTimeInput({
   containerStyle,
-  elevated = false,
-  fieldStyle,
-  focusedInputStyle,
-  inputStyle,
   minutes,
   onMinutesChange,
   onSecondsChange,
   seconds,
 }: {
   containerStyle?: StyleProp<ViewStyle>;
-  elevated?: boolean;
-  fieldStyle?: StyleProp<ViewStyle>;
-  focusedInputStyle?: StyleProp<TextStyle>;
-  inputStyle?: StyleProp<TextStyle>;
   minutes: string;
   onMinutesChange: (value: string) => void;
   onSecondsChange: (value: string) => void;
@@ -146,14 +135,8 @@ export function WorkoutTimeInput({
 }) {
   return (
     <View style={[styles.timeRow, containerStyle]}>
-      <View style={styles.timePart}>
-        <TextField compact accessibilityLabel="Minutes" containerStyle={[styles.timeField, fieldStyle]} focusedStyle={focusedInputStyle} inputMode="numeric" keyboardType="number-pad" onChangeText={onMinutesChange} placeholder="28" style={[elevated && styles.elevatedInput, inputStyle]} value={minutes} />
-        <Text style={styles.timeUnit}>min</Text>
-      </View>
-      <View style={styles.timePart}>
-        <TextField compact accessibilityLabel="Seconds" containerStyle={[styles.timeField, fieldStyle]} focusedStyle={focusedInputStyle} inputMode="numeric" keyboardType="number-pad" maxLength={2} onChangeText={onSecondsChange} placeholder="14" style={[elevated && styles.elevatedInput, inputStyle]} value={seconds} />
-        <Text style={styles.timeUnit}>sec</Text>
-      </View>
+      <NumberField accessibilityLabel="Minutes" containerStyle={styles.timeField} kind="number" onChangeText={onMinutesChange} placeholder="28" suffix="min" value={minutes} />
+      <NumberField accessibilityLabel="Seconds" containerStyle={styles.timeField} error={secondsRangeError(seconds)} kind="number" onChangeText={onSecondsChange} placeholder="14" suffix="sec" value={seconds} />
     </View>
   );
 }
@@ -206,17 +189,11 @@ export function buildQuickLogResults(value: QuickLogResultsDraft, workoutType: W
 
 const styles = StyleSheet.create({
   section: { marginTop: spacing.lg },
-  sectionTitle: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
-  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.xs },
-  optional: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 18 },
-  metricRow: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
-  metricField: { flex: 1, marginTop: 0 },
+  metricRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
+  metricField: { flex: 1 },
   resultField: { marginTop: spacing.sm },
-  timeRow: { alignItems: "center", flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
-  timePart: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
-  timeField: { width: 84 },
-  elevatedInput: { boxShadow: elevation.glass },
-  timeUnit: { color: colors.muted, ...type.bodySmall },
+  timeRow: { alignItems: "flex-start", flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
+  timeField: { flex: 1 },
   segment: { marginTop: spacing.sm },
-  inlineSegment: { alignSelf: "flex-end" },
+  inlineSegment: { alignSelf: "center" },
 });

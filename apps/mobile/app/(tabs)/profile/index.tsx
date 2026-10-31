@@ -13,7 +13,6 @@ import {
 import { BrandHeader, Card, LoadingState, StateCard } from "../../../ui/components";
 import { WideColumn } from "../../../ui/layout";
 import { useMainTabs } from "../../../ui/main-tabs-context";
-import { RepInPill } from "../../../ui/rep-in-pill";
 import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -194,7 +193,6 @@ export default function ProfileTabScreen() {
           <Text style={styles.refreshErrorText}>Refresh failed · Retry</Text>
         </Pressable>
       ) : null}
-      <RepInPill />
     </View>
   );
 }
