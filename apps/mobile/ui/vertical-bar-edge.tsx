@@ -7,10 +7,11 @@ import {
   edgeResolved,
   stripPresent,
   type StatusBarModule,
+  type StripState,
   type VerticalBarEdge,
 } from "./vertical-bar-edge-store";
 
-export type { VerticalBarEdge } from "./vertical-bar-edge-store";
+export type { StripState, VerticalBarEdge } from "./vertical-bar-edge-store";
 export { edgeResolved, stripPresent };
 
 /**
@@ -59,5 +60,14 @@ export function useEdgeResolved(): boolean {
     subscribe,
     () => edgeResolved(store.getState()),
     () => edgeResolved(store.getState()),
+  );
+}
+
+/** Reads `{ status, edge }` from the shared store. The snapshot object is stable until the edge changes. */
+export function useStripState(): StripState {
+  return useSyncExternalStore(
+    subscribe,
+    () => store.getState(),
+    () => store.getState(),
   );
 }

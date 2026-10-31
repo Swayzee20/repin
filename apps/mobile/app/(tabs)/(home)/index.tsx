@@ -20,7 +20,6 @@ import { useMainTabs } from "../../../ui/main-tabs-context";
 import { BrandHeader, Card, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { TwoPane, useLayoutMode } from "../../../ui/layout";
-import { RepInPill } from "../../../ui/rep-in-pill";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
 import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
 
@@ -178,7 +177,6 @@ export default function HomeScreen() {
           )}
         />
       </SafeAreaView>
-      <RepInPill />
     </View>
   );
 }

@@ -10,6 +10,9 @@ const vectorIcons = {
   "chevron.left": "chevron-left",
   "chevron.right": "chevron-right",
   "chevron.up": "chevron-up",
+  house: "home",
+  "person.2": "users",
+  "person.crop.circle": "user",
   plus: "plus",
   xmark: "x",
 } as const;
