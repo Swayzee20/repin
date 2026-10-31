@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuthSession } from "../lib/use-auth-session";
 import { useMainTabs } from "./main-tabs-context";
-import { colors, radii, spacing, type } from "./theme";
+import { colors, elevation, radii, spacing, type } from "./theme";
 
 export function RepInPill() {
   const stripPresent = useStripPresent();
@@ -60,16 +60,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: colors.brand,
     borderRadius: radii.pill,
-    elevation: 4,
+    boxShadow: elevation.e2,
     flexDirection: "row",
     gap: spacing.xs,
     justifyContent: "center",
     minHeight: 46,
     paddingHorizontal: spacing.xl,
-    shadowColor: colors.ink,
-    shadowOffset: { height: 5, width: 0 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
   },
   pillPressed: { backgroundColor: colors.brandPressed, transform: [{ scale: 0.98 }] },
   label: { color: colors.surface, ...type.button },

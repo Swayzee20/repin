@@ -3,7 +3,7 @@ import { useEffect, useRef } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { CenteredCard } from "./layout";
-import { colors, fonts, radii, spacing, type } from "./theme";
+import { colors, elevation, fonts, radii, spacing, type } from "./theme";
 
 const workoutLogOptions = [
   {
@@ -124,7 +124,7 @@ const styles = StyleSheet.create({
   overlay: { flex: 1 },
   backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
-  card: { backgroundColor: colors.surface, borderRadius: radii.lg, paddingBottom: spacing.lg, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
+  card: { backgroundColor: colors.surface, borderRadius: radii.lg, boxShadow: elevation.e3, paddingBottom: spacing.lg, paddingHorizontal: spacing.xxl, paddingTop: spacing.lg },
   title: { color: colors.ink, ...type.title },
   options: { marginTop: spacing.lg },
   option: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, flexDirection: "row", justifyContent: "space-between", minHeight: 72, paddingVertical: spacing.md },

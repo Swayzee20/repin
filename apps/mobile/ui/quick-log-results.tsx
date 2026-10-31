@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type
 
 import { TextField } from "./components";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
-import { colors, compactControlShadowStyle, fonts, radii, spacing, type } from "./theme";
+import { colors, elevation, fonts, radii, spacing, type } from "./theme";
 
 type DistanceUnit = "mi" | "km";
 type FunctionalResultType = "time" | "rounds" | "score";
@@ -239,7 +239,7 @@ const styles = StyleSheet.create({
   timeRow: { alignItems: "center", flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
   timePart: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   timeField: { width: 84 },
-  elevatedInput: { ...compactControlShadowStyle },
+  elevatedInput: { boxShadow: elevation.glass },
   timeUnit: { color: colors.muted, ...type.bodySmall },
   toggle: { alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexDirection: "row", marginTop: spacing.sm, padding: 3 },
   toggleOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 36, minWidth: 48, paddingHorizontal: spacing.md },

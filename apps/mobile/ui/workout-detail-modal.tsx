@@ -18,7 +18,7 @@ import type { CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 
 import { CenteredCard } from "./layout";
 import { ScrollAnchorProvider, useScrollAnchor } from "./scroll-anchor";
-import { colors, radii, spacing } from "./theme";
+import { colors, elevation, radii, spacing } from "./theme";
 import { WorkoutDetailView, type WorkoutDetailFixture } from "./workout-detail";
 
 const webScrollerStyle = Platform.OS === "web"
@@ -156,7 +156,7 @@ export function WorkoutDetailModal({
             },
           ]}
         >
-          <ModalCloseButton onPress={close} />
+          <View style={styles.panelClip}>
           <ScrollView
             automaticallyAdjustKeyboardInsets
             contentContainerStyle={[
@@ -198,6 +198,8 @@ export function WorkoutDetailModal({
             pointerEvents="none"
             style={styles.topScrollFade}
           />
+          </View>
+          <ModalCloseButton onPress={close} />
         </Animated.View>
         </CenteredCard>
       </View>
@@ -223,8 +225,9 @@ const styles = StyleSheet.create({
   overlay: { alignItems: "center", flex: 1, justifyContent: "center", paddingVertical: spacing.lg },
   backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
-  panel: { backgroundColor: colors.surface, borderColor: colors.overlaySoft, borderRadius: radii.lg, borderWidth: 1, overflow: "hidden" },
-  closeButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, elevation: 5, height: 36, justifyContent: "center", position: "absolute", right: spacing.lg, top: spacing.lg, width: 36, zIndex: 20 },
+  panel: { backgroundColor: colors.surface, borderColor: colors.overlaySoft, borderRadius: radii.lg, borderWidth: 1, boxShadow: elevation.e3 },
+  panelClip: { borderRadius: radii.lg, flexShrink: 1, overflow: "hidden" },
+  closeButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, boxShadow: elevation.glass, height: 36, justifyContent: "center", position: "absolute", right: spacing.lg, top: spacing.lg, width: 36, zIndex: 20 },
   pressed: { opacity: 0.66 },
   scroller: { flexGrow: 0, flexShrink: 1 },
   scrollContent: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },

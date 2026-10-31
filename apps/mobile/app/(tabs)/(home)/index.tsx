@@ -22,7 +22,7 @@ import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { TwoPane, useLayoutMode } from "../../../ui/layout";
 import { RepInPill } from "../../../ui/rep-in-pill";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
-import { colors, floatingSurfaceStyle, fonts, radii, spacing, type } from "../../../ui/theme";
+import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -204,7 +204,7 @@ function PersonalZone({
       </ScrollAnchor>
 
       <ScrollAnchor id="home-snapshot">
-        <Card style={[styles.snapshot, styles.floatingSurface, compact && styles.snapshotCompact]}>
+        <Card style={[styles.snapshot, compact && styles.snapshotCompact]}>
           <View style={styles.snapshotTop}>
             <View style={[styles.statusIcon, homeData.snapshot.hasWorkoutToday ? styles.doneIcon : styles.pendingIcon]}>
               <Text style={homeData.snapshot.hasWorkoutToday ? styles.doneGlyph : styles.pendingGlyph}>{homeData.snapshot.hasWorkoutToday ? "✓" : "·"}</Text>
@@ -220,7 +220,7 @@ function PersonalZone({
       </ScrollAnchor>
 
       <ScrollAnchor id="home-week">
-        <View accessibilityRole="list" style={[styles.consistencyRow, styles.floatingSurface]}>
+        <Card accessibilityRole="list" style={styles.consistencyRow}>
           {consistencyDays.map((day) => (
             <View
               accessibilityLabel={day.accessibilityLabel}
@@ -245,7 +245,7 @@ function PersonalZone({
               </View>
             </View>
           ))}
-        </View>
+        </Card>
       </ScrollAnchor>
       {highlights ? <Highlights compact={compact} highlights={highlights} /> : null}
     </View>
@@ -290,20 +290,20 @@ function CrewZone({
       {showList ? workouts.map((workout) => (
         <ScrollAnchor id={`home-workout-${workout.id}`} key={workout.id}>
           <View style={[styles.latestWorkout, compact && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard style={styles.floatingSurface} variant="compact" workout={workout} />
+            <WorkoutSummaryCard variant="compact" workout={workout} />
           </View>
         </ScrollAnchor>
       )) : latestWorkoutToday ? (
         <ScrollAnchor id={`home-workout-${latestWorkoutToday.id}`}>
           <View style={[styles.latestWorkout, compact && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard style={styles.floatingSurface} variant="compact" workout={latestWorkoutToday} />
+            <WorkoutSummaryCard variant="compact" workout={latestWorkoutToday} />
           </View>
         </ScrollAnchor>
       ) : (
         <ScrollAnchor id="home-empty">
-          <View style={[styles.emptySnapshot, styles.floatingSurface, compact && styles.emptySnapshotCompact]}>
+          <Card style={[styles.emptySnapshot, compact && styles.emptySnapshotCompact]}>
             <CheckInEmptyContent onCheckIn={onCheckIn} />
-          </View>
+          </Card>
         </ScrollAnchor>
       )}
       {highlights ? <Highlights compact={compact} highlights={highlights} /> : null}
@@ -531,7 +531,7 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
   headerCompact: { marginBottom: spacing.sm },
   greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
-  snapshot: { backgroundColor: colors.surface, borderColor: colors.border, padding: spacing.lg }, snapshotTop: { alignItems: "center", flexDirection: "row" }, statusIcon: { alignItems: "center", borderRadius: radii.md, height: 40, justifyContent: "center", width: 40 },
+  snapshot: { padding: spacing.lg }, snapshotTop: { alignItems: "center", flexDirection: "row" }, statusIcon: { alignItems: "center", borderRadius: radii.md, height: 40, justifyContent: "center", width: 40 },
   snapshotCompact: { padding: spacing.md },
   doneIcon: { backgroundColor: colors.surfaceMuted }, pendingIcon: { backgroundColor: colors.surfaceMuted }, doneGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 }, pendingGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 24, marginTop: -7 },
   snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 }, snapshotMessage: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: spacing.xs },
@@ -557,7 +557,6 @@ const styles = StyleSheet.create({
   latestWorkout: { marginTop: spacing.lg },
   latestWorkoutCompact: { marginTop: spacing.sm },
   emptySnapshot: { alignItems: "center", marginTop: spacing.lg, padding: spacing.lg },
-  floatingSurface: { ...floatingSurfaceStyle },
   emptySnapshotCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
   highlightsTitle: { marginTop: spacing.xl },
   highlightsTitleCompact: { marginTop: spacing.xs },
