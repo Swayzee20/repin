@@ -1,9 +1,10 @@
 import { createElement, useEffect, useState, type ChangeEvent } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text } from "react-native";
 
 import { fromLocalDateInputValue, toLocalDateInputValue } from "../lib/community-date";
-import { CenteredCard } from "./layout";
-import { colors, elevation, fonts, radii, spacing, type } from "./theme";
+import { DatePickerActions } from "./date-picker-actions";
+import { Dialog } from "./dialog";
+import { colors, radii, size, spacing, type } from "./theme";
 
 export function CommunityDatePicker({
   maximumDate,
@@ -23,28 +24,25 @@ export function CommunityDatePicker({
   if (!visible) return null;
 
   return (
-    <Modal animationType="fade" onRequestClose={onDismiss} presentationStyle="overFullScreen" transparent visible>
-      <View style={styles.overlay}>
-        <Pressable accessibilityLabel="Close date picker" accessibilityRole="button" onPress={onDismiss} style={[StyleSheet.absoluteFill, styles.backdrop]} />
-        <CenteredCard>
-        <View style={styles.panel}>
-          <Text style={styles.title}>Choose a day</Text>
-          {createElement("input", {
-            "aria-label": "Community date",
-            max: toLocalDateInputValue(maximumDate),
-            onChange: (event: ChangeEvent<HTMLInputElement>) => setDraft(event.currentTarget.value),
-            style: webInputStyle,
-            type: "date",
-            value: draft,
-          })}
-          <View style={styles.actions}>
-            <Pressable accessibilityRole="button" onPress={onDismiss} style={styles.action}><Text style={styles.secondaryAction}>Cancel</Text></Pressable>
-            <Pressable accessibilityRole="button" onPress={() => { const next = fromLocalDateInputValue(draft); if (next) onChange(next); onDismiss(); }} style={styles.action}><Text style={styles.primaryAction}>Done</Text></Pressable>
-          </View>
-        </View>
-        </CenteredCard>
-      </View>
-    </Modal>
+    <Dialog closeLabel="Close date picker" onDismiss={onDismiss} visible>
+      <Text style={styles.title}>Choose a day</Text>
+      {createElement("input", {
+        "aria-label": "Community date",
+        max: toLocalDateInputValue(maximumDate),
+        onChange: (event: ChangeEvent<HTMLInputElement>) => setDraft(event.currentTarget.value),
+        style: webInputStyle,
+        type: "date",
+        value: draft,
+      })}
+      <DatePickerActions
+        onCancel={onDismiss}
+        onDone={() => {
+          const next = fromLocalDateInputValue(draft);
+          if (next) onChange(next);
+          onDismiss();
+        }}
+      />
+    </Dialog>
   );
 }
 
@@ -52,22 +50,16 @@ const webInputStyle = {
   backgroundColor: colors.surface,
   border: `1px solid ${colors.borderStrong}`,
   borderRadius: radii.md,
+  boxSizing: "border-box" as const,
   color: colors.ink,
-  fontFamily: fonts.regular,
-  fontSize: 16,
-  height: 48,
-  marginTop: spacing.lg,
+  fontFamily: type.body.fontFamily,
+  fontSize: type.body.fontSize,
+  height: size.control,
+  marginTop: spacing.sm,
   padding: `0 ${spacing.lg}px`,
   width: "100%",
 };
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1 },
-  backdrop: { backgroundColor: colors.overlay },
-  panel: { backgroundColor: colors.surface, borderRadius: radii.lg, boxShadow: elevation.e3, padding: spacing.lg, width: "100%" },
   title: { color: colors.ink, ...type.heading },
-  actions: { flexDirection: "row", justifyContent: "flex-end", marginTop: spacing.md },
-  action: { alignItems: "center", justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.lg },
-  secondaryAction: { color: colors.muted, ...type.label },
-  primaryAction: { color: colors.brand, ...type.label },
 });

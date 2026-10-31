@@ -1,5 +1,4 @@
 import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
-import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useRef, useState, type ComponentRef, type ReactNode, type Ref } from "react";
 import type { StyleProp, TextInputProps, ViewInstance, ViewProps, ViewStyle } from "react-native";
@@ -46,7 +45,10 @@ import {
   controlHelperGap,
   type ButtonVariant,
 } from "./primitive-state";
-import { colors, controls, elevation, fonts, radii, spacing, type } from "./theme";
+import { Icon, type IconName } from "./icons";
+import { Menu, MenuItem } from "./menu";
+import { menuPopoverWidth, stateActionHeight, stateIconSize } from "./overlay-state";
+import { colors, controls, elevation, fonts, radii, size, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
 
 const webFeedScrollerStyle =
@@ -299,21 +301,30 @@ export function SectionHeader({
 }
 
 export function StateCard({
-  title,
-  message,
   actionLabel,
+  icon,
+  message,
   onAction,
+  title,
 }: {
-  title: string;
-  message: string;
   actionLabel?: string;
+  icon?: IconName;
+  message: string;
   onAction?: () => void;
+  title: string;
 }) {
   return (
     <Card style={styles.stateCard}>
+      {icon ? (
+        <View style={styles.stateIcon}>
+          <Icon color={colors.ink} name={icon} size={stateIconSize} />
+        </View>
+      ) : null}
       <Text style={styles.stateTitle}>{title}</Text>
       <Text style={styles.bodyMuted}>{message}</Text>
-      {actionLabel && onAction ? <Button onPress={onAction} style={styles.stateAction}>{actionLabel}</Button> : null}
+      {actionLabel && onAction ? (
+        <Button onPress={onAction} style={styles.stateAction} variant="secondary">{actionLabel}</Button>
+      ) : null}
     </Card>
   );
 }
@@ -321,8 +332,12 @@ export function StateCard({
 export function LoadingState({ message }: { message: string }) {
   return (
     <View style={styles.loadingState}>
-      <ActivityIndicator color={colors.brand} size="large" />
-      <Text style={styles.bodyMuted}>{message}</Text>
+      <Card style={styles.stateCard}>
+        <View style={styles.stateIcon}>
+          <ActivityIndicator color={colors.brand} />
+        </View>
+        <Text style={styles.bodyMuted}>{message}</Text>
+      </Card>
     </View>
   );
 }
@@ -711,7 +726,7 @@ function PostOptionsMenu({ onDelete, onEdit }: { onDelete: () => void; onEdit: (
   const open = () => {
     anchor.current?.measureInWindow((x, y, width, height) => {
       setPosition({
-        left: Math.max(insets.left + spacing.md, Math.min(x + width - 176, viewportWidth - insets.right - 176 - spacing.md)),
+        left: Math.max(insets.left + spacing.md, Math.min(x + width - menuPopoverWidth, viewportWidth - insets.right - menuPopoverWidth - spacing.md)),
         top: Math.max(insets.top + spacing.xs, y + height + spacing.xs),
       });
       setVisible(true);
@@ -728,25 +743,22 @@ function PostOptionsMenu({ onDelete, onEdit }: { onDelete: () => void; onEdit: (
         <Pressable
           accessibilityLabel="Post options"
           accessibilityRole="button"
-          hitSlop={8}
           onPress={(event) => { event.stopPropagation(); open(); }}
-          style={({ pressed }) => [styles.postOptionsButton, pressed && styles.workoutCardPressed]}
+          style={(state) => [
+            styles.postOptionsButton,
+            state.pressed && styles.workoutCardPressed,
+            webFocusRing(pressableFocused(state)),
+          ]}
         >
-          <Feather color={colors.muted} name="more-horizontal" size={19} />
+          <Icon color={colors.muted} name="ellipsis" />
         </Pressable>
       </View>
       <Modal animationType="fade" onRequestClose={() => setVisible(false)} transparent visible={visible}>
         <Pressable accessibilityLabel="Close post options" onPress={() => setVisible(false)} style={styles.postMenuBackdrop}>
-          <View style={[styles.postMenu, position]}>
-            <Pressable accessibilityRole="button" onPress={(event) => { event.stopPropagation(); choose(onEdit); }} style={styles.postMenuRow}>
-              <Feather color={colors.inkSoft} name="edit-2" size={16} />
-              <Text style={styles.postMenuText}>Edit</Text>
-            </Pressable>
-            <Pressable accessibilityRole="button" onPress={(event) => { event.stopPropagation(); choose(onDelete); }} style={styles.postMenuRow}>
-              <Feather color={colors.danger} name="trash-2" size={16} />
-              <Text style={styles.postMenuDeleteText}>Delete</Text>
-            </Pressable>
-          </View>
+          <Menu style={[styles.postMenu, position]}>
+            <MenuItem icon="pencil" label="Edit" onPress={() => choose(onEdit)} />
+            <MenuItem danger icon="trash" label="Delete" onPress={() => choose(onDelete)} />
+          </Menu>
         </Pressable>
       </Modal>
     </>
@@ -802,11 +814,12 @@ const styles = StyleSheet.create({
   sectionCopy: { flex: 1 },
   eyebrow: { color: colors.brand, ...type.eyebrow, marginBottom: spacing.xs },
   sectionTitle: { color: colors.ink, ...type.title },
-  stateCard: { gap: spacing.sm },
+  stateCard: { alignSelf: "stretch", gap: spacing.sm },
+  stateIcon: { alignItems: "center", height: stateIconSize, justifyContent: "center", width: stateIconSize },
   stateTitle: { color: colors.ink, ...type.heading },
   bodyMuted: { color: colors.muted, ...type.bodySmall },
-  stateAction: { alignSelf: "flex-start", marginTop: spacing.sm },
-  loadingState: { alignItems: "center", flex: 1, gap: spacing.md, justifyContent: "center", minHeight: 300 },
+  stateAction: { alignSelf: "flex-start", height: stateActionHeight, marginTop: spacing.sm, minHeight: stateActionHeight },
+  loadingState: { flex: 1, justifyContent: "center", minHeight: 300 },
   workoutTopline: { alignItems: "center", flexDirection: "row" },
   compactWorkoutCard: { padding: spacing.lg },
   fullWorkoutCard: { padding: spacing.lg },
@@ -817,12 +830,9 @@ const styles = StyleSheet.create({
   timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
   typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
-  postOptionsButton: { alignItems: "center", height: 36, justifyContent: "center", marginLeft: spacing.xs, width: 36 },
+  postOptionsButton: { alignItems: "center", height: size.hit, justifyContent: "center", marginLeft: spacing.xs, width: size.hit },
   postMenuBackdrop: { flex: 1 },
-  postMenu: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, boxShadow: elevation.e2, padding: spacing.xs, position: "absolute", width: 176 },
-  postMenuRow: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md },
-  postMenuText: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
-  postMenuDeleteText: { color: colors.danger, fontFamily: fonts.semibold, fontSize: 15 },
+  postMenu: { position: "absolute", width: menuPopoverWidth },
   workoutTitle: { color: colors.ink, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25, marginTop: spacing.lg },
   compactWorkoutTitle: { marginTop: spacing.md },
   workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },

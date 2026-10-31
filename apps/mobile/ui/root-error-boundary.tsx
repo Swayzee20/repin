@@ -1,7 +1,8 @@
 import { Component, type ReactNode } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 
-import { colors, radii, spacing } from "./theme";
+import { colors, spacing } from "./theme";
+import { StateCard } from "./components";
 
 type BoundaryState = { error: Error | null };
 
@@ -21,11 +22,13 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, Bounda
     if (!this.state.error) return this.props.children;
     return (
       <View style={styles.screen}>
-        <Text style={styles.title}>Something went wrong</Text>
-        <Text style={styles.body}>The screen could not be shown. Reload to try again.</Text>
-        <Pressable accessibilityRole="button" onPress={this.reset} style={styles.button}>
-          <Text style={styles.buttonText}>Reload</Text>
-        </Pressable>
+        <StateCard
+          actionLabel="Reload"
+          icon="exclamationmark.triangle"
+          message="The screen could not be shown. Reload to try again."
+          onAction={this.reset}
+          title="Something went wrong"
+        />
       </View>
     );
   }
@@ -33,22 +36,9 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, Bounda
 
 const styles = StyleSheet.create({
   screen: {
-    alignItems: "center",
     backgroundColor: colors.background,
     flex: 1,
     justifyContent: "center",
     padding: spacing.xxl,
   },
-  title: { color: colors.ink, fontSize: 22, fontWeight: "700", textAlign: "center" },
-  body: { color: colors.muted, fontSize: 16, lineHeight: 23, marginTop: spacing.md, textAlign: "center" },
-  button: {
-    alignItems: "center",
-    backgroundColor: colors.brand,
-    borderRadius: radii.md,
-    justifyContent: "center",
-    marginTop: spacing.xxl,
-    minHeight: 52,
-    paddingHorizontal: spacing.xxl,
-  },
-  buttonText: { color: colors.surface, fontSize: 16, fontWeight: "800" },
 });

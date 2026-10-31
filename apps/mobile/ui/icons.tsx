@@ -5,12 +5,20 @@ import { Platform, View } from "react-native";
 import { colors, size } from "./theme";
 
 const vectorIcons = {
+  "arrow.triangle.2.circlepath": "repeat",
+  bolt: "zap",
   checkmark: "check",
   "chevron.down": "chevron-down",
   "chevron.left": "chevron-left",
   "chevron.right": "chevron-right",
   "chevron.up": "chevron-up",
+  clipboard: "clipboard",
+  ellipsis: "more-horizontal",
+  "exclamationmark.triangle": "alert-triangle",
+  pencil: "edit-2",
+  "person.2": "users",
   plus: "plus",
+  trash: "trash-2",
   xmark: "x",
 } as const;
 
