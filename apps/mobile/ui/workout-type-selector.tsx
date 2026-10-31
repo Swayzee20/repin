@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { ChoiceTile, Picker } from "./form-fields";
 import { colors, elevation, fonts, radii, spacing, type } from "./theme";
 
 export const workoutTypeOptions: { label: string; value: WorkoutType }[] = [
@@ -27,37 +28,24 @@ export function WorkoutTypeGrid({
   value: WorkoutType | null;
 }) {
   return (
-    <View style={styles.grid}>
-      {workoutTypeOptions.map((option) => {
-        const selected = value === option.value;
-        return (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityState={{ selected }}
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.gridOption,
-              selected && styles.gridOptionSelected,
-              pressed && styles.pressed,
-            ]}
-          >
-            <Text style={[styles.gridOptionText, selected && styles.gridOptionTextSelected]}>{option.label}</Text>
-          </Pressable>
-        );
-      })}
+    <View accessibilityLabel="Workout type" accessibilityRole="radiogroup" style={styles.grid}>
+      {workoutTypeOptions.map((option) => (
+        <ChoiceTile
+          key={option.value}
+          label={option.label}
+          onPress={() => onChange(option.value)}
+          selected={value === option.value}
+          style={styles.gridOption}
+        />
+      ))}
     </View>
   );
 }
 
 export function WorkoutTypeSelector({
-  compact = false,
-  elevated = false,
   onChange,
   value,
 }: {
-  compact?: boolean;
-  elevated?: boolean;
   onChange: (value: WorkoutType) => void;
   value: WorkoutType | null;
 }) {
@@ -112,18 +100,13 @@ export function WorkoutTypeSelector({
 
   return (
     <>
-      <Pressable
+      <Picker
         accessibilityHint="Opens workout type options"
         accessibilityLabel={value ? `Workout type, ${workoutTypeLabels[value]}` : "Select workout type"}
-        accessibilityRole="button"
+        containerStyle={styles.selector}
         onPress={() => setVisible(true)}
-        style={({ pressed }) => [styles.selector, compact && styles.selectorCompact, elevated && styles.selectorElevated, pressed && styles.pressed]}
-      >
-        <Text style={[styles.selectorText, !value && styles.placeholder]}>
-          {value ? workoutTypeLabels[value] : "Select workout type"}
-        </Text>
-        <Text aria-hidden style={styles.selectorChevron}>⌄</Text>
-      </Pressable>
+        value={value ? workoutTypeLabels[value] : null}
+      />
 
       <Modal
         animationType="none"
@@ -170,23 +153,7 @@ export function WorkoutTypeSelector({
 }
 
 const styles = StyleSheet.create({
-  selector: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: spacing.md,
-    minHeight: 50,
-    paddingHorizontal: spacing.lg,
-  },
-  selectorText: { color: colors.ink, fontFamily: fonts.medium, fontSize: 16, lineHeight: 23 },
-  selectorCompact: { borderRadius: radii.md, minHeight: 48, paddingHorizontal: spacing.md },
-  selectorElevated: { boxShadow: elevation.glass },
-  placeholder: { color: colors.muted },
-  selectorChevron: { color: colors.muted, fontFamily: fonts.medium, fontSize: 22, lineHeight: 24, marginLeft: spacing.md },
+  selector: { marginTop: spacing.md },
   overlay: { flex: 1, justifyContent: "flex-end" },
   backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
@@ -203,20 +170,5 @@ const styles = StyleSheet.create({
   cancelText: { color: colors.brand, ...type.label },
   pressed: { opacity: 0.7 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
-  gridOption: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderRadius: radii.md,
-    borderWidth: 1,
-    flexBasis: "46%",
-    flexGrow: 1,
-    justifyContent: "center",
-    minHeight: 50,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  gridOptionSelected: { backgroundColor: colors.surfaceMuted, borderColor: colors.brand, borderWidth: 2 },
-  gridOptionText: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 15, lineHeight: 20, textAlign: "center" },
-  gridOptionTextSelected: { color: colors.ink, fontFamily: fonts.semibold },
+  gridOption: { flexBasis: "46%", flexGrow: 1 },
 });
