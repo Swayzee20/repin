@@ -3,7 +3,6 @@ import type { Session } from "@supabase/supabase-js";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -12,7 +11,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
-import { Button, TextField } from "../../ui/components";
+import { Button, LoadingState, StateCard, TextField } from "../../ui/components";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { WideColumn } from "../../ui/layout";
 import { colors, radii, spacing, type } from "../../ui/theme";
@@ -112,16 +111,23 @@ export default function JoinGroupScreen() {
   }, [params.onboarding, preview, previewCode, router, session]);
 
   if (authLoading) {
-    return <CenteredState message="Checking your account…" />;
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <LoadingState message="Checking your account…" />
+      </SafeAreaView>
+    );
   }
 
   if (!session) {
     return (
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.centered}>
-          <Text style={styles.title}>Sign in required</Text>
-          <Text style={styles.muted}>Sign in from Home before joining a group.</Text>
-          <Button onPress={() => router.back()}>Back to Home</Button>
+          <StateCard
+            actionLabel="Back to Home"
+            message="Sign in from Home before joining a group."
+            onAction={() => router.back()}
+            title="Sign in required"
+          />
         </View>
       </SafeAreaView>
     );
@@ -200,21 +206,10 @@ function memberLabel(count: number) {
   return `${count} ${count === 1 ? "member" : "members"}`;
 }
 
-function CenteredState({ message }: { message: string }) {
-  return (
-    <SafeAreaView style={styles.safeArea}>
-      <View style={styles.centered}>
-        <ActivityIndicator color={colors.brand} size="large" />
-        <Text style={styles.muted}>{message}</Text>
-      </View>
-    </SafeAreaView>
-  );
-}
-
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   container: { padding: spacing.xxl, paddingBottom: 72 },
-  centered: { alignItems: "center", flex: 1, gap: spacing.md, justifyContent: "center", padding: spacing.xxl },
+  centered: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },

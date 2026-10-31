@@ -1,11 +1,11 @@
 import type { Session } from "@supabase/supabase-js";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
-import { Lockup } from "../../ui/components";
+import { LoadingState, Lockup } from "../../ui/components";
 import { WideColumn } from "../../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
@@ -31,7 +31,7 @@ export default function GroupOnboardingScreen() {
   }, [router]);
 
   if (loading || !session) {
-    return <SafeAreaView style={styles.safeArea}><View style={styles.centered}><ActivityIndicator color={colors.brand} size="large" /></View></SafeAreaView>;
+    return <SafeAreaView style={styles.safeArea}><LoadingState message="Checking your account…" /></SafeAreaView>;
   }
 
   return (
@@ -80,7 +80,7 @@ function OptionCard({ icon, onPress, subtitle, title }: { icon: string; onPress:
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flex: 1, padding: spacing.xxl }, centered: { alignItems: "center", flex: 1, justifyContent: "center" },
+  safeArea: { backgroundColor: colors.background, flex: 1 }, container: { flex: 1, padding: spacing.xxl },
   topRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" }, signOut: { color: colors.muted, fontFamily: fonts.semibold, fontSize: 13 },
   intro: { marginTop: spacing.huge }, eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.sm }, subtitle: { color: colors.muted, ...type.body, marginTop: spacing.md, maxWidth: 340 },
   options: { gap: spacing.lg, marginTop: spacing.xxxl }, option: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, flexDirection: "row", minHeight: 112, padding: spacing.lg },

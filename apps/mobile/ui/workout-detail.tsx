@@ -1227,7 +1227,7 @@ const styles = StyleSheet.create({
   modalCommentTimestamp: { color: colors.subtle, fontSize: 12, marginLeft: spacing.xs },
   commentBody: { color: colors.inkSoft, ...type.body, marginTop: spacing.xs },
   modalCommentBody: { color: colors.ink, marginTop: 2 },
-  commentEmpty: { color: colors.muted, ...type.body, marginTop: spacing.md },
+  commentEmpty: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
   composer: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   commentInput: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, color: colors.ink, flex: 1, fontFamily: fonts.regular, fontSize: 15, maxHeight: 120, minHeight: 44, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   commentSubmit: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.sm, justifyContent: "center", minHeight: 44, minWidth: 64, paddingHorizontal: spacing.md },
