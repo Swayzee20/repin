@@ -666,6 +666,7 @@ export default function CommunityTabScreen() {
         key={detailTarget?.workout.id ?? "closed"}
         fixture={layoutPreview && detailTarget ? layoutPreviewDetail(detailTarget.workout.id) : null}
         groupId={detailTarget?.groupId ?? null}
+        groupName={selectedGroup?.name ?? null}
         initialWorkout={detailTarget?.workout ?? null}
         onCommentCountChange={updateFeedCommentCount}
         onDismiss={() => {

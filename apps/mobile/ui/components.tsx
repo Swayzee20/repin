@@ -823,7 +823,7 @@ const styles = StyleSheet.create({
   postMenuRow: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md },
   postMenuText: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
   postMenuDeleteText: { color: colors.danger, fontFamily: fonts.semibold, fontSize: 15 },
-  workoutTitle: { color: colors.ink, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25, marginTop: spacing.lg },
+  workoutTitle: { color: colors.ink, ...type.cardTitle, marginTop: spacing.lg },
   compactWorkoutTitle: { marginTop: spacing.md },
   workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },
   workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: spacing.xs },
