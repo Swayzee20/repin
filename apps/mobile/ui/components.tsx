@@ -775,7 +775,7 @@ const styles = StyleSheet.create({
   postOptionsButton: { alignItems: "center", height: size.hit, justifyContent: "center", marginLeft: spacing.xs, width: size.hit },
   postMenuBackdrop: { flex: 1 },
   postMenu: { position: "absolute", width: menuPopoverWidth },
-  workoutTitle: { color: colors.ink, fontFamily: fonts.bold, fontSize: 19, lineHeight: 25, marginTop: spacing.lg },
+  workoutTitle: { color: colors.ink, ...type.cardTitle, marginTop: spacing.lg },
   compactWorkoutTitle: { marginTop: spacing.md },
   workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },
   workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: spacing.xs },

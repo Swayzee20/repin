@@ -1,4 +1,3 @@
-import { Feather } from "@expo/vector-icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { RoundIconButton } from "./primitives";
 import { colors, radii, spacing } from "./theme";
 
 type NaturalSize = { height: number; width: number };
@@ -174,19 +174,16 @@ export function PhotoViewer({
             </Animated.View>
           </View>
         ) : null}
-        <Pressable
+        <RoundIconButton
           accessibilityLabel="Close photo"
-          accessibilityRole="button"
-          hitSlop={8}
+          kind="close"
+          look="photo"
           onPress={close}
-          style={({ pressed }) => [
+          style={[
             styles.closeButton,
-            { right: Math.max(insets.right, spacing.lg), top: Math.max(insets.top, spacing.lg) },
-            pressed && styles.pressed,
+            { right: insets.right + spacing.lg, top: insets.top + spacing.sm },
           ]}
-        >
-          <Feather color={colors.surface} name="x" size={22} />
-        </Pressable>
+        />
       </View>
     </Modal>
   );
@@ -201,6 +198,5 @@ const styles = StyleSheet.create({
   unmeasuredMedia: { height: "100%", width: "100%" },
   mediaPressable: { height: "100%", width: "100%" },
   image: { borderRadius: radii.sm, height: "100%", width: "100%" },
-  closeButton: { alignItems: "center", backgroundColor: colors.overlayStrong, borderRadius: radii.pill, height: 44, justifyContent: "center", position: "absolute", width: 44, zIndex: 2 },
-  pressed: { opacity: 0.68 },
+  closeButton: { position: "absolute", zIndex: 2 },
 });

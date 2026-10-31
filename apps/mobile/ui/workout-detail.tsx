@@ -13,7 +13,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useCommentDraft } from "../lib/comment-draft";
@@ -39,12 +39,27 @@ import {
   LoadingState,
   StateCard,
 } from "./components";
-import { colors, fonts, radii, spacing, type } from "./theme";
+import { pressableFocused, webFocusRing } from "./focus-ring";
+import { Chevron } from "./icons";
+import { TwoPane, useLayoutMode, WideColumn } from "./layout";
+import { colors, fonts, radii, size, spacing, type } from "./theme";
 import { PhotoViewer } from "./photo-viewer";
 import { ScrollAnchor, ScrollAnchorProvider, useScrollAnchor } from "./scroll-anchor";
 import { WorkoutPhoto } from "./workout-photo";
 
+const webScrollerStyle = Platform.OS === "web"
+  ? ({
+      WebkitOverflowScrolling: "touch",
+      overflowY: "auto",
+      overscrollBehaviorY: "contain",
+      touchAction: "pan-y",
+    } as ViewStyle)
+  : undefined;
+
+const commentFieldMaxHeight = size.hit * 2 + spacing.xxxl;
+
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
+const keyboardBehavior = Platform.OS === "ios" ? "padding" : "height";
 
 let focusedComposerSession: string | null = null;
 let ignoreComposerBlur = false;
@@ -81,6 +96,7 @@ export function WorkoutDetailView({
   detailPhotoMaxHeight,
   fixture = null,
   groupId,
+  leading = null,
   onCommentCountChange,
   onReactionSummaryChange,
   paneHeader = null,
@@ -93,10 +109,11 @@ export function WorkoutDetailView({
   detailPhotoMaxHeight?: number;
   fixture?: WorkoutDetailFixture | null;
   groupId: string;
+  leading?: ReactNode;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   paneHeader?: ReactNode;
-  presentation?: "community-modal" | "community-pane" | "default";
+  presentation?: "community-modal" | "community-pane" | "default" | "session";
   refreshOnFocus?: boolean;
   seedWorkout?: WorkoutFeedItem;
   sessionId: string;
@@ -145,8 +162,12 @@ export function WorkoutDetailView({
   const [commentError, setCommentError] = useState<string | null>(null);
   const { clearDraft, draft: commentText, setDraft: setCommentText } = useCommentDraft(sessionId);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
-  const detailAnchor = useScrollAnchor(sessionId, presentation === "community-pane" ? `workout-detail:${sessionId}` : null);
+  const detailAnchor = useScrollAnchor(
+    sessionId,
+    presentation === "default" ? null : `workout-detail:${sessionId}`,
+  );
   const insets = useSafeAreaInsets();
+  const { mode } = useLayoutMode();
   const reactionRequestPending = useRef(false);
   const commentRequestPending = useRef(false);
   const mounted = useRef(true);
@@ -409,88 +430,184 @@ export function WorkoutDetailView({
     }
   }, [clearDraft, commentText, comments, groupId, onCommentCountChange, sessionId, setCommentText]);
 
+  const pinsComposer = presentation !== "default";
+  const splitSession = presentation === "session" && mode === "twoPane";
+  const composerPaddingBottom = presentation === "community-modal"
+    ? spacing.lg
+    : Math.max(insets.bottom, spacing.md);
+
   if (loading && !workout) {
     return (
-      <View>
+      <View style={styles.surfaceInset}>
+        {leading}
         <LoadingState message="Loading workout…" />
       </View>
     );
   }
   if (error && !workout) {
     return (
-      <View>
-        <StateCard
-          actionLabel="Try again"
-          message={error}
-          onAction={() => void loadWorkout()}
-          title="Workout unavailable"
-        />
+      <View style={styles.surfaceInset}>
+        {leading}
+        <WideColumn>
+          <StateCard
+            actionLabel="Try again"
+            message={error}
+            onAction={() => void loadWorkout()}
+            title="Workout unavailable"
+          />
+        </WideColumn>
       </View>
     );
   }
 
   if (!workout) return null;
 
-  const content = (
+  const detail = (part: "all" | "comments" | "post") => (
     <WorkoutDetailContent
-      detailExpansionResetKey={detailExpansionResetKey}
-      detailPhotoMaxHeight={detailPhotoMaxHeight}
-      onReactionPress={(reactionType) => void toggleReaction(reactionType)}
-      detailError={error}
       commentError={commentError}
       commentSubmitting={commentSubmitting}
       commentText={commentText}
       comments={comments}
       commentsLoading={commentsLoading}
+      detailError={error}
+      detailExpansionResetKey={detailExpansionResetKey}
+      detailPhotoMaxHeight={detailPhotoMaxHeight}
       onCommentChange={setCommentText}
       onCommentSubmit={() => void submitComment()}
       onCommentsRetry={() => void loadComments(true)}
+      onReactionPress={(reactionType) => void toggleReaction(reactionType)}
+      part={part}
       presentation={presentation}
       reactionError={reactionError}
       reactionPending={reactionPending || loading}
-      showComposer={presentation !== "community-pane"}
+      showComposer={!pinsComposer}
       workout={workout}
     />
   );
 
-  if (presentation !== "community-pane") return content;
-
-  return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
-      style={styles.pane}
-    >
-      <ScrollView
-        contentContainerStyle={styles.paneScroll}
-        keyboardShouldPersistTaps="handled"
-        onContentSizeChange={detailAnchor.onContentSizeChange}
-        onLayout={detailAnchor.onViewportLayout}
-        onScroll={detailAnchor.onScroll}
-        ref={detailAnchor.scrollRef}
-        scrollEventThrottle={16}
-        showsVerticalScrollIndicator={false}
-        style={styles.pane}
-      >
-        <View collapsable={false} ref={detailAnchor.contentRef}>
-          <ScrollAnchorProvider contentRef={detailAnchor.contentRef} onItemLayout={detailAnchor.onItemLayout} pane="right">
-            {paneHeader}
-            {content}
-          </ScrollAnchorProvider>
-        </View>
-      </ScrollView>
-      <View style={[styles.composerBar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
-        <CommentComposer
-          commentSubmitting={commentSubmitting}
-          commentText={commentText}
-          onCommentChange={setCommentText}
-          onCommentSubmit={() => void submitComment()}
-          pinned
-          sessionId={sessionId}
-        />
-        {commentError ? <Text style={styles.reactionError}>{commentError}</Text> : null}
-      </View>
-    </KeyboardAvoidingView>
+  const composer = (
+    <View style={[styles.composerDock, { paddingBottom: composerPaddingBottom }]}>
+      <CommentComposer
+        commentSubmitting={commentSubmitting}
+        commentText={commentText}
+        onCommentChange={setCommentText}
+        onCommentSubmit={() => void submitComment()}
+        pinned
+        sessionId={sessionId}
+      />
+      {commentError && comments.length ? <Text style={styles.reactionError}>{commentError}</Text> : null}
+    </View>
   );
+
+  if (splitSession) {
+    return (
+      <KeyboardAvoidingView behavior={keyboardBehavior} style={styles.pane}>
+        <TwoPane
+          keyboardShouldPersistTaps="handled"
+          left={(
+            <View style={styles.splitColumn}>
+              {leading}
+              <Card style={styles.surfaceCard}>
+                <View style={styles.surfaceClip}>
+                  <ScrollView
+                    contentContainerStyle={styles.surfaceScroll}
+                    keyboardShouldPersistTaps="handled"
+                    style={[styles.surfaceScroller, webScrollerStyle]}
+                  >
+                    {detail("post")}
+                  </ScrollView>
+                </View>
+              </Card>
+            </View>
+          )}
+          right={(
+            <View style={styles.splitColumn}>
+              <Card style={styles.surfaceCard}>
+                <View style={styles.surfaceClip}>
+                  <ScrollView
+                    contentContainerStyle={styles.surfaceScroll}
+                    keyboardShouldPersistTaps="handled"
+                    style={[styles.surfaceScroller, webScrollerStyle]}
+                  >
+                    {detail("comments")}
+                  </ScrollView>
+                  {composer}
+                </View>
+              </Card>
+            </View>
+          )}
+          scrollableLeft={false}
+          scrollableRight={false}
+        />
+      </KeyboardAvoidingView>
+    );
+  }
+
+  if (presentation === "community-modal") {
+    return (
+      <View style={styles.modalBody}>
+        <ScrollView
+          contentContainerStyle={styles.modalScroll}
+          keyboardDismissMode={Platform.OS === "web" ? "none" : "on-drag"}
+          keyboardShouldPersistTaps="handled"
+          nestedScrollEnabled
+          onContentSizeChange={detailAnchor.onContentSizeChange}
+          onLayout={detailAnchor.onViewportLayout}
+          onScroll={detailAnchor.onScroll}
+          ref={detailAnchor.scrollRef}
+          scrollEventThrottle={16}
+          showsVerticalScrollIndicator
+          style={[styles.modalScroller, webScrollerStyle]}
+        >
+          <View collapsable={false} ref={detailAnchor.contentRef}>
+            <ScrollAnchorProvider contentRef={detailAnchor.contentRef} onItemLayout={detailAnchor.onItemLayout} pane={null}>
+              {detail("all")}
+            </ScrollAnchorProvider>
+          </View>
+        </ScrollView>
+        {composer}
+      </View>
+    );
+  }
+
+  if (presentation === "community-pane" || presentation === "session") {
+    return (
+      <KeyboardAvoidingView behavior={keyboardBehavior} style={styles.pane}>
+        <View style={styles.surfaceInset}>
+          {leading}
+          <Card style={styles.surfaceCard}>
+            <View style={styles.surfaceClip}>
+              <ScrollView
+                contentContainerStyle={styles.surfaceScroll}
+                keyboardShouldPersistTaps="handled"
+                onContentSizeChange={detailAnchor.onContentSizeChange}
+                onLayout={detailAnchor.onViewportLayout}
+                onScroll={detailAnchor.onScroll}
+                ref={detailAnchor.scrollRef}
+                scrollEventThrottle={16}
+                showsVerticalScrollIndicator={false}
+                style={[styles.surfaceScroller, webScrollerStyle]}
+              >
+                <View collapsable={false} ref={detailAnchor.contentRef}>
+                  <ScrollAnchorProvider
+                    contentRef={detailAnchor.contentRef}
+                    onItemLayout={detailAnchor.onItemLayout}
+                    pane={presentation === "community-pane" ? "right" : null}
+                  >
+                    {paneHeader}
+                    {detail("all")}
+                  </ScrollAnchorProvider>
+                </View>
+              </ScrollView>
+              {composer}
+            </View>
+          </Card>
+        </View>
+      </KeyboardAvoidingView>
+    );
+  }
+
+  return detail("all");
 }
 
 export function WorkoutDetailContent({
@@ -506,6 +623,7 @@ export function WorkoutDetailContent({
   onCommentSubmit,
   onCommentsRetry,
   onReactionPress,
+  part = "all",
   presentation = "default",
   reactionError,
   reactionPending = false,
@@ -524,7 +642,8 @@ export function WorkoutDetailContent({
   onCommentSubmit?: () => void;
   onCommentsRetry?: () => void;
   onReactionPress?: (reactionType: CommunityReactionType) => void;
-  presentation?: "community-modal" | "community-pane" | "default";
+  part?: "all" | "comments" | "post";
+  presentation?: "community-modal" | "community-pane" | "default" | "session";
   reactionError?: string | null;
   reactionPending?: boolean;
   showComposer?: boolean;
@@ -539,9 +658,8 @@ export function WorkoutDetailContent({
     .filter((metric): metric is NonNullable<typeof metric> => metric !== null);
   const hasResults = formattedMetrics.length > 0 || workout.movements.length > 0 || workout.segments.length > 0;
   const groupedIntervals = groupConsecutiveIntervalSegments(workout.segments);
-  const isCommunityPane = presentation === "community-pane";
   const isCommunityModal = presentation === "community-modal";
-  const isCommunitySheet = isCommunityModal || isCommunityPane;
+  const isCommunitySheet = presentation !== "default";
   const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
   const [workoutExpanded, setWorkoutExpanded] = useState(false);
 
@@ -613,7 +731,7 @@ export function WorkoutDetailContent({
 
   const summary = (
     <>
-      <View style={[styles.authorRow, isCommunityModal && styles.modalAuthorRow]}>
+      <View style={styles.authorRow}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text>
         </View>
@@ -624,7 +742,7 @@ export function WorkoutDetailContent({
         {!isCommunityModal ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
       </View>
 
-      <Text style={[styles.title, isCommunitySheet && styles.modalTitle]}>{title}</Text>
+      <Text style={[styles.title, isCommunitySheet ? styles.sheetTitle : styles.defaultTitle]}>{title}</Text>
       {detailError ? <Text style={styles.detailError}>{detailError}</Text> : null}
       {workout.effort ? <Text accessibilityLabel={`Effort ${workout.effort} out of 5`} style={styles.effort}>{"🔥".repeat(workout.effort)}</Text> : null}
       {workout.resultSummary && (isCommunitySheet || !hasResults) ? (
@@ -653,75 +771,79 @@ export function WorkoutDetailContent({
     </>
   );
 
+  const disclosure = isCommunitySheet && hasResults ? (
+    <Pressable
+      accessibilityLabel={workoutExpanded ? "Hide workout details" : "View workout details"}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: workoutExpanded }}
+      onPress={() => setWorkoutExpanded((expanded) => !expanded)}
+      style={({ pressed }) => [styles.workoutDisclosureButton, pressed && styles.reactionButtonPressed]}
+    >
+      <Text style={styles.workoutDisclosureText}>{workoutExpanded ? "Hide workout" : "View workout"}</Text>
+      <Chevron color={colors.inkSoft} direction={workoutExpanded ? "up" : "down"} size={size.icon.sm} />
+    </Pressable>
+  ) : null;
+
   return (
     <View>
-      <ScrollAnchor id={`detail-summary:${workout.id}`}>
-        {isCommunityPane ? <Card style={styles.paneCard}>{summary}</Card> : summary}
-      </ScrollAnchor>
-
-      {!isCommunitySheet ? workoutResults : null}
-
-      {isCommunitySheet && hasResults ? (
-        <View style={styles.workoutDisclosure}>
-          <Pressable
-            accessibilityLabel={workoutExpanded ? "Hide workout details" : "View workout details"}
-            accessibilityRole="button"
-            accessibilityState={{ expanded: workoutExpanded }}
-            hitSlop={8}
-            onPress={() => setWorkoutExpanded((expanded) => !expanded)}
-            style={({ pressed }) => [styles.workoutDisclosureButton, pressed && styles.reactionButtonPressed]}
-          >
-            <Text style={styles.workoutDisclosureText}>{workoutExpanded ? "Hide workout" : "View workout"}</Text>
-            <Feather color={colors.inkSoft} name={workoutExpanded ? "chevron-up" : "chevron-down"} size={16} />
-          </Pressable>
-          {workoutExpanded ? workoutResults : null}
-        </View>
+      {part !== "comments" ? (
+        <>
+          <ScrollAnchor id={`detail-summary:${workout.id}`}>
+            {summary}
+          </ScrollAnchor>
+          {!isCommunitySheet ? workoutResults : null}
+          <ScrollAnchor id={`detail-reactions:${workout.id}`}>
+            {isCommunitySheet ? (
+              <View style={styles.sheetMetaRow}>
+                <View style={styles.sheetReactions}>
+                  <CommunityModalReactionRow
+                    onReactionPress={onReactionPress}
+                    reactionPending={reactionPending}
+                    reactions={workout.reactions}
+                  />
+                  {reactionError ? <Text style={styles.reactionError}>{reactionError}</Text> : null}
+                </View>
+                {disclosure}
+              </View>
+            ) : (
+              <View style={styles.reactionSection}>
+                <Text style={styles.sectionEyebrow}>REACTIONS</Text>
+                <View style={styles.reactionRow}>
+                  {communityReactionTypes.map((reactionType) => {
+                    const option = reactionOptions[reactionType];
+                    const selected = workout.reactions.viewerReaction === reactionType;
+                    const count = workout.reactions.counts[reactionType];
+                    return (
+                      <Pressable
+                        accessibilityLabel={`${option.label}, ${count} reaction${count === 1 ? "" : "s"}${selected ? ", selected" : ""}`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected, disabled: reactionPending }}
+                        disabled={reactionPending || !onReactionPress}
+                        key={reactionType}
+                        onPress={() => onReactionPress?.(reactionType)}
+                        style={({ pressed }) => [
+                          styles.reactionButton,
+                          selected && styles.reactionButtonSelected,
+                          pressed && styles.reactionButtonPressed,
+                        ]}
+                      >
+                        <Text style={styles.reactionEmoji}>{option.emoji}</Text>
+                        <Text style={[styles.reactionCount, selected && styles.reactionCountSelected]}>{count}</Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                {reactionError ? <Text style={styles.reactionError}>{reactionError}</Text> : null}
+              </View>
+            )}
+          </ScrollAnchor>
+          {isCommunitySheet && workoutExpanded ? workoutResults : null}
+        </>
       ) : null}
 
-      <ScrollAnchor id={`detail-reactions:${workout.id}`}>
-      <View style={[styles.reactionSection, isCommunitySheet && styles.modalReactionSection]}>
-        {isCommunitySheet ? (
-          <CommunityModalReactionRow
-            onReactionPress={onReactionPress}
-            reactionPending={reactionPending}
-            reactions={workout.reactions}
-          />
-        ) : (
-          <>
-            <Text style={styles.sectionEyebrow}>REACTIONS</Text>
-            <View style={styles.reactionRow}>
-              {communityReactionTypes.map((reactionType) => {
-                const option = reactionOptions[reactionType];
-                const selected = workout.reactions.viewerReaction === reactionType;
-                const count = workout.reactions.counts[reactionType];
-                return (
-                  <Pressable
-                    accessibilityLabel={`${option.label}, ${count} reaction${count === 1 ? "" : "s"}${selected ? ", selected" : ""}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected, disabled: reactionPending }}
-                    disabled={reactionPending || !onReactionPress}
-                    key={reactionType}
-                    onPress={() => onReactionPress?.(reactionType)}
-                    style={({ pressed }) => [
-                      styles.reactionButton,
-                      selected && styles.reactionButtonSelected,
-                      pressed && styles.reactionButtonPressed,
-                    ]}
-                  >
-                    <Text style={styles.reactionEmoji}>{option.emoji}</Text>
-                    <Text style={[styles.reactionCount, selected && styles.reactionCountSelected]}>{count}</Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </>
-        )}
-        {reactionError ? <Text style={styles.reactionError}>{reactionError}</Text> : null}
-      </View>
-      </ScrollAnchor>
-
+      {part !== "post" ? (
       <ScrollAnchor id={`detail-comments:${workout.id}`}>
-      <View style={[styles.commentsSection, isCommunitySheet && styles.modalCommentsSection]}>
+      <View style={[styles.commentsSection, isCommunitySheet && styles.modalCommentsSection, part === "comments" && styles.splitCommentsSection]}>
         <Text style={isCommunitySheet ? styles.commentsHeading : styles.sectionEyebrow}>{isCommunitySheet ? "Comments" : "COMMENTS"}</Text>
         {commentsLoading && !comments.length ? (
           <View style={styles.commentsLoading}>
@@ -783,7 +905,8 @@ export function WorkoutDetailContent({
         ) : null}
       </View>
       </ScrollAnchor>
-      {isCommunitySheet && workout.photoUrl ? (
+      ) : null}
+      {part !== "comments" && isCommunitySheet && workout.photoUrl ? (
         <PhotoViewer
           images={[{ accessibilityLabel: `${title} workout photo`, uri: workout.photoUrl }]}
           initialIndex={0}
@@ -811,10 +934,11 @@ function CommentComposer({
   sessionId: string;
 }) {
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
-  const [commentInputHeight, setCommentInputHeight] = useState(44);
+  const [commentInputHeight, setCommentInputHeight] = useState<number>(size.hit);
+  const empty = !commentText.trim();
 
   useEffect(() => {
-    if (!commentText) setCommentInputHeight(44);
+    if (!commentText) setCommentInputHeight(size.hit);
   }, [commentText]);
 
   useEffect(() => {
@@ -837,7 +961,7 @@ function CommentComposer({
         onChangeText={onCommentChange}
         onContentSizeChange={(event) => {
           setCommentInputHeight(
-            Math.min(120, Math.max(44, Math.ceil(event.nativeEvent.contentSize.height))),
+            Math.min(commentFieldMaxHeight, Math.max(size.hit, Math.ceil(event.nativeEvent.contentSize.height))),
           );
         }}
         onFocus={() => {
@@ -847,23 +971,38 @@ function CommentComposer({
         placeholder="Add a comment..."
         placeholderTextColor={colors.muted}
         ref={inputRef}
-        scrollEnabled={commentInputHeight >= 120}
+        scrollEnabled={commentInputHeight >= commentFieldMaxHeight}
         style={[styles.commentInput, { height: commentInputHeight }]}
-        textAlignVertical={commentInputHeight > 44 ? "top" : "center"}
+        textAlignVertical={commentInputHeight > size.hit ? "top" : "center"}
         value={commentText}
       />
       <Pressable
+        accessibilityLabel="Post comment"
         accessibilityRole="button"
-        accessibilityState={{ disabled: commentSubmitting || !commentText.trim() }}
-        disabled={commentSubmitting || !commentText.trim()}
+        accessibilityState={{ disabled: commentSubmitting || empty }}
+        disabled={commentSubmitting || empty}
         onPress={onCommentSubmit}
-        style={({ pressed }) => [
-          styles.commentSubmit,
-          (commentSubmitting || !commentText.trim()) && styles.commentSubmitDisabled,
-          pressed && styles.reactionButtonPressed,
-        ]}
+        style={(state) => {
+          const ready = !empty && !commentSubmitting;
+          const backgroundColor = ready || commentSubmitting
+            ? (state.pressed && ready ? colors.brandPressed : colors.brand)
+            : colors.disabledFill;
+          return [
+            styles.sendButton,
+            { backgroundColor },
+            webFocusRing(pressableFocused(state)),
+          ];
+        }}
       >
-        {commentSubmitting ? <ActivityIndicator color={colors.surface} size="small" /> : <Text style={styles.commentSubmitText}>Post</Text>}
+        {commentSubmitting ? (
+          <ActivityIndicator color={colors.surface} size="small" />
+        ) : (
+          <Chevron
+            color={empty ? colors.disabledText : colors.surface}
+            direction="right"
+            size={size.icon.md}
+          />
+        )}
       </Pressable>
     </View>
   );
@@ -1130,13 +1269,19 @@ function getLocalDateKey(date: Date) {
 }
 
 const styles = StyleSheet.create({
-  pane: { flex: 1 },
-  paneScroll: { flexGrow: 1, paddingBottom: spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
-  paneCard: { padding: spacing.lg },
-  composerBar: { backgroundColor: colors.background, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  pane: { flex: 1, minHeight: 0 },
+  surfaceInset: { flex: 1, minHeight: 0, padding: spacing.md },
+  splitColumn: { flex: 1, minHeight: 0, padding: spacing.md },
+  surfaceCard: { flex: 1, minHeight: 0, padding: 0 },
+  surfaceClip: { borderRadius: radii.lg, flex: 1, minHeight: 0, overflow: "hidden" },
+  surfaceScroller: { flex: 1, minHeight: 0 },
+  surfaceScroll: { padding: spacing.lg },
+  modalBody: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  modalScroller: { flexGrow: 0, flexShrink: 1 },
+  modalScroll: { paddingBottom: spacing.lg, paddingHorizontal: spacing.lg },
+  composerDock: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
   composerPinned: { marginTop: 0 },
   authorRow: { alignItems: "center", flexDirection: "row" },
-  modalAuthorRow: { paddingRight: 48 },
   avatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },
   avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 13 },
   authorCopy: { flex: 1, marginLeft: spacing.md },
@@ -1144,8 +1289,9 @@ const styles = StyleSheet.create({
   timestamp: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
   typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
-  title: { color: colors.ink, ...type.screenTitle, marginTop: spacing.xxl },
-  modalTitle: { ...type.title, marginTop: spacing.lg },
+  title: { color: colors.ink, marginTop: spacing.xxl },
+  defaultTitle: { ...type.screenTitle },
+  sheetTitle: { ...type.cardTitle, marginTop: spacing.lg },
   effort: { fontSize: 18, lineHeight: 24, marginTop: spacing.sm },
   detailError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.sm },
   resultsSection: { marginTop: spacing.xxxl },
@@ -1180,11 +1326,11 @@ const styles = StyleSheet.create({
   caption: { color: colors.inkSoft, ...type.body, marginTop: spacing.md },
   modalCaption: { marginTop: spacing.lg },
   compatibilityDuration: { color: colors.muted, fontFamily: fonts.medium, fontSize: 14, marginTop: spacing.lg },
-  workoutDisclosure: { marginTop: spacing.lg },
-  workoutDisclosureButton: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", gap: spacing.sm, minHeight: 40 },
-  workoutDisclosureText: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 15, lineHeight: 20 },
+  sheetMetaRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, justifyContent: "space-between", marginTop: spacing.lg },
+  sheetReactions: { flexGrow: 1, flexShrink: 1, minWidth: 0 },
+  workoutDisclosureButton: { alignItems: "center", flexDirection: "row", flexShrink: 0, gap: spacing.sm, minHeight: size.hit },
+  workoutDisclosureText: { color: colors.inkSoft, ...type.bodySmall, fontFamily: fonts.medium },
   reactionSection: { marginTop: spacing.xxxl },
-  modalReactionSection: { marginTop: spacing.md },
   reactionRow: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
   reactionButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, flexDirection: "row", gap: spacing.xs, minHeight: 40, paddingHorizontal: spacing.md },
   reactionButtonSelected: { backgroundColor: colors.surfaceMuted, borderColor: colors.brand },
@@ -1210,6 +1356,7 @@ const styles = StyleSheet.create({
   reactionPickerEmoji: { fontSize: 15, lineHeight: 20 },
   commentsSection: { marginTop: spacing.xxxl },
   modalCommentsSection: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.lg, paddingTop: spacing.lg },
+  splitCommentsSection: { borderTopWidth: 0, marginTop: 0, paddingTop: 0 },
   commentsHeading: { color: colors.ink, ...type.heading },
   commentsLoading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, minHeight: 44 },
   commentMuted: { color: colors.muted, ...type.bodySmall },
@@ -1229,10 +1376,8 @@ const styles = StyleSheet.create({
   modalCommentBody: { color: colors.ink, marginTop: 2 },
   commentEmpty: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
   composer: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
-  commentInput: { backgroundColor: colors.surfaceMuted, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, color: colors.ink, flex: 1, fontFamily: fonts.regular, fontSize: 15, maxHeight: 120, minHeight: 44, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  commentSubmit: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.sm, justifyContent: "center", minHeight: 44, minWidth: 64, paddingHorizontal: spacing.md },
-  commentSubmitDisabled: { opacity: 0.45 },
-  commentSubmitText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 14 },
+  commentInput: { ...type.body, backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, color: colors.ink, flex: 1, maxHeight: commentFieldMaxHeight, minHeight: size.hit, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
+  sendButton: { alignItems: "center", borderRadius: radii.pill, height: size.hit, justifyContent: "center", width: size.hit },
   commentErrorRow: { marginTop: spacing.sm },
   commentRetry: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13, marginTop: spacing.xs },
 });

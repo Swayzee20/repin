@@ -1,38 +1,28 @@
-import { Feather } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useMemo, useRef } from "react";
 import {
   Animated,
   Easing,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
-  ScrollView,
   StyleSheet,
+  Text,
   View,
   useWindowDimensions,
-  type ViewStyle,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 
 import { CenteredCard } from "./layout";
-import { ScrollAnchorProvider, useScrollAnchor } from "./scroll-anchor";
-import { colors, elevation, radii, spacing } from "./theme";
+import { RoundIconButton } from "./primitives";
+import { colors, elevation, radii, size, spacing, type } from "./theme";
 import { WorkoutDetailView, type WorkoutDetailFixture } from "./workout-detail";
-
-const webScrollerStyle = Platform.OS === "web"
-  ? ({
-      WebkitOverflowScrolling: "touch",
-      overflowY: "auto",
-      overscrollBehaviorY: "contain",
-      touchAction: "pan-y",
-    } as ViewStyle)
-  : undefined;
 
 export function WorkoutDetailModal({
   fixture = null,
   groupId,
+  groupName = null,
   initialWorkout,
   onCommentCountChange,
   onDismiss,
@@ -42,6 +32,7 @@ export function WorkoutDetailModal({
 }: {
   fixture?: WorkoutDetailFixture | null;
   groupId: string | null;
+  groupName?: string | null;
   initialWorkout?: WorkoutFeedItem | null;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onDismiss: () => void;
@@ -56,10 +47,6 @@ export function WorkoutDetailModal({
   const panelScale = useRef(new Animated.Value(0.96)).current;
   const closing = useRef(false);
   const useNativeDriver = Platform.OS !== "web";
-  const detailAnchor = useScrollAnchor(
-    `${sessionId ?? "none"}:${visible ? "open" : "closed"}`,
-    visible && sessionId ? `workout-detail:${sessionId}` : null,
-  );
   const panelMaxHeight = useMemo(
     () => Math.min(
       viewportHeight * 0.8,
@@ -145,37 +132,31 @@ export function WorkoutDetailModal({
           style={styles.backdropPressable}
         />
         <CenteredCard>
-        <Animated.View
-          style={[
-            styles.panel,
-            {
-              maxHeight: panelMaxHeight,
-              opacity: panelOpacity,
-              transform: [{ scale: panelScale }],
-              width: "100%",
-            },
-          ]}
-        >
-          <View style={styles.panelClip}>
-          <ScrollView
-            automaticallyAdjustKeyboardInsets
-            contentContainerStyle={[
-              styles.scrollContent,
-              { paddingBottom: Math.max(insets.bottom, spacing.xxl) + spacing.xxl },
-            ]}
-            keyboardDismissMode={Platform.OS === "web" ? "none" : "on-drag"}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            onContentSizeChange={detailAnchor.onContentSizeChange}
-            onLayout={detailAnchor.onViewportLayout}
-            onScroll={detailAnchor.onScroll}
-            ref={detailAnchor.scrollRef}
-            scrollEventThrottle={16}
-            showsVerticalScrollIndicator
-            style={[styles.scroller, webScrollerStyle]}
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            style={[styles.keyboard, { maxHeight: panelMaxHeight }]}
           >
-            <View collapsable={false} ref={detailAnchor.contentRef}>
-              <ScrollAnchorProvider contentRef={detailAnchor.contentRef} onItemLayout={detailAnchor.onItemLayout} pane={null}>
+            <Animated.View
+              style={[
+                styles.panel,
+                {
+                  maxHeight: panelMaxHeight,
+                  opacity: panelOpacity,
+                  transform: [{ scale: panelScale }],
+                  width: "100%",
+                },
+              ]}
+            >
+              <View style={styles.panelClip}>
+                <View style={styles.header}>
+                  <View style={styles.headerCopy}>
+                    <Text accessibilityRole="header" style={styles.headerTitle}>Post</Text>
+                    {groupName ? (
+                      <Text numberOfLines={1} style={styles.headerFrom}>from {groupName}</Text>
+                    ) : null}
+                  </View>
+                  <RoundIconButton accessibilityLabel="Close workout details" kind="close" onPress={close} style={styles.headerClose} />
+                </View>
                 {groupId && sessionId ? (
                   <WorkoutDetailView
                     detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
@@ -189,35 +170,12 @@ export function WorkoutDetailModal({
                     sessionId={sessionId}
                   />
                 ) : null}
-              </ScrollAnchorProvider>
-            </View>
-          </ScrollView>
-          <LinearGradient
-            colors={[colors.surface, "rgba(255,255,255,0)"]}
-            locations={[0, 1]}
-            pointerEvents="none"
-            style={styles.topScrollFade}
-          />
-          </View>
-          <ModalCloseButton onPress={close} />
-        </Animated.View>
+              </View>
+            </Animated.View>
+          </KeyboardAvoidingView>
         </CenteredCard>
       </View>
     </Modal>
-  );
-}
-
-function ModalCloseButton({ onPress }: { onPress: () => void }) {
-  return (
-    <Pressable
-      accessibilityLabel="Close workout details"
-      accessibilityRole="button"
-      hitSlop={8}
-      onPress={onPress}
-      style={({ pressed }) => [styles.closeButton, pressed && styles.pressed]}
-    >
-      <Feather color={colors.inkSoft} name="x" size={20} />
-    </Pressable>
   );
 }
 
@@ -225,11 +183,18 @@ const styles = StyleSheet.create({
   overlay: { alignItems: "center", flex: 1, justifyContent: "center", paddingVertical: spacing.lg },
   backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
+  keyboard: { width: "100%" },
   panel: { backgroundColor: colors.surface, borderColor: colors.overlaySoft, borderRadius: radii.lg, borderWidth: 1, boxShadow: elevation.e3 },
-  panelClip: { borderRadius: radii.lg, flexShrink: 1, overflow: "hidden" },
-  closeButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, boxShadow: elevation.glass, height: 36, justifyContent: "center", position: "absolute", right: spacing.lg, top: spacing.lg, width: 36, zIndex: 20 },
-  pressed: { opacity: 0.66 },
-  scroller: { flexGrow: 0, flexShrink: 1 },
-  scrollContent: { paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
-  topScrollFade: { height: 32, left: 0, position: "absolute", right: 0, top: 0, zIndex: 10 },
+  panelClip: { borderRadius: radii.lg, flexShrink: 1, minHeight: 0, overflow: "hidden" },
+  header: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md,
+    minHeight: size.hit + spacing.md,
+    paddingHorizontal: spacing.lg,
+  },
+  headerClose: { alignSelf: "center" },
+  headerCopy: { alignItems: "baseline", flex: 1, flexDirection: "row", gap: spacing.sm, minWidth: 0 },
+  headerTitle: { color: colors.ink, ...type.heading },
+  headerFrom: { color: colors.muted, flexShrink: 1, ...type.bodySmall },
 });
