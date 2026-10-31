@@ -50,7 +50,7 @@ export default function CommunityTabScreen() {
   const params = useLocalSearchParams<{ post?: string | string[] }>();
   const postParam = readCommunityPostParam(params.post);
   const { mode } = useLayoutMode();
-  const layoutPreview = isLayoutPreview();
+  const layoutPreview = __DEV__ && isLayoutPreview();
   const { openWorkoutChooser, selectedGroupId, setSelectedGroupId } = useMainTabs();
   const [data, setData] = useState<CommunityData | null>(null);
   const [loading, setLoading] = useState(!layoutPreview);

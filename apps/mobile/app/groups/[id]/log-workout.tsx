@@ -54,7 +54,7 @@ export default function LogWorkoutScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { mode } = useLayoutMode();
-  const layoutPreview = isLayoutPreview();
+  const layoutPreview = __DEV__ && isLayoutPreview();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [form, dispatch] = useReducer(logFormReducer, layoutPreview, createLogFormState);
