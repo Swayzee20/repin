@@ -16,8 +16,9 @@ export function MainTabsGate({ children }: { children: ReactNode }) {
   const { selectedGroupId, setWorkoutChooserVisible, workoutChooserVisible } = useMainTabs();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
 
-  if (!ready && !isLayoutPreview()) return <View style={styles.fill} />;
-  if (!session && !isLayoutPreview()) {
+  const layoutPreview = __DEV__ && isLayoutPreview();
+  if (!ready && !layoutPreview) return <View style={styles.fill} />;
+  if (!session && !layoutPreview) {
     return (
       <Redirect
         href={inviteRedirect ? { pathname: "/sign-in", params: { redirect: inviteRedirect } } : "/sign-in"}
