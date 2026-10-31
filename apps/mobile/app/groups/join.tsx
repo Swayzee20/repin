@@ -1,20 +1,15 @@
 import type { GroupPreview, JoinGroupResponse } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
-import { Button, LoadingState, StateCard, TextField } from "../../ui/components";
+import { Button, Card, LoadingState, StateCard, TextField } from "../../ui/components";
+import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
-import { WideColumn } from "../../ui/layout";
-import { colors, radii, spacing, type } from "../../ui/theme";
+import { colors, layout, size, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(
   /\/$/,
@@ -112,46 +107,36 @@ export default function JoinGroupScreen() {
 
   if (authLoading) {
     return (
-      <SafeAreaView style={styles.safeArea}>
+      <FlowFrame>
         <LoadingState message="Checking your account…" />
-      </SafeAreaView>
+      </FlowFrame>
     );
   }
 
   if (!session) {
     return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <StateCard
-            actionLabel="Back to Home"
-            message="Sign in from Home before joining a group."
-            onAction={() => router.back()}
-            title="Sign in required"
-          />
-        </View>
-      </SafeAreaView>
+      <FlowFrame>
+        <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
+        <StateCard
+          actionLabel="Back to Home"
+          message="Sign in from Home before joining a group."
+          onAction={() => router.back()}
+          title="Sign in required"
+        />
+      </FlowFrame>
     );
   }
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-        <SafeAreaView edges={["left", "right"]}>
-        <WideColumn max="form">
-        <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
-        <Text style={styles.eyebrow}>FIND YOUR CREW</Text>
-        <Text style={styles.title}>Join a group</Text>
-        <Text style={styles.intro}>
-          Enter the invite code a member shared with you, or open their invite link.
-        </Text>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Invite code</Text>
-          <View style={styles.inviteRow}>
+    <FlowFrame
+      action={(
+        <View style={styles.form}>
+          <Card style={styles.formCard}>
             <TextField
               autoCapitalize="characters"
               autoCorrect={false}
-              containerStyle={styles.inviteField}
+              error={inviteError}
+              label="Invite code"
               onChangeText={(value) => {
                 setInviteCode(value);
                 setPreview(null);
@@ -169,35 +154,56 @@ export default function JoinGroupScreen() {
               loading={inviteLoading}
               loadingLabel="Finding"
               onPress={() => void findInvite()}
-              style={styles.compactButton}
             >
               Find
             </Button>
-          </View>
-          {inviteError ? <Text style={styles.error}>{inviteError}</Text> : null}
+          </Card>
+          {preview ? (
+            <Card style={styles.previewCard}>
+              <Text style={styles.previewLabel}>GROUP PREVIEW</Text>
+              <Text style={styles.previewName}>{preview.name}</Text>
+              <Text style={styles.muted}>{memberLabel(preview.memberCount)}</Text>
+              <Button
+                disabled={joining || preview.isMember}
+                disabledReason={preview.isMember ? "You’re already in this group." : undefined}
+                loading={joining}
+                loadingLabel="Joining"
+                onPress={() => void join()}
+                variant={preview.isMember ? "secondary" : "primary"}
+              >
+                {preview.isMember ? "Already joined" : "Join Group"}
+              </Button>
+              {joinError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{joinError}</Text> : null}
+            </Card>
+          ) : null}
         </View>
+      )}
+    >
+      <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
+      <Text style={styles.eyebrow}>FIND YOUR CREW</Text>
+      <Text style={styles.title}>Join a group</Text>
+      <Text style={styles.intro}>
+        Enter the invite code a member shared with you, or open their invite link.
+      </Text>
+    </FlowFrame>
+  );
+}
 
-        {preview ? (
-          <View style={styles.previewCard}>
-            <Text style={styles.previewLabel}>GROUP PREVIEW</Text>
-            <Text style={styles.previewName}>{preview.name}</Text>
-            <Text style={styles.muted}>{memberLabel(preview.memberCount)}</Text>
-            <Button
-              disabled={joining || preview.isMember}
-              disabledReason={preview.isMember ? "You’re already in this group." : undefined}
-              loading={joining}
-              loadingLabel="Joining"
-              onPress={() => void join()}
-              variant={preview.isMember ? "secondary" : "primary"}
-            >
-              {preview.isMember ? "Already joined" : "Join Group"}
-            </Button>
-            {joinError ? <Text style={styles.error}>{joinError}</Text> : null}
-          </View>
-        ) : null}
-        </WideColumn>
-        </SafeAreaView>
-      </ScrollView>
+function FlowFrame({ action, children }: { action?: ReactNode; children: ReactNode }) {
+  const { mode } = useLayoutMode();
+  const twoPane = mode === "twoPane";
+  return (
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
+        <TwoPane
+          column="form"
+          contentPaddingBottom={spacing.xxl}
+          fallback={action ? "stack" : "hide-right"}
+          keyboardShouldPersistTaps="handled"
+          left={<View style={styles.pane}>{children}</View>}
+          right={action ? <View style={twoPane ? styles.actionSplit : styles.actionStack}>{action}</View> : <View />}
+        />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
@@ -208,19 +214,18 @@ function memberLabel(count: number) {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  container: { padding: spacing.xxl, paddingBottom: 72 },
-  centered: { flex: 1, justifyContent: "center", padding: spacing.xxl },
+  flex: { flex: 1 },
+  pane: { flexGrow: 1, maxWidth: layout.formMax, width: "100%" },
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
-  section: { marginTop: spacing.xxxl },
-  sectionTitle: { color: colors.inkSoft, ...type.label, marginBottom: spacing.sm },
-  muted: { color: colors.muted, ...type.bodySmall, marginTop: spacing.sm },
-  error: { color: colors.danger, ...type.bodySmall, marginTop: spacing.sm },
-  inviteRow: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm },
-  inviteField: { flex: 1, minWidth: 0 },
-  compactButton: { minWidth: 80 },
-  previewCard: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, marginTop: spacing.xxxl, padding: spacing.xl },
+  actionSplit: { maxWidth: layout.formMax, paddingTop: size.hit + spacing.xl, width: "100%" },
+  actionStack: { marginTop: spacing.xxl, maxWidth: layout.formMax, width: "100%" },
+  form: { gap: spacing.lg },
+  formCard: { gap: spacing.lg, padding: spacing.xl },
+  previewCard: { gap: spacing.sm, padding: spacing.xl },
   previewLabel: { color: colors.brand, ...type.eyebrow },
-  previewName: { color: colors.ink, ...type.title, marginTop: spacing.sm },
+  previewName: { color: colors.ink, ...type.title },
+  muted: { color: colors.muted, ...type.bodySmall },
+  error: { color: colors.danger, ...type.bodySmall },
 });

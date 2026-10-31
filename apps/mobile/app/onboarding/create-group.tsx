@@ -1,18 +1,20 @@
 import { useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
-import { Button, TextField } from "../../ui/components";
+import { Button, Card, TextField } from "../../ui/components";
+import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
-import { WideColumn } from "../../ui/layout";
-import { colors, radii, spacing, type } from "../../ui/theme";
+import { colors, layout, size, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export default function CreateFirstGroupScreen() {
   const router = useRouter();
+  const { mode } = useLayoutMode();
+  const twoPane = mode === "twoPane";
   const [name, setName] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -43,28 +45,59 @@ export default function CreateFirstGroupScreen() {
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
-          <SafeAreaView edges={["left", "right"]} style={styles.flex}>
-          <WideColumn max="form">
-          <RoundIconButton accessibilityLabel="Get Started" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
-          <Text style={styles.eyebrow}>BUILD YOUR CREW</Text>
-          <Text style={styles.title}>Create a group</Text>
-          <Text style={styles.intro}>Give your community a name. You’ll become the owner automatically.</Text>
-          <View style={styles.formCard}>
-            <TextField autoFocus label="Group name" maxLength={80} onChangeText={setName} onSubmitEditing={() => void createGroup()} placeholder="Sunday Strength Club" returnKeyType="done" value={name} />
-            {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
-            <Button disabled={!name.trim()} disabledReason={name.trim() ? undefined : "Enter a group name."} loading={submitting} loadingLabel="Creating group" onPress={() => void createGroup()}>Create Group</Button>
-          </View>
-          </WideColumn>
-          </SafeAreaView>
-        </ScrollView>
+        <TwoPane
+          column="form"
+          contentPaddingBottom={spacing.xxl}
+          fallback="stack"
+          keyboardShouldPersistTaps="handled"
+          left={(
+            <View style={styles.pane}>
+              <RoundIconButton accessibilityLabel="Get Started" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
+              <Text style={styles.eyebrow}>BUILD YOUR CREW</Text>
+              <Text style={styles.title}>Create a group</Text>
+              <Text style={styles.intro}>Give your community a name. You’ll become the owner automatically.</Text>
+            </View>
+          )}
+          right={(
+            <View style={twoPane ? styles.actionSplit : styles.actionStack}>
+              <Card style={styles.formCard}>
+                <TextField
+                  autoFocus
+                  error={error}
+                  label="Group name"
+                  maxLength={80}
+                  onChangeText={setName}
+                  onSubmitEditing={() => void createGroup()}
+                  placeholder="Sunday Strength Club"
+                  returnKeyType="done"
+                  value={name}
+                />
+                <Button
+                  disabled={!name.trim()}
+                  disabledReason={name.trim() ? undefined : "Enter a group name."}
+                  loading={submitting}
+                  loadingLabel="Creating group"
+                  onPress={() => void createGroup()}
+                >
+                  Create Group
+                </Button>
+              </Card>
+            </View>
+          )}
+        />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 }, flex: { flex: 1 }, container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
-  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs }, intro: { color: colors.muted, ...type.body, marginBottom: spacing.xxl, marginTop: spacing.sm },
-  formCard: { gap: spacing.lg }, errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, padding: spacing.md }, errorText: { color: colors.danger, ...type.bodySmall },
+  safeArea: { backgroundColor: colors.background, flex: 1 },
+  flex: { flex: 1 },
+  pane: { flexGrow: 1, maxWidth: layout.formMax, width: "100%" },
+  eyebrow: { color: colors.brand, ...type.eyebrow },
+  title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
+  intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
+  actionSplit: { maxWidth: layout.formMax, paddingTop: size.hit + spacing.xl, width: "100%" },
+  actionStack: { marginTop: spacing.xxl, maxWidth: layout.formMax, width: "100%" },
+  formCard: { gap: spacing.lg, padding: spacing.xl },
 });

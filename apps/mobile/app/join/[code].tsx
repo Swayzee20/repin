@@ -2,16 +2,15 @@ import type { GroupPreview, JoinGroupResponse } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-
-import { WideColumn } from "../../ui/layout";
 
 import { invitePath, normalizeInviteCode } from "../../lib/invite-route";
 import { supabase } from "../../lib/supabase";
-import { Button, LoadingState, StateCard } from "../../ui/components";
+import { Button, Card, LoadingState, StateCard } from "../../ui/components";
+import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
-import { colors, fonts, radii, spacing, type } from "../../ui/theme";
+import { colors, layout, radii, size, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(
   /\/$/,
@@ -140,77 +139,94 @@ export default function GroupInviteScreen() {
   }, [inviteCode, router, session]);
 
   if (authLoading) {
-    return <InviteShell><LoadingState message="Opening invite…" /></InviteShell>;
+    return <InviteScreen><LoadingState message="Opening invite…" /></InviteScreen>;
   }
 
   if (invalidInvite) {
     return (
-      <InviteShell>
-        <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
+      <InviteScreen>
         <StateCard
           actionLabel="Go to Home"
           message="This invite code isn’t valid. Ask the group for a new code and try again."
           onAction={() => router.replace("/")}
           title="Invalid invite"
         />
-      </InviteShell>
+      </InviteScreen>
     );
   }
 
   if (!session && inviteCode) {
     const redirect = invitePath(inviteCode);
     return (
-      <InviteShell>
-        <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
+      <InviteScreen
+        action={(
+          <View style={styles.actions}>
+            <Button onPress={() => router.push({ pathname: "/sign-in", params: { redirect } })}>
+              Sign In to Continue
+            </Button>
+            <Button
+              onPress={() => router.push({ pathname: "/signup", params: { redirect } })}
+              variant="secondary"
+            >
+              Create Account
+            </Button>
+          </View>
+        )}
+      >
         <Text style={styles.eyebrow}>YOU’RE INVITED</Text>
         <Text style={styles.title}>Join your repin crew</Text>
         <Text style={styles.intro}>
           Sign in or create an account to view this group and accept the invite.
         </Text>
-        <View style={styles.codePanel}>
+        <Card style={styles.codeCard}>
           <Text style={styles.codeLabel}>INVITE CODE</Text>
           <Text style={styles.code}>{inviteCode}</Text>
-        </View>
-        <View style={styles.actions}>
-          <Button
-            onPress={() => router.push({ pathname: "/sign-in", params: { redirect } })}
-          >
-            Sign In to Continue
-          </Button>
-          <Button
-            onPress={() => router.push({ pathname: "/signup", params: { redirect } })}
-            variant="secondary"
-          >
-            Create Account
-          </Button>
-        </View>
-      </InviteShell>
+        </Card>
+      </InviteScreen>
     );
   }
 
   if (inviteLoading && !preview) {
-    return <InviteShell><LoadingState message="Loading group invite…" /></InviteShell>;
+    return <InviteScreen><LoadingState message="Loading group invite…" /></InviteScreen>;
   }
 
   if (error && !preview) {
     return (
-      <InviteShell>
-        <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
+      <InviteScreen>
         <StateCard
           actionLabel="Try again"
           message={error}
           onAction={() => void loadInvite()}
           title="Invite unavailable"
         />
-      </InviteShell>
+      </InviteScreen>
     );
   }
 
   if (!preview) return null;
 
   return (
-    <InviteShell>
-      <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
+    <InviteScreen
+      action={(
+        <View style={styles.actions}>
+          {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
+          {preview.isMember ? (
+            <>
+              <Button onPress={() => router.replace(`/groups/${preview.id}`)}>
+                Continue to Group
+              </Button>
+              <Button onPress={() => router.replace("/")} variant="secondary">
+                Go to Home
+              </Button>
+            </>
+          ) : (
+            <Button loading={joining} loadingLabel="Joining" onPress={() => void joinGroup()}>
+              Join Group
+            </Button>
+          )}
+        </View>
+      )}
+    >
       <Text style={styles.eyebrow}>GROUP INVITE</Text>
       <Text style={styles.title}>{preview.name}</Text>
       <Text style={styles.intro}>
@@ -218,7 +234,7 @@ export default function GroupInviteScreen() {
           ? "You’re already part of this repin group."
           : "You’ve been invited to join this repin group."}
       </Text>
-      <View style={styles.groupPanel}>
+      <Card style={styles.groupCard}>
         <View style={styles.groupMark}>
           <Text style={styles.groupMarkText}>{preview.name[0]?.toUpperCase()}</Text>
         </View>
@@ -226,34 +242,29 @@ export default function GroupInviteScreen() {
           <Text numberOfLines={1} style={styles.groupName}>{preview.name}</Text>
           <Text style={styles.memberCount}>{memberLabel(preview.memberCount)}</Text>
         </View>
-      </View>
-      {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
-      <View style={styles.actions}>
-        {preview.isMember ? (
-          <>
-            <Button onPress={() => router.replace(`/groups/${preview.id}`)}>
-              Continue to Group
-            </Button>
-            <Button onPress={() => router.replace("/")} variant="secondary">
-              Go to Home
-            </Button>
-          </>
-        ) : (
-          <Button loading={joining} loadingLabel="Joining" onPress={() => void joinGroup()}>
-            Join Group
-          </Button>
-        )}
-      </View>
-    </InviteShell>
+      </Card>
+    </InviteScreen>
   );
 }
 
-function InviteShell({ children }: { children: ReactNode }) {
+function InviteScreen({ action, children }: { action?: ReactNode; children: ReactNode }) {
+  const router = useRouter();
+  const { mode } = useLayoutMode();
+  const twoPane = mode === "twoPane";
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.container}>
-        <SafeAreaView edges={["left", "right"]}><WideColumn max="form">{children}</WideColumn></SafeAreaView>
-      </ScrollView>
+      <TwoPane
+        column="form"
+        contentPaddingBottom={spacing.xxl}
+        fallback={action ? "stack" : "hide-right"}
+        left={(
+          <View style={styles.pane}>
+            <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
+            {children}
+          </View>
+        )}
+        right={action ? <View style={twoPane ? styles.actionSplit : styles.actionStack}>{action}</View> : <View />}
+      />
     </SafeAreaView>
   );
 }
@@ -264,19 +275,28 @@ function memberLabel(count: number) {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
+  pane: { flexGrow: 1, maxWidth: layout.formMax, width: "100%" },
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
-  codePanel: { backgroundColor: colors.surfaceMuted, borderColor: colors.boardBorder, borderRadius: radii.lg, borderWidth: 1, marginTop: spacing.xxxl, padding: spacing.lg },
+  codeCard: { marginTop: spacing.xxl },
   codeLabel: { color: colors.brandPressed, ...type.eyebrow },
-  code: { color: colors.ink, fontFamily: fonts.bold, fontSize: 24, letterSpacing: 3, marginTop: spacing.sm },
-  groupPanel: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", marginTop: spacing.xxxl, paddingVertical: spacing.lg },
-  groupMark: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.lg, height: 48, justifyContent: "center", width: 48 },
-  groupMarkText: { color: colors.surface, fontFamily: fonts.bold, fontSize: 20 },
+  code: { color: colors.ink, ...type.title, letterSpacing: 3, marginTop: spacing.sm },
+  groupCard: { alignItems: "center", flexDirection: "row", marginTop: spacing.xxl },
+  groupMark: {
+    alignItems: "center",
+    backgroundColor: colors.brand,
+    borderRadius: radii.lg,
+    height: size.control,
+    justifyContent: "center",
+    width: size.control,
+  },
+  groupMarkText: { color: colors.surface, ...type.heading },
   groupCopy: { flex: 1, marginLeft: spacing.md },
   groupName: { color: colors.ink, ...type.heading },
   memberCount: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  actions: { gap: spacing.md, marginTop: spacing.xxxl },
-  error: { color: colors.danger, ...type.bodySmall, marginTop: spacing.lg },
+  actionSplit: { maxWidth: layout.formMax, paddingTop: size.hit + spacing.xl, width: "100%" },
+  actionStack: { marginTop: spacing.xxl, maxWidth: layout.formMax, width: "100%" },
+  actions: { gap: spacing.md },
+  error: { color: colors.danger, ...type.bodySmall },
 });

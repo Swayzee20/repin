@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-native";
 
 import { pressableFocused, webFocusRing } from "./focus-ring";
@@ -146,10 +147,12 @@ export function SegmentedControl<T extends string>({
 
 export function ListRow({
   label,
+  leading,
   onPress,
   value,
 }: {
   label: string;
+  leading?: ReactNode;
   onPress: () => void;
   value?: string;
 }) {
@@ -164,6 +167,7 @@ export function ListRow({
         webFocusRing(pressableFocused(state)),
       ]}
     >
+      {leading ? <View style={styles.listLeading}>{leading}</View> : null}
       <Text style={styles.listLabel}>{label}</Text>
       <View style={styles.listTrailing}>
         {value ? <Text style={styles.listValue}>{value}</Text> : null}
@@ -228,6 +232,9 @@ const styles = StyleSheet.create({
   },
   listRowPressed: {
     backgroundColor: colors.selection,
+  },
+  listLeading: {
+    flexShrink: 0,
   },
   listLabel: {
     ...type.body,
