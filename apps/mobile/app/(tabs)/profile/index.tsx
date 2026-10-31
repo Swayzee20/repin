@@ -10,7 +10,7 @@ import {
   isFresh,
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
-import { BrandHeader, LoadingState, StateCard } from "../../../ui/components";
+import { BrandHeader, Card, LoadingState, StateCard } from "../../../ui/components";
 import { WideColumn } from "../../../ui/layout";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { RepInPill } from "../../../ui/rep-in-pill";
@@ -122,7 +122,7 @@ export default function ProfileTabScreen() {
 
         <View style={styles.section}>
           <Text style={styles.sectionLabel}>PERSONAL ACTIVITY</Text>
-          <View style={styles.activityPanel}>
+          <Card style={styles.activityPanel}>
             <View style={styles.activitySummary}>
               <View>
                 <Text style={styles.weekCount}>{data.snapshot.workoutsThisWeek}</Text>
@@ -145,7 +145,7 @@ export default function ProfileTabScreen() {
               </View>
             </View>
             ) : null}
-          </View>
+          </Card>
         </View>
 
         <View style={styles.section}>
@@ -214,7 +214,7 @@ const styles = StyleSheet.create({
   memberSince: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
   section: { marginTop: spacing.xxxl },
   sectionLabel: { color: colors.muted, ...type.eyebrow, fontSize: 11 },
-  activityPanel: { borderBottomColor: colors.border, borderBottomWidth: 1, borderTopColor: colors.border, borderTopWidth: 1, marginTop: spacing.md, paddingVertical: spacing.lg },
+  activityPanel: { marginTop: spacing.md },
   activitySummary: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   weekCount: { color: colors.ink, fontFamily: fonts.bold, fontSize: 28, lineHeight: 32 },
   weekCountLabel: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.9, marginTop: spacing.xs },

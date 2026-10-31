@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
-import { colors, compactSelectorShadowStyle, fonts, radii, spacing, type } from "./theme";
+import { colors, elevation, fonts, radii, spacing, type } from "./theme";
 
 export const workoutTypeOptions: { label: string; value: WorkoutType }[] = [
   { label: "Run", value: "run" },
@@ -184,13 +184,13 @@ const styles = StyleSheet.create({
   },
   selectorText: { color: colors.ink, fontFamily: fonts.medium, fontSize: 16, lineHeight: 23 },
   selectorCompact: { borderRadius: radii.md, minHeight: 48, paddingHorizontal: spacing.md },
-  selectorElevated: { ...compactSelectorShadowStyle },
+  selectorElevated: { boxShadow: elevation.glass },
   placeholder: { color: colors.muted },
   selectorChevron: { color: colors.muted, fontFamily: fonts.medium, fontSize: 22, lineHeight: 24, marginLeft: spacing.md },
   overlay: { flex: 1, justifyContent: "flex-end" },
   backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
-  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radii.lg, borderTopRightRadius: radii.lg, paddingHorizontal: spacing.xxl, paddingTop: spacing.md },
+  sheet: { backgroundColor: colors.surface, borderTopLeftRadius: radii.lg, borderTopRightRadius: radii.lg, boxShadow: elevation.e3, paddingHorizontal: spacing.xxl, paddingTop: spacing.md },
   handle: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: 4, marginBottom: spacing.lg, width: 38 },
   title: { color: colors.ink, ...type.title },
   options: { marginTop: spacing.md },

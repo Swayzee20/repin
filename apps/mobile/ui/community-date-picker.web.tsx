@@ -3,7 +3,7 @@ import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { fromLocalDateInputValue, toLocalDateInputValue } from "../lib/community-date";
 import { CenteredCard } from "./layout";
-import { colors, fonts, radii, spacing, type } from "./theme";
+import { colors, elevation, fonts, radii, spacing, type } from "./theme";
 
 export function CommunityDatePicker({
   maximumDate,
@@ -64,7 +64,7 @@ const webInputStyle = {
 const styles = StyleSheet.create({
   overlay: { flex: 1 },
   backdrop: { backgroundColor: colors.overlay },
-  panel: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.lg, width: "100%" },
+  panel: { backgroundColor: colors.surface, borderRadius: radii.lg, boxShadow: elevation.e3, padding: spacing.lg, width: "100%" },
   title: { color: colors.ink, ...type.heading },
   actions: { flexDirection: "row", justifyContent: "flex-end", marginTop: spacing.md },
   action: { alignItems: "center", justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.lg },
