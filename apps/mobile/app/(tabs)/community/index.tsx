@@ -30,7 +30,6 @@ import {
 } from "../../../lib/community-selection";
 import { BrandHeader, CommunityFeed, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
 import { CenteredCard, TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
-import { RepInPill } from "../../../ui/rep-in-pill";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { CommunityDatePicker } from "../../../ui/community-date-picker";
 import { useMainTabs } from "../../../ui/main-tabs-context";
@@ -504,7 +503,6 @@ export default function CommunityTabScreen() {
           stage={deleteStage}
           visible={deleteTarget !== null}
         />
-        <RepInPill />
       </View>
     );
   }
@@ -695,7 +693,6 @@ export default function CommunityTabScreen() {
         visible={deleteTarget !== null}
       />
     </SafeAreaView>
-    <RepInPill />
     </View>
   );
 }

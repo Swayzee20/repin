@@ -12,6 +12,9 @@ const vectorIcons = {
   "chevron.right": "chevron-right",
   "chevron.up": "chevron-up",
   "exclamationmark.circle": "alert-circle",
+  house: "home",
+  "person.2": "users",
+  "person.crop.circle": "user",
   plus: "plus",
   xmark: "x",
 } as const;
