@@ -1,15 +1,14 @@
 import { Stack } from "expo-router";
-import { useVerticalBarEdge } from "./vertical-bar-edge";
+import { useStripPresent } from "./vertical-bar-edge";
 
 import { useAuthSession } from "../lib/use-auth-session";
 import { useMainTabs } from "./main-tabs-context";
 import { colors } from "./theme";
 
 export default function TabRootStack() {
-  const edge = useVerticalBarEdge();
+  const stripPresent = useStripPresent();
   const { session } = useAuthSession();
   const { openWorkoutChooser, selectedGroupId } = useMainTabs();
-  const stripPresent = edge !== null;
   const showRepIn = stripPresent && Boolean(session && selectedGroupId);
 
   return (

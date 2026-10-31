@@ -1,37 +1,63 @@
 import { requireOptionalNativeModule } from "expo";
-import { useEffect, useState } from "react";
+import { useSyncExternalStore } from "react";
+import { AppState, Platform } from "react-native";
 
-export type VerticalBarEdge = "leading" | "trailing";
+import {
+  createStripStore,
+  edgeResolved,
+  stripPresent,
+  type StatusBarModule,
+  type VerticalBarEdge,
+} from "./vertical-bar-edge-store";
 
-type StatusBarSubscription = { remove: () => void };
-
-type StatusBarModule = {
-  addListener: (
-    eventName: "onVerticalBarEdgeChange",
-    listener: (event: { edge?: string | null }) => void,
-  ) => StatusBarSubscription;
-};
+export type { VerticalBarEdge } from "./vertical-bar-edge-store";
+export { edgeResolved, stripPresent };
 
 /**
  * The edge of the iPhone Duo side strip, or null when there is no strip.
  *
- * Do not call `StatusBar.getVerticalBarEdgeIOS()`. That synchronous Expo Function hops to the
- * main thread with `dispatch_sync`. A fold runs JS from the main thread's event beat
- * (`executeNowOnTheSameThread`), so the hop deadlocks (0x8BADF00D). Observation emits the
- * current edge, and later changes, without that synchronous call.
+ * One store for the whole app, read through `useSyncExternalStore`. A per-hook
+ * subscription stays null when it mounts after expo-status-bar's single
+ * OnStartObserving emission (listener count 0 → 1).
+ *
+ * Do not call `getVerticalBarEdge()` / `StatusBar.getVerticalBarEdgeIOS()`. That
+ * synchronous Expo Function hops to the main thread with `dispatch_sync`. A fold
+ * runs JS from the main thread's event beat (`executeNowOnTheSameThread`), so the
+ * hop deadlocks (0x8BADF00D).
  */
 const statusBar: StatusBarModule | null = requireOptionalNativeModule("ExpoStatusBar");
 
+const store = createStripStore({
+  appState: AppState,
+  os: Platform.OS,
+  statusBar,
+  version: Platform.Version,
+});
+
+function subscribe(listener: () => void) {
+  return store.subscribe(listener);
+}
+
 export function useVerticalBarEdge(): VerticalBarEdge | null {
-  const [edge, setEdge] = useState<VerticalBarEdge | null>(null);
+  return useSyncExternalStore(
+    subscribe,
+    () => store.getState().edge,
+    () => store.getState().edge,
+  );
+}
 
-  useEffect(() => {
-    if (!statusBar) return;
-    const subscription = statusBar.addListener("onVerticalBarEdgeChange", (event) => {
-      setEdge(event.edge === "leading" || event.edge === "trailing" ? event.edge : null);
-    });
-    return () => subscription.remove();
-  }, []);
+export function useStripPresent(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => stripPresent(store.getState()),
+    () => stripPresent(store.getState()),
+  );
+}
 
-  return edge;
+export function useEdgeResolved(): boolean {
+  return useSyncExternalStore(
+    subscribe,
+    () => edgeResolved(store.getState()),
+    () => edgeResolved(store.getState()),
+  );
 }

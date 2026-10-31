@@ -1,0 +1,8 @@
+---
+description: repin design language is the reference for mobile UI
+alwaysApply: true
+---
+
+`docs/DESIGN-LANGUAGE.md` (boards in `docs/design/`) is the reference for all future work.
+
+New screens and features must use the tokens in `apps/mobile/ui/theme.ts` and the shared components per `docs/DESIGN-LANGUAGE.md`. No literal colours, fontSize, borderRadius, shadows, or sub-44pt pressables. Use the pane templates T1–T4 via `TwoPane` / `useLayoutMode`. The side-strip nav pill and round orange (+) are locked. Never call `ExpoStatusBar.getVerticalBarEdge` (deadlock). Read strip state from the shared store in `apps/mobile/ui/vertical-bar-edge.tsx`.
