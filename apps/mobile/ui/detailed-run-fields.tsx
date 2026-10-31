@@ -6,7 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { TextField } from "./components";
+import { Button, TextField } from "./components";
 import { SegmentedControl } from "./primitives";
 import {
   buildRunResultSummary,
@@ -19,7 +19,7 @@ import {
 import { type QuickLogResultsDraft, WorkoutTimeInput } from "./quick-log-results";
 import { formatDurationSeconds } from "../lib/workout-detail-format";
 import { getDurationSeconds } from "../lib/workout-time";
-import { colors, elevation, fonts, radii, spacing, type } from "./theme";
+import { colors, elevation, fonts, radii, size, spacing, type } from "./theme";
 
 const runSubtypeOptions: { label: string; value: RunWorkoutSubtype }[] = [
   { label: "Distance", value: "distance" },
@@ -109,7 +109,7 @@ export function RunResultEditor({
             <View style={[styles.intervalMetricRow, styles.metricRowSurface, styles.firstMetricRow]}>
               <Text style={styles.intervalMetricLabel}>Distance</Text>
               <View style={styles.intervalMetricControls}>
-                <TextField compact containerStyle={styles.metricField} focusedStyle={styles.integratedInputFocused} inputMode="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" style={styles.integratedInput} value={results.distance} />
+                <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" value={results.distance} />
                 <DistanceUnitToggle onChange={(distanceUnit) => updateResults({ distanceUnit })} value={results.distanceUnit} />
               </View>
             </View>
@@ -117,9 +117,6 @@ export function RunResultEditor({
               <Text style={styles.intervalMetricLabel}>Time</Text>
               <WorkoutTimeInput
                 containerStyle={styles.intervalTimeControls}
-                fieldStyle={styles.intervalTimeField}
-                focusedInputStyle={styles.integratedInputFocused}
-                inputStyle={styles.integratedInput}
                 minutes={results.timeMinutes}
                 onMinutesChange={(timeMinutes) => updateResults({ timeMinutes })}
                 onSecondsChange={(timeSeconds) => updateResults({ timeSeconds })}
@@ -130,9 +127,9 @@ export function RunResultEditor({
           </>
         )}
         {subtype !== "interval" ? (
-          <Pressable accessibilityRole="button" hitSlop={1} onPress={onDone} style={({ pressed }) => [styles.doneAction, pressed && styles.pressed]}>
-            <Text style={styles.doneActionText}>Done</Text>
-          </Pressable>
+          <View style={styles.doneSlot}>
+            <Button onPress={onDone} style={styles.tonalDone} variant="tonal">Done</Button>
+          </View>
         ) : null}
       </View>
     </View>
@@ -224,7 +221,7 @@ function IntervalEditor({
           <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
             <Text style={styles.intervalMetricLabel}>Distance</Text>
             <View style={styles.intervalMetricControls}>
-              <TextField compact containerStyle={styles.metricField} focusedStyle={styles.integratedInputFocused} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" style={styles.integratedInput} value={interval.distance} />
+              <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" value={interval.distance} />
               <UnitToggle onChange={(distanceUnit) => updateInterval(interval.id, { distanceUnit })} value={interval.distanceUnit} />
             </View>
           </View>
@@ -234,9 +231,6 @@ function IntervalEditor({
             <Text style={styles.intervalMetricLabel}>Time</Text>
             <WorkoutTimeInput
               containerStyle={styles.intervalTimeControls}
-              fieldStyle={styles.intervalTimeField}
-              focusedInputStyle={styles.integratedInputFocused}
-              inputStyle={styles.integratedInput}
               minutes={interval.timeMinutes}
               onMinutesChange={(timeMinutes) => updateInterval(interval.id, { timeMinutes })}
               onSecondsChange={(timeSeconds) => updateInterval(interval.id, { timeSeconds })}
@@ -248,7 +242,7 @@ function IntervalEditor({
           <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
             <Text style={styles.intervalMetricLabel}>Recovery</Text>
             <View style={styles.recoveryRow}>
-              <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} focusedStyle={styles.integratedInputFocused} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" style={styles.integratedInput} value={interval.recoverySeconds} />
+              <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" value={interval.recoverySeconds} />
               <Text style={styles.unitLabel}>sec</Text>
             </View>
           </View>
@@ -292,9 +286,7 @@ function IntervalEditor({
         <Pressable accessibilityRole="button" onPress={addInterval} style={({ pressed }) => [styles.addInterval, pressed && styles.pressed]}>
           <Text style={styles.addIntervalText}>+ Add interval</Text>
         </Pressable>
-        <Pressable accessibilityRole="button" hitSlop={1} onPress={onDone} style={({ pressed }) => [styles.intervalDoneAction, pressed && styles.pressed]}>
-          <Text style={styles.intervalDoneActionText}>Done</Text>
-        </Pressable>
+        <Button onPress={onDone} style={styles.tonalDone} variant="tonal">Done</Button>
       </View>
     </View>
   );
@@ -376,11 +368,8 @@ const styles = StyleSheet.create({
   metricRowSurface: { boxShadow: elevation.glass, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, minHeight: 56, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   intervalMetricLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, width: 64 },
   intervalMetricHeading: { flex: 1, minWidth: 120 },
-  intervalMetricControls: { alignItems: "center", flex: 1, flexDirection: "row", gap: spacing.xs, minWidth: 182 },
-  intervalTimeControls: { flex: 1, gap: spacing.sm, marginTop: 0, minWidth: 168 },
-  intervalTimeField: { width: 52 },
-  integratedInput: { backgroundColor: "transparent", borderColor: colors.borderStrong, borderRadius: 0, borderWidth: 0, borderBottomWidth: 1, minHeight: 44, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs },
-  integratedInputFocused: { borderBottomColor: colors.brand, borderBottomWidth: 2 },
+  intervalMetricControls: { alignItems: "center", flex: 1, flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, minWidth: 0 },
+  intervalTimeControls: { flex: 1, flexShrink: 1, gap: spacing.sm, marginTop: 0, minWidth: 0 },
   recoveryRow: { alignItems: "center", flex: 1, flexDirection: "row", gap: spacing.sm, minWidth: 132 },
   recoveryField: { marginTop: 0, width: 96 },
   unitLabel: { color: colors.muted, ...type.bodySmall },
@@ -388,17 +377,15 @@ const styles = StyleSheet.create({
   quantityRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between", marginTop: spacing.sm },
   quantityHelper: { color: colors.muted, ...type.bodySmall, marginTop: 2 },
   quantityControl: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
-  quantityButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, height: 36, justifyContent: "center", width: 36 },
+  quantityButton: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, height: size.hit, justifyContent: "center", width: size.hit },
   quantityButtonDisabled: { opacity: 0.35 },
   quantitySymbol: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 20, lineHeight: 22 },
   quantityValue: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16, minWidth: 24, textAlign: "center" },
   intervalActions: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between", marginTop: spacing.sm },
   addInterval: { boxShadow: elevation.glass, alignItems: "center", backgroundColor: colors.surface, borderColor: colors.success, borderRadius: radii.pill, borderWidth: 1, flexShrink: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
   addIntervalText: { color: colors.success, ...type.label },
-  intervalDoneAction: { boxShadow: elevation.glass, alignItems: "center", backgroundColor: colors.success, borderRadius: radii.md, flexShrink: 0, height: 42, justifyContent: "center", minWidth: 76, paddingHorizontal: spacing.lg },
-  intervalDoneActionText: { color: colors.surface, ...type.label },
-  doneAction: { boxShadow: elevation.glass, alignItems: "center", alignSelf: "flex-end", backgroundColor: colors.success, borderRadius: radii.md, height: 42, justifyContent: "center", marginTop: spacing.sm, minWidth: 76, paddingHorizontal: spacing.lg },
-  doneActionText: { color: colors.surface, ...type.label },
+  doneSlot: { alignItems: "flex-end", marginTop: spacing.sm },
+  tonalDone: { alignSelf: "flex-start", paddingHorizontal: spacing.xl },
   collapsedSurface: { boxShadow: elevation.glass, alignItems: "center", alignSelf: "stretch", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, flexDirection: "row", gap: spacing.sm, marginTop: spacing.xxl, maxWidth: "100%", paddingHorizontal: spacing.md, paddingVertical: spacing.md, width: "100%" },
   collapsedCopy: { flex: 1, flexBasis: 0, gap: spacing.xs, minWidth: 0 },
   summaryText: { color: colors.ink, flexShrink: 1, ...type.bodyMedium },

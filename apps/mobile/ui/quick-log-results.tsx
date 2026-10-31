@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle 
 import { TextField } from "./components";
 import { SegmentedControl } from "./primitives";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
-import { colors, elevation, fonts, spacing, type } from "./theme";
+import { colors, elevation, fonts, size, spacing, type } from "./theme";
 
 type DistanceUnit = "mi" | "km";
 type FunctionalResultType = "time" | "rounds" | "score";
@@ -212,11 +212,11 @@ const styles = StyleSheet.create({
   metricRow: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
   metricField: { flex: 1, marginTop: 0 },
   resultField: { marginTop: spacing.sm },
-  timeRow: { alignItems: "center", flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
-  timePart: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
-  timeField: { width: 84 },
+  timeRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm, width: "100%" },
+  timePart: { alignItems: "center", flexDirection: "row", flexGrow: 1, flexShrink: 1, gap: spacing.xs, minWidth: size.hit },
+  timeField: { flex: 1, minWidth: size.hit },
   elevatedInput: { boxShadow: elevation.glass },
-  timeUnit: { color: colors.muted, ...type.bodySmall },
+  timeUnit: { color: colors.muted, flexShrink: 0, ...type.bodySmall },
   segment: { marginTop: spacing.sm },
   inlineSegment: { alignSelf: "flex-end" },
 });

@@ -5,6 +5,7 @@ import { Platform, View } from "react-native";
 import { colors, size } from "./theme";
 
 const vectorIcons = {
+  camera: "camera",
   checkmark: "check",
   "chevron.down": "chevron-down",
   "chevron.left": "chevron-left",
