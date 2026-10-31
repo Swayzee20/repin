@@ -66,6 +66,7 @@ export default function CommunityTabScreen() {
   } | null>(null);
   const [explicitOverride, setExplicitOverride] = useState<string | null>(null);
   const modeRef = useRef(mode);
+  const queuedDetail = useRef(detailTarget);
   const [deleteTarget, setDeleteTarget] = useState<WorkoutFeedItem | null>(null);
   const [deleteStage, setDeleteStage] = useState<"choose" | "confirm-workout">("choose");
   const [deletePending, setDeletePending] = useState(false);
@@ -209,12 +210,19 @@ export default function CommunityTabScreen() {
       selection = resolveCommunitySelection({ postParam: effect.setExplicitPostId, workouts });
       if (effect.setExplicitPostId !== explicitOverride) setExplicitOverride(effect.setExplicitPostId);
     }
-    if ((detail?.workout.id ?? null) !== (detailTarget?.workout.id ?? null)) setDetailTarget(detail);
+    queuedDetail.current = detail;
   }
 
   useEffect(() => {
-    const timer = setTimeout(() => releaseComposerFocus(), 600);
-    return () => clearTimeout(timer);
+    const next = queuedDetail.current;
+    const openSheet = setTimeout(() => {
+      setDetailTarget(next);
+    }, 32);
+    const releaseFocus = setTimeout(() => releaseComposerFocus(), 600);
+    return () => {
+      clearTimeout(openSheet);
+      clearTimeout(releaseFocus);
+    };
   }, [mode]);
 
   useEffect(() => {
@@ -655,10 +663,10 @@ export default function CommunityTabScreen() {
         visible={datePickerOpen}
       />
       <WorkoutDetailModal
-        key={detail?.workout.id ?? "closed"}
-        fixture={layoutPreview && detail ? layoutPreviewDetail(detail.workout.id) : null}
-        groupId={detail?.groupId ?? null}
-        initialWorkout={detail?.workout ?? null}
+        key={detailTarget?.workout.id ?? "closed"}
+        fixture={layoutPreview && detailTarget ? layoutPreviewDetail(detailTarget.workout.id) : null}
+        groupId={detailTarget?.groupId ?? null}
+        initialWorkout={detailTarget?.workout ?? null}
         onCommentCountChange={updateFeedCommentCount}
         onDismiss={() => {
           setDetailTarget(null);
@@ -666,8 +674,8 @@ export default function CommunityTabScreen() {
           if (postParam) router.setParams({ post: "" });
         }}
         onReactionSummaryChange={updateFeedReactionSummary}
-        sessionId={detail?.workout.id ?? null}
-        visible={detail !== null}
+        sessionId={detailTarget?.workout.id ?? null}
+        visible={detailTarget !== null}
       />
       <DeleteWorkoutModal
         error={deleteError}
