@@ -2,7 +2,7 @@ import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useRef, useState, type ComponentRef, type ReactNode, type Ref } from "react";
-import type { StyleProp, TextInputProps, ViewInstance, ViewStyle } from "react-native";
+import type { StyleProp, TextInputProps, ViewInstance, ViewProps, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
   Image,
@@ -46,7 +46,7 @@ import {
   controlHelperGap,
   type ButtonVariant,
 } from "./primitive-state";
-import { colors, controls, fonts, radii, spacing, type } from "./theme";
+import { colors, controls, elevation, fonts, radii, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
 
 const webFeedScrollerStyle =
@@ -133,7 +133,7 @@ export function Screen({
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
         removeClippedSubviews={false}
-        style={preserveTransformedContent ? styles.overflowVisible : undefined}
+        style={[styles.screenBleed, preserveTransformedContent ? styles.overflowVisible : null]}
       >
         <SafeAreaView edges={["left", "right"]} style={styles.sideInset}>
           <WideColumn>
@@ -214,8 +214,17 @@ export function Button({
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  return <View style={[styles.card, style]}>{children}</View>;
+export function Card({
+  children,
+  selected = false,
+  style,
+  ...rest
+}: ViewProps & { selected?: boolean }) {
+  return (
+    <View {...rest} style={[styles.card, selected && styles.cardSelected, style]}>
+      {children}
+    </View>
+  );
 }
 
 export function TextField({
@@ -372,14 +381,7 @@ export function WorkoutCard({
         );
 
     return {
-      elevation: reduceMotion ? 2 : interpolate(proximity, [0, 1], [1.5, 3.5]),
       opacity,
-      shadowOffset: {
-        height: reduceMotion ? 5 : interpolate(proximity, [0, 1], [4, 10]),
-        width: 0,
-      },
-      shadowOpacity: reduceMotion ? 0.055 : interpolate(proximity, [0, 1], [0.045, 0.065]),
-      shadowRadius: reduceMotion ? 17 : interpolate(proximity, [0, 1], [15, 25]),
       transform: [
         { perspective: 900 },
         { translateX },
@@ -395,7 +397,7 @@ export function WorkoutCard({
       onLayout={(event) => {
         cardHeight.value = event.nativeEvent.layout.height;
       }}
-      style={[styles.floatingWorkout, side === "left" ? styles.floatingLeft : styles.floatingRight, animatedStyle]}
+      style={[styles.feedCardShell, side === "left" ? styles.floatingLeft : styles.floatingRight, animatedStyle]}
     >
       {onPress ? (
         <Pressable
@@ -404,10 +406,10 @@ export function WorkoutCard({
           onPress={onPress}
           style={({ pressed }) => pressed && styles.workoutCardPressed}
         >
-          <WorkoutSummaryCard onDelete={onDelete} onEdit={onEdit} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} variant="full" workout={workout} />
+          <WorkoutSummaryCard onDelete={onDelete} onEdit={onEdit} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} style={styles.feedCardFlat} variant="full" workout={workout} />
         </Pressable>
       ) : (
-        <WorkoutSummaryCard onDelete={onDelete} onEdit={onEdit} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} variant="full" workout={workout} />
+        <WorkoutSummaryCard onDelete={onDelete} onEdit={onEdit} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} style={styles.feedCardFlat} variant="full" workout={workout} />
       )}
     </Animated.View>
   );
@@ -416,6 +418,7 @@ export function WorkoutCard({
 export function WorkoutSummaryCard({
   onDelete,
   onEdit,
+  selected = false,
   showCommentCount = false,
   showReactionSummary = false,
   style,
@@ -424,6 +427,7 @@ export function WorkoutSummaryCard({
 }: {
   onDelete?: () => void;
   onEdit?: () => void;
+  selected?: boolean;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
   style?: StyleProp<ViewStyle>;
@@ -460,7 +464,7 @@ export function WorkoutSummaryCard({
   ];
 
   return (
-    <Card style={[variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard, style]}>
+    <Card selected={selected} style={[variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard, style]}>
       <View style={styles.workoutTopline}>
         <View style={styles.avatar}><Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text></View>
         <View style={styles.workoutAuthor}>
@@ -520,6 +524,9 @@ export function CommunityFeed({
   const itemHeights = useSharedValue<Record<string, number>>({});
   const orderedWorkoutIds = visibleWorkouts.map((workout) => workout.id);
   const scrollRef = useRef<ScrollViewInstance>(null);
+  const setScrollRef = useCallback((node: ScrollViewInstance | null) => {
+    scrollRef.current = node;
+  }, []);
   const positions = useRef(new Map<string, { height: number; y: number }>());
   const contentHeight = useRef(0);
   const restored = useRef(false);
@@ -567,7 +574,7 @@ export function CommunityFeed({
         }}
         onScroll={scrollHandler}
         overScrollMode="never"
-        ref={scrollRef}
+        ref={setScrollRef}
         removeClippedSubviews={false}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={mode === "full"}
@@ -770,8 +777,9 @@ const styles = StyleSheet.create({
   brandHeaderMark: { height: 29, width: 36 },
   lockup: { height: 29, width: 88 },
   wordmark: { fontFamily: fonts.display },
-  safeArea: { backgroundColor: colors.background, flex: 1 },
-  screenScroll: { flexGrow: 1 },
+  safeArea: { backgroundColor: colors.background, flex: 1, overflow: "hidden" },
+  screenScroll: { flexGrow: 1, paddingHorizontal: spacing.md },
+  screenBleed: { marginHorizontal: -spacing.md },
   sideInset: { flexGrow: 1 },
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
   transformedScreenContent: { overflow: "visible", paddingBottom: 96 },
@@ -780,7 +788,8 @@ const styles = StyleSheet.create({
   buttonContent: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "center" },
   buttonText: { ...type.button, flexShrink: 1, textAlign: "center" },
   buttonHelper: { color: colors.disabledText, marginTop: controlHelperGap, ...type.bodySmall },
-  card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg },
+  card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, boxShadow: elevation.e1, padding: spacing.lg },
+  cardSelected: { boxShadow: `${elevation.e1}, inset 0 0 0 2px ${colors.brand}` },
   field: { gap: spacing.sm },
   fieldCompact: { gap: spacing.xs },
   fieldLabel: { color: colors.inkSoft, ...type.label },
@@ -810,7 +819,7 @@ const styles = StyleSheet.create({
   typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
   postOptionsButton: { alignItems: "center", height: 36, justifyContent: "center", marginLeft: spacing.xs, width: 36 },
   postMenuBackdrop: { flex: 1 },
-  postMenu: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, elevation: 5, padding: spacing.xs, position: "absolute", shadowColor: colors.ink, shadowOffset: { height: 3, width: 0 }, shadowOpacity: 0.1, shadowRadius: 10, width: 176 },
+  postMenu: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, boxShadow: elevation.e2, padding: spacing.xs, position: "absolute", width: 176 },
   postMenuRow: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md },
   postMenuText: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 },
   postMenuDeleteText: { color: colors.danger, fontFamily: fonts.semibold, fontSize: 15 },
@@ -821,16 +830,13 @@ const styles = StyleSheet.create({
   reactionSummary: { alignSelf: "flex-end", color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.sm },
   workoutCardPressed: { opacity: 0.94 },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
-  floatingWorkout: {
+  feedCardShell: {
     backgroundColor: colors.surface,
     borderRadius: radii.lg,
-    elevation: 2,
-    shadowColor: colors.ink,
-    shadowOffset: { height: 5, width: 0 },
-    shadowOpacity: 0.055,
-    shadowRadius: 17,
+    boxShadow: elevation.e1,
     width: "94%",
   },
+  feedCardFlat: { boxShadow: "none" },
   floatingLeft: {
     alignSelf: "flex-start",
   },
@@ -838,13 +844,15 @@ const styles = StyleSheet.create({
     alignSelf: "flex-end",
   },
   feedViewport: {
+    alignSelf: "stretch",
     borderRadius: radii.md,
+    marginHorizontal: -spacing.md,
     overflow: "hidden",
-    width: "100%",
   },
   edgeToEdgeFeedViewport: { backgroundColor: colors.surfaceMuted, borderRadius: 0 },
   feedScroller: { overflow: "visible" },
-  feedContent: { paddingHorizontal: spacing.lg, paddingTop: spacing.xxl },
+  // 12pt bleed plus the feed's previous 16pt inset, so staggered cards stay put.
+  feedContent: { paddingHorizontal: spacing.md + spacing.lg, paddingTop: spacing.xxl },
   feedSlot: { minWidth: 0, overflow: "visible", paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },
   edgeFade: { height: 20, left: 0, position: "absolute", right: 0, zIndex: 10 },
   topFade: { top: 0 },

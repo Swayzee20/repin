@@ -226,7 +226,15 @@ function PaneScroll({
   pointerEvents?: "auto" | "none";
   scrollable: boolean;
 }) {
-  const frameStyle = { bottom: 0, left: frame.x, position: "absolute" as const, top: 0, width: frame.width };
+  const bleed = scrollable ? spacing.md : 0;
+  const frameStyle = {
+    bottom: 0,
+    left: frame.x,
+    marginHorizontal: -bleed,
+    position: "absolute" as const,
+    top: 0,
+    width: frame.width + bleed * 2,
+  };
   if (!scrollable) {
     return (
       <View pointerEvents={pointerEvents} style={frameStyle}>
@@ -236,7 +244,7 @@ function PaneScroll({
   }
   return (
     <ScrollView
-      contentContainerStyle={styles.paneContent}
+      contentContainerStyle={[styles.paneContent, styles.scrollBleedContent]}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       onContentSizeChange={anchor.onContentSizeChange}
       onLayout={anchor.onViewportLayout}
@@ -284,7 +292,7 @@ function CollapsedColumn({
       ref={anchor.scrollRef}
       scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
-      style={styles.fill}
+      style={[styles.fill, styles.scrollBleed]}
     >
       <SafeAreaView edges={["left", "right"]} style={styles.collapsedSafe}>
         {column === "none" ? body : <WideColumn max={column}>{body}</WideColumn>}
@@ -304,10 +312,12 @@ function CollapsedAnchor({ anchor, children }: { anchor: ScrollAnchorController;
 const styles = StyleSheet.create({
   collapsedContent: { flexGrow: 1, paddingHorizontal: spacing.xxl },
   collapsedSafe: { flexGrow: 1 },
-  collapsedScroll: { flexGrow: 1 },
+  collapsedScroll: { flexGrow: 1, paddingHorizontal: spacing.md },
   fill: { flex: 1 },
   leadingFill: { bottom: 0, left: 0, position: "absolute", top: 0 },
   paneContent: { flexGrow: 1 },
-  panes: { backgroundColor: colors.background, flex: 1 },
+  panes: { backgroundColor: colors.background, flex: 1, overflow: "hidden" },
+  scrollBleed: { marginHorizontal: -spacing.md },
+  scrollBleedContent: { paddingHorizontal: spacing.md },
   wideOuter: { alignItems: "center", width: "100%" },
 });

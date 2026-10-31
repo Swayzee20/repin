@@ -4,7 +4,7 @@ import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle 
 import { TextField } from "./components";
 import { SegmentedControl } from "./primitives";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
-import { colors, compactControlShadowStyle, fonts, spacing, type } from "./theme";
+import { colors, elevation, fonts, spacing, type } from "./theme";
 
 type DistanceUnit = "mi" | "km";
 type FunctionalResultType = "time" | "rounds" | "score";
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
   timeRow: { alignItems: "center", flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
   timePart: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
   timeField: { width: 84 },
-  elevatedInput: { ...compactControlShadowStyle },
+  elevatedInput: { boxShadow: elevation.glass },
   timeUnit: { color: colors.muted, ...type.bodySmall },
   segment: { marginTop: spacing.sm },
   inlineSegment: { alignSelf: "flex-end" },

@@ -84,34 +84,6 @@ export const size = {
   },
 } as const;
 
-export const floatingSurfaceStyle = {
-  backgroundColor: colors.surface,
-  borderColor: colors.border,
-  borderRadius: radii.lg,
-  borderWidth: 1,
-  elevation: 2,
-  shadowColor: colors.ink,
-  shadowOffset: { height: 4, width: 0 },
-  shadowOpacity: 0.12,
-  shadowRadius: 10,
-} as const;
-
-export const compactSelectorShadowStyle = {
-  elevation: 2,
-  shadowColor: colors.ink,
-  shadowOffset: { height: 2, width: 0 },
-  shadowOpacity: 0.09,
-  shadowRadius: 6,
-} as const;
-
-export const compactControlShadowStyle = {
-  elevation: 1,
-  shadowColor: colors.ink,
-  shadowOffset: { height: 1, width: 0 },
-  shadowOpacity: 0.08,
-  shadowRadius: 4,
-} as const;
-
 export const controls = {
   buttonHeight: 52,
   inputHeight: 50,

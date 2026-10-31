@@ -141,7 +141,7 @@ const styles = StyleSheet.create({
   heroCopy: { flex: 1, marginHorizontal: spacing.md }, eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.title, marginTop: spacing.xs },
   rolePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
   roleText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 11, textTransform: "capitalize" },
-  inviteCard: { backgroundColor: colors.surfaceMuted, borderColor: colors.boardBorder, marginTop: spacing.xl, padding: spacing.md }, inviteTopRow: { alignItems: "center", flexDirection: "row" }, inviteCopy: { flex: 1 },
+  inviteCard: { marginTop: spacing.xl, padding: spacing.md }, inviteTopRow: { alignItems: "center", flexDirection: "row" }, inviteCopy: { flex: 1 },
   inviteLabel: { color: colors.brandPressed, ...type.eyebrow }, inviteCode: { color: colors.ink, fontFamily: fonts.bold, fontSize: 19, letterSpacing: 2, marginTop: spacing.xs },
   inviteActions: { flexDirection: "row", gap: spacing.sm, marginLeft: spacing.md }, copyAction: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.boardBorder, borderRadius: radii.sm, borderWidth: 1, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.sm },
   copyActionText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 }, shareAction: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.sm, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.sm }, shareActionText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 13 }, actionPressed: { opacity: 0.72 }, inviteError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.sm },
