@@ -1,20 +1,22 @@
-import { Feather } from "@expo/vector-icons";
+import { Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import { SymbolView } from "expo-symbols";
 import { Platform, View } from "react-native";
 
 import { colors, size } from "./theme";
 
 const vectorIcons = {
+  camera: "camera",
   checkmark: "check",
   "chevron.down": "chevron-down",
   "chevron.left": "chevron-left",
   "chevron.right": "chevron-right",
   "chevron.up": "chevron-up",
+  "exclamationmark.circle": "alert-circle",
   plus: "plus",
   xmark: "x",
 } as const;
 
-export type IconName = keyof typeof vectorIcons;
+export type IconName = keyof typeof vectorIcons | "flame";
 
 const chevrons = {
   down: "chevron.down",
@@ -41,13 +43,15 @@ export function Icon({
     >
       {Platform.OS === "ios" ? (
         <SymbolView
-          name={name}
+          name={name === "flame" ? "flame.fill" : name}
           resizeMode="scaleAspectFit"
           size={iconSize}
           style={{ height: iconSize, width: iconSize }}
           tintColor={color}
           weight="medium"
         />
+      ) : name === "flame" ? (
+        <MaterialCommunityIcons color={color} name="fire" size={iconSize} />
       ) : (
         <Feather color={color} name={vectorIcons[name]} size={iconSize} />
       )}

@@ -3,14 +3,14 @@ import type { WorkoutFeedItem, WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useReducer, useRef, type ComponentRef, type ReactNode } from "react";
-import { Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, type TextInput } from "react-native";
+import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, type TextInput } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { isLayoutPreview } from "../../../lib/layout-preview";
 import { Button, TextField, WorkoutSummaryCard } from "../../../ui/components";
-import { Chevron } from "../../../ui/icons";
+import { DateRow, FlameRating, PhotoTile, TextArea, effortLabels, photoUploadFieldError } from "../../../ui/form-fields";
 import { RoundIconButton, roundNavButtonStyle } from "../../../ui/primitives";
 import { TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
 import { ScrollAnchor, ScrollAnchorProvider, useScrollAnchor, writeStoredScrollAnchor } from "../../../ui/scroll-anchor";
@@ -18,7 +18,6 @@ import { colors, controls, fonts, radii, spacing, type } from "../../../ui/theme
 import { WorkoutTypeGrid, WorkoutTypeSelector, workoutTypeLabels } from "../../../ui/workout-type-selector";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
-const effortLabels = ["Light work", "Felt good", "Solid work", "That was rough", "I'm cooked"];
 const postAnchorKey = "log-workout-post";
 type SelectedPhoto = { base64: string; mimeType: string; uri: string };
 type PhotoStatus = "idle" | "picking" | "uploading";
@@ -69,6 +68,7 @@ export default function LogWorkoutScreen() {
   const twoPane = mode === "twoPane";
   const occurredAt = new Date(form.occurredAt);
   const canSubmit = Boolean(form.workoutType);
+  const photoError = photoUploadFieldError(form.error);
 
   if (modeRef.current !== mode) {
     modeRef.current = mode;
@@ -209,11 +209,10 @@ export default function LogWorkoutScreen() {
 
   const captionField = (
     <ScrollAnchor id="log-caption">
-      <TextField
+      <TextArea
         accessibilityLabel="Caption"
-        containerStyle={styles.controlSpacing}
+        label="Caption"
         maxLength={2_000}
-        multiline
         onBlur={() => {
           if (blurTimer.current) clearTimeout(blurTimer.current);
           blurTimer.current = setTimeout(() => {
@@ -226,21 +225,27 @@ export default function LogWorkoutScreen() {
           if (blurTimer.current) clearTimeout(blurTimer.current);
           focusedField.current = "caption";
         }}
+        optional
         placeholder="Legs felt great today"
         ref={captionRef}
-        style={styles.captionInput}
         value={form.caption}
       />
     </ScrollAnchor>
   );
 
   const photoBlock = (
-    <PhotoField
-      onChange={() => void pickPhoto()}
-      onRemove={() => dispatch({ photo: null, type: "photo" })}
-      photo={form.photo}
-      status={form.photoStatus}
-      tile={twoPane}
+    <PhotoTile
+      busy={form.photoStatus === "picking" || form.photoStatus === "uploading"}
+      error={photoError}
+      label="Photo"
+      onAdd={() => void pickPhoto()}
+      onRemove={() => {
+        dispatch({ photo: null, type: "photo" });
+        dispatch({ error: null, type: "error" });
+      }}
+      onRetry={photoError ? () => void submitWorkout() : undefined}
+      optional
+      uri={form.photo?.uri}
     />
   );
 
@@ -262,19 +267,10 @@ export default function LogWorkoutScreen() {
 
   const effort = (
     <View style={styles.section}>
-      <FieldLabel hierarchy="primary" label="How'd it feel?" optional />
-      <View style={styles.effortRow}>{[1, 2, 3, 4, 5].map((level) => (
-        <Pressable
-          accessibilityLabel={`${level}: ${effortLabels[level - 1]}`}
-          accessibilityRole="button"
-          key={level}
-          onPress={() => dispatch({ effort: form.effort === level ? null : level, type: "effort" })}
-          style={[styles.flameButton, (form.effort ?? 0) >= level && styles.flameButtonActive, form.effort === level && styles.flameButtonSelected]}
-        >
-          <Text style={[styles.flame, (form.effort ?? 0) < level && styles.flameInactive]}>🔥</Text>
-        </Pressable>
-      ))}</View>
-      <Text style={[styles.effortLabel, !form.effort && styles.effortLabelEmpty]}>{form.effort ? effortLabels[form.effort - 1] : "Tap a flame to rate your effort"}</Text>
+      <View style={styles.labelRow}><Text style={styles.sectionTitle}>How'd it feel?</Text><Text style={styles.optional}>Optional</Text></View>
+      <View style={styles.controlSpacing}>
+        <FlameRating labels={effortLabels} onChange={(effort) => dispatch({ effort, type: "effort" })} value={form.effort} />
+      </View>
     </View>
   );
 
@@ -340,7 +336,7 @@ export default function LogWorkoutScreen() {
                   {photoBlock}
                   {captionField}
                   {preview}
-                  {form.error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{form.error}</Text></View> : null}
+                  {form.error && !photoError ? <View style={styles.errorBanner}><Text style={styles.errorText}>{form.error}</Text></View> : null}
                 </View>,
               )}
               <View style={[styles.pinnedBar, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
@@ -369,60 +365,17 @@ export default function LogWorkoutScreen() {
               {effort}
               <View style={styles.postSection}>
                 <Text style={styles.subsectionTitle}>Add to your post</Text>
-                <View style={styles.postField}>
-                  <FieldLabel label="Photo" optional />
-                  {photoBlock}
-                </View>
-                <View style={styles.postField}>
-                  <FieldLabel label="Caption" optional />
-                  {captionField}
-                </View>
+                <View style={styles.postField}>{photoBlock}</View>
+                <View style={styles.postField}>{captionField}</View>
               </View>
               <View style={styles.section}>{completed}</View>
-              {form.error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{form.error}</Text></View> : null}
+              {form.error && !photoError ? <View style={styles.errorBanner}><Text style={styles.errorText}>{form.error}</Text></View> : null}
               {submit}
             </WideColumn>
           </SafeAreaView>,
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-function PhotoField({
-  onChange,
-  onRemove,
-  photo,
-  status,
-  tile,
-}: {
-  onChange: () => void;
-  onRemove: () => void;
-  photo: SelectedPhoto | null;
-  status: PhotoStatus;
-  tile: boolean;
-}) {
-  if (photo) {
-    return (
-      <View>
-        <Image accessibilityLabel="Selected workout" source={{ uri: photo.uri }} style={tile ? styles.photoTileImage : styles.photoPreview} />
-        <View style={styles.photoActions}>
-          <Pressable accessibilityRole="button" onPress={onChange}><Text style={styles.textAction}>Change</Text></Pressable>
-          <Pressable accessibilityRole="button" onPress={onRemove}><Text style={styles.removeAction}>Remove</Text></Pressable>
-        </View>
-      </View>
-    );
-  }
-  const label = status === "picking" ? "Adding photo…" : status === "uploading" ? "Uploading photo…" : "+ Add photo";
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={status === "picking"}
-      onPress={onChange}
-      style={({ pressed }) => [tile ? styles.photoTile : styles.addPhoto, pressed && styles.pressed]}
-    >
-      <Text style={styles.addPhotoText}>{label}</Text>
-    </Pressable>
   );
 }
 
@@ -464,13 +417,7 @@ function CompletedField({
   }
   return (
     <>
-      <Pressable accessibilityRole="button" onPress={() => togglePicker("date")} style={({ pressed }) => [styles.whenRow, pressed && styles.pressed]}>
-        <Text style={styles.whenLabel}>Completed</Text>
-        <View style={styles.whenValue}>
-          <Text style={styles.whenText}>{formatFriendlyDate(occurredAt)}</Text>
-          <View style={styles.whenAction}><Chevron color={colors.brand} /></View>
-        </View>
-      </Pressable>
+      <DateRow label="Completed" onPress={() => togglePicker("date")} value={formatFriendlyDate(occurredAt)} />
       {showPicker ? (
         <View style={styles.pickerWrap}>
           <DateTimePicker mode={Platform.OS === "ios" ? "datetime" : pickerMode} onChange={onNativeChange} value={occurredAt} />
@@ -479,10 +426,6 @@ function CompletedField({
       ) : null}
     </>
   );
-}
-
-function FieldLabel({ hierarchy = "field", label, optional = false }: { hierarchy?: "field" | "primary"; label: string; optional?: boolean }) {
-  return <View style={styles.labelRow}><Text style={hierarchy === "primary" ? styles.sectionTitle : styles.fieldLabel}>{label}</Text>{optional ? <Text style={styles.optional}>Optional</Text> : null}</View>;
 }
 
 function createLogFormState(preview: boolean): LogFormState {
@@ -587,34 +530,10 @@ const styles = StyleSheet.create({
   postSection: { marginTop: spacing.xxxl },
   sectionTitle: { color: colors.ink, ...type.heading },
   subsectionTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 },
-  fieldLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
   labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm },
-  optional: { color: colors.muted, ...type.bodySmall },
+  optional: { color: colors.muted, ...type.label, fontFamily: fonts.medium },
   controlSpacing: { marginTop: spacing.sm },
-  pressed: { opacity: 0.76 },
-  effortRow: { flexDirection: "row", gap: spacing.xs, marginTop: spacing.xs },
-  flameButton: { alignItems: "center", borderColor: "transparent", borderRadius: radii.md, borderWidth: 1, height: 48, justifyContent: "center", width: 48 },
-  flameButtonActive: { backgroundColor: colors.surfaceMuted },
-  flameButtonSelected: { borderColor: colors.brand },
-  flame: { fontSize: 25 },
-  flameInactive: { opacity: 0.18 },
-  effortLabel: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.xs },
-  effortLabelEmpty: { color: colors.muted },
-  captionInput: { maxHeight: 144, minHeight: 88, textAlignVertical: "top" },
-  postField: { marginTop: spacing.md },
-  addPhoto: { alignItems: "center", alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, justifyContent: "center", marginTop: spacing.sm, minHeight: 44, paddingHorizontal: spacing.lg },
-  photoTile: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, justifyContent: "center", marginTop: spacing.md, minHeight: spacing.huge * 3, paddingHorizontal: spacing.lg },
-  addPhotoText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14 },
-  photoPreview: { borderRadius: radii.md, height: 132, marginTop: spacing.sm, width: 176 },
-  photoTileImage: { borderRadius: radii.md, height: spacing.huge * 3, marginTop: spacing.md, width: "100%" },
-  photoActions: { flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
-  textAction: { color: colors.brand, ...type.label },
-  removeAction: { color: colors.muted, ...type.label },
-  whenRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", justifyContent: "space-between", minHeight: 52 },
-  whenLabel: { color: colors.ink, ...type.heading },
-  whenValue: { alignItems: "center", flexDirection: "row", flexShrink: 1, marginLeft: spacing.md },
-  whenText: { color: colors.muted, ...type.bodySmall },
-  whenAction: { marginLeft: spacing.sm },
+  postField: { marginTop: spacing.lg },
   pickerWrap: { alignItems: "flex-end", marginTop: spacing.sm },
   pickerDone: { color: colors.brand, ...type.label, padding: spacing.md },
   webDateRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
