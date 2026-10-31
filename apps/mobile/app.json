@@ -60,7 +60,7 @@
     },
     "extra": {
       "router": {},
-      "reservedRegions": false,
+      "reservedRegions": true,
       "eas": {
         "projectId": "e88e4ec2-8133-4ef9-9909-40dd1f6c9f3b"
       }

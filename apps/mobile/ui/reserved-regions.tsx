@@ -1,10 +1,10 @@
 import Constants, { ExecutionEnvironment } from "expo-constants";
-import { Component, createContext, useContext, type ReactNode } from "react";
+import { Component, createContext, memo, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { UIManager, View, type StyleProp, type ViewStyle } from "react-native";
 
+import { createReservedRegionApplier, reservedRegionsEqual } from "./reserved-region-updates";
 import {
-  reservedRegionsEnabled,
-  reservedRegionsViewAvailable,
+  shouldMountReservedRegions,
   type ReservedRegion,
 } from "./reserved-regions-availability";
 
@@ -26,11 +26,8 @@ export function isReservedRegionsNativeAvailable(): boolean {
   if (nativeFailed) return false;
   if (nativeAvailable !== null) return nativeAvailable;
   const extra = Constants.expoConfig?.extra as { reservedRegions?: boolean } | undefined;
-  if (!reservedRegionsEnabled(extra)) {
-    nativeAvailable = false;
-    return false;
-  }
-  nativeAvailable = reservedRegionsViewAvailable({
+  nativeAvailable = shouldMountReservedRegions({
+    extra,
     executionEnvironment: Constants.executionEnvironment ?? ExecutionEnvironment.Bare,
     hasViewManager: (name) => {
       const manager = UIManager as { hasViewManagerConfig?: (viewName: string) => boolean } | undefined;
@@ -48,9 +45,9 @@ export function isReservedRegionsNativeAvailable(): boolean {
 function loadReservedRegions(): ReservedRegionsModule | null {
   if (!isReservedRegionsNativeAvailable()) return null;
   try {
-    // Evaluated only after the kill switch and view-manager check.
-    // The 0.2.0 native view flushSyncs its first measurement from layoutSubviews
-    // and installs a hinge observer. Expo Go never reaches this require.
+    // Evaluated only after the kill switch, Expo Go check, and view-manager check.
+    // The patched native view emits regions on a later main-queue turn. This module
+    // still publishes them on the next frame so layout cannot setState inside UIKit.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require("react-native-reserved-regions") as ReservedRegionsModule;
   } catch {
@@ -108,22 +105,56 @@ export function ReservedRegionsProvider({
   );
 }
 
-function NativeRegionsBridge({
+const NativeRegionsBridge = memo(function NativeRegionsBridge({
   children,
   useNativeRegions,
 }: {
   children: ReactNode;
   useNativeRegions: () => readonly ReservedRegion[];
 }) {
-  let regions = emptyRegions;
-  try {
-    const next = useNativeRegions();
-    if (Array.isArray(next)) regions = next;
-  } catch {
-    nativeFailed = true;
-    regions = emptyRegions;
-  }
-  return <RegionsContext.Provider value={regions}>{children}</RegionsContext.Provider>;
+  const [regions, setRegions] = useState<readonly ReservedRegion[]>(emptyRegions);
+  const applierRef = useRef(createReservedRegionApplier());
+  const publishedRef = useRef<readonly ReservedRegion[]>(emptyRegions);
+  const activeRef = useRef(true);
+
+  useEffect(() => {
+    activeRef.current = true;
+    return () => {
+      activeRef.current = false;
+    };
+  }, []);
+
+  const publish = useCallback((incoming: readonly ReservedRegion[]) => {
+    if (!applierRef.current.push(incoming)) return;
+    requestAnimationFrame(() => {
+      const next = applierRef.current.flush();
+      if (!activeRef.current || reservedRegionsEqual(publishedRef.current, next)) return;
+      publishedRef.current = next;
+      setRegions(next);
+    });
+  }, []);
+
+  return (
+    <RegionsContext.Provider value={regions}>
+      <NativeRegionSnapshot onRegions={publish} useNativeRegions={useNativeRegions} />
+      {children}
+    </RegionsContext.Provider>
+  );
+});
+
+function NativeRegionSnapshot({
+  onRegions,
+  useNativeRegions,
+}: {
+  onRegions: (regions: readonly ReservedRegion[]) => void;
+  useNativeRegions: () => readonly ReservedRegion[];
+}) {
+  const next = useNativeRegions();
+  const incoming = Array.isArray(next) ? next : emptyRegions;
+  useEffect(() => {
+    onRegions(incoming);
+  }, [incoming, onRegions]);
+  return null;
 }
 
 export function useReservedRegions(): readonly ReservedRegion[] {
