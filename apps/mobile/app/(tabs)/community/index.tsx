@@ -35,7 +35,7 @@ import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { CommunityDatePicker } from "../../../ui/community-date-picker";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
-import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
+import { colors, elevation, fonts, radii, spacing, type } from "../../../ui/theme";
 import { holdComposerFocus, releaseComposerFocus, WorkoutDetailView, type WorkoutDetailFixture } from "../../../ui/workout-detail";
 import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
 
@@ -440,9 +440,9 @@ export default function CommunityTabScreen() {
                         style={styles.paneCardPress}
                       >
                         <WorkoutSummaryCard
+                          selected={selected}
                           showCommentCount
                           showReactionSummary
-                          style={selected ? styles.selectedCard : undefined}
                           variant="full"
                           workout={workout}
                         />
@@ -857,7 +857,7 @@ function DeleteWorkoutModal({
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 },
+  safeArea: { backgroundColor: colors.background, flex: 1, overflow: "hidden" },
   flex: { flex: 1 },
   content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
@@ -867,7 +867,7 @@ const styles = StyleSheet.create({
   selector: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", minHeight: 44, paddingRight: spacing.sm },
   groupName: { color: colors.ink, flexShrink: 1, ...type.screenTitle },
   chevron: { marginLeft: spacing.xs },
-  groupDrawer: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, elevation: 4, left: 0, maxWidth: 280, minWidth: 220, padding: spacing.xs, position: "absolute", shadowColor: colors.ink, shadowOffset: { height: 3, width: 0 }, shadowOpacity: 0.08, shadowRadius: 8, top: "100%", zIndex: 21 },
+  groupDrawer: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, boxShadow: elevation.e2, left: 0, maxWidth: 280, minWidth: 220, padding: spacing.xs, position: "absolute", top: "100%", zIndex: 21 },
   menuAction: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md },
   menuActionText: { color: colors.ink, flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
   menuHeading: { alignItems: "center", flexDirection: "row", gap: spacing.xs, minHeight: 36, paddingHorizontal: spacing.sm },
@@ -889,7 +889,7 @@ const styles = StyleSheet.create({
   historicalEmptyText: { color: colors.muted, ...type.body, textAlign: "center" },
   deleteOverlay: { flex: 1 },
   deleteBackdrop: { backgroundColor: colors.overlay },
-  deletePanel: { backgroundColor: colors.surface, borderRadius: radii.lg, padding: spacing.xxl, width: "100%" },
+  deletePanel: { backgroundColor: colors.surface, borderRadius: radii.lg, boxShadow: elevation.e3, padding: spacing.xxl, width: "100%" },
   deleteTitle: { color: colors.ink, ...type.title },
   deleteMessage: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
   deleteChoice: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, minHeight: 72, paddingVertical: spacing.md },
@@ -904,7 +904,6 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.72 },
   paneColumn: { flexGrow: 1, paddingBottom: spacing.xxl, paddingTop: spacing.lg },
   paneCardPress: { marginTop: spacing.md },
-  selectedCard: { borderColor: colors.brand, borderRadius: radii.lg, borderWidth: 2 },
   paneEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
   panePostHeader: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.lg },
   panePostTitle: { color: colors.ink, ...type.heading },

@@ -51,6 +51,7 @@ const styles = StyleSheet.create({
     backgroundColor: colors.surface,
     borderTopColor: colors.border,
     borderTopWidth: StyleSheet.hairlineWidth,
+    // Cancels React Navigation's default elevation: 8. boxShadow would stack with that library elevation.
     elevation: 0,
     paddingTop: spacing.xs,
   },

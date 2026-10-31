@@ -28,7 +28,7 @@ import {
   type IntervalValidationIssue,
   validateIntervals,
 } from "../../../lib/detailed-run-results";
-import { BackButton, Button, TextField } from "../../../ui/components";
+import { BackButton, Button, Card, TextField } from "../../../ui/components";
 import { WideColumn } from "../../../ui/layout";
 import {
   buildDetailedMovements,
@@ -49,7 +49,7 @@ import {
   validateQuickLogResults,
   WorkoutMetricFields,
 } from "../../../ui/quick-log-results";
-import { colors, floatingSurfaceStyle, fonts, radii, spacing, type } from "../../../ui/theme";
+import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
 import { WorkoutTypeSelector, workoutTypeLabels } from "../../../ui/workout-type-selector";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -346,7 +346,7 @@ export default function DetailedWorkoutScreen() {
         >
           <SafeAreaView edges={["left", "right"]}>
           <WideColumn>
-          <View onLayout={(event) => { workoutCardY.current = event.nativeEvent.layout.y; }} style={styles.formCard}>
+          <Card onLayout={(event) => { workoutCardY.current = event.nativeEvent.layout.y; }} style={styles.formCard}>
             <Text style={styles.sectionTitle}>What&apos;d you do?</Text>
             <WorkoutTypeSelector compact elevated onChange={handleWorkoutTypeChange} value={workoutType} />
 
@@ -395,9 +395,9 @@ export default function DetailedWorkoutScreen() {
               <FieldLabel label="Workout name" optional />
               <TextField compact containerStyle={styles.controlSpacing} maxLength={120} onChangeText={setName} placeholder="Push day, Murph, morning run..." returnKeyType="next" value={name} />
             </View>
-          </View>
+          </Card>
 
-          <View style={styles.formCard}>
+          <Card style={styles.formCard}>
             <FieldLabel hierarchy="primary" label="How'd it feel?" optional />
             <View style={styles.effortRow}>
               {[1, 2, 3, 4, 5].map((level) => (
@@ -413,9 +413,9 @@ export default function DetailedWorkoutScreen() {
               ))}
             </View>
             <Text style={[styles.effortLabel, !effort && styles.effortLabelEmpty]}>{effort ? effortLabels[effort - 1] : "Tap a flame to rate your effort"}</Text>
-          </View>
+          </Card>
 
-          <View style={styles.formCard}>
+          <Card style={styles.formCard}>
             <Text style={styles.subsectionTitle}>Add to your post</Text>
             <View style={styles.postField}>
               <FieldLabel label="Photo" optional />
@@ -432,9 +432,9 @@ export default function DetailedWorkoutScreen() {
               <FieldLabel label="Caption" optional />
               <TextField containerStyle={styles.controlSpacing} maxLength={2_000} multiline onChangeText={setCaption} placeholder="Legs felt great today" style={styles.captionInput} value={caption} />
             </View>
-          </View>
+          </Card>
 
-          <View style={[styles.formCard, styles.completedCard]}>
+          <Card style={[styles.formCard, styles.completedCard]}>
             {Platform.OS === "web" ? (
               <>
                 <Text style={styles.sectionTitle}>Completed</Text>
@@ -452,7 +452,7 @@ export default function DetailedWorkoutScreen() {
                 {showPicker ? <View style={styles.pickerWrap}><DateTimePicker mode={Platform.OS === "ios" ? "datetime" : pickerMode} onChange={handleNativeDateChange} value={occurredAt} />{Platform.OS === "ios" ? <Pressable accessibilityRole="button" onPress={() => setShowPicker(false)}><Text style={styles.pickerDone}>Done</Text></Pressable> : null}</View> : null}
               </>
             )}
-          </View>
+          </Card>
 
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
           <Button disabled={loadingExisting || !workoutType || (!editing && workoutType === "run" && !runSubtype)} loading={submitting || loadingExisting} onPress={() => void submitWorkout()} style={styles.submitButton}>{editing ? "Save changes" : "Log workout"}</Button>
@@ -507,10 +507,10 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   keyboardAvoidingView: { backgroundColor: colors.surface, flex: 1 },
   header: { backgroundColor: colors.surface, paddingBottom: spacing.xxl, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
-  headerDivider: { alignSelf: "flex-start", backgroundColor: colors.overlayLine, height: 1, marginLeft: spacing.xxl, shadowColor: colors.ink, shadowOffset: { height: 1, width: 0 }, shadowOpacity: 0.16, shadowRadius: 1, width: "86%" },
+  headerDivider: { alignSelf: "flex-start", backgroundColor: colors.overlayLine, height: 1, marginLeft: spacing.xxl, width: "86%" },
   scrollView: { backgroundColor: colors.surface, flex: 1 },
   container: { paddingBottom: 144, paddingHorizontal: spacing.md, paddingTop: spacing.xxl },
-  formCard: { ...floatingSurfaceStyle, marginBottom: spacing.lg, padding: spacing.xxl },
+  formCard: { marginBottom: spacing.lg, padding: spacing.xxl },
   completedCard: { paddingVertical: spacing.lg },
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
