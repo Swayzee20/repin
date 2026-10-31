@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 
-import { BackButton, Screen, StateCard } from "../../ui/components";
+import { Screen, StateCard } from "../../ui/components";
+import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { WorkoutDetailView } from "../../ui/workout-detail";
 
 export default function WorkoutDetailScreen() {
@@ -14,7 +15,7 @@ export default function WorkoutDetailScreen() {
 
   return (
     <Screen>
-      <BackButton label="Community" onPress={() => router.back()} />
+      <RoundIconButton accessibilityLabel="Community" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
       {groupId && sessionId ? (
         <WorkoutDetailView groupId={groupId} refreshOnFocus sessionId={sessionId} />
       ) : (

@@ -17,9 +17,11 @@ import {
   type RecoverySessionResult,
 } from "../lib/password-reset";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { BackButton, Button, LoadingState, StateCard, TextField } from "../ui/components";
+import { Button, LoadingState, StateCard, TextField } from "../ui/components";
+import { Icon } from "../ui/icons";
+import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
 import { WideColumn } from "../ui/layout";
-import { colors, fonts, radii, spacing, type } from "../ui/theme";
+import { colors, radii, size, spacing, type } from "../ui/theme";
 
 type Phase = "checking" | "invalid" | "form" | "success";
 
@@ -184,9 +186,11 @@ export default function ResetPasswordScreen() {
         <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
           <WideColumn max="form">
-          <BackButton
-            label="Sign In"
+          <RoundIconButton
+            accessibilityLabel="Sign In"
+            kind="back"
             onPress={() => void returnToSignIn(phase === "form" && sessionEstablishedFromLink)}
+            style={roundNavButtonStyle}
           />
           <Text style={styles.eyebrow}>ACCOUNT</Text>
           <Text style={styles.title}>Reset password</Text>
@@ -210,7 +214,7 @@ export default function ResetPasswordScreen() {
                 value={email}
               />
               {sent ? <Text style={styles.successText}>{PASSWORD_RESET_SENT_MESSAGE}</Text> : null}
-              <Button disabled={!email.trim()} loading={sending} onPress={() => void sendAnotherLink()}>Send a new link</Button>
+              <Button disabled={!email.trim()} disabledReason={email.trim() ? undefined : "Enter your email."} loading={sending} loadingLabel="Sending link" onPress={() => void sendAnotherLink()}>Send a new link</Button>
             </View>
           ) : null}
 
@@ -239,9 +243,10 @@ export default function ResetPasswordScreen() {
                 value={confirmPassword}
               />
               {banner ? <View style={styles.errorBanner}><Text style={styles.errorText}>{banner}</Text></View> : null}
-              <Button disabled={!password || !confirmPassword} loading={submitting} onPress={() => void updatePassword()}>Update password</Button>
+              <Button disabled={!password || !confirmPassword} disabledReason={!password || !confirmPassword ? "Enter and confirm your new password." : undefined} loading={submitting} loadingLabel="Updating" onPress={() => void updatePassword()}>Update password</Button>
               <Button
                 disabled={submitting}
+                disabledReason={submitting ? "Wait until the password update finishes." : undefined}
                 onPress={() => void returnToSignIn(sessionEstablishedFromLink)}
                 variant="secondary"
               >
@@ -252,7 +257,7 @@ export default function ResetPasswordScreen() {
 
           {phase === "success" ? (
             <View style={styles.sent}>
-              <View style={styles.confirmationIcon}><Text style={styles.confirmationGlyph}>✓</Text></View>
+              <View style={styles.confirmationIcon}><Icon color={colors.success} name="checkmark" size={size.icon.md} /></View>
               <Text style={styles.sentCopy}>Your password has been updated.</Text>
               <Button onPress={() => void returnToSignIn(false)}>
                 {signedIn ? "Continue" : "Back to Sign In"}
@@ -280,7 +285,6 @@ const styles = StyleSheet.create({
   errorText: { color: colors.danger, ...type.bodySmall },
   successText: { color: colors.success, ...type.bodySmall },
   sent: { gap: spacing.lg, marginTop: spacing.xxl },
-  confirmationIcon: { alignItems: "center", backgroundColor: colors.successSoft, borderRadius: radii.pill, height: 64, justifyContent: "center", width: 64 },
-  confirmationGlyph: { color: colors.success, fontFamily: fonts.bold, fontSize: 28 },
+  confirmationIcon: { alignItems: "center", backgroundColor: colors.successSoft, borderRadius: radii.pill, height: size.avatars.lg, justifyContent: "center", width: size.avatars.lg },
   sentCopy: { color: colors.inkSoft, ...type.body },
 });

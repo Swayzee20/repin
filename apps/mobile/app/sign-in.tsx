@@ -121,7 +121,7 @@ export default function SignInScreen() {
           <Text style={styles.forgotPasswordText}>Forgot password?</Text>
         </Pressable>
         {authMessage ? <Text style={styles.error}>{authMessage}</Text> : null}
-        <Button disabled={!email || !password} loading={submitting} onPress={() => void signIn()} style={styles.authButton}>Sign in</Button>
+        <Button disabled={!email || !password} disabledReason={!email && !password ? "Enter your email and password." : !email ? "Enter your email." : !password ? "Enter your password." : undefined} loading={submitting} loadingLabel="Signing in" onPress={() => void signIn()} style={styles.authButton}>Sign in</Button>
       </View>
       <View style={styles.signupPrompt}>
         <Text style={styles.signupCopy}>Don’t have an account?</Text>

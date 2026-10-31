@@ -1,9 +1,10 @@
 import type { QuickLogMetricInput, WorkoutDetailMetric, WorkoutType } from "@repin/types";
-import { Pressable, StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type TextStyle, type ViewStyle } from "react-native";
 
 import { TextField } from "./components";
+import { SegmentedControl } from "./primitives";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
-import { colors, compactControlShadowStyle, fonts, radii, spacing, type } from "./theme";
+import { colors, compactControlShadowStyle, fonts, spacing, type } from "./theme";
 
 type DistanceUnit = "mi" | "km";
 type FunctionalResultType = "time" | "rounds" | "score";
@@ -68,7 +69,16 @@ export function WorkoutMetricFields({
           <FieldLabel label="Distance" />
           <View style={styles.metricRow}>
             <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => update({ distance })} placeholder="3.2" value={value.distance} />
-            <ChoiceToggle<DistanceUnit> onChange={(distanceUnit) => distanceUnit && update({ distanceUnit })} options={["mi", "km"]} value={value.distanceUnit} />
+            <SegmentedControl<DistanceUnit>
+              accessibilityLabel="Distance unit"
+              onChange={(distanceUnit) => {
+                if (distanceUnit) update({ distanceUnit });
+              }}
+              options={[{ label: "Mi", value: "mi" }, { label: "Km", value: "km" }]}
+              size="sm"
+              style={styles.inlineSegment}
+              value={value.distanceUnit}
+            />
           </View>
         </View>
       ) : null}
@@ -76,10 +86,13 @@ export function WorkoutMetricFields({
       {workoutType === "functional_fitness" ? (
         <View style={styles.section}>
           <FieldLabel label="Result" />
-          <ChoiceToggle<FunctionalResultType>
+          <SegmentedControl<FunctionalResultType>
+            accessibilityLabel="Result"
             allowClear
             onChange={(functionalResultType) => update({ functionalResultType })}
-            options={["time", "rounds", "score"]}
+            options={[{ label: "Time", value: "time" }, { label: "Rounds", value: "rounds" }, { label: "Score", value: "score" }]}
+            size="sm"
+            style={styles.segment}
             value={value.functionalResultType}
           />
           {value.functionalResultType === "rounds" ? (
@@ -103,39 +116,6 @@ export function WorkoutMetricFields({
         </View>
       ) : null}
     </>
-  );
-}
-
-function ChoiceToggle<T extends string>({
-  allowClear = false,
-  onChange,
-  options,
-  value,
-}: {
-  allowClear?: boolean;
-  onChange: (value: T | null) => void;
-  options: readonly T[];
-  value: T | null;
-}) {
-  return (
-    <View style={styles.toggle}>
-      {options.map((option) => (
-        <Pressable
-          accessibilityRole="button"
-          key={option}
-          onPress={() => {
-            if (allowClear && value === option) {
-              onChange(null);
-            } else {
-              onChange(option);
-            }
-          }}
-          style={[styles.toggleOption, value === option && styles.toggleOptionSelected]}
-        >
-          <Text style={[styles.toggleText, value === option && styles.toggleTextSelected]}>{capitalize(option)}</Text>
-        </Pressable>
-      ))}
-    </View>
   );
 }
 
@@ -224,10 +204,6 @@ export function buildQuickLogResults(value: QuickLogResultsDraft, workoutType: W
   return { metrics, durationSeconds };
 }
 
-function capitalize(value: string) {
-  return `${value.charAt(0).toUpperCase()}${value.slice(1)}`;
-}
-
 const styles = StyleSheet.create({
   section: { marginTop: spacing.lg },
   sectionTitle: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
@@ -241,9 +217,6 @@ const styles = StyleSheet.create({
   timeField: { width: 84 },
   elevatedInput: { ...compactControlShadowStyle },
   timeUnit: { color: colors.muted, ...type.bodySmall },
-  toggle: { alignSelf: "flex-start", backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexDirection: "row", marginTop: spacing.sm, padding: 3 },
-  toggleOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 36, minWidth: 48, paddingHorizontal: spacing.md },
-  toggleOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
-  toggleText: { color: colors.muted, ...type.label },
-  toggleTextSelected: { color: colors.ink },
+  segment: { marginTop: spacing.sm },
+  inlineSegment: { alignSelf: "flex-end" },
 });

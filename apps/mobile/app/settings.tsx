@@ -4,7 +4,8 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../lib/supabase";
-import { BackButton, Button, TextField } from "../ui/components";
+import { Button, TextField } from "../ui/components";
+import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
 import { WideColumn } from "../ui/layout";
 import { colors, radii, spacing, type } from "../ui/theme";
 
@@ -63,11 +64,11 @@ export default function SettingsScreen() {
       <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
         <SafeAreaView edges={["left", "right"]}>
         <WideColumn max="form">
-        <BackButton onPress={() => router.back()} />
+        <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
         <Text style={styles.title}>Settings</Text>
         <Text style={styles.intro}>Manage your repin account.</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button loading={signingOut} onPress={() => void signOut()} variant="secondary">Sign out</Button>
+        <Button loading={signingOut} loadingLabel="Signing out" onPress={() => void signOut()} variant="secondary">Sign out</Button>
 
         <View style={styles.deleteSection}>
           <Text style={styles.deleteTitle}>Delete account</Text>
@@ -93,7 +94,9 @@ export default function SettingsScreen() {
               />
               <Button
                 disabled={confirmation.trim() !== "DELETE"}
+                disabledReason={confirmation.trim() === "DELETE" ? undefined : "Type DELETE to confirm."}
                 loading={deleting}
+                loadingLabel="Deleting"
                 onPress={() => void deleteAccount()}
                 variant="danger"
               >
@@ -101,6 +104,7 @@ export default function SettingsScreen() {
               </Button>
               <Button
                 disabled={deleting}
+                disabledReason={deleting ? "Wait until deletion finishes." : undefined}
                 onPress={() => {
                   setConfirmingDelete(false);
                   setConfirmation("");

@@ -9,7 +9,8 @@ import { WideColumn } from "../../ui/layout";
 
 import { invitePath, normalizeInviteCode } from "../../lib/invite-route";
 import { supabase } from "../../lib/supabase";
-import { BackButton, Button, LoadingState, StateCard } from "../../ui/components";
+import { Button, LoadingState, StateCard } from "../../ui/components";
+import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(
@@ -145,7 +146,7 @@ export default function GroupInviteScreen() {
   if (invalidInvite) {
     return (
       <InviteShell>
-        <BackButton label="Home" onPress={() => router.replace("/")} />
+        <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
         <StateCard
           actionLabel="Go to Home"
           message="This invite code isn’t valid. Ask the group for a new code and try again."
@@ -160,7 +161,7 @@ export default function GroupInviteScreen() {
     const redirect = invitePath(inviteCode);
     return (
       <InviteShell>
-        <BackButton label="Home" onPress={() => router.replace("/")} />
+        <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
         <Text style={styles.eyebrow}>YOU’RE INVITED</Text>
         <Text style={styles.title}>Join your repin crew</Text>
         <Text style={styles.intro}>
@@ -194,7 +195,7 @@ export default function GroupInviteScreen() {
   if (error && !preview) {
     return (
       <InviteShell>
-        <BackButton label="Home" onPress={() => router.replace("/")} />
+        <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
         <StateCard
           actionLabel="Try again"
           message={error}
@@ -209,7 +210,7 @@ export default function GroupInviteScreen() {
 
   return (
     <InviteShell>
-      <BackButton label="Home" onPress={() => router.replace("/")} />
+      <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.replace("/")} style={roundNavButtonStyle} />
       <Text style={styles.eyebrow}>GROUP INVITE</Text>
       <Text style={styles.title}>{preview.name}</Text>
       <Text style={styles.intro}>
@@ -233,12 +234,12 @@ export default function GroupInviteScreen() {
             <Button onPress={() => router.replace(`/groups/${preview.id}`)}>
               Continue to Group
             </Button>
-            <Button onPress={() => router.replace("/")} variant="quiet">
+            <Button onPress={() => router.replace("/")} variant="secondary">
               Go to Home
             </Button>
           </>
         ) : (
-          <Button loading={joining} onPress={() => void joinGroup()}>
+          <Button loading={joining} loadingLabel="Joining" onPress={() => void joinGroup()}>
             Join Group
           </Button>
         )}
