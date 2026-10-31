@@ -1,8 +1,7 @@
 import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { Platform, StyleSheet, Text, View } from "react-native";
 
 import {
   clearRecoveryAddressBar,
@@ -17,16 +16,15 @@ import {
   type RecoverySessionResult,
 } from "../lib/password-reset";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { AuthScreen, AuthSuccessMark, FormError, usePaneFieldFocus } from "../ui/auth-screen";
 import { Button, LoadingState, StateCard, TextField } from "../ui/components";
-import { Icon } from "../ui/icons";
-import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
-import { WideColumn } from "../ui/layout";
-import { colors, radii, size, spacing, type } from "../ui/theme";
+import { colors, spacing, type } from "../ui/theme";
 
 type Phase = "checking" | "invalid" | "form" | "success";
 
 export default function ResetPasswordScreen() {
   const router = useRouter();
+  const fieldProps = usePaneFieldFocus();
   const params = useLocalSearchParams<{
     access_token?: string | string[];
     code?: string | string[];
@@ -165,126 +163,127 @@ export default function ResetPasswordScreen() {
     setBanner(null);
   };
 
-  if (!isSupabaseConfigured || !supabase) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <StateCard message="Add the Expo public Supabase URL and publishable key before resetting a password." title="Supabase is not configured" />
-          <Button onPress={() => router.replace("/sign-in")} variant="secondary">Back to Sign In</Button>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
   const sessionEstablishedFromLink = Boolean(
     established?.ok && established.established === "link",
   );
+  const onBack = () => void returnToSignIn(phase === "form" && sessionEstablishedFromLink);
+
+  if (!isSupabaseConfigured || !supabase) {
+    return (
+      <AuthScreen backLabel="Sign In" onBack={() => router.replace("/sign-in")}>
+        <StateCard
+          actionLabel="Back to Sign In"
+          message="Add the Expo public Supabase URL and publishable key before resetting a password."
+          onAction={() => router.replace("/sign-in")}
+          title="Supabase is not configured"
+        />
+      </AuthScreen>
+    );
+  }
+
+  let body = <LoadingState message="Checking your reset link…" />;
+  if (phase === "invalid") {
+    body = (
+      <View style={styles.form}>
+        <FormError message={banner ?? "This reset link is invalid or has expired."} />
+        <Text style={styles.intro}>Send a new link to your email.</Text>
+        <TextField
+          autoCapitalize="none"
+          autoComplete="email"
+          inputMode="email"
+          label="Email"
+          onChangeText={setEmail}
+          placeholder="you@example.com"
+          textContentType="emailAddress"
+          value={email}
+          {...fieldProps("email")}
+        />
+        {sent ? <Text style={styles.successText}>{PASSWORD_RESET_SENT_MESSAGE}</Text> : null}
+        <Button
+          disabled={!email.trim()}
+          disabledReason={email.trim() ? undefined : "Enter your email."}
+          loading={sending}
+          loadingLabel="Sending link"
+          onPress={() => void sendAnotherLink()}
+        >
+          Send a new link
+        </Button>
+      </View>
+    );
+  } else if (phase === "form") {
+    body = (
+      <View style={styles.form}>
+        <Text style={styles.intro}>Choose a new password for your account.</Text>
+        <TextField
+          autoCapitalize="none"
+          autoComplete="new-password"
+          label="New password"
+          onChangeText={setPassword}
+          placeholder="At least 8 characters"
+          secureTextEntry
+          textContentType="newPassword"
+          value={password}
+          {...fieldProps("password")}
+        />
+        <TextField
+          autoCapitalize="none"
+          autoComplete="new-password"
+          label="Confirm password"
+          onChangeText={setConfirmPassword}
+          onSubmitEditing={() => void updatePassword()}
+          placeholder="Enter it again"
+          secureTextEntry
+          textContentType="newPassword"
+          value={confirmPassword}
+          {...fieldProps("confirm")}
+        />
+        {banner ? <FormError message={banner} /> : null}
+        <Button
+          disabled={!password || !confirmPassword}
+          disabledReason={!password || !confirmPassword ? "Enter and confirm your new password." : undefined}
+          loading={submitting}
+          loadingLabel="Updating"
+          onPress={() => void updatePassword()}
+        >
+          Update password
+        </Button>
+        <Button
+          disabled={submitting}
+          disabledReason={submitting ? "Wait until the password update finishes." : undefined}
+          onPress={() => void returnToSignIn(sessionEstablishedFromLink)}
+          variant="secondary"
+        >
+          Cancel
+        </Button>
+      </View>
+    );
+  } else if (phase === "success") {
+    body = (
+      <View style={styles.sent}>
+        <AuthSuccessMark />
+        <Text style={styles.sentCopy}>Your password has been updated.</Text>
+        <Button onPress={() => void returnToSignIn(false)}>
+          {signedIn ? "Continue" : "Back to Sign In"}
+        </Button>
+      </View>
+    );
+  }
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
-          <SafeAreaView edges={["left", "right"]} style={styles.flex}>
-          <WideColumn max="form">
-          <RoundIconButton
-            accessibilityLabel="Sign In"
-            kind="back"
-            onPress={() => void returnToSignIn(phase === "form" && sessionEstablishedFromLink)}
-            style={roundNavButtonStyle}
-          />
-          <Text style={styles.eyebrow}>ACCOUNT</Text>
-          <Text style={styles.title}>Reset password</Text>
-
-          {phase === "checking" ? <LoadingState message="Checking your reset link…" /> : null}
-
-          {phase === "invalid" ? (
-            <View style={styles.form}>
-              <View style={styles.errorBanner}>
-                <Text style={styles.errorText}>{banner ?? "This reset link is invalid or has expired."}</Text>
-              </View>
-              <Text style={styles.intro}>Send a new link to your email.</Text>
-              <TextField
-                autoCapitalize="none"
-                autoComplete="email"
-                inputMode="email"
-                label="Email"
-                onChangeText={setEmail}
-                placeholder="you@example.com"
-                textContentType="emailAddress"
-                value={email}
-              />
-              {sent ? <Text style={styles.successText}>{PASSWORD_RESET_SENT_MESSAGE}</Text> : null}
-              <Button disabled={!email.trim()} disabledReason={email.trim() ? undefined : "Enter your email."} loading={sending} loadingLabel="Sending link" onPress={() => void sendAnotherLink()}>Send a new link</Button>
-            </View>
-          ) : null}
-
-          {phase === "form" ? (
-            <View style={styles.form}>
-              <Text style={styles.intro}>Choose a new password for your account.</Text>
-              <TextField
-                autoCapitalize="none"
-                autoComplete="new-password"
-                label="New password"
-                onChangeText={setPassword}
-                placeholder="At least 8 characters"
-                secureTextEntry
-                textContentType="newPassword"
-                value={password}
-              />
-              <TextField
-                autoCapitalize="none"
-                autoComplete="new-password"
-                label="Confirm password"
-                onChangeText={setConfirmPassword}
-                onSubmitEditing={() => void updatePassword()}
-                placeholder="Enter it again"
-                secureTextEntry
-                textContentType="newPassword"
-                value={confirmPassword}
-              />
-              {banner ? <View style={styles.errorBanner}><Text style={styles.errorText}>{banner}</Text></View> : null}
-              <Button disabled={!password || !confirmPassword} disabledReason={!password || !confirmPassword ? "Enter and confirm your new password." : undefined} loading={submitting} loadingLabel="Updating" onPress={() => void updatePassword()}>Update password</Button>
-              <Button
-                disabled={submitting}
-                disabledReason={submitting ? "Wait until the password update finishes." : undefined}
-                onPress={() => void returnToSignIn(sessionEstablishedFromLink)}
-                variant="secondary"
-              >
-                Cancel
-              </Button>
-            </View>
-          ) : null}
-
-          {phase === "success" ? (
-            <View style={styles.sent}>
-              <View style={styles.confirmationIcon}><Icon color={colors.success} name="checkmark" size={size.icon.md} /></View>
-              <Text style={styles.sentCopy}>Your password has been updated.</Text>
-              <Button onPress={() => void returnToSignIn(false)}>
-                {signedIn ? "Continue" : "Back to Sign In"}
-              </Button>
-            </View>
-          ) : null}
-          </WideColumn>
-          </SafeAreaView>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <AuthScreen backLabel="Sign In" onBack={onBack}>
+      <Text style={styles.eyebrow}>ACCOUNT</Text>
+      <Text style={styles.title}>Reset password</Text>
+      {body}
+    </AuthScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 },
-  flex: { flex: 1 },
-  container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
-  centered: { alignItems: "center", flex: 1, gap: spacing.lg, justifyContent: "center", padding: spacing.xxl },
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   intro: { color: colors.muted, ...type.body },
   form: { gap: spacing.lg, marginTop: spacing.xxl },
-  errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, padding: spacing.md },
-  errorText: { color: colors.danger, ...type.bodySmall },
   successText: { color: colors.success, ...type.bodySmall },
   sent: { gap: spacing.lg, marginTop: spacing.xxl },
-  confirmationIcon: { alignItems: "center", backgroundColor: colors.successSoft, borderRadius: radii.pill, height: size.avatars.lg, justifyContent: "center", width: size.avatars.lg },
   sentCopy: { color: colors.inkSoft, ...type.body },
 });
