@@ -36,9 +36,19 @@ export function reservedRegionsViewAvailable(input: {
   }
 }
 
-/** app.json `extra.reservedRegions: false` turns the native view off. Missing means on. */
+/** app.json `extra.reservedRegions: false` turns the native view off. Missing or true means on. */
 export function reservedRegionsEnabled(extra: { reservedRegions?: boolean } | null | undefined) {
   return extra?.reservedRegions !== false;
+}
+
+/** Kill switch, then Expo Go, then the linked view manager. A false flag does not probe native. */
+export function shouldMountReservedRegions(input: {
+  extra: { reservedRegions?: boolean } | null | undefined;
+  executionEnvironment: string | null | undefined;
+  hasViewManager: (name: string) => boolean;
+}): boolean {
+  if (!reservedRegionsEnabled(input.extra)) return false;
+  return reservedRegionsViewAvailable(input);
 }
 
 /** Empty list when the native view cannot be used, without letting a probe throw. */

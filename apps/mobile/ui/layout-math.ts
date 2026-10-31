@@ -1,3 +1,4 @@
+import type { ReservedRegion } from "./reserved-regions-availability";
 import { layout, spacing } from "./theme";
 
 export type LayoutMode = "compact" | "wide" | "twoPane";
@@ -36,6 +37,20 @@ export type LayoutInput = {
   insets: { left: number; right: number };
   width: number;
 };
+
+/** Division region in provider coordinates. Occlusions and non-finite frames are ignored. */
+export function activeDivisionFromRegions(regions: readonly ReservedRegion[]): ActiveDivision | null {
+  const division = regions.find((region) => region.kind === "division");
+  if (division?.kind !== "division") return null;
+  const { height, width, x, y } = division.frame;
+  if (![height, width, x, y].every((value) => Number.isFinite(value))) return null;
+  return {
+    centerX: x + width / 2,
+    centerY: y + height / 2,
+    height,
+    width,
+  };
+}
 
 const cardInset = spacing.xxl * 2;
 

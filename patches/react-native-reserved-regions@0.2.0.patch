@@ -1,0 +1,102 @@
+diff --git a/ios/ReservedRegionsView.mm b/ios/ReservedRegionsView.mm
+index 04b38972d2cf73c56a128c977e121b1b8533d5e9..4fae25cfc9632a5604a486f2acac4f722a95e4cd 100644
+--- a/ios/ReservedRegionsView.mm
++++ b/ios/ReservedRegionsView.mm
+@@ -10,7 +10,8 @@ using namespace facebook::react;
+ 
+ @implementation ReservedRegionsView {
+   NSArray<NSDictionary *> *_currentRegions;
+-  BOOL _hasDispatchedRegions;
++  BOOL _regionsUpdateScheduled;
++  NSUInteger _recycleGeneration;
+ }
+ 
+ + (ComponentDescriptorProvider)componentDescriptorProvider
+@@ -26,6 +27,7 @@ using namespace facebook::react;
+ #if defined(__IPHONE_27_1) && __IPHONE_OS_VERSION_MAX_ALLOWED >= __IPHONE_27_1
+     if (@available(iOS 27.1, *)) {
+       // UIKit posts no reserved-region change notification, so hinge updates schedule the re-query.
++      // The handler only marks the view dirty. Region reads and JS events stay off this callback.
+       __weak __typeof(self) weakSelf = self;
+       UIHingeInteraction *hingeInteraction =
+           [[UIHingeInteraction alloc] initWithUpdateHandler:^(UIHingeInteraction *, UIHingeInteractionUpdate *) {
+@@ -41,7 +43,7 @@ using namespace facebook::react;
+ - (void)layoutSubviews
+ {
+   [super layoutSubviews];
+-  [self updateRegions];
++  [self scheduleRegionsUpdate];
+ }
+ 
+ - (void)didMoveToWindow
+@@ -67,7 +69,33 @@ using namespace facebook::react;
+   [self setNeedsLayout];
+ }
+ 
+-- (void)updateRegions
++// layoutSubviews and the hinge callback run on the main thread inside UIKit.
++// experimental_flushSync set EventBeat's synchronous flag, so the next induce()
++// ran JS with executeNowOnTheSameThread while main was still in that layout.
++// JS that then called an Expo synchronous Function (dispatch_sync back to main)
++// deadlocked, and the scene-update watchdog killed the app (0x8BADF00D).
++// Defer the query to a later main-queue turn, coalesce a burst of layouts into
++// one read, and enqueue one asynchronous unique event. Never request a
++// synchronous event beat.
++- (void)scheduleRegionsUpdate
++{
++  if (_regionsUpdateScheduled || self.window == nil) {
++    return;
++  }
++  _regionsUpdateScheduled = YES;
++  NSUInteger generation = _recycleGeneration;
++  __weak __typeof(self) weakSelf = self;
++  dispatch_async(dispatch_get_main_queue(), ^{
++    ReservedRegionsView *view = weakSelf;
++    if (view == nil || view->_recycleGeneration != generation) {
++      return;
++    }
++    view->_regionsUpdateScheduled = NO;
++    [view emitRegions];
++  });
++}
++
++- (void)emitRegions
+ {
+   if (self.window == nil || !_eventEmitter || CGSizeEqualToSize(self.bounds.size, CGSizeZero)) {
+     return;
+@@ -107,28 +135,19 @@ using namespace facebook::react;
+             ("height", frame.size.height))
+         ("occludesContent", false));
+   }
+-  auto eventEmitter = _eventEmitter;
+-  if (_hasDispatchedRegions) {
+-    // React Native's EventQueue replaces this view's pending unique event when it is the last one queued.
+-    eventEmitter->dispatchUniqueEvent(
+-        "regionsChange",
+-        folly::dynamic::object("regions", std::move(regionPayloads)));
+-    return;
+-  }
+-  _hasDispatchedRegions = YES;
+-  eventEmitter->experimental_flushSync([eventEmitter, regions = std::move(regionPayloads)]() mutable {
+-    eventEmitter->dispatchEvent(
+-        "regionsChange",
+-        folly::dynamic::object("regions", std::move(regions)),
+-        RawEvent::Category::Discrete);
+-  });
++  // Replaces a still-queued regionsChange. Does not call experimental_flushSync
++  // or EventBeat::requestSynchronous, so induce() uses scheduleWork.
++  _eventEmitter->dispatchUniqueEvent(
++      "regionsChange",
++      folly::dynamic::object("regions", std::move(regionPayloads)));
+ }
+ 
+ - (void)prepareForRecycle
+ {
+   [super prepareForRecycle];
+   _currentRegions = nil;
+-  _hasDispatchedRegions = NO;
++  _regionsUpdateScheduled = NO;
++  _recycleGeneration += 1;
+ }
+ 
+ @end

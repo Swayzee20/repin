@@ -3,7 +3,8 @@ import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
-import { anchoredScrollOffset, centeredCardFrame, resolveLayout, topVisibleAnchor } from "./layout-math";
+import { activeDivisionFromRegions, anchoredScrollOffset, centeredCardFrame, resolveLayout, topVisibleAnchor } from "./layout-math";
+import type { ReservedRegion } from "./reserved-regions-availability";
 
 const flat = { left: 0, right: 0 };
 
@@ -114,6 +115,42 @@ test("non-finite sizes collapse to a compact layout instead of NaN frames", () =
   assert.equal(layout.split.right.width, 0);
   assert.equal(Number.isFinite(layout.split.splitX), true);
   assert.equal(anchoredScrollOffset({ height: 10, y: Number.NaN }, { id: "a", offset: Number.NaN }, Number.NaN, 100), 0);
+});
+
+test("no fold region splits at width/2", () => {
+  const layout = resolveLayout({ insets: flat, width: 800 });
+  assert.equal(layout.mode, "twoPane");
+  assert.equal(layout.split.splitX, 400);
+  assert.equal(layout.split.foldActive, false);
+  assert.equal(layout.split.foldHalf, 0);
+  assert.equal(layout.split.vertical, false);
+});
+
+test("an off-center fold splits on the hinge and keeps panes off the crease", () => {
+  const region: ReservedRegion = {
+    frame: { height: 800, width: 20, x: 590, y: 0 },
+    kind: "division",
+    occludesContent: false,
+  };
+  const division = activeDivisionFromRegions([region]);
+  assert.equal(division?.centerX, 600);
+  const layout = resolveLayout({ division, insets: flat, width: 1000 });
+  assert.equal(layout.split.splitX, 600);
+  assert.equal(layout.split.foldActive, true);
+  assert.equal(layout.mode, "twoPane");
+  assert.ok(layout.split.left.x + layout.split.left.width <= layout.split.splitX - layout.split.gap);
+  assert.ok(layout.split.right.x >= layout.split.splitX + layout.split.gap);
+});
+
+test("pane width clamps at zero when the fold leaves no room", () => {
+  const layout = resolveLayout({
+    division: { centerX: 10, centerY: 400, height: 800, width: 20 },
+    insets: flat,
+    width: 1000,
+  });
+  assert.equal(layout.split.left.width, 0);
+  assert.ok(layout.split.right.width > 0);
+  assert.equal(layout.split.foldActive, true);
 });
 
 test("scroll anchors restore the top visible item", () => {

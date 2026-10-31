@@ -4,6 +4,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import { useReservedRegions } from "./reserved-regions";
 
 import {
+  activeDivisionFromRegions,
   centeredCardFrame,
   resolveLayout,
   type ActiveDivision,
@@ -23,16 +24,7 @@ export type { LayoutMode, LayoutSnapshot, LayoutSplit } from "./layout-math";
 function useActiveDivision(): ActiveDivision | null {
   const regions = useReservedRegions();
   if (Platform.OS !== "ios") return null;
-  const division = regions.find((region) => region.kind === "division");
-  if (!division || division.kind !== "division") return null;
-  const { height, width, x, y } = division.frame;
-  if (![height, width, x, y].every(Number.isFinite)) return null;
-  return {
-    centerX: x + width / 2,
-    centerY: y + height / 2,
-    height,
-    width,
-  };
+  return activeDivisionFromRegions(regions);
 }
 
 export function useLayoutMode(): LayoutSnapshot {
