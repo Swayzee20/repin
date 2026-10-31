@@ -1,5 +1,4 @@
 import { getUserInitials, resolveUserDisplayName, type HomeData, type WorkoutFeedItem } from "@repin/types";
-import { Feather } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useVerticalBarEdge } from "../../../ui/vertical-bar-edge";
@@ -19,10 +18,11 @@ import {
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { BrandHeader, Card, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
+import { Icon } from "../../../ui/icons";
 import { TwoPane, useLayoutMode } from "../../../ui/layout";
 import { RepInPill } from "../../../ui/rep-in-pill";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
-import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
+import { colors, fonts, radii, size, spacing, type } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -206,8 +206,12 @@ function PersonalZone({
       <ScrollAnchor id="home-snapshot">
         <Card style={[styles.snapshot, compact && styles.snapshotCompact]}>
           <View style={styles.snapshotTop}>
-            <View style={[styles.statusIcon, homeData.snapshot.hasWorkoutToday ? styles.doneIcon : styles.pendingIcon]}>
-              <Text style={homeData.snapshot.hasWorkoutToday ? styles.doneGlyph : styles.pendingGlyph}>{homeData.snapshot.hasWorkoutToday ? "✓" : "·"}</Text>
+            <View style={styles.statusIcon}>
+              {homeData.snapshot.hasWorkoutToday ? (
+                <Icon color={colors.brand} name="checkmark" size={size.icon.md} />
+              ) : (
+                <View style={styles.pendingMark} />
+              )}
             </View>
             <View style={styles.snapshotCopy}>
               <Text style={styles.snapshotStatus}>{homeData.snapshot.hasWorkoutToday ? "You repped in today" : "Ready when you are"}</Text>
@@ -240,7 +244,7 @@ function PersonalZone({
                         ? styles.consistencyCircleToday
                         : styles.consistencyCirclePast,
                 ]}>
-                  {day.completed ? <Feather color={colors.surface} name="check" size={14} /> : null}
+                  {day.completed ? <Icon color={colors.surface} name="checkmark" size={size.icon.sm} /> : null}
                 </View>
               </View>
             </View>
@@ -321,9 +325,9 @@ function Highlights({
   return (
     <ScrollAnchor id="home-highlights">
       <Text style={[styles.subsectionTitle, styles.highlightsTitle, compact && styles.highlightsTitleCompact]}>Highlights</Text>
-      {highlights.length ? (
-        <View>
-          {highlights.map((highlight, index) => (
+      <Card style={[styles.highlightsCard, compact && styles.highlightsCardCompact]}>
+        {highlights.length ? (
+          highlights.map((highlight, index) => (
             <View key={highlight.userId} style={[styles.highlightRow, compact && styles.highlightRowCompact, index < highlights.length - 1 && styles.highlightDivider]}>
               <View style={styles.highlightAvatar}><Text style={styles.highlightAvatarText}>{getUserInitials({ displayName: highlight.displayName })}</Text></View>
               <Text style={styles.highlightMessage}>
@@ -331,11 +335,11 @@ function Highlights({
                 {` repped in at least ${highlight.count} times this week`}
               </Text>
             </View>
-          ))}
-        </View>
-      ) : (
-        <Text style={styles.noHighlights}>No highlights yet. Keep getting those reps in.</Text>
-      )}
+          ))
+        ) : (
+          <Text style={styles.noHighlights}>No highlights yet. Keep getting those reps in.</Text>
+        )}
+      </Card>
     </ScrollAnchor>
   );
 }
@@ -531,15 +535,15 @@ const styles = StyleSheet.create({
   header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
   headerCompact: { marginBottom: spacing.sm },
   greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
-  snapshot: { padding: spacing.lg }, snapshotTop: { alignItems: "center", flexDirection: "row" }, statusIcon: { alignItems: "center", borderRadius: radii.md, height: 40, justifyContent: "center", width: 40 },
+  snapshot: { padding: spacing.lg }, snapshotTop: { alignItems: "center", flexDirection: "row" }, statusIcon: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, height: 40, justifyContent: "center", width: 40 },
   snapshotCompact: { padding: spacing.md },
-  doneIcon: { backgroundColor: colors.surfaceMuted }, pendingIcon: { backgroundColor: colors.surfaceMuted }, doneGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 17 }, pendingGlyph: { color: colors.brand, fontFamily: fonts.bold, fontSize: 24, marginTop: -7 },
-  snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 15 }, snapshotMessage: { color: colors.muted, fontFamily: fonts.regular, fontSize: 13, lineHeight: 19, marginTop: spacing.xs },
-  weekStat: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, marginLeft: spacing.md, minWidth: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, weekNumber: { color: colors.brand, fontFamily: fonts.bold, fontSize: 26, lineHeight: 30 }, weekLabel: { color: colors.brandPressed, fontFamily: fonts.bold, fontSize: 9, letterSpacing: 0.8 },
-  latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 13, marginTop: spacing.md, paddingTop: spacing.md },
+  pendingMark: { backgroundColor: colors.brand, borderRadius: radii.pill, height: spacing.sm, width: spacing.sm },
+  snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, ...type.bodySmall, fontFamily: fonts.semibold }, snapshotMessage: { color: colors.muted, ...type.label, fontFamily: fonts.regular, marginTop: spacing.xs },
+  weekStat: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, marginLeft: spacing.md, minWidth: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, weekNumber: { color: colors.brand, ...type.title }, weekLabel: { color: colors.brandPressed, ...type.micro, letterSpacing: 0.8 },
+  latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, ...type.label, fontFamily: fonts.medium, marginTop: spacing.md, paddingTop: spacing.md },
   consistencyRow: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm },
   consistencyDay: { alignItems: "center", flex: 1 },
-  consistencyWeekday: { color: colors.muted, fontFamily: fonts.bold, fontSize: 11, letterSpacing: 0.6, lineHeight: 16 },
+  consistencyWeekday: { color: colors.muted, ...type.micro, letterSpacing: 0.6 },
   consistencyWeekdayToday: { color: colors.inkSoft },
   consistencyMarker: { alignItems: "center", height: 34, justifyContent: "center", marginTop: spacing.xs, width: 34 },
   consistencyCircle: { alignItems: "center", borderRadius: radii.pill, borderWidth: 1, height: 26, justifyContent: "center", width: 26 },
@@ -552,21 +556,23 @@ const styles = StyleSheet.create({
   crewEyebrow: { color: colors.brand, ...type.heading },
   sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xs },
   sectionHeaderCompact: { marginTop: 0 },
-  subsectionTitle: { color: colors.ink, ...type.bodyMedium, fontFamily: fonts.semibold },
-  sectionAction: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
+  subsectionTitle: { color: colors.ink, ...type.section },
+  sectionAction: { color: colors.brand, ...type.label },
   latestWorkout: { marginTop: spacing.lg },
   latestWorkoutCompact: { marginTop: spacing.sm },
   emptySnapshot: { alignItems: "center", marginTop: spacing.lg, padding: spacing.lg },
   emptySnapshotCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
   highlightsTitle: { marginTop: spacing.xl },
   highlightsTitleCompact: { marginTop: spacing.xs },
-  highlightRow: { alignItems: "center", flexDirection: "row", minHeight: 64, paddingVertical: spacing.md },
-  highlightRowCompact: { minHeight: 44, paddingVertical: spacing.xs },
+  highlightsCard: { marginTop: spacing.md },
+  highlightsCardCompact: { marginTop: spacing.xs },
+  highlightRow: { alignItems: "center", flexDirection: "row", paddingVertical: spacing.xs },
+  highlightRowCompact: { paddingVertical: 0 },
   highlightDivider: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
-  highlightAvatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 36, justifyContent: "center", width: 36 },
-  highlightAvatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 11 },
+  highlightAvatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: size.avatars.sm, justifyContent: "center", width: size.avatars.sm },
+  highlightAvatarText: { color: colors.brand, ...type.micro },
   highlightMessage: { color: colors.inkSoft, flex: 1, ...type.bodySmall, marginLeft: spacing.md },
   highlightName: { color: colors.ink, fontFamily: fonts.semibold },
-  noHighlights: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
+  noHighlights: { color: colors.muted, ...type.bodySmall },
   refreshing: { marginTop: spacing.md }, error: { color: colors.danger, ...type.bodySmall, marginTop: spacing.md },
 });
