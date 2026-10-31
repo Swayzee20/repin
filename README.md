@@ -2,6 +2,10 @@
 
 Minimal pnpm/Turborepo monorepo containing an Expo mobile app, a Next.js API, and shared TypeScript packages.
 
+## Design language
+
+The mobile app's visual reference is [docs/DESIGN-LANGUAGE.md](docs/DESIGN-LANGUAGE.md). Approved boards are in [docs/design/](docs/design/). New screens and features follow that document.
+
 ## Requirements
 
 - Node.js 22.13 or newer
