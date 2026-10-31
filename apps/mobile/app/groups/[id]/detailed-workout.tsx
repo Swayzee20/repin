@@ -18,7 +18,8 @@ import {
   type IntervalValidationIssue,
   validateIntervals,
 } from "../../../lib/detailed-run-results";
-import { Button, TextField, WorkoutSummaryCard } from "../../../ui/components";
+import { Button, WorkoutSummaryCard } from "../../../ui/components";
+import { FieldLabel, FlameRating, PhotoTile, TextArea, TextField, photoUploadFieldError } from "../../../ui/form-fields";
 import {
   buildDetailedMovements,
   DetailedExerciseFields,
@@ -42,11 +43,8 @@ import { spacing } from "../../../ui/theme";
 import {
   CardHeading,
   CompletedCard,
-  FieldLabel,
-  FlameRating,
   FormCard,
   FormError,
-  PhotoTile,
   WorkoutFormScaffold,
   getLocalDateParts,
 } from "../../../ui/workout-form-frame";
@@ -94,6 +92,7 @@ export default function DetailedWorkoutScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isStrengthWorkout = workoutType === "strength_training" || workoutType === "powerlifting";
+  const photoError = photoUploadFieldError(error);
 
   useEffect(() => {
     if (!editSessionId || !groupId || !supabase) return;
@@ -328,7 +327,7 @@ export default function DetailedWorkoutScreen() {
         <>
           <FormCard>
             <CardHeading>What&apos;d you do?</CardHeading>
-            <WorkoutTypeSelector compact onChange={handleWorkoutTypeChange} value={workoutType} />
+            <WorkoutTypeSelector onChange={handleWorkoutTypeChange} value={workoutType} />
           </FormCard>
           {workoutType === "run" ? (
             <View onLayout={(event) => { workoutCardY.current = event.nativeEvent.layout.y; }}>
@@ -378,23 +377,30 @@ export default function DetailedWorkoutScreen() {
             </FormCard>
           ) : null}
           <FormCard>
-            <FieldLabel label="Workout name" optional />
-            <TextField compact maxLength={120} onChangeText={setName} placeholder="Push day, Murph, morning run..." returnKeyType="next" value={name} />
+            <TextField label="Workout name" maxLength={120} onChangeText={setName} optional placeholder="Push day, Murph, morning run..." returnKeyType="next" value={name} />
           </FormCard>
           <FormCard>
             <FieldLabel label="How'd it feel?" optional />
-            <FlameRating onChange={setEffort} value={effort} />
+            <View style={styles.followField}>
+              <FlameRating onChange={setEffort} value={effort} />
+            </View>
           </FormCard>
           <FormCard>
-            <FieldLabel label="Photo" optional />
             <PhotoTile
-              onChange={() => void pickPhoto()}
-              onRemove={() => { setPhoto(null); setPhotoRemoved(true); }}
+              error={photoError}
+              label="Photo"
+              onAdd={() => void pickPhoto()}
+              onRemove={() => {
+                setPhoto(null);
+                setPhotoRemoved(true);
+                setError(null);
+              }}
+              onRetry={photoError ? () => void submitWorkout() : undefined}
+              optional
               uri={photoUri}
             />
-            <View style={styles.followField}>
-              <FieldLabel label="Caption" optional />
-              <TextField maxLength={2_000} multiline onChangeText={setCaption} placeholder="Legs felt great today" value={caption} />
+            <View style={styles.captionField}>
+              <TextArea label="Caption" maxLength={2_000} onChangeText={setCaption} optional placeholder="Legs felt great today" value={caption} />
             </View>
           </FormCard>
           <CompletedCard
@@ -418,7 +424,7 @@ export default function DetailedWorkoutScreen() {
           />
         </>
       )}
-      notice={error ? <FormError message={error} /> : null}
+      notice={error && !photoError ? <FormError message={error} /> : null}
       onClose={() => router.back()}
       preview={(
         <WorkoutSummaryCard
@@ -530,5 +536,6 @@ function decodeBase64(value: string) {
 }
 
 const styles = StyleSheet.create({
-  followField: { marginTop: spacing.lg },
+  captionField: { marginTop: spacing.lg },
+  followField: { marginTop: spacing.sm },
 });

@@ -6,7 +6,7 @@ import { Pressable, Share, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../../lib/supabase";
 import { fetchGroupBoard } from "../../lib/group-board";
-import { Button, Card, CommunityFeed, LoadingState, Screen, SectionHeader, StateCard } from "../../ui/components";
+import { Card, CommunityFeed, LoadingState, Screen, SectionHeader, StateCard } from "../../ui/components";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
@@ -120,11 +120,12 @@ export default function GroupDetailScreen() {
               <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push(`./${group.id}/log-workout`)}><Text style={styles.logLink}>+ Log workout</Text></Pressable>
             } />
             {workouts.length === 0 ? (
-              <Card style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>Be the first to rep in</Text>
-                <Text style={styles.emptyCopy}>Log a workout to start this group’s Community Board.</Text>
-                <Button onPress={() => router.push(`./${group.id}/log-workout`)} style={styles.emptyAction}>Log a Workout</Button>
-              </Card>
+              <StateCard
+                actionLabel="Log a Workout"
+                message="Log a workout to start this group’s Community Board."
+                onAction={() => router.push(`./${group.id}/log-workout`)}
+                title="Be the first to rep in"
+              />
             ) : <CommunityFeed workouts={workouts} />}
           </View>
         </>
@@ -147,5 +148,4 @@ const styles = StyleSheet.create({
   copyActionText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 }, shareAction: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.sm, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.sm }, shareActionText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 13 }, actionPressed: { opacity: 0.72 }, inviteError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.sm },
   board: { backgroundColor: colors.surfaceMuted, borderColor: colors.boardBorder, borderRadius: radii.lg, borderWidth: 1, marginTop: spacing.xxxl, overflow: "visible", padding: spacing.lg },
   logLink: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
-  emptyCard: { alignItems: "center", padding: spacing.xxl }, emptyTitle: { color: colors.ink, ...type.heading }, emptyCopy: { color: colors.muted, ...type.bodySmall, marginTop: spacing.sm, textAlign: "center" }, emptyAction: { alignSelf: "stretch", marginTop: spacing.lg },
 });

@@ -1,9 +1,7 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import {
-  Image,
   KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -14,20 +12,25 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { Button, Card } from "./components";
 import { pressableFocused, webFocusRing } from "./focus-ring";
-import { Chevron, Icon } from "./icons";
+import { DateRow, TextField } from "./form-fields";
+import { Chevron } from "./icons";
 import { TwoPane, useLayoutMode } from "./layout";
-import { Button, Card, TextField } from "./components";
-import { ListRow, RoundIconButton } from "./primitives";
+import { RoundIconButton } from "./primitives";
 import { ScrollAnchorProvider, type ScrollAnchorController } from "./scroll-anchor";
-import { colors, elevation, fonts, layout, radii, size, spacing, type } from "./theme";
-
-const effortLabels = ["Light work", "Felt good", "Solid work", "That was rough", "I'm cooked"];
+import { BottomSheet } from "./sheet";
+import { colors, elevation, layout, radii, size, spacing, type } from "./theme";
 
 /**
- * T4 workout forms. The Duo strip is system status-bar chrome (`useStripPresent`),
- * not a slot this stack can draw into. `presentation: "modal"` does not document
- * that chrome staying above the modal, so the close control is always top-left.
+ * T4 workout forms. Unfolded Duo (`useLayoutMode` mode `"twoPane"`, not web)
+ * puts fields in the leading pane and the preview plus submit in the trailing
+ * pane, clear of the crease. Compact, folded, upright, and web stay one column:
+ * a Preview row opens the shared sheet, and the submit stays pinned.
+ *
+ * The Duo strip is system status-bar chrome, not a slot this stack can draw
+ * into. `presentation: "modal"` does not document that chrome staying above
+ * the modal, so the close control is always the round 44pt X at the top-left.
  */
 export function WorkoutFormScaffold({
   anchor,
@@ -163,32 +166,20 @@ export function WorkoutFormScaffold({
               {notice}
               {submit}
             </View>
-            <Modal
-              animationType="fade"
-              onRequestClose={() => setPreviewOpen(false)}
-              presentationStyle="overFullScreen"
-              statusBarTranslucent
-              transparent
+            <BottomSheet
+              closeLabel="Close preview"
+              onDismiss={() => setPreviewOpen(false)}
+              title="Preview"
               visible={previewOpen}
             >
-              <View style={styles.sheetRoot}>
-                <Pressable accessibilityLabel="Close preview" onPress={() => setPreviewOpen(false)} style={styles.sheetBackdrop} />
-                <View style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-                  <View style={styles.sheetGrabber} />
-                  <View style={styles.sheetHeader}>
-                    <Text style={styles.sheetTitle}>Preview</Text>
-                    <RoundIconButton accessibilityLabel="Close preview" kind="close" onPress={() => setPreviewOpen(false)} />
-                  </View>
-                  <ScrollView
-                    contentContainerStyle={styles.sheetContent}
-                    keyboardShouldPersistTaps="handled"
-                    style={styles.sheetScroll}
-                  >
-                    {preview}
-                  </ScrollView>
-                </View>
-              </View>
-            </Modal>
+              <ScrollView
+                contentContainerStyle={styles.sheetContent}
+                keyboardShouldPersistTaps="handled"
+                style={styles.sheetScroll}
+              >
+                {preview}
+              </ScrollView>
+            </BottomSheet>
           </>
         )}
       </View>
@@ -266,134 +257,11 @@ export function CardHeading({ children }: { children: string }) {
   return <Text style={styles.cardHeading}>{children}</Text>;
 }
 
-export function FieldLabel({ label, optional = false }: { label: string; optional?: boolean }) {
-  return (
-    <View style={styles.labelRow}>
-      <Text style={styles.fieldLabel}>{label}</Text>
-      {optional ? <Text style={styles.optional}>Optional</Text> : null}
-    </View>
-  );
-}
-
 export function FormError({ message }: { message: string }) {
   return (
     <View style={styles.errorBanner}>
       <Text accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.errorText}>{message}</Text>
     </View>
-  );
-}
-
-export function ChoiceTiles<T extends string>({
-  onChange,
-  options,
-  value,
-}: {
-  onChange: (value: T) => void;
-  options: readonly { label: string; value: T }[];
-  value: T | null;
-}) {
-  return (
-    <View accessibilityRole="radiogroup" style={styles.choiceGrid}>
-      {options.map((option) => {
-        const selected = value === option.value;
-        return (
-          <Pressable
-            accessibilityRole="radio"
-            accessibilityState={{ selected }}
-            key={option.value}
-            onPress={() => onChange(option.value)}
-            style={(state) => [
-              styles.choiceTile,
-              selected ? styles.choiceTileSelected : styles.choiceTileIdle,
-              webFocusRing(pressableFocused(state)),
-            ]}
-          >
-            <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{option.label}</Text>
-            {selected ? <Icon color={colors.brand} name="checkmark" /> : null}
-          </Pressable>
-        );
-      })}
-    </View>
-  );
-}
-
-export function FlameRating({
-  onChange,
-  value,
-}: {
-  onChange: (value: number | null) => void;
-  value: number | null;
-}) {
-  return (
-    <View>
-      <View accessibilityLabel="How'd it feel?" accessibilityRole="radiogroup" style={styles.flameRow}>
-        {effortLabels.map((label, index) => {
-          const level = index + 1;
-          const selected = value === level;
-          const filled = (value ?? 0) >= level;
-          return (
-            <Pressable
-              accessibilityLabel={`${level}: ${label}`}
-              accessibilityRole="radio"
-              accessibilityState={{ selected }}
-              key={level}
-              onPress={() => onChange(selected ? null : level)}
-              style={(state) => [
-                styles.flameTile,
-                filled ? styles.flameTileFilled : styles.flameTileEmpty,
-                selected && styles.flameTileSelected,
-                webFocusRing(pressableFocused(state)),
-              ]}
-            >
-              <Text style={[styles.flame, !filled && styles.flameEmpty]}>🔥</Text>
-            </Pressable>
-          );
-        })}
-        {value ? <Text style={styles.flameWord}>{effortLabels[value - 1]}</Text> : null}
-      </View>
-      {value ? null : <Text style={styles.flameHelper}>Tap a flame to rate your effort</Text>}
-    </View>
-  );
-}
-
-export function PhotoTile({
-  busyLabel = null,
-  onChange,
-  onRemove,
-  uri,
-}: {
-  busyLabel?: string | null;
-  onChange: () => void;
-  onRemove: () => void;
-  uri: string | null;
-}) {
-  if (uri) {
-    return (
-      <View style={styles.photoFilled}>
-        <Pressable accessibilityLabel="Change photo" accessibilityRole="button" onPress={onChange}>
-          <Image accessibilityLabel="Selected workout" source={{ uri }} style={styles.photo} />
-        </Pressable>
-        <RoundIconButton
-          accessibilityLabel="Remove photo"
-          kind="close"
-          look="photo"
-          onPress={onRemove}
-          style={styles.photoRemove}
-        />
-      </View>
-    );
-  }
-
-  return (
-    <Pressable
-      accessibilityRole="button"
-      disabled={Boolean(busyLabel)}
-      onPress={onChange}
-      style={(state) => [styles.photoEmpty, webFocusRing(pressableFocused(state))]}
-    >
-      <Icon color={colors.brand} name="camera" />
-      <Text style={styles.photoLabel}>{busyLabel ?? "Add photo"}</Text>
-    </Pressable>
   );
 }
 
@@ -437,28 +305,24 @@ export function CompletedCard({
       <FormCard>
         <CardHeading>Completed</CardHeading>
         <View style={styles.webDateRow}>
-          <View style={styles.webDateField}>
-            <TextField
-              autoCapitalize="none"
-              compact
-              label="Date"
-              onBlur={() => onOccurredAt(fromLocalParts(webDate, webTime, occurredAt))}
-              onChangeText={onWebDate}
-              placeholder="YYYY-MM-DD"
-              value={webDate}
-            />
-          </View>
-          <View style={styles.webDateField}>
-            <TextField
-              autoCapitalize="none"
-              compact
-              label="Time"
-              onBlur={() => onOccurredAt(fromLocalParts(webDate, webTime, occurredAt))}
-              onChangeText={onWebTime}
-              placeholder="HH:MM"
-              value={webTime}
-            />
-          </View>
+          <TextField
+            autoCapitalize="none"
+            containerStyle={styles.webDateField}
+            label="Date"
+            onBlur={() => onOccurredAt(fromLocalParts(webDate, webTime, occurredAt))}
+            onChangeText={onWebDate}
+            placeholder="YYYY-MM-DD"
+            value={webDate}
+          />
+          <TextField
+            autoCapitalize="none"
+            containerStyle={styles.webDateField}
+            label="Time"
+            onBlur={() => onOccurredAt(fromLocalParts(webDate, webTime, occurredAt))}
+            onChangeText={onWebTime}
+            placeholder="HH:MM"
+            value={webTime}
+          />
         </View>
       </FormCard>
     );
@@ -466,12 +330,12 @@ export function CompletedCard({
 
   return (
     <FormCard flush>
-      <ListRow label="Completed" onPress={() => onPicker({ pickerMode: "date", showPicker: true })} value={formatFriendlyDate(occurredAt)} />
+      <DateRow label="Completed" onPress={() => onPicker({ pickerMode: "date", showPicker: true })} value={formatFriendlyDate(occurredAt)} />
       {showPicker ? (
         <View style={styles.pickerWrap}>
           <DateTimePicker mode={Platform.OS === "ios" ? "datetime" : pickerMode} onChange={handleNativeChange} value={occurredAt} />
           {Platform.OS === "ios" ? (
-            <Button onPress={() => onPicker({ showPicker: false })} style={styles.tonalDone} variant="tonal">Done</Button>
+            <Button onPress={() => onPicker({ showPicker: false })} variant="tonal">Done</Button>
           ) : null}
         </View>
       ) : null}
@@ -488,7 +352,7 @@ export function getLocalDateParts(value: Date) {
   return { date: `${year}-${month}-${day}`, time: `${hours}:${minutes}` };
 }
 
-export function fromLocalParts(date: string, time: string, fallback: Date) {
+function fromLocalParts(date: string, time: string, fallback: Date) {
   const next = new Date(`${date}T${time}:00`);
   return Number.isNaN(next.getTime()) ? fallback : next;
 }
@@ -517,55 +381,9 @@ const styles = StyleSheet.create({
   formCard: { padding: spacing.xl },
   flushCard: { paddingHorizontal: 0, paddingVertical: 0 },
   cardHeading: { ...type.section, color: colors.ink, marginBottom: spacing.sm },
-  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm, marginBottom: spacing.sm },
-  fieldLabel: { ...type.body, color: colors.inkSoft, fontFamily: fonts.bold },
-  optional: { ...type.label, color: colors.muted, fontFamily: fonts.medium },
-  choiceGrid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  choiceTile: {
-    alignItems: "center",
-    borderRadius: radii.md,
-    borderWidth: 2,
-    flexBasis: "47%",
-    flexDirection: "row",
-    flexGrow: 1,
-    gap: spacing.sm,
-    justifyContent: "space-between",
-    minHeight: size.control,
-    paddingHorizontal: spacing.lg,
-  },
-  choiceTileIdle: { backgroundColor: colors.surface, borderColor: colors.border },
-  choiceTileSelected: { backgroundColor: colors.brandTint, borderColor: colors.brand },
-  choiceText: { ...type.body, color: colors.inkSoft, flex: 1 },
-  choiceTextSelected: { color: colors.ink, fontFamily: fonts.semibold },
-  flameRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm },
-  flameTile: { alignItems: "center", borderRadius: radii.md, borderWidth: 2, height: size.hit, justifyContent: "center", width: size.hit },
-  flameTileEmpty: { backgroundColor: colors.surface, borderColor: colors.border },
-  flameTileFilled: { backgroundColor: colors.brandTint, borderColor: colors.brandTint },
-  flameTileSelected: { borderColor: colors.brand },
-  flame: { ...type.title },
-  flameEmpty: { opacity: 0.35 },
-  flameWord: { ...type.body, color: colors.brand, fontFamily: fonts.bold },
-  flameHelper: { color: colors.muted, marginTop: spacing.sm, ...type.bodySmall },
-  photoEmpty: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.borderStrong,
-    borderRadius: radii.lg,
-    borderStyle: "dashed",
-    borderWidth: 1,
-    gap: spacing.sm,
-    justifyContent: "center",
-    minHeight: spacing.huge * 4,
-    padding: spacing.lg,
-  },
-  photoLabel: { color: colors.brand, ...type.label },
-  photoFilled: { position: "relative" },
-  photo: { borderRadius: radii.lg, height: spacing.huge * 4, width: "100%" },
-  photoRemove: { position: "absolute", right: spacing.sm, top: spacing.sm },
   webDateRow: { flexDirection: "row", gap: spacing.md },
   webDateField: { flex: 1 },
-  pickerWrap: { alignItems: "flex-end", gap: spacing.sm, paddingBottom: spacing.lg, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
-  tonalDone: { alignSelf: "flex-start", paddingHorizontal: spacing.xl },
+  pickerWrap: { alignItems: "flex-start", gap: spacing.sm, paddingBottom: spacing.lg, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
   previewColumn: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   previewScroll: { flex: 1, marginHorizontal: -spacing.md },
   previewScrollContent: { paddingBottom: spacing.md, paddingHorizontal: spacing.md, paddingTop: spacing.lg },
@@ -586,21 +404,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
   },
   previewRowHint: { color: colors.muted, flex: 1, ...type.bodySmall },
-  sheetRoot: { flex: 1, justifyContent: "flex-end" },
-  sheetBackdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
-  sheet: {
-    backgroundColor: colors.background,
-    borderTopLeftRadius: radii.lg,
-    borderTopRightRadius: radii.lg,
-    boxShadow: elevation.e3,
-    maxHeight: "86%",
-    paddingHorizontal: spacing.xl,
-    paddingTop: spacing.md,
-  },
-  sheetGrabber: { alignSelf: "center", backgroundColor: colors.borderStrong, borderRadius: radii.pill, height: spacing.xs, marginBottom: spacing.md, width: spacing.huge },
-  sheetHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md, minHeight: size.hit },
-  sheetTitle: { color: colors.ink, ...type.heading },
-  sheetScroll: { flexGrow: 0, flexShrink: 1 },
+  sheetScroll: { flexGrow: 0, flexShrink: 1, maxHeight: "70%" },
   sheetContent: { paddingBottom: spacing.md },
   errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, padding: spacing.md },
   errorText: { color: colors.danger, ...type.bodySmall },

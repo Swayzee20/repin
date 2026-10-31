@@ -6,7 +6,8 @@ import { Feather } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Button, TextField } from "./components";
+import { Button } from "./components";
+import { NumberField } from "./form-fields";
 import { SegmentedControl } from "./primitives";
 import {
   buildRunResultSummary,
@@ -106,14 +107,14 @@ export function RunResultEditor({
           />
         ) : (
           <>
-            <View style={[styles.intervalMetricRow, styles.metricRowSurface, styles.firstMetricRow]}>
+            <View style={[styles.intervalMetricRow, styles.firstMetricRow]}>
               <Text style={styles.intervalMetricLabel}>Distance</Text>
               <View style={styles.intervalMetricControls}>
-                <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" value={results.distance} />
+                <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" suffix={results.distanceUnit} value={results.distance} />
                 <DistanceUnitToggle onChange={(distanceUnit) => updateResults({ distanceUnit })} value={results.distanceUnit} />
               </View>
             </View>
-            <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+            <View style={styles.intervalMetricRow}>
               <Text style={styles.intervalMetricLabel}>Time</Text>
               <WorkoutTimeInput
                 containerStyle={styles.intervalTimeControls}
@@ -128,7 +129,7 @@ export function RunResultEditor({
         )}
         {subtype !== "interval" ? (
           <View style={styles.doneSlot}>
-            <Button onPress={onDone} style={styles.tonalDone} variant="tonal">Done</Button>
+            <Button onPress={onDone} variant="tonal">Done</Button>
           </View>
         ) : null}
       </View>
@@ -218,16 +219,16 @@ function IntervalEditor({
           <InlineError field="interval" index={index} issue={validationError} />
 
           {expanded ? <>
-          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+          <View style={styles.intervalMetricRow}>
             <Text style={styles.intervalMetricLabel}>Distance</Text>
             <View style={styles.intervalMetricControls}>
-              <TextField compact containerStyle={styles.metricField} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" value={interval.distance} />
+              <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" suffix={interval.distanceUnit} value={interval.distance} />
               <UnitToggle onChange={(distanceUnit) => updateInterval(interval.id, { distanceUnit })} value={interval.distanceUnit} />
             </View>
           </View>
           <InlineError field="distance" index={index} issue={validationError} />
 
-          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+          <View style={styles.intervalMetricRow}>
             <Text style={styles.intervalMetricLabel}>Time</Text>
             <WorkoutTimeInput
               containerStyle={styles.intervalTimeControls}
@@ -239,11 +240,10 @@ function IntervalEditor({
           </View>
           <InlineError field="time" index={index} issue={validationError} />
 
-          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+          <View style={styles.intervalMetricRow}>
             <Text style={styles.intervalMetricLabel}>Recovery</Text>
-            <View style={styles.recoveryRow}>
-              <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" value={interval.recoverySeconds} />
-              <Text style={styles.unitLabel}>sec</Text>
+            <View style={styles.intervalMetricControls}>
+              <NumberField accessibilityLabel="Recovery seconds" containerStyle={styles.metricField} kind="number" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" suffix="sec" value={interval.recoverySeconds} />
             </View>
           </View>
           <InlineError field="recovery" index={index} issue={validationError} />
@@ -286,7 +286,9 @@ function IntervalEditor({
         <Pressable accessibilityRole="button" onPress={addInterval} style={({ pressed }) => [styles.addInterval, pressed && styles.pressed]}>
           <Text style={styles.addIntervalText}>+ Add interval</Text>
         </Pressable>
-        <Button onPress={onDone} style={styles.tonalDone} variant="tonal">Done</Button>
+        <View style={styles.intervalDoneSlot}>
+          <Button onPress={onDone} variant="tonal">Done</Button>
+        </View>
       </View>
     </View>
   );
@@ -361,7 +363,7 @@ const styles = StyleSheet.create({
   intervalNeedsDetails: { color: colors.brand, fontFamily: fonts.medium },
   removeButton: { alignItems: "center", flexShrink: 0, justifyContent: "center", minHeight: 44, paddingLeft: spacing.sm },
   removeAction: { color: colors.danger, ...type.label },
-  metricField: { flex: 1, marginTop: 0 },
+  metricField: { flex: 1, flexShrink: 1, marginTop: 0, minWidth: 0 },
   unitSegment: { alignSelf: "center" },
   intervalMetricRow: { alignItems: "center", columnGap: spacing.sm, flexDirection: "row", flexWrap: "wrap", marginTop: spacing.sm, rowGap: spacing.xs },
   firstMetricRow: { marginTop: 0 },
@@ -369,10 +371,7 @@ const styles = StyleSheet.create({
   intervalMetricLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, width: 64 },
   intervalMetricHeading: { flex: 1, minWidth: 120 },
   intervalMetricControls: { alignItems: "center", flex: 1, flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, minWidth: 0 },
-  intervalTimeControls: { flex: 1, flexShrink: 1, gap: spacing.sm, marginTop: 0, minWidth: 0 },
-  recoveryRow: { alignItems: "center", flex: 1, flexDirection: "row", gap: spacing.sm, minWidth: 132 },
-  recoveryField: { marginTop: 0, width: 96 },
-  unitLabel: { color: colors.muted, ...type.bodySmall },
+  intervalTimeControls: { flex: 1, flexShrink: 1, marginTop: 0, minWidth: 0 },
   inlineError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.xs },
   quantityRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between", marginTop: spacing.sm },
   quantityHelper: { color: colors.muted, ...type.bodySmall, marginTop: 2 },
@@ -385,7 +384,7 @@ const styles = StyleSheet.create({
   addInterval: { boxShadow: elevation.glass, alignItems: "center", backgroundColor: colors.surface, borderColor: colors.success, borderRadius: radii.pill, borderWidth: 1, flexShrink: 1, justifyContent: "center", minHeight: 44, paddingHorizontal: spacing.md },
   addIntervalText: { color: colors.success, ...type.label },
   doneSlot: { alignItems: "flex-end", marginTop: spacing.sm },
-  tonalDone: { alignSelf: "flex-start", paddingHorizontal: spacing.xl },
+  intervalDoneSlot: { flexShrink: 0 },
   collapsedSurface: { boxShadow: elevation.glass, alignItems: "center", alignSelf: "stretch", backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, flexDirection: "row", gap: spacing.sm, marginTop: spacing.xxl, maxWidth: "100%", paddingHorizontal: spacing.md, paddingVertical: spacing.md, width: "100%" },
   collapsedCopy: { flex: 1, flexBasis: 0, gap: spacing.xs, minWidth: 0 },
   summaryText: { color: colors.ink, flexShrink: 1, ...type.bodyMedium },

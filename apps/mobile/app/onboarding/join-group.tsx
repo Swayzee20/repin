@@ -21,7 +21,7 @@ import {
 } from "../../ui/components";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { WideColumn } from "../../ui/layout";
-import { colors, fonts, radii, spacing, type } from "../../ui/theme";
+import { colors, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(
   /\/$/,
@@ -215,7 +215,7 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
   },
   formCard: { gap: spacing.lg },
-  codeInput: { fontFamily: fonts.bold, fontSize: 21, letterSpacing: 3 },
+  codeInput: { ...type.title, letterSpacing: 3 },
   errorBanner: {
     backgroundColor: colors.dangerSoft,
     borderRadius: radii.md,

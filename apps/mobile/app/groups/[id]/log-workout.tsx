@@ -7,23 +7,20 @@ import { View, type TextInput } from "react-native";
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { isLayoutPreview } from "../../../lib/layout-preview";
-import { Button, TextField, WorkoutSummaryCard } from "../../../ui/components";
-import {
-  CardHeading,
-  ChoiceTiles,
-  CompletedCard,
-  FieldLabel,
-  FlameRating,
-  FormCard,
-  FormError,
-  PhotoTile,
-  WorkoutFormScaffold,
-  getLocalDateParts,
-} from "../../../ui/workout-form-frame";
+import { Button, WorkoutSummaryCard } from "../../../ui/components";
+import { FieldLabel, FlameRating, PhotoTile, TextArea, photoUploadFieldError } from "../../../ui/form-fields";
 import { useLayoutMode } from "../../../ui/layout";
 import { ScrollAnchor, useScrollAnchor, writeStoredScrollAnchor } from "../../../ui/scroll-anchor";
 import { spacing } from "../../../ui/theme";
-import { workoutTypeLabels, workoutTypeOptions } from "../../../ui/workout-type-selector";
+import { WorkoutTypeGrid, workoutTypeLabels } from "../../../ui/workout-type-selector";
+import {
+  CardHeading,
+  CompletedCard,
+  FormCard,
+  FormError,
+  WorkoutFormScaffold,
+  getLocalDateParts,
+} from "../../../ui/workout-form-frame";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const postAnchorKey = "log-workout-post";
@@ -74,6 +71,7 @@ export default function LogWorkoutScreen() {
   const modeRef = useRef(mode);
   const occurredAt = new Date(form.occurredAt);
   const canSubmit = Boolean(form.workoutType);
+  const photoError = photoUploadFieldError(form.error);
 
   if (modeRef.current !== mode) {
     modeRef.current = mode;
@@ -198,8 +196,6 @@ export default function LogWorkoutScreen() {
     }
   }, [form.caption, form.effort, form.occurredAt, form.photo, form.workoutType, groupId, router]);
 
-  const busyLabel = form.photoStatus === "picking" ? "Adding photo…" : form.photoStatus === "uploading" ? "Uploading photo…" : null;
-
   return (
     <WorkoutFormScaffold
       anchor={postAnchor}
@@ -208,11 +204,13 @@ export default function LogWorkoutScreen() {
         <>
           <FormCard>
             <CardHeading>What&apos;d you do?</CardHeading>
-            <ChoiceTiles onChange={(workoutType) => dispatch({ type: "type", workoutType })} options={workoutTypeOptions} value={form.workoutType} />
+            <WorkoutTypeGrid onChange={(workoutType) => dispatch({ type: "type", workoutType })} value={form.workoutType} />
           </FormCard>
           <FormCard>
             <FieldLabel label="How'd it feel?" optional />
-            <FlameRating onChange={(effort) => dispatch({ effort, type: "effort" })} value={form.effort} />
+            <View style={{ marginTop: spacing.sm }}>
+              <FlameRating onChange={(effort) => dispatch({ effort, type: "effort" })} value={form.effort} />
+            </View>
           </FormCard>
           <CompletedCard
             occurredAt={occurredAt}
@@ -226,20 +224,25 @@ export default function LogWorkoutScreen() {
             webTime={form.webTime}
           />
           <FormCard>
-            <FieldLabel label="Photo" optional />
             <PhotoTile
-              busyLabel={busyLabel}
-              onChange={() => void pickPhoto()}
-              onRemove={() => dispatch({ photo: null, type: "photo" })}
-              uri={form.photo?.uri ?? null}
+              busy={form.photoStatus === "picking" || form.photoStatus === "uploading"}
+              error={photoError}
+              label="Photo"
+              onAdd={() => void pickPhoto()}
+              onRemove={() => {
+                dispatch({ photo: null, type: "photo" });
+                dispatch({ error: null, type: "error" });
+              }}
+              onRetry={photoError ? () => void submitWorkout() : undefined}
+              optional
+              uri={form.photo?.uri}
             />
             <View style={{ marginTop: spacing.lg }}>
-              <FieldLabel label="Caption" optional />
               <ScrollAnchor id="log-caption">
-                <TextField
+                <TextArea
                   accessibilityLabel="Caption"
+                  label="Caption"
                   maxLength={2_000}
-                  multiline
                   onBlur={() => {
                     if (blurTimer.current) clearTimeout(blurTimer.current);
                     blurTimer.current = setTimeout(() => {
@@ -252,6 +255,7 @@ export default function LogWorkoutScreen() {
                     if (blurTimer.current) clearTimeout(blurTimer.current);
                     focusedField.current = "caption";
                   }}
+                  optional
                   placeholder="Legs felt great today"
                   ref={captionRef}
                   value={form.caption}
@@ -261,7 +265,7 @@ export default function LogWorkoutScreen() {
           </FormCard>
         </>
       )}
-      notice={form.error ? <FormError message={form.error} /> : null}
+      notice={form.error && !photoError ? <FormError message={form.error} /> : null}
       onClose={() => router.back()}
       preview={(
         <WorkoutSummaryCard

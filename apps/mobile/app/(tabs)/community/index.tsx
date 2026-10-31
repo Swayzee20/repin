@@ -2,7 +2,7 @@ import type { CommunityData, CommunityPostComment, CommunityReactionSummary, Com
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
@@ -28,14 +28,16 @@ import {
   readCommunityPostParam,
   resolveCommunitySelection,
 } from "../../../lib/community-selection";
-import { BrandHeader, CommunityFeed, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
-import { CenteredCard, TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
-import { RepInPill } from "../../../ui/rep-in-pill";
+import { BrandHeader, Button, CommunityFeed, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { Dialog } from "../../../ui/dialog";
+import { Chevron } from "../../../ui/icons";
+import { TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
+import { Menu, MenuItem } from "../../../ui/menu";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { CommunityDatePicker } from "../../../ui/community-date-picker";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
-import { colors, elevation, fonts, radii, spacing, type } from "../../../ui/theme";
+import { colors, fonts, size, spacing, type } from "../../../ui/theme";
 import { holdComposerFocus, releaseComposerFocus, WorkoutDetailView, type WorkoutDetailFixture } from "../../../ui/workout-detail";
 import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
 
@@ -457,7 +459,7 @@ export default function CommunityTabScreen() {
                 {isSameLocalDay(selectedDate, currentDay) ? (
                   <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
                 ) : (
-                  <Text style={styles.historicalEmptyText}>No workouts were logged this day</Text>
+                  <StateCard message="No workouts were logged this day." title="No workouts" />
                 )}
               </View>
             ) : (
@@ -504,7 +506,6 @@ export default function CommunityTabScreen() {
           stage={deleteStage}
           visible={deleteTarget !== null}
         />
-        <RepInPill />
       </View>
     );
   }
@@ -535,68 +536,26 @@ export default function CommunityTabScreen() {
                   style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
                 >
                   <Text numberOfLines={1} style={styles.groupName}>{selectedGroup.name}</Text>
-                  <Feather color={colors.brand} name={groupMenuView ? "chevron-up" : "chevron-down"} size={18} style={styles.chevron} />
+                  <View style={styles.chevron}><Chevron color={colors.brand} direction={groupMenuView ? "up" : "down"} /></View>
                 </Pressable>
                 {groupMenuView ? (
-                  <View style={styles.groupDrawer}>
-                    {groupMenuView === "actions" ? (
-                      <>
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() => setGroupMenuView("groups")}
-                          style={({ pressed }) => [styles.menuAction, pressed && styles.pressed]}
-                        >
-                          <Feather color={colors.inkSoft} name="repeat" size={17} />
-                          <Text style={styles.menuActionText}>Switch group</Text>
-                          <Feather color={colors.muted} name="chevron-right" size={16} />
-                        </Pressable>
-                        <Pressable
-                          accessibilityRole="button"
-                          onPress={() => {
-                            setGroupMenuView(null);
-                            router.push(`/groups/${selectedGroup.id}`);
-                          }}
-                          style={({ pressed }) => [styles.menuAction, pressed && styles.pressed]}
-                        >
-                          <Feather color={colors.inkSoft} name="users" size={17} />
-                          <Text style={styles.menuActionText}>View group</Text>
-                        </Pressable>
-                      </>
-                    ) : (
-                      <>
-                        <Pressable
-                          accessibilityLabel="Back to group menu"
-                          accessibilityRole="button"
-                          onPress={() => setGroupMenuView("actions")}
-                          style={({ pressed }) => [styles.menuHeading, pressed && styles.pressed]}
-                        >
-                          <Feather color={colors.muted} name="chevron-left" size={16} />
-                          <Text style={styles.menuHeadingText}>Switch group</Text>
-                        </Pressable>
-                        {board?.groups.map((group) => (
-                          <Pressable
-                            accessibilityRole="button"
-                            key={group.id}
-                            onPress={() => {
-                              if (communitySelectionClears({
-                                nextDayKey: toLocalDateInputValue(selectedDate),
-                                nextGroupId: group.id,
-                                previousDayKey: toLocalDateInputValue(selectedDate),
-                                previousGroupId: selectedGroup.id,
-                              })) clearPostSelection();
-                              clearFeed(group.id);
-                              setSelectedGroupId(group.id);
-                              setGroupMenuView(null);
-                            }}
-                            style={({ pressed }) => [styles.groupOption, group.id === selectedGroup.id && styles.selectedOption, pressed && styles.pressed]}
-                          >
-                            <Text numberOfLines={1} style={styles.optionName}>{group.name}</Text>
-                            {group.id === selectedGroup.id ? <Feather color={colors.brand} name="check" size={17} /> : null}
-                          </Pressable>
-                        ))}
-                      </>
-                    )}
-                  </View>
+                  <GroupActionsMenu
+                    groupMenuView={groupMenuView}
+                    groups={board?.groups ?? []}
+                    onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}
+                    onSelectGroup={(groupId) => {
+                      if (communitySelectionClears({
+                        nextDayKey: toLocalDateInputValue(selectedDate),
+                        nextGroupId: groupId,
+                        previousDayKey: toLocalDateInputValue(selectedDate),
+                        previousGroupId: selectedGroup.id,
+                      })) clearPostSelection();
+                      clearFeed(groupId);
+                      setSelectedGroupId(groupId);
+                    }}
+                    onToggleMenu={setGroupMenuView}
+                    selectedGroupId={selectedGroup.id}
+                  />
                 ) : null}
               </View>
             </View>
@@ -636,7 +595,7 @@ export default function CommunityTabScreen() {
 
             <View onLayout={handleBoardLayout} style={styles.boardArea}>
               {loading ? (
-                <View style={styles.feedState}><ActivityIndicator color={colors.brand} /><Text style={styles.feedStateText}>Loading activity…</Text></View>
+                <View style={styles.feedState}><LoadingState message="Loading activity…" /></View>
               ) : error ? (
                 <View style={styles.feedState}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Activity unavailable" /></View>
               ) : (board?.communityWorkouts.length ?? 0) > 0 ? (
@@ -646,7 +605,7 @@ export default function CommunityTabScreen() {
                   <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
                 </View>
               ) : (
-                <View style={styles.historicalEmpty}><Text style={styles.historicalEmptyText}>No workouts were logged this day</Text></View>
+                <View style={styles.historicalEmpty}><StateCard message="No workouts were logged this day." title="No workouts" /></View>
               )}
             </View>
           </>
@@ -666,6 +625,7 @@ export default function CommunityTabScreen() {
         key={detailTarget?.workout.id ?? "closed"}
         fixture={layoutPreview && detailTarget ? layoutPreviewDetail(detailTarget.workout.id) : null}
         groupId={detailTarget?.groupId ?? null}
+        groupName={selectedGroup?.name ?? null}
         initialWorkout={detailTarget?.workout ?? null}
         onCommentCountChange={updateFeedCommentCount}
         onDismiss={() => {
@@ -695,8 +655,56 @@ export default function CommunityTabScreen() {
         visible={deleteTarget !== null}
       />
     </SafeAreaView>
-    <RepInPill />
     </View>
+  );
+}
+
+function GroupActionsMenu({
+  groupMenuView,
+  groups,
+  onOpenGroup,
+  onSelectGroup,
+  onToggleMenu,
+  selectedGroupId,
+}: {
+  groupMenuView: "actions" | "groups";
+  groups: GroupSummary[];
+  onOpenGroup: (groupId: string) => void;
+  onSelectGroup: (groupId: string) => void;
+  onToggleMenu: (view: "actions" | "groups" | null) => void;
+  selectedGroupId: string;
+}) {
+  return (
+    <Menu style={styles.groupDrawer}>
+      {groupMenuView === "actions" ? (
+        <>
+          <MenuItem icon="arrow.triangle.2.circlepath" label="Switch group" onPress={() => onToggleMenu("groups")} showChevron />
+          <MenuItem
+            icon="person.2"
+            label="View group"
+            onPress={() => {
+              onToggleMenu(null);
+              onOpenGroup(selectedGroupId);
+            }}
+          />
+        </>
+      ) : (
+        <>
+          <MenuItem accessibilityLabel="Back to group menu" icon="chevron.left" label="Switch group" onPress={() => onToggleMenu("actions")} />
+          {groups.map((group) => (
+            <MenuItem
+              key={group.id}
+              label={group.name}
+              onPress={() => {
+                onSelectGroup(group.id);
+                onToggleMenu(null);
+              }}
+              selected={group.id === selectedGroupId}
+            />
+          ))}
+        </>
+      )}
+    </Menu>
   );
 }
 
@@ -734,52 +742,17 @@ function CommunityGroupControls({
             style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
           >
             <Text numberOfLines={1} style={styles.groupName}>{selectedGroup.name}</Text>
-            <Feather color={colors.brand} name={groupMenuView ? "chevron-up" : "chevron-down"} size={18} style={styles.chevron} />
+            <View style={styles.chevron}><Chevron color={colors.brand} direction={groupMenuView ? "up" : "down"} /></View>
           </Pressable>
           {groupMenuView ? (
-            <View style={styles.groupDrawer}>
-              {groupMenuView === "actions" ? (
-                <>
-                  <Pressable accessibilityRole="button" onPress={() => onToggleMenu("groups")} style={({ pressed }) => [styles.menuAction, pressed && styles.pressed]}>
-                    <Feather color={colors.inkSoft} name="repeat" size={17} />
-                    <Text style={styles.menuActionText}>Switch group</Text>
-                    <Feather color={colors.muted} name="chevron-right" size={16} />
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => {
-                      onToggleMenu(null);
-                      onOpenGroup(selectedGroup.id);
-                    }}
-                    style={({ pressed }) => [styles.menuAction, pressed && styles.pressed]}
-                  >
-                    <Feather color={colors.inkSoft} name="users" size={17} />
-                    <Text style={styles.menuActionText}>View group</Text>
-                  </Pressable>
-                </>
-              ) : (
-                <>
-                  <Pressable accessibilityLabel="Back to group menu" accessibilityRole="button" onPress={() => onToggleMenu("actions")} style={({ pressed }) => [styles.menuHeading, pressed && styles.pressed]}>
-                    <Feather color={colors.muted} name="chevron-left" size={16} />
-                    <Text style={styles.menuHeadingText}>Switch group</Text>
-                  </Pressable>
-                  {groups.map((group) => (
-                    <Pressable
-                      accessibilityRole="button"
-                      key={group.id}
-                      onPress={() => {
-                        onSelectGroup(group.id);
-                        onToggleMenu(null);
-                      }}
-                      style={({ pressed }) => [styles.groupOption, group.id === selectedGroup.id && styles.selectedOption, pressed && styles.pressed]}
-                    >
-                      <Text numberOfLines={1} style={styles.optionName}>{group.name}</Text>
-                      {group.id === selectedGroup.id ? <Feather color={colors.brand} name="check" size={17} /> : null}
-                    </Pressable>
-                  ))}
-                </>
-              )}
-            </View>
+            <GroupActionsMenu
+              groupMenuView={groupMenuView}
+              groups={groups}
+              onOpenGroup={onOpenGroup}
+              onSelectGroup={onSelectGroup}
+              onToggleMenu={onToggleMenu}
+              selectedGroupId={selectedGroup.id}
+            />
           ) : null}
         </View>
       </View>
@@ -824,35 +797,31 @@ function DeleteWorkoutModal({
   visible: boolean;
 }) {
   return (
-    <Modal animationType="fade" onRequestClose={onDismiss} transparent visible={visible}>
-      <View style={styles.deleteOverlay}>
-        <Pressable accessibilityLabel="Cancel deletion" disabled={pending} onPress={onDismiss} style={[StyleSheet.absoluteFill, styles.deleteBackdrop]} />
-        <CenteredCard>
-        <View accessibilityViewIsModal style={styles.deletePanel}>
-          <Text style={styles.deleteTitle}>{stage === "choose" ? "Delete workout?" : "Permanently delete workout?"}</Text>
-          <Text style={styles.deleteMessage}>{stage === "choose" ? "Choose what you want to remove." : "This removes the workout from your history and every Community post. This cannot be undone."}</Text>
-          {stage === "choose" ? (
-            <>
-              <Pressable accessibilityRole="button" disabled={pending} onPress={onDeletePost} style={styles.deleteChoice}>
-                <Text style={styles.deleteChoiceTitle}>Delete post only</Text>
-                <Text style={styles.deleteChoiceCopy}>Remove this rep-in from the group. Your workout will stay in your history.</Text>
-              </Pressable>
-              <Pressable accessibilityRole="button" disabled={pending} onPress={onDeleteWorkout} style={styles.deleteChoice}>
-                <Text style={styles.destructiveTitle}>Delete post and workout</Text>
-                <Text style={styles.deleteChoiceCopy}>Permanently delete this workout and its Community post.</Text>
-              </Pressable>
-            </>
-          ) : (
-            <Pressable accessibilityRole="button" disabled={pending} onPress={onDeleteWorkout} style={styles.confirmDelete}>
-              {pending ? <ActivityIndicator color={colors.surface} /> : <Text style={styles.confirmDeleteText}>Permanently delete</Text>}
-            </Pressable>
-          )}
-          {error ? <Text style={styles.deleteError}>{error}</Text> : null}
-          <Pressable accessibilityRole="button" disabled={pending} onPress={onDismiss} style={styles.cancelDelete}><Text style={styles.cancelDeleteText}>Cancel</Text></Pressable>
-        </View>
-        </CenteredCard>
-      </View>
-    </Modal>
+    <Dialog closeLabel="Cancel deletion" dismissDisabled={pending} onDismiss={onDismiss} visible={visible}>
+      <Text style={styles.deleteTitle}>{stage === "choose" ? "Delete workout?" : "Permanently delete workout?"}</Text>
+      <Text style={styles.deleteMessage}>{stage === "choose" ? "Choose what you want to remove." : "This removes the workout from your history and every Community post. This cannot be undone."}</Text>
+      {stage === "choose" ? (
+        <>
+          <MenuItem
+            detail="Remove this rep-in from the group. Your workout will stay in your history."
+            disabled={pending}
+            label="Delete post only"
+            onPress={onDeletePost}
+          />
+          <MenuItem
+            danger
+            detail="Permanently delete this workout and its Community post."
+            disabled={pending}
+            label="Delete post and workout"
+            onPress={onDeleteWorkout}
+          />
+        </>
+      ) : (
+        <Button loading={pending} loadingLabel="Deleting" onPress={onDeleteWorkout} variant="danger">Permanently delete</Button>
+      )}
+      {error ? <Text accessibilityLiveRegion="polite" style={styles.deleteError}>{error}</Text> : null}
+      <Button disabled={pending} onPress={onDismiss} variant="secondary">Cancel</Button>
+    </Dialog>
   );
 }
 
@@ -862,45 +831,25 @@ const styles = StyleSheet.create({
   content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   pickerBackdrop: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0, zIndex: 10 },
-  groupHeaderRow: { alignItems: "center", flexDirection: "row", marginTop: spacing.xs, minHeight: 48, zIndex: 20 },
+  groupHeaderRow: { alignItems: "center", flexDirection: "row", marginTop: spacing.xs, minHeight: size.control, zIndex: 20 },
   selectorAnchor: { flexShrink: 1, maxWidth: "100%", position: "relative", zIndex: 21 },
-  selector: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", minHeight: 44, paddingRight: spacing.sm },
+  selector: { alignItems: "center", alignSelf: "flex-start", flexDirection: "row", minHeight: size.hit, paddingRight: spacing.sm },
   groupName: { color: colors.ink, flexShrink: 1, ...type.screenTitle },
   chevron: { marginLeft: spacing.xs },
-  groupDrawer: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, boxShadow: elevation.e2, left: 0, maxWidth: 280, minWidth: 220, padding: spacing.xs, position: "absolute", top: "100%", zIndex: 21 },
-  menuAction: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", gap: spacing.sm, minHeight: 44, paddingHorizontal: spacing.md },
-  menuActionText: { color: colors.ink, flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
-  menuHeading: { alignItems: "center", flexDirection: "row", gap: spacing.xs, minHeight: 36, paddingHorizontal: spacing.sm },
-  menuHeadingText: { color: colors.muted, fontFamily: fonts.semibold, fontSize: 13 },
-  groupOption: { alignItems: "center", borderRadius: radii.sm, flexDirection: "row", minHeight: 44, paddingHorizontal: spacing.md },
-  selectedOption: { backgroundColor: colors.surfaceMuted },
-  optionName: { color: colors.inkSoft, flex: 1, fontFamily: fonts.semibold, fontSize: 15 },
+  groupDrawer: { left: 0, maxWidth: 280, minWidth: 220, position: "absolute", top: "100%", zIndex: 21 },
   dateNavigator: { alignItems: "center", alignSelf: "center", flexDirection: "row", justifyContent: "center", marginTop: spacing.xs },
-  dateArrow: { alignItems: "center", justifyContent: "center", minHeight: 44, width: 52 },
+  dateArrow: { alignItems: "center", justifyContent: "center", minHeight: size.hit, width: size.primary },
   dateArrowDisabled: { opacity: 0.28 },
-  dateLabelButton: { alignItems: "center", justifyContent: "center", minHeight: 44, minWidth: 128, paddingHorizontal: spacing.md },
+  dateLabelButton: { alignItems: "center", justifyContent: "center", minHeight: size.hit, minWidth: 128, paddingHorizontal: spacing.md },
   dateLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
   boardTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 17, lineHeight: 23, marginBottom: spacing.sm, marginTop: spacing.sm },
   boardArea: { backgroundColor: colors.surfaceMuted, borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
-  feedState: { flex: 1, gap: spacing.md, justifyContent: "center", padding: spacing.xxl },
-  feedStateText: { color: colors.muted, ...type.bodySmall, textAlign: "center" },
+  feedState: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   todayEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
-  historicalEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
-  historicalEmptyText: { color: colors.muted, ...type.body, textAlign: "center" },
-  deleteOverlay: { flex: 1 },
-  deleteBackdrop: { backgroundColor: colors.overlay },
-  deletePanel: { backgroundColor: colors.surface, borderRadius: radii.lg, boxShadow: elevation.e3, padding: spacing.xxl, width: "100%" },
+  historicalEmpty: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   deleteTitle: { color: colors.ink, ...type.title },
-  deleteMessage: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  deleteChoice: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, minHeight: 72, paddingVertical: spacing.md },
-  deleteChoiceTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16 },
-  destructiveTitle: { color: colors.danger, fontFamily: fonts.semibold, fontSize: 16 },
-  deleteChoiceCopy: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  confirmDelete: { alignItems: "center", backgroundColor: colors.danger, borderRadius: radii.md, justifyContent: "center", marginTop: spacing.xl, minHeight: 48 },
-  confirmDeleteText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 16 },
-  deleteError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.md },
-  cancelDelete: { alignItems: "center", justifyContent: "center", marginTop: spacing.md, minHeight: 44 },
-  cancelDeleteText: { color: colors.inkSoft, ...type.label },
+  deleteMessage: { color: colors.muted, ...type.bodySmall },
+  deleteError: { color: colors.danger, ...type.bodySmall },
   pressed: { opacity: 0.72 },
   paneColumn: { flexGrow: 1, paddingBottom: spacing.xxl, paddingTop: spacing.lg },
   paneCardPress: { marginTop: spacing.md },
