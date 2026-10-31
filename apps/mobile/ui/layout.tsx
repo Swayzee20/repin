@@ -1,7 +1,7 @@
 import { useRef, type ReactNode } from "react";
 import { Platform, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { useReservedRegions } from "react-native-reserved-regions";
+import { useReservedRegions } from "./reserved-regions";
 
 import {
   centeredCardFrame,

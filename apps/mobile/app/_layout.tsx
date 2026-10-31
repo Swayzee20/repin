@@ -12,7 +12,7 @@ import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import { StyleSheet } from "react-native";
-import { ReservedRegionsProvider } from "react-native-reserved-regions";
+import { ReservedRegionsProvider } from "../ui/reserved-regions";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isLayoutPreview } from "../lib/layout-preview";
