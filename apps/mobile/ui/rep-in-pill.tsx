@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useVerticalBarEdge } from "./vertical-bar-edge";
+import { useEdgeResolved, useStripPresent } from "./vertical-bar-edge";
 import { useCallback, useEffect, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,13 +10,14 @@ import { useMainTabs } from "./main-tabs-context";
 import { colors, radii, spacing, type } from "./theme";
 
 export function RepInPill() {
-  const edge = useVerticalBarEdge();
+  const stripPresent = useStripPresent();
+  const edgeResolved = useEdgeResolved();
   const insets = useSafeAreaInsets();
   const { session } = useAuthSession();
   const { openWorkoutChooser, selectedGroupId } = useMainTabs();
   const [focused, setFocused] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const stripPresent = edge !== null;
+  const visible = focused && edgeResolved && !stripPresent && session && selectedGroupId && !keyboardVisible;
 
   useFocusEffect(useCallback(() => {
     setFocused(true);
@@ -24,16 +25,16 @@ export function RepInPill() {
   }, []));
 
   useEffect(() => {
-    if (!focused || stripPresent) return;
+    if (!focused || !edgeResolved || stripPresent) return;
     const showSubscription = Keyboard.addListener("keyboardDidShow", () => setKeyboardVisible(true));
     const hideSubscription = Keyboard.addListener("keyboardDidHide", () => setKeyboardVisible(false));
     return () => {
       showSubscription.remove();
       hideSubscription.remove();
     };
-  }, [focused, stripPresent]);
+  }, [edgeResolved, focused, stripPresent]);
 
-  if (!focused || stripPresent || !session || !selectedGroupId || keyboardVisible) return null;
+  if (!visible) return null;
 
   return (
     <View
