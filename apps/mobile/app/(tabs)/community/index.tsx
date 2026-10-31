@@ -1,9 +1,9 @@
-import type { CommunityData, CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
+import type { CommunityData, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GroupSummary, WorkoutFeedItem } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
-import { useFocusEffect, useRouter, useSegments } from "expo-router";
+import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, Modal, Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
 import { clearWorkoutDetailCaches } from "../../../lib/workout-detail-cache";
@@ -21,23 +21,39 @@ import {
   markWorkoutDataStale,
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
-import { BrandHeader, CommunityFeed, LoadingState, StateCard } from "../../../ui/components";
-import { CenteredCard, WideColumn } from "../../../ui/layout";
+import { isLayoutPreview } from "../../../lib/layout-preview";
+import {
+  communityFoldTransition,
+  communitySelectionClears,
+  readCommunityPostParam,
+  resolveCommunitySelection,
+} from "../../../lib/community-selection";
+import { BrandHeader, CommunityFeed, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { CenteredCard, TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
 import { RepInPill } from "../../../ui/rep-in-pill";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { CommunityDatePicker } from "../../../ui/community-date-picker";
 import { useMainTabs } from "../../../ui/main-tabs-context";
+import { ScrollAnchor } from "../../../ui/scroll-anchor";
 import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
+import { holdComposerFocus, releaseComposerFocus, WorkoutDetailView, type WorkoutDetailFixture } from "../../../ui/workout-detail";
 import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
+const communityFeedAnchorKey = "community-feed";
+
 export default function CommunityTabScreen() {
   const router = useRouter();
   const segments = useSegments();
+  const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams<{ post?: string | string[] }>();
+  const postParam = readCommunityPostParam(params.post);
+  const { mode } = useLayoutMode();
+  const layoutPreview = __DEV__ && isLayoutPreview();
   const { openWorkoutChooser, selectedGroupId, setSelectedGroupId } = useMainTabs();
   const [data, setData] = useState<CommunityData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!layoutPreview);
   const [error, setError] = useState<string | null>(null);
   const [groupMenuView, setGroupMenuView] = useState<"actions" | "groups" | null>(null);
   const [datePickerOpen, setDatePickerOpen] = useState(false);
@@ -48,6 +64,9 @@ export default function CommunityTabScreen() {
     groupId: string;
     workout: WorkoutFeedItem;
   } | null>(null);
+  const [explicitOverride, setExplicitOverride] = useState<string | null>(null);
+  const modeRef = useRef(mode);
+  const queuedDetail = useRef(detailTarget);
   const [deleteTarget, setDeleteTarget] = useState<WorkoutFeedItem | null>(null);
   const [deleteStage, setDeleteStage] = useState<"choose" | "confirm-workout">("choose");
   const [deletePending, setDeletePending] = useState(false);
@@ -138,6 +157,7 @@ export default function CommunityTabScreen() {
   }, [selectedDate, selectedGroupId, setSelectedGroupId]);
 
   useEffect(() => {
+    if (layoutPreview) return;
     const now = new Date();
     const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const timeout = setTimeout(() => {
@@ -154,12 +174,67 @@ export default function CommunityTabScreen() {
       lastSuccessfulLoad.current = null;
     }, nextDay.getTime() - now.getTime() + 1_000);
     return () => clearTimeout(timeout);
-  }, [currentDay]);
+  }, [currentDay, layoutPreview]);
 
+  const previewBoard = useMemo(() => (layoutPreview ? layoutPreviewCommunity() : null), [layoutPreview]);
+  const board = previewBoard ?? data;
+  const workouts = useMemo(() => board?.communityWorkouts ?? [], [board]);
   const selectedGroup = useMemo(
-    () => data?.groups.find((group) => group.id === (selectedGroupId ?? data.selectedGroupId)) ?? null,
-    [data, selectedGroupId],
+    () => board?.groups.find((group) => group.id === (selectedGroupId ?? board.selectedGroupId)) ?? null,
+    [board, selectedGroupId],
   );
+  const baseSelection = resolveCommunitySelection({
+    postParam: explicitOverride ?? postParam,
+    workouts,
+  });
+  let selection = baseSelection;
+  let detail = detailTarget;
+  if (modeRef.current !== mode) {
+    const previousMode = modeRef.current;
+    modeRef.current = mode;
+    holdComposerFocus();
+    const effect = communityFoldTransition({
+      modalSessionId: detailTarget?.workout.id ?? null,
+      nextMode: mode,
+      previousMode,
+      selection: baseSelection,
+    });
+    if (effect.closeModalImmediately) detail = null;
+    if (effect.openModalSessionId) {
+      const workout = workouts.find((item) => item.id === effect.openModalSessionId)
+        ?? (detailTarget?.workout.id === effect.openModalSessionId ? detailTarget.workout : null);
+      const groupId = selectedGroup?.id ?? detailTarget?.groupId ?? null;
+      if (workout && groupId) detail = { groupId, workout };
+    }
+    if (effect.setExplicitPostId) {
+      selection = resolveCommunitySelection({ postParam: effect.setExplicitPostId, workouts });
+      if (effect.setExplicitPostId !== explicitOverride) setExplicitOverride(effect.setExplicitPostId);
+    }
+    queuedDetail.current = detail;
+  }
+
+  useEffect(() => {
+    const next = queuedDetail.current;
+    const openSheet = setTimeout(() => {
+      setDetailTarget(next);
+    }, 32);
+    const releaseFocus = setTimeout(() => releaseComposerFocus(), 600);
+    return () => {
+      clearTimeout(openSheet);
+      clearTimeout(releaseFocus);
+    };
+  }, [mode]);
+
+  useEffect(() => {
+    if (!explicitOverride || explicitOverride === postParam) return;
+    router.setParams({ post: explicitOverride });
+  }, [explicitOverride, postParam, router]);
+
+  const clearPostSelection = useCallback(() => {
+    setExplicitOverride(null);
+    setDetailTarget(null);
+    if (postParam) router.setParams({ post: "" });
+  }, [postParam, router]);
 
   const clearFeed = useCallback((nextGroupId?: string | null) => {
     latestRequestKey.current = null;
@@ -177,6 +252,7 @@ export default function CommunityTabScreen() {
   }, []);
 
   useFocusEffect(useCallback(() => {
+    if (layoutPreview) return;
     if (!resetDateOnNextFocus.current) {
       void loadCommunity();
       return;
@@ -191,19 +267,26 @@ export default function CommunityTabScreen() {
     clearFeed();
 
     if (dateChanged) {
+      clearPostSelection();
       setSelectedDate(today);
       return;
     }
 
     void loadCommunity();
-  }, [clearFeed, loadCommunity, selectedDate]));
+  }, [clearFeed, clearPostSelection, layoutPreview, loadCommunity, selectedDate]));
 
   const selectDate = useCallback((nextDate: Date) => {
     const normalized = startOfLocalDay(nextDate);
     if (normalized > currentDay || isSameLocalDay(normalized, selectedDate)) return;
+    if (communitySelectionClears({
+      nextDayKey: toLocalDateInputValue(normalized),
+      nextGroupId: selectedGroupId,
+      previousDayKey: toLocalDateInputValue(selectedDate),
+      previousGroupId: selectedGroupId,
+    })) clearPostSelection();
     clearFeed();
     setSelectedDate(normalized);
-  }, [clearFeed, currentDay, selectedDate]);
+  }, [clearFeed, clearPostSelection, currentDay, selectedDate, selectedGroupId]);
 
   const handleBoardLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = Math.floor(event.nativeEvent.layout.height);
@@ -213,8 +296,13 @@ export default function CommunityTabScreen() {
   const openWorkoutDetail = useCallback((workout: WorkoutFeedItem) => {
     if (!selectedGroup) return;
     setGroupMenuView(null);
+    if (mode === "twoPane") {
+      setExplicitOverride(workout.id);
+      router.setParams({ post: workout.id });
+      return;
+    }
     setDetailTarget({ groupId: selectedGroup.id, workout });
-  }, [selectedGroup]);
+  }, [mode, router, selectedGroup]);
 
   const updateFeedReactionSummary = useCallback((sessionId: string, reactions: CommunityReactionSummary) => {
     setData((current) => {
@@ -272,6 +360,9 @@ export default function CommunityTabScreen() {
       }
       markWorkoutDataStale();
       clearWorkoutDetailCaches();
+      if (postParam === deleteTarget.id || explicitOverride === deleteTarget.id || detailTarget?.workout.id === deleteTarget.id) {
+        clearPostSelection();
+      }
       setData((current) => {
         if (!current) return current;
         const next = { ...current, communityWorkouts: current.communityWorkouts.filter((workout) => workout.id !== deleteTarget.id) };
@@ -285,10 +376,138 @@ export default function CommunityTabScreen() {
     } finally {
       setDeletePending(false);
     }
-  }, [deleteTarget, selectedGroup]);
+  }, [clearPostSelection, deleteTarget, detailTarget?.workout.id, explicitOverride, postParam, selectedGroup]);
 
-  if (loading && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><WideColumn fill><LoadingState message="Loading Community…" /></WideColumn></SafeAreaView>;
-  if (error && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><WideColumn fill><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" /></View></WideColumn></SafeAreaView>;
+  if (!layoutPreview && loading && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><WideColumn fill><LoadingState message="Loading Community…" /></WideColumn></SafeAreaView>;
+  if (!layoutPreview && error && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><WideColumn fill><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" /></View></WideColumn></SafeAreaView>;
+
+  const previewFixture = layoutPreview && selection.kind !== "none" ? layoutPreviewDetail(selection.sessionId) : null;
+  const openSessionId = selection.kind === "none" ? null : selection.sessionId;
+
+  if (mode === "twoPane" && selectedGroup) {
+    return (
+      <View style={styles.safeArea}>
+        <SafeAreaView edges={["top"]} style={styles.flex}>
+          <TwoPane
+            fallback="hide-right"
+            keyboardShouldPersistTaps="handled"
+            leftAnchorKey={communityFeedAnchorKey}
+            scrollableRight={false}
+            left={(
+              <View style={styles.paneColumn}>
+                {groupMenuView ? (
+                  <Pressable
+                    accessibilityLabel="Close group menu"
+                    accessibilityRole="button"
+                    onPress={() => setGroupMenuView(null)}
+                    style={styles.pickerBackdrop}
+                  />
+                ) : null}
+                <ScrollAnchor id="community-header">
+                  <BrandHeader />
+                  <CommunityGroupControls
+                    currentDay={currentDay}
+                    groupMenuView={groupMenuView}
+                    groups={board?.groups ?? []}
+                    onOpenDatePicker={() => setDatePickerOpen(true)}
+                    onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}
+                    onSelectDate={selectDate}
+                    onSelectGroup={(groupId) => {
+                      if (communitySelectionClears({
+                        nextDayKey: toLocalDateInputValue(selectedDate),
+                        nextGroupId: groupId,
+                        previousDayKey: toLocalDateInputValue(selectedDate),
+                        previousGroupId: selectedGroup.id,
+                      })) clearPostSelection();
+                      clearFeed(groupId);
+                      setSelectedGroupId(groupId);
+                    }}
+                    onToggleMenu={setGroupMenuView}
+                    selectedDate={selectedDate}
+                    selectedGroup={selectedGroup}
+                  />
+                </ScrollAnchor>
+                <Text style={styles.boardTitle}>Community Board</Text>
+                {workouts.length ? workouts.map((workout) => {
+                  const selected = workout.id === openSessionId;
+                  return (
+                    <ScrollAnchor id={workout.id} key={workout.id}>
+                      <Pressable
+                        accessibilityLabel={`Open ${workout.title} workout details`}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected }}
+                        onPress={() => openWorkoutDetail(workout)}
+                        style={styles.paneCardPress}
+                      >
+                        <WorkoutSummaryCard
+                          showCommentCount
+                          showReactionSummary
+                          style={selected ? styles.selectedCard : undefined}
+                          variant="full"
+                          workout={workout}
+                        />
+                      </Pressable>
+                    </ScrollAnchor>
+                  );
+                }) : null}
+              </View>
+            )}
+            right={openSessionId === null ? (
+              <View style={[styles.paneEmpty, { paddingBottom: insets.bottom }]}>
+                {isSameLocalDay(selectedDate, currentDay) ? (
+                  <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
+                ) : (
+                  <Text style={styles.historicalEmptyText}>No workouts were logged this day</Text>
+                )}
+              </View>
+            ) : (
+              <WorkoutDetailView
+                key={openSessionId}
+                fixture={previewFixture}
+                groupId={selectedGroup.id}
+                paneHeader={(
+                  <View style={styles.panePostHeader}>
+                    <Text style={styles.panePostTitle}>Post</Text>
+                    <Text style={styles.panePostFrom}>from {selectedGroup.name}</Text>
+                  </View>
+                )}
+                presentation="community-pane"
+                seedWorkout={workouts.find((workout) => workout.id === openSessionId)}
+                sessionId={openSessionId}
+                onCommentCountChange={updateFeedCommentCount}
+                onReactionSummaryChange={updateFeedReactionSummary}
+              />
+            )}
+          />
+        </SafeAreaView>
+        <CommunityDatePicker
+          maximumDate={currentDay}
+          onChange={selectDate}
+          onDismiss={() => setDatePickerOpen(false)}
+          value={selectedDate}
+          visible={datePickerOpen}
+        />
+        <DeleteWorkoutModal
+          error={deleteError}
+          onDeletePost={() => void deleteWorkout("post")}
+          onDeleteWorkout={() => {
+            if (deleteStage === "choose") setDeleteStage("confirm-workout");
+            else void deleteWorkout("workout");
+          }}
+          onDismiss={() => {
+            if (deletePending) return;
+            setDeleteTarget(null);
+            setDeleteStage("choose");
+            setDeleteError(null);
+          }}
+          pending={deletePending}
+          stage={deleteStage}
+          visible={deleteTarget !== null}
+        />
+        <RepInPill />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.safeArea}>
@@ -354,11 +573,17 @@ export default function CommunityTabScreen() {
                           <Feather color={colors.muted} name="chevron-left" size={16} />
                           <Text style={styles.menuHeadingText}>Switch group</Text>
                         </Pressable>
-                        {data?.groups.map((group) => (
+                        {board?.groups.map((group) => (
                           <Pressable
                             accessibilityRole="button"
                             key={group.id}
                             onPress={() => {
+                              if (communitySelectionClears({
+                                nextDayKey: toLocalDateInputValue(selectedDate),
+                                nextGroupId: group.id,
+                                previousDayKey: toLocalDateInputValue(selectedDate),
+                                previousGroupId: selectedGroup.id,
+                              })) clearPostSelection();
                               clearFeed(group.id);
                               setSelectedGroupId(group.id);
                               setGroupMenuView(null);
@@ -414,8 +639,8 @@ export default function CommunityTabScreen() {
                 <View style={styles.feedState}><ActivityIndicator color={colors.brand} /><Text style={styles.feedStateText}>Loading activity…</Text></View>
               ) : error ? (
                 <View style={styles.feedState}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Activity unavailable" /></View>
-              ) : data?.communityWorkouts.length ? (
-                boardHeight > 0 ? <CommunityFeed edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} showCommentCount showReactionSummary viewerUserId={loadedUserId.current} viewportHeight={boardHeight} workouts={data.communityWorkouts} /> : null
+              ) : (board?.communityWorkouts.length ?? 0) > 0 ? (
+                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} showCommentCount showReactionSummary viewerUserId={loadedUserId.current} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
               ) : isSameLocalDay(selectedDate, currentDay) ? (
                 <View style={styles.todayEmpty}>
                   <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
@@ -438,10 +663,16 @@ export default function CommunityTabScreen() {
         visible={datePickerOpen}
       />
       <WorkoutDetailModal
+        key={detailTarget?.workout.id ?? "closed"}
+        fixture={layoutPreview && detailTarget ? layoutPreviewDetail(detailTarget.workout.id) : null}
         groupId={detailTarget?.groupId ?? null}
         initialWorkout={detailTarget?.workout ?? null}
         onCommentCountChange={updateFeedCommentCount}
-        onDismiss={() => setDetailTarget(null)}
+        onDismiss={() => {
+          setDetailTarget(null);
+          setExplicitOverride(null);
+          if (postParam) router.setParams({ post: "" });
+        }}
         onReactionSummaryChange={updateFeedReactionSummary}
         sessionId={detailTarget?.workout.id ?? null}
         visible={detailTarget !== null}
@@ -466,6 +697,112 @@ export default function CommunityTabScreen() {
     </SafeAreaView>
     <RepInPill />
     </View>
+  );
+}
+
+function CommunityGroupControls({
+  currentDay,
+  groupMenuView,
+  groups,
+  onOpenDatePicker,
+  onOpenGroup,
+  onSelectDate,
+  onSelectGroup,
+  onToggleMenu,
+  selectedDate,
+  selectedGroup,
+}: {
+  currentDay: Date;
+  groupMenuView: "actions" | "groups" | null;
+  groups: GroupSummary[];
+  onOpenDatePicker: () => void;
+  onOpenGroup: (groupId: string) => void;
+  onSelectDate: (date: Date) => void;
+  onSelectGroup: (groupId: string) => void;
+  onToggleMenu: (view: "actions" | "groups" | null) => void;
+  selectedDate: Date;
+  selectedGroup: GroupSummary;
+}) {
+  return (
+    <>
+      <View style={styles.groupHeaderRow}>
+        <View style={styles.selectorAnchor}>
+          <Pressable
+            accessibilityLabel={`Selected group: ${selectedGroup.name}. Open group menu`}
+            accessibilityRole="button"
+            onPress={() => onToggleMenu(groupMenuView ? null : "actions")}
+            style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
+          >
+            <Text numberOfLines={1} style={styles.groupName}>{selectedGroup.name}</Text>
+            <Feather color={colors.brand} name={groupMenuView ? "chevron-up" : "chevron-down"} size={18} style={styles.chevron} />
+          </Pressable>
+          {groupMenuView ? (
+            <View style={styles.groupDrawer}>
+              {groupMenuView === "actions" ? (
+                <>
+                  <Pressable accessibilityRole="button" onPress={() => onToggleMenu("groups")} style={({ pressed }) => [styles.menuAction, pressed && styles.pressed]}>
+                    <Feather color={colors.inkSoft} name="repeat" size={17} />
+                    <Text style={styles.menuActionText}>Switch group</Text>
+                    <Feather color={colors.muted} name="chevron-right" size={16} />
+                  </Pressable>
+                  <Pressable
+                    accessibilityRole="button"
+                    onPress={() => {
+                      onToggleMenu(null);
+                      onOpenGroup(selectedGroup.id);
+                    }}
+                    style={({ pressed }) => [styles.menuAction, pressed && styles.pressed]}
+                  >
+                    <Feather color={colors.inkSoft} name="users" size={17} />
+                    <Text style={styles.menuActionText}>View group</Text>
+                  </Pressable>
+                </>
+              ) : (
+                <>
+                  <Pressable accessibilityLabel="Back to group menu" accessibilityRole="button" onPress={() => onToggleMenu("actions")} style={({ pressed }) => [styles.menuHeading, pressed && styles.pressed]}>
+                    <Feather color={colors.muted} name="chevron-left" size={16} />
+                    <Text style={styles.menuHeadingText}>Switch group</Text>
+                  </Pressable>
+                  {groups.map((group) => (
+                    <Pressable
+                      accessibilityRole="button"
+                      key={group.id}
+                      onPress={() => {
+                        onSelectGroup(group.id);
+                        onToggleMenu(null);
+                      }}
+                      style={({ pressed }) => [styles.groupOption, group.id === selectedGroup.id && styles.selectedOption, pressed && styles.pressed]}
+                    >
+                      <Text numberOfLines={1} style={styles.optionName}>{group.name}</Text>
+                      {group.id === selectedGroup.id ? <Feather color={colors.brand} name="check" size={17} /> : null}
+                    </Pressable>
+                  ))}
+                </>
+              )}
+            </View>
+          ) : null}
+        </View>
+      </View>
+      <View style={styles.dateNavigator}>
+        <Pressable accessibilityLabel="Previous day" accessibilityRole="button" hitSlop={8} onPress={() => onSelectDate(addLocalDays(selectedDate, -1))} style={({ pressed }) => [styles.dateArrow, pressed && styles.pressed]}>
+          <Feather color={colors.inkSoft} name="chevron-left" size={21} />
+        </Pressable>
+        <Pressable accessibilityLabel={`Choose date, currently ${formatCommunityDayLabel(selectedDate, currentDay)}`} accessibilityRole="button" onPress={onOpenDatePicker} style={({ pressed }) => [styles.dateLabelButton, pressed && styles.pressed]}>
+          <Text style={styles.dateLabel}>{formatCommunityDayLabel(selectedDate, currentDay)}</Text>
+        </Pressable>
+        <Pressable
+          accessibilityLabel="Next day"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: isSameLocalDay(selectedDate, currentDay) }}
+          disabled={isSameLocalDay(selectedDate, currentDay)}
+          hitSlop={8}
+          onPress={() => onSelectDate(addLocalDays(selectedDate, 1))}
+          style={({ pressed }) => [styles.dateArrow, isSameLocalDay(selectedDate, currentDay) && styles.dateArrowDisabled, pressed && styles.pressed]}
+        >
+          <Feather color={colors.inkSoft} name="chevron-right" size={21} />
+        </Pressable>
+      </View>
+    </>
   );
 }
 
@@ -565,4 +902,108 @@ const styles = StyleSheet.create({
   cancelDelete: { alignItems: "center", justifyContent: "center", marginTop: spacing.md, minHeight: 44 },
   cancelDeleteText: { color: colors.inkSoft, ...type.label },
   pressed: { opacity: 0.72 },
+  paneColumn: { flexGrow: 1, paddingBottom: spacing.xxl, paddingTop: spacing.lg },
+  paneCardPress: { marginTop: spacing.md },
+  selectedCard: { borderColor: colors.brand, borderRadius: radii.lg, borderWidth: 2 },
+  paneEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
+  panePostHeader: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.lg },
+  panePostTitle: { color: colors.ink, ...type.heading },
+  panePostFrom: { color: colors.muted, ...type.bodySmall },
 });
+
+function atLocalTime(hours: number, minutes: number) {
+  const date = new Date();
+  date.setHours(hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
+function layoutPreviewCommunity(): CommunityData {
+  const reactions = { clap: 0, fire: 2, strong: 1 };
+  const workout = (
+    id: string,
+    displayName: string,
+    userId: string,
+    title: string,
+    workoutType: string,
+    hours: number,
+    minutes: number,
+    effort: number,
+    caption: string | null,
+    resultSummary: string,
+  ): WorkoutFeedItem => {
+    const occurredAt = atLocalTime(hours, minutes);
+    return {
+      caption,
+      commentCount: 1,
+      completedAt: occurredAt,
+      createdAt: occurredAt,
+      displayName,
+      durationMinutes: null,
+      effort,
+      groupId: "group-1",
+      id,
+      name: title,
+      notes: caption,
+      occurredAt,
+      photoPath: null,
+      reactionCounts: reactions,
+      resultSummary,
+      title,
+      updatedAt: occurredAt,
+      userId,
+      workoutType,
+    };
+  };
+  return {
+    communityWorkouts: [
+      workout("w1", "Maya L.", "user-maya", "Easy shakeout", "run", 7, 12, 4, "Legs felt great today", "5 km Run"),
+      workout("w2", "Jordan P.", "user-jordan", "Push day", "strength_training", 6, 40, 4, null, "45 min Strength Training"),
+      workout("w3", "Sam R.", "user-sam", "Hill repeats", "run", 6, 5, 4, null, "8 km Run"),
+    ],
+    groups: [{
+      createdAt: "2026-01-01T00:00:00.000Z",
+      id: "group-1",
+      name: "Morning Crew",
+      ownerId: "user-maya",
+      role: "owner",
+    }],
+    selectedGroupId: "group-1",
+  };
+}
+
+function layoutPreviewDetail(sessionId: string): WorkoutDetailFixture | null {
+  const workout = layoutPreviewCommunity().communityWorkouts.find((item) => item.id === sessionId);
+  if (!workout) return null;
+  const counts = workout.reactionCounts ?? { clap: 0, fire: 0, strong: 0 };
+  const detail: CommunityWorkoutDetail = {
+    ...workout,
+    communityPostId: `post-${workout.id}`,
+    metrics: workout.id === "w1" ? [{
+      id: "metric-distance",
+      label: "Distance",
+      metricType: "distance",
+      numericValue: 5,
+      position: 0,
+      textValue: null,
+      unit: "km",
+    }] : [],
+    movements: [],
+    reactions: {
+      counts,
+      total: counts.fire + counts.strong + counts.clap,
+      viewerReaction: null,
+    },
+    segments: [],
+    workoutSubtype: null,
+  };
+  const commentAt = atLocalTime(15, 36);
+  const comments: CommunityPostComment[] = workout.id === "w1" ? [{
+    createdAt: commentAt,
+    displayName: "repin member",
+    id: "comment-1",
+    text: "See you tomorrow.",
+    updatedAt: commentAt,
+    userId: "user-jordan",
+  }] : [];
+  return { comments, workout: detail };
+}

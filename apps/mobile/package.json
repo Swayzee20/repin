@@ -10,7 +10,7 @@
     "dev": "expo start",
     "ios": "expo start --ios",
     "start": "expo start",
-    "test:layout": "tsx --test ui/layout-math.test.ts ui/reserved-regions-availability.test.ts",
+    "test:layout": "tsx --test ui/layout-math.test.ts ui/reserved-regions-availability.test.ts lib/community-selection.test.ts lib/comment-draft.test.ts",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web"
   },

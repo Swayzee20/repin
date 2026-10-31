@@ -34,6 +34,17 @@ export type ScrollAnchorController = {
   scrollRef: RefObject<ScrollViewInstance | null>;
 };
 
+const storedAnchors = new Map<string, ScrollAnchor>();
+
+export function readStoredScrollAnchor(key: string) {
+  return storedAnchors.get(key) ?? null;
+}
+
+export function writeStoredScrollAnchor(key: string, anchor: ScrollAnchor | null) {
+  if (!anchor) storedAnchors.delete(key);
+  else storedAnchors.set(key, anchor);
+}
+
 type ScrollAnchorContextValue = {
   contentRef: RefObject<HostView | null>;
   onItemLayout: ScrollAnchorController["onItemLayout"];
@@ -43,16 +54,26 @@ const ScrollAnchorContext = createContext<ScrollAnchorContextValue | null>(null)
 const PaneContext = createContext<"left" | "right" | null>(null);
 const AnchorRegistryContext = createContext<RefObject<Map<string, "left" | "right">> | null>(null);
 
-export function useScrollAnchor(relayoutKey: string): ScrollAnchorController {
+export function useScrollAnchor(relayoutKey: string, storageKey?: string | null): ScrollAnchorController {
   const scrollRef = useRef<ScrollViewInstance>(null);
   const contentRef = useRef<HostView>(null);
-  const anchorRef = useRef<ScrollAnchor | null>(null);
+  const stored = storageKey ? storedAnchors.get(storageKey) ?? null : null;
+  const anchorRef = useRef<ScrollAnchor | null>(stored);
   const items = useRef(new Map<string, ItemLayout>());
-  const pending = useRef(false);
+  const pending = useRef(stored !== null);
   const viewportHeight = useRef(0);
   const contentHeight = useRef(0);
   const generation = useRef(0);
   const keyRef = useRef(relayoutKey);
+  const storageKeyRef = useRef<string | null>(storageKey ?? null);
+
+  if (storageKeyRef.current !== (storageKey ?? null)) {
+    storageKeyRef.current = storageKey ?? null;
+    const next = storageKey ? storedAnchors.get(storageKey) ?? null : null;
+    anchorRef.current = next;
+    generation.current += 1;
+    if (next) pending.current = true;
+  }
 
   if (keyRef.current !== relayoutKey) {
     keyRef.current = relayoutKey;
@@ -83,7 +104,10 @@ export function useScrollAnchor(relayoutKey: string): ScrollAnchorController {
       .filter(([, layout]) => layout.generation === generation.current)
       .map(([id, layout]) => ({ height: layout.height, id, y: layout.y }));
     const next = topVisibleAnchor(list, event.nativeEvent.contentOffset.y);
-    if (next) anchorRef.current = next;
+    if (next) {
+      anchorRef.current = next;
+      if (storageKeyRef.current) storedAnchors.set(storageKeyRef.current, next);
+    }
   }, []);
 
   const onContentSizeChange = useCallback((_width: number, height: number) => {

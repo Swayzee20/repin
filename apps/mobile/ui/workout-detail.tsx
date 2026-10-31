@@ -12,9 +12,11 @@ import {
 } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, Animated, Easing, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useRef, useState, type ComponentRef, type ReactNode } from "react";
+import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { useCommentDraft } from "../lib/comment-draft";
 import { supabase } from "../lib/supabase";
 import {
   formatWorkoutMetric,
@@ -39,16 +41,49 @@ import {
 } from "./components";
 import { colors, fonts, radii, spacing, type } from "./theme";
 import { PhotoViewer } from "./photo-viewer";
+import { ScrollAnchor, ScrollAnchorProvider, useScrollAnchor } from "./scroll-anchor";
 import { WorkoutPhoto } from "./workout-photo";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
+let focusedComposerSession: string | null = null;
+let ignoreComposerBlur = false;
+let composerBlurTimer: ReturnType<typeof setTimeout> | null = null;
+
+export function holdComposerFocus() {
+  ignoreComposerBlur = true;
+  if (composerBlurTimer) {
+    clearTimeout(composerBlurTimer);
+    composerBlurTimer = null;
+  }
+}
+
+export function releaseComposerFocus() {
+  ignoreComposerBlur = false;
+}
+
+function markComposerFocused(sessionId: string) {
+  focusedComposerSession = sessionId;
+}
+
+function markComposerBlurred(sessionId: string) {
+  if (ignoreComposerBlur) return;
+  if (focusedComposerSession === sessionId) focusedComposerSession = null;
+}
+
+export type WorkoutDetailFixture = {
+  comments: CommunityPostComment[];
+  workout: CommunityWorkoutDetail;
+};
+
 export function WorkoutDetailView({
   detailExpansionResetKey,
   detailPhotoMaxHeight,
+  fixture = null,
   groupId,
   onCommentCountChange,
   onReactionSummaryChange,
+  paneHeader = null,
   presentation = "default",
   refreshOnFocus = false,
   seedWorkout,
@@ -56,10 +91,12 @@ export function WorkoutDetailView({
 }: {
   detailExpansionResetKey?: string;
   detailPhotoMaxHeight?: number;
+  fixture?: WorkoutDetailFixture | null;
   groupId: string;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
-  presentation?: "default" | "community-modal";
+  paneHeader?: ReactNode;
+  presentation?: "community-modal" | "community-pane" | "default";
   refreshOnFocus?: boolean;
   seedWorkout?: WorkoutFeedItem;
   sessionId: string;
@@ -93,21 +130,23 @@ export function WorkoutDetailView({
   }
 
   const [workout, setWorkout] = useState<CommunityWorkoutDetail | null>(
-    initialDetail.current.workout,
+    fixture?.workout ?? initialDetail.current.workout,
   );
-  const [loading, setLoading] = useState(!initialDetail.current.fresh);
+  const [loading, setLoading] = useState(fixture ? false : !initialDetail.current.fresh);
   const [error, setError] = useState<string | null>(null);
   const [reactionError, setReactionError] = useState<string | null>(null);
   const [reactionPending, setReactionPending] = useState(false);
   const [comments, setComments] = useState<CommunityPostComment[]>(
-    initialComments.current.comments,
+    fixture?.comments ?? initialComments.current.comments,
   );
   const [commentsLoading, setCommentsLoading] = useState(
-    !initialComments.current.fresh,
+    fixture ? false : !initialComments.current.fresh,
   );
   const [commentError, setCommentError] = useState<string | null>(null);
-  const [commentText, setCommentText] = useState("");
+  const { clearDraft, draft: commentText, setDraft: setCommentText } = useCommentDraft(sessionId);
   const [commentSubmitting, setCommentSubmitting] = useState(false);
+  const detailAnchor = useScrollAnchor(sessionId, presentation === "community-pane" ? `workout-detail:${sessionId}` : null);
+  const insets = useSafeAreaInsets();
   const reactionRequestPending = useRef(false);
   const commentRequestPending = useRef(false);
   const mounted = useRef(true);
@@ -238,18 +277,16 @@ export function WorkoutDetailView({
   }, [groupId, onCommentCountChange, sessionId]);
 
   useEffect(() => {
-    if (!refreshOnFocus) {
-      void loadWorkout();
-      void loadComments();
-    }
-  }, [loadComments, loadWorkout, refreshOnFocus]);
+    if (fixture || refreshOnFocus) return;
+    void loadWorkout();
+    void loadComments();
+  }, [fixture, loadComments, loadWorkout, refreshOnFocus]);
 
   useFocusEffect(useCallback(() => {
-    if (refreshOnFocus) {
-      void loadWorkout(true);
-      void loadComments(true);
-    }
-  }, [loadComments, loadWorkout, refreshOnFocus]));
+    if (fixture || !refreshOnFocus) return;
+    void loadWorkout(true);
+    void loadComments(true);
+  }, [fixture, loadComments, loadWorkout, refreshOnFocus]));
 
   const toggleReaction = useCallback(async (reactionType: CommunityReactionType) => {
     if (!workout || reactionRequestPending.current) return;
@@ -358,6 +395,7 @@ export function WorkoutDetailView({
       setComments(nextComments);
       writeWorkoutCommentsCache(groupId, sessionId, nextComments);
       setCommentText("");
+      clearDraft();
       onCommentCountChange?.(sessionId, nextComments.length);
     } catch (submitError) {
       setCommentError(
@@ -369,7 +407,7 @@ export function WorkoutDetailView({
       commentRequestPending.current = false;
       setCommentSubmitting(false);
     }
-  }, [commentText, comments, groupId, onCommentCountChange, sessionId]);
+  }, [clearDraft, commentText, comments, groupId, onCommentCountChange, sessionId, setCommentText]);
 
   if (loading && !workout) {
     return (
@@ -391,7 +429,9 @@ export function WorkoutDetailView({
     );
   }
 
-  return workout ? (
+  if (!workout) return null;
+
+  const content = (
     <WorkoutDetailContent
       detailExpansionResetKey={detailExpansionResetKey}
       detailPhotoMaxHeight={detailPhotoMaxHeight}
@@ -408,9 +448,49 @@ export function WorkoutDetailView({
       presentation={presentation}
       reactionError={reactionError}
       reactionPending={reactionPending || loading}
+      showComposer={presentation !== "community-pane"}
       workout={workout}
     />
-  ) : null;
+  );
+
+  if (presentation !== "community-pane") return content;
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      style={styles.pane}
+    >
+      <ScrollView
+        contentContainerStyle={styles.paneScroll}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={detailAnchor.onContentSizeChange}
+        onLayout={detailAnchor.onViewportLayout}
+        onScroll={detailAnchor.onScroll}
+        ref={detailAnchor.scrollRef}
+        scrollEventThrottle={16}
+        showsVerticalScrollIndicator={false}
+        style={styles.pane}
+      >
+        <View collapsable={false} ref={detailAnchor.contentRef}>
+          <ScrollAnchorProvider contentRef={detailAnchor.contentRef} onItemLayout={detailAnchor.onItemLayout} pane="right">
+            {paneHeader}
+            {content}
+          </ScrollAnchorProvider>
+        </View>
+      </ScrollView>
+      <View style={[styles.composerBar, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+        <CommentComposer
+          commentSubmitting={commentSubmitting}
+          commentText={commentText}
+          onCommentChange={setCommentText}
+          onCommentSubmit={() => void submitComment()}
+          pinned
+          sessionId={sessionId}
+        />
+        {commentError ? <Text style={styles.reactionError}>{commentError}</Text> : null}
+      </View>
+    </KeyboardAvoidingView>
+  );
 }
 
 export function WorkoutDetailContent({
@@ -429,6 +509,7 @@ export function WorkoutDetailContent({
   presentation = "default",
   reactionError,
   reactionPending = false,
+  showComposer = true,
   workout,
 }: {
   commentError?: string | null;
@@ -443,9 +524,10 @@ export function WorkoutDetailContent({
   onCommentSubmit?: () => void;
   onCommentsRetry?: () => void;
   onReactionPress?: (reactionType: CommunityReactionType) => void;
-  presentation?: "default" | "community-modal";
+  presentation?: "community-modal" | "community-pane" | "default";
   reactionError?: string | null;
   reactionPending?: boolean;
+  showComposer?: boolean;
   workout: CommunityWorkoutDetail;
 }) {
   const displayName = resolveUserDisplayName({ displayName: workout.displayName });
@@ -457,27 +539,24 @@ export function WorkoutDetailContent({
     .filter((metric): metric is NonNullable<typeof metric> => metric !== null);
   const hasResults = formattedMetrics.length > 0 || workout.movements.length > 0 || workout.segments.length > 0;
   const groupedIntervals = groupConsecutiveIntervalSegments(workout.segments);
+  const isCommunityPane = presentation === "community-pane";
   const isCommunityModal = presentation === "community-modal";
-  const [commentInputHeight, setCommentInputHeight] = useState(44);
+  const isCommunitySheet = isCommunityModal || isCommunityPane;
   const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
   const [workoutExpanded, setWorkoutExpanded] = useState(false);
-
-  useEffect(() => {
-    if (!commentText) setCommentInputHeight(44);
-  }, [commentText]);
 
   useEffect(() => {
     setWorkoutExpanded(false);
   }, [detailExpansionResetKey, workout.id]);
 
   const workoutResults = hasResults ? (
-    <View style={[styles.resultsSection, isCommunityModal && styles.modalResultsSection]}>
-      {!isCommunityModal ? <Text style={styles.sectionEyebrow}>WORKOUT RESULTS</Text> : null}
+    <View style={[styles.resultsSection, isCommunitySheet && styles.modalResultsSection]}>
+      {!isCommunitySheet ? <Text style={styles.sectionEyebrow}>WORKOUT RESULTS</Text> : null}
       {formattedMetrics.length ? (
-        <Card style={[styles.metricsCard, isCommunityModal && styles.modalMetricsCard]}>
+        <Card style={[styles.metricsCard, isCommunitySheet && styles.modalMetricsCard]}>
           {formattedMetrics.map((metric, index) => (
-            <View key={`${metric.label}-${index}`} style={[styles.metricRow, index > 0 && styles.dividedRow, isCommunityModal && index > 0 && styles.modalDividedRow]}>
-              <Text style={[styles.metricLabel, isCommunityModal && styles.modalResultLabel]}>{metric.label}</Text>
+            <View key={`${metric.label}-${index}`} style={[styles.metricRow, index > 0 && styles.dividedRow, isCommunitySheet && index > 0 && styles.modalDividedRow]}>
+              <Text style={[styles.metricLabel, isCommunitySheet && styles.modalResultLabel]}>{metric.label}</Text>
               <Text style={styles.metricValue}>{metric.value}</Text>
             </View>
           ))}
@@ -488,15 +567,15 @@ export function WorkoutDetailContent({
         <Card
           style={[
             styles.intervalCard,
-            isCommunityModal && styles.modalIntervalCard,
-            isCommunityModal && formattedMetrics.length > 0 && styles.modalStackedResultCard,
+            isCommunitySheet && styles.modalIntervalCard,
+            isCommunitySheet && formattedMetrics.length > 0 && styles.modalStackedResultCard,
           ]}
         >
           <Text style={styles.intervalHeading}>Intervals</Text>
           {groupedIntervals.map((group, index) => {
             const formatted = formatGroupedIntervalSegment(group);
             return (
-            <View key={`${group.segment.segmentType}-${index}`} style={[styles.intervalRow, index > 0 && styles.dividedRow, isCommunityModal && index > 0 && styles.modalDividedRow]}>
+            <View key={`${group.segment.segmentType}-${index}`} style={[styles.intervalRow, index > 0 && styles.dividedRow, isCommunitySheet && index > 0 && styles.modalDividedRow]}>
               <View style={styles.intervalResult}>
                 <Text style={styles.intervalValue}>{formatted.main}</Text>
                 {formatted.recovery ? <Text style={styles.intervalRecovery}>{formatted.recovery}</Text> : null}
@@ -512,15 +591,15 @@ export function WorkoutDetailContent({
           key={movement.id}
           style={[
             styles.movementCard,
-            isCommunityModal && styles.modalMovementCard,
-            isCommunityModal && (formattedMetrics.length > 0 || workout.segments.length > 0 || movementIndex > 0) && styles.modalStackedResultCard,
+            isCommunitySheet && styles.modalMovementCard,
+            isCommunitySheet && (formattedMetrics.length > 0 || workout.segments.length > 0 || movementIndex > 0) && styles.modalStackedResultCard,
           ]}
         >
           <Text style={styles.movementName}>{movement.movementName}</Text>
           {movement.notes ? <Text style={styles.movementNotes}>{movement.notes}</Text> : null}
           {movement.sets.map((set, index) => (
-            <View key={set.id} style={[styles.setRow, index > 0 && styles.dividedRow, isCommunityModal && index > 0 && styles.modalDividedRow]}>
-              <Text style={[styles.setLabel, isCommunityModal && styles.modalResultLabel]}>Set {set.position + 1}</Text>
+            <View key={set.id} style={[styles.setRow, index > 0 && styles.dividedRow, isCommunitySheet && index > 0 && styles.modalDividedRow]}>
+              <Text style={[styles.setLabel, isCommunitySheet && styles.modalResultLabel]}>Set {set.position + 1}</Text>
               <View style={styles.setResult}>
                 <Text style={styles.setValue}>{formatWorkoutSet(set)}</Text>
                 {set.notes ? <Text style={styles.setNotes}>{set.notes}</Text> : null}
@@ -532,8 +611,8 @@ export function WorkoutDetailContent({
     </View>
   ) : null;
 
-  return (
-    <View>
+  const summary = (
+    <>
       <View style={[styles.authorRow, isCommunityModal && styles.modalAuthorRow]}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text>
@@ -545,18 +624,16 @@ export function WorkoutDetailContent({
         {!isCommunityModal ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
       </View>
 
-      <Text style={[styles.title, isCommunityModal && styles.modalTitle]}>{title}</Text>
+      <Text style={[styles.title, isCommunitySheet && styles.modalTitle]}>{title}</Text>
       {detailError ? <Text style={styles.detailError}>{detailError}</Text> : null}
       {workout.effort ? <Text accessibilityLabel={`Effort ${workout.effort} out of 5`} style={styles.effort}>{"🔥".repeat(workout.effort)}</Text> : null}
-      {workout.resultSummary && (isCommunityModal || !hasResults) ? (
+      {workout.resultSummary && (isCommunitySheet || !hasResults) ? (
         <Text style={styles.compatibilityDuration}>{workout.resultSummary}</Text>
       ) : !hasResults && workout.durationMinutes ? (
         <Text style={styles.compatibilityDuration}>{workout.durationMinutes} min</Text>
       ) : null}
 
-      {!isCommunityModal ? workoutResults : null}
-
-      {caption ? isCommunityModal ? (
+      {caption ? isCommunitySheet ? (
         <Text style={[styles.caption, styles.modalCaption]}>{caption}</Text>
       ) : (
         <View style={styles.postSection}>
@@ -568,13 +645,23 @@ export function WorkoutDetailContent({
       {workout.photoUrl ? (
         <WorkoutPhoto
           detailMaxHeight={detailPhotoMaxHeight}
-          onPress={isCommunityModal ? () => setPhotoViewerVisible(true) : undefined}
+          onPress={isCommunitySheet ? () => setPhotoViewerVisible(true) : undefined}
           uri={workout.photoUrl}
           variant="detail"
         />
       ) : null}
+    </>
+  );
 
-      {isCommunityModal && hasResults ? (
+  return (
+    <View>
+      <ScrollAnchor id={`detail-summary:${workout.id}`}>
+        {isCommunityPane ? <Card style={styles.paneCard}>{summary}</Card> : summary}
+      </ScrollAnchor>
+
+      {!isCommunitySheet ? workoutResults : null}
+
+      {isCommunitySheet && hasResults ? (
         <View style={styles.workoutDisclosure}>
           <Pressable
             accessibilityLabel={workoutExpanded ? "Hide workout details" : "View workout details"}
@@ -591,8 +678,9 @@ export function WorkoutDetailContent({
         </View>
       ) : null}
 
-      <View style={[styles.reactionSection, isCommunityModal && styles.modalReactionSection]}>
-        {isCommunityModal ? (
+      <ScrollAnchor id={`detail-reactions:${workout.id}`}>
+      <View style={[styles.reactionSection, isCommunitySheet && styles.modalReactionSection]}>
+        {isCommunitySheet ? (
           <CommunityModalReactionRow
             onReactionPress={onReactionPress}
             reactionPending={reactionPending}
@@ -630,9 +718,11 @@ export function WorkoutDetailContent({
         )}
         {reactionError ? <Text style={styles.reactionError}>{reactionError}</Text> : null}
       </View>
+      </ScrollAnchor>
 
-      <View style={[styles.commentsSection, isCommunityModal && styles.modalCommentsSection]}>
-        <Text style={isCommunityModal ? styles.commentsHeading : styles.sectionEyebrow}>{isCommunityModal ? "Comments" : "COMMENTS"}</Text>
+      <ScrollAnchor id={`detail-comments:${workout.id}`}>
+      <View style={[styles.commentsSection, isCommunitySheet && styles.modalCommentsSection]}>
+        <Text style={isCommunitySheet ? styles.commentsHeading : styles.sectionEyebrow}>{isCommunitySheet ? "Comments" : "COMMENTS"}</Text>
         {commentsLoading && !comments.length ? (
           <View style={styles.commentsLoading}>
             <ActivityIndicator color={colors.brand} size="small" />
@@ -640,11 +730,12 @@ export function WorkoutDetailContent({
           </View>
         ) : comments.length ? (
           <View style={styles.commentList}>
-            {isCommunityModal ? groupCommentsByLocalDate(comments).map((group, groupIndex) => (
+            {isCommunitySheet ? groupCommentsByLocalDate(comments).map((group, groupIndex) => (
               <View key={group.key} style={[styles.commentDateGroup, groupIndex === 0 && styles.firstCommentDateGroup]}>
                 <Text style={styles.commentDateLabel}>{group.label}</Text>
                 {group.comments.map((comment) => (
-                  <View key={comment.id} style={[styles.commentRow, styles.modalCommentRow]}>
+                  <ScrollAnchor id={`comment:${comment.id}`} key={comment.id}>
+                  <View style={[styles.commentRow, styles.modalCommentRow]}>
                     <View style={[styles.commentHeader, styles.modalCommentHeader]}>
                       <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
                       <Text style={styles.commentSeparator}>·</Text>
@@ -652,58 +743,35 @@ export function WorkoutDetailContent({
                     </View>
                     <Text style={[styles.commentBody, styles.modalCommentBody]}>{comment.text}</Text>
                   </View>
+                  </ScrollAnchor>
                 ))}
               </View>
             )) : comments.map((comment, index) => (
-              <View key={comment.id} style={[styles.commentRow, index > 0 && styles.dividedRow]}>
+              <ScrollAnchor id={`comment:${comment.id}`} key={comment.id}>
+              <View style={[styles.commentRow, index > 0 && styles.dividedRow]}>
                 <View style={styles.commentHeader}>
                   <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
                   <Text style={styles.commentTimestamp}>{formatCommentTimestamp(comment.createdAt)}</Text>
                 </View>
                 <Text style={styles.commentBody}>{comment.text}</Text>
               </View>
+              </ScrollAnchor>
             ))}
           </View>
         ) : (
           <Text style={styles.commentEmpty}>No comments yet.</Text>
         )}
 
-        {onCommentChange && onCommentSubmit ? (
-          <View style={styles.composer}>
-            <TextInput
-              accessibilityLabel="Add a comment"
-              editable={!commentSubmitting}
-              maxLength={2_000}
-              multiline
-              onChangeText={onCommentChange}
-              onContentSizeChange={(event) => {
-                setCommentInputHeight(
-                  Math.min(120, Math.max(44, Math.ceil(event.nativeEvent.contentSize.height))),
-                );
-              }}
-              placeholder="Add a comment..."
-              placeholderTextColor={colors.muted}
-              scrollEnabled={commentInputHeight >= 120}
-              style={[styles.commentInput, { height: commentInputHeight }]}
-              textAlignVertical={commentInputHeight > 44 ? "top" : "center"}
-              value={commentText}
-            />
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ disabled: commentSubmitting || !commentText.trim() }}
-              disabled={commentSubmitting || !commentText.trim()}
-              onPress={onCommentSubmit}
-              style={({ pressed }) => [
-                styles.commentSubmit,
-                (commentSubmitting || !commentText.trim()) && styles.commentSubmitDisabled,
-                pressed && styles.reactionButtonPressed,
-              ]}
-            >
-              {commentSubmitting ? <ActivityIndicator color={colors.surface} size="small" /> : <Text style={styles.commentSubmitText}>Post</Text>}
-            </Pressable>
-          </View>
+        {showComposer && onCommentChange && onCommentSubmit ? (
+          <CommentComposer
+            commentSubmitting={commentSubmitting}
+            commentText={commentText}
+            onCommentChange={onCommentChange}
+            onCommentSubmit={onCommentSubmit}
+            sessionId={workout.id}
+          />
         ) : null}
-        {commentError ? (
+        {commentError && (showComposer || !comments.length) ? (
           <View style={styles.commentErrorRow}>
             <Text style={styles.reactionError}>{commentError}</Text>
             {onCommentsRetry && !comments.length ? (
@@ -714,7 +782,8 @@ export function WorkoutDetailContent({
           </View>
         ) : null}
       </View>
-      {isCommunityModal && workout.photoUrl ? (
+      </ScrollAnchor>
+      {isCommunitySheet && workout.photoUrl ? (
         <PhotoViewer
           images={[{ accessibilityLabel: `${title} workout photo`, uri: workout.photoUrl }]}
           initialIndex={0}
@@ -722,6 +791,80 @@ export function WorkoutDetailContent({
           visible={photoViewerVisible}
         />
       ) : null}
+    </View>
+  );
+}
+
+function CommentComposer({
+  commentSubmitting,
+  commentText,
+  onCommentChange,
+  onCommentSubmit,
+  pinned = false,
+  sessionId,
+}: {
+  commentSubmitting: boolean;
+  commentText: string;
+  onCommentChange: (text: string) => void;
+  onCommentSubmit: () => void;
+  pinned?: boolean;
+  sessionId: string;
+}) {
+  const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const [commentInputHeight, setCommentInputHeight] = useState(44);
+
+  useEffect(() => {
+    if (!commentText) setCommentInputHeight(44);
+  }, [commentText]);
+
+  useEffect(() => {
+    if (focusedComposerSession !== sessionId) return;
+    const frame = requestAnimationFrame(() => inputRef.current?.focus());
+    return () => cancelAnimationFrame(frame);
+  }, [sessionId]);
+
+  return (
+    <View style={[styles.composer, pinned && styles.composerPinned]}>
+      <TextInput
+        accessibilityLabel="Add a comment"
+        editable={!commentSubmitting}
+        maxLength={2_000}
+        multiline
+        onBlur={() => {
+          if (composerBlurTimer) clearTimeout(composerBlurTimer);
+          composerBlurTimer = setTimeout(() => markComposerBlurred(sessionId), 200);
+        }}
+        onChangeText={onCommentChange}
+        onContentSizeChange={(event) => {
+          setCommentInputHeight(
+            Math.min(120, Math.max(44, Math.ceil(event.nativeEvent.contentSize.height))),
+          );
+        }}
+        onFocus={() => {
+          if (composerBlurTimer) clearTimeout(composerBlurTimer);
+          markComposerFocused(sessionId);
+        }}
+        placeholder="Add a comment..."
+        placeholderTextColor={colors.muted}
+        ref={inputRef}
+        scrollEnabled={commentInputHeight >= 120}
+        style={[styles.commentInput, { height: commentInputHeight }]}
+        textAlignVertical={commentInputHeight > 44 ? "top" : "center"}
+        value={commentText}
+      />
+      <Pressable
+        accessibilityRole="button"
+        accessibilityState={{ disabled: commentSubmitting || !commentText.trim() }}
+        disabled={commentSubmitting || !commentText.trim()}
+        onPress={onCommentSubmit}
+        style={({ pressed }) => [
+          styles.commentSubmit,
+          (commentSubmitting || !commentText.trim()) && styles.commentSubmitDisabled,
+          pressed && styles.reactionButtonPressed,
+        ]}
+      >
+        {commentSubmitting ? <ActivityIndicator color={colors.surface} size="small" /> : <Text style={styles.commentSubmitText}>Post</Text>}
+      </Pressable>
     </View>
   );
 }
@@ -987,6 +1130,11 @@ function getLocalDateKey(date: Date) {
 }
 
 const styles = StyleSheet.create({
+  pane: { flex: 1 },
+  paneScroll: { flexGrow: 1, paddingBottom: spacing.lg, paddingHorizontal: spacing.lg, paddingTop: spacing.lg },
+  paneCard: { padding: spacing.lg },
+  composerBar: { backgroundColor: colors.background, paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  composerPinned: { marginTop: 0 },
   authorRow: { alignItems: "center", flexDirection: "row" },
   modalAuthorRow: { paddingRight: 48 },
   avatar: { alignItems: "center", backgroundColor: colors.brandSoft, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },

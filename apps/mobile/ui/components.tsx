@@ -1,8 +1,7 @@
 import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useVerticalBarEdge } from "./vertical-bar-edge";
-import { useRef, useState, type ComponentRef, type ReactNode, type Ref } from "react";
+import { useCallback, useRef, useState, type ComponentRef, type ReactNode, type Ref } from "react";
 import type { StyleProp, TextInputProps, ViewInstance, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
@@ -12,6 +11,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  type ScrollViewInstance,
   Text,
   TextInput,
   View,
@@ -21,6 +21,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import Animated, {
   Extrapolation,
   interpolate,
+  runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
   useDerivedValue,
@@ -28,6 +29,10 @@ import Animated, {
   useSharedValue,
   type SharedValue,
 } from "react-native-reanimated";
+
+import { useVerticalBarEdge } from "./vertical-bar-edge";
+import { anchoredScrollOffset, topVisibleAnchor } from "./layout-math";
+import { readStoredScrollAnchor, writeStoredScrollAnchor } from "./scroll-anchor";
 
 import repinLockup from "../assets/branding/repin-lockup.png";
 import repinLockupReversed from "../assets/branding/repin-lockup-reversed.png";
@@ -458,6 +463,7 @@ export function WorkoutSummaryCard({
 }
 
 export function CommunityFeed({
+  anchorKey,
   edgeToEdge = false,
   focusOffsetY = 0,
   mode = "full",
@@ -470,6 +476,7 @@ export function CommunityFeed({
   viewportHeight,
   workouts,
 }: {
+  anchorKey?: string;
   edgeToEdge?: boolean;
   focusOffsetY?: number;
   mode?: "preview" | "full";
@@ -490,9 +497,40 @@ export function CommunityFeed({
   const scrollY = useSharedValue(0);
   const itemHeights = useSharedValue<Record<string, number>>({});
   const orderedWorkoutIds = visibleWorkouts.map((workout) => workout.id);
+  const scrollRef = useRef<ScrollViewInstance>(null);
+  const positions = useRef(new Map<string, { height: number; y: number }>());
+  const contentHeight = useRef(0);
+  const restored = useRef(false);
+  const publishAnchor = useCallback((offsetY: number) => {
+    if (!anchorKey || !restored.current) return;
+    const items = [...positions.current.entries()].map(([id, layout]) => ({ height: layout.height, id, y: layout.y }));
+    const next = topVisibleAnchor(items, offsetY);
+    if (next) writeStoredScrollAnchor(anchorKey, next);
+  }, [anchorKey]);
+  const tryRestore = useCallback(() => {
+    if (!anchorKey || restored.current) return;
+    const saved = readStoredScrollAnchor(anchorKey);
+    if (!saved) {
+      restored.current = true;
+      return;
+    }
+    const item = positions.current.get(saved.id);
+    if (!item) {
+      if (positions.current.size >= visibleWorkouts.length) restored.current = true;
+      return;
+    }
+    scrollRef.current?.scrollTo({
+      animated: false,
+      y: anchoredScrollOffset(item, saved, contentHeight.current, resolvedViewportHeight),
+    });
+    restored.current = true;
+  }, [anchorKey, resolvedViewportHeight, visibleWorkouts.length]);
   const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => { scrollY.value = event.contentOffset.y; },
-  });
+    onScroll: (event) => {
+      scrollY.value = event.contentOffset.y;
+      if (anchorKey) runOnJS(publishAnchor)(event.contentOffset.y);
+    },
+  }, [anchorKey, publishAnchor]);
 
   return (
     <View style={[styles.feedViewport, edgeToEdge && styles.edgeToEdgeFeedViewport, { height: resolvedViewportHeight }]}>
@@ -501,8 +539,13 @@ export function CommunityFeed({
         directionalLockEnabled
         keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
+        onContentSizeChange={(_width, height) => {
+          contentHeight.current = height;
+          tryRestore();
+        }}
         onScroll={scrollHandler}
         overScrollMode="never"
+        ref={scrollRef as never}
         removeClippedSubviews={false}
         scrollEventThrottle={16}
         showsVerticalScrollIndicator={mode === "full"}
@@ -513,6 +556,10 @@ export function CommunityFeed({
             focalY={resolvedViewportHeight * 0.38 - focusOffsetY}
             itemHeights={itemHeights}
             key={workout.id}
+            onItemFrame={(frame) => {
+              positions.current.set(workout.id, frame);
+              tryRestore();
+            }}
             onPress={onWorkoutPress ? () => onWorkoutPress(workout) : undefined}
             onDelete={viewerUserId === workout.userId && onWorkoutDelete ? () => onWorkoutDelete(workout) : undefined}
             onEdit={viewerUserId === workout.userId && onWorkoutEdit ? () => onWorkoutEdit(workout) : undefined}
@@ -553,6 +600,7 @@ export function CommunityFeed({
 function CommunityFeedItem({
   focalY,
   itemHeights,
+  onItemFrame,
   onPress,
   onDelete,
   onEdit,
@@ -566,6 +614,7 @@ function CommunityFeedItem({
 }: {
   focalY: number;
   itemHeights: SharedValue<Record<string, number>>;
+  onItemFrame?: (frame: { height: number; y: number }) => void;
   onPress?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
@@ -599,6 +648,7 @@ function CommunityFeedItem({
       onLayout={(event) => {
         const { height, y } = event.nativeEvent.layout;
         measuredLayoutY.value = y;
+        onItemFrame?.({ height, y });
         if (itemHeights.value[workout.id] !== height) {
           itemHeights.value = { ...itemHeights.value, [workout.id]: height };
         }

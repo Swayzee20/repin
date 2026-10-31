@@ -19,6 +19,37 @@ export const workoutTypeLabels = Object.fromEntries(
   workoutTypeOptions.map((option) => [option.value, option.label]),
 ) as Record<WorkoutType, string>;
 
+export function WorkoutTypeGrid({
+  onChange,
+  value,
+}: {
+  onChange: (value: WorkoutType) => void;
+  value: WorkoutType | null;
+}) {
+  return (
+    <View style={styles.grid}>
+      {workoutTypeOptions.map((option) => {
+        const selected = value === option.value;
+        return (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
+            key={option.value}
+            onPress={() => onChange(option.value)}
+            style={({ pressed }) => [
+              styles.gridOption,
+              selected && styles.gridOptionSelected,
+              pressed && styles.pressed,
+            ]}
+          >
+            <Text style={[styles.gridOptionText, selected && styles.gridOptionTextSelected]}>{option.label}</Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 export function WorkoutTypeSelector({
   compact = false,
   elevated = false,
@@ -171,4 +202,21 @@ const styles = StyleSheet.create({
   cancel: { alignItems: "center", justifyContent: "center", minHeight: 48, marginTop: spacing.sm },
   cancelText: { color: colors.brand, ...type.label },
   pressed: { opacity: 0.7 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
+  gridOption: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexBasis: "46%",
+    flexGrow: 1,
+    justifyContent: "center",
+    minHeight: 50,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  gridOptionSelected: { backgroundColor: colors.brandSoft, borderColor: colors.brand, borderWidth: 2 },
+  gridOptionText: { color: colors.inkSoft, fontFamily: fonts.medium, fontSize: 15, lineHeight: 20, textAlign: "center" },
+  gridOptionTextSelected: { color: colors.ink, fontFamily: fonts.semibold },
 });
