@@ -51,7 +51,7 @@ export function CommunityDatePicker({
 const webInputStyle = {
   backgroundColor: colors.surface,
   border: `1px solid ${colors.borderStrong}`,
-  borderRadius: radii.input,
+  borderRadius: radii.md,
   color: colors.ink,
   fontFamily: fonts.regular,
   fontSize: 16,

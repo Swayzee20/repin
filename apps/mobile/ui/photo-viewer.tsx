@@ -194,7 +194,7 @@ export function PhotoViewer({
 
 const styles = StyleSheet.create({
   viewport: { flex: 1 },
-  backdrop: { backgroundColor: "rgba(18,18,18,0.88)", bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
+  backdrop: { backgroundColor: colors.scrimPhoto, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { flex: 1 },
   imageStage: { alignItems: "center", justifyContent: "center", position: "absolute" },
   media: { borderRadius: radii.sm, overflow: "hidden" },

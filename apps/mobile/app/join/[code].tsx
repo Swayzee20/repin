@@ -267,7 +267,7 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
-  codePanel: { backgroundColor: colors.brandSoft, borderColor: colors.boardBorder, borderRadius: radii.lg, borderWidth: 1, marginTop: spacing.xxxl, padding: spacing.lg },
+  codePanel: { backgroundColor: colors.surfaceMuted, borderColor: colors.boardBorder, borderRadius: radii.lg, borderWidth: 1, marginTop: spacing.xxxl, padding: spacing.lg },
   codeLabel: { color: colors.brandPressed, ...type.eyebrow },
   code: { color: colors.ink, fontFamily: fonts.bold, fontSize: 24, letterSpacing: 3, marginTop: spacing.sm },
   groupPanel: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", marginTop: spacing.xxxl, paddingVertical: spacing.lg },
