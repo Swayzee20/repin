@@ -36,6 +36,11 @@ export function reservedRegionsViewAvailable(input: {
   }
 }
 
+/** app.json `extra.reservedRegions: false` turns the native view off. Missing means on. */
+export function reservedRegionsEnabled(extra: { reservedRegions?: boolean } | null | undefined) {
+  return extra?.reservedRegions !== false;
+}
+
 /** Empty list when the native view cannot be used, without letting a probe throw. */
 export function reservedRegionsOrEmpty(
   available: boolean,

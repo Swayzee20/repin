@@ -2,7 +2,7 @@ import { getUserInitials, resolveUserDisplayName, type HomeData, type WorkoutFee
 import { Feather } from "@expo/vector-icons";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useVerticalBarEdgeIOS } from "expo-status-bar";
+import { useVerticalBarEdge } from "../../../ui/vertical-bar-edge";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -31,7 +31,7 @@ export default function HomeScreen() {
   const { height: windowHeight } = useWindowDimensions();
   const { mode } = useLayoutMode();
   const insets = useSafeAreaInsets();
-  const verticalBarEdge = useVerticalBarEdgeIOS();
+  const verticalBarEdge = useVerticalBarEdge();
   const { openWorkoutChooser, setSelectedGroupId: setTabGroupId } = useMainTabs();
   const params = useLocalSearchParams<{ redirect?: string | string[] }>();
   const layoutPreview = __DEV__ && isLayoutPreview();

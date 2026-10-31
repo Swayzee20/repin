@@ -1,6 +1,6 @@
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
-import { useVerticalBarEdgeIOS } from "expo-status-bar";
+import { useVerticalBarEdge } from "./vertical-bar-edge";
 import { useCallback, useEffect, useState } from "react";
 import { Keyboard, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,7 +10,7 @@ import { useMainTabs } from "./main-tabs-context";
 import { colors, radii, spacing, type } from "./theme";
 
 export function RepInPill() {
-  const edge = useVerticalBarEdgeIOS();
+  const edge = useVerticalBarEdge();
   const insets = useSafeAreaInsets();
   const { session } = useAuthSession();
   const { openWorkoutChooser, selectedGroupId } = useMainTabs();

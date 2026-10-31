@@ -10,9 +10,10 @@ import {
 import { Redirect, Stack, useGlobalSearchParams, usePathname } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet } from "react-native";
 import { ReservedRegionsProvider } from "../ui/reserved-regions";
+import { RootErrorBoundary } from "../ui/root-error-boundary";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isLayoutPreview } from "../lib/layout-preview";
@@ -21,8 +22,10 @@ import { colors } from "../ui/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+const fontGateMs = 2_500;
+
 export default function RootLayout() {
-  const [fontsLoaded] = useFonts({
+  const [fontsLoaded, fontError] = useFonts({
     Fredoka_700Bold,
     Nunito_400Regular,
     Nunito_500Medium,
@@ -30,27 +33,34 @@ export default function RootLayout() {
     Nunito_700Bold,
     Nunito_800ExtraBold,
   });
+  const [fontGateOpen, setFontGateOpen] = useState(false);
+  const showApp = fontsLoaded || Boolean(fontError) || fontGateOpen;
 
   useEffect(() => {
-    if (fontsLoaded) {
-      SplashScreen.hideAsync().catch(() => {});
-    }
-  }, [fontsLoaded]);
+    const timer = setTimeout(() => setFontGateOpen(true), fontGateMs);
+    return () => clearTimeout(timer);
+  }, []);
 
-  if (!fontsLoaded) return null;
+  useEffect(() => {
+    if (showApp) SplashScreen.hideAsync().catch(() => {});
+  }, [showApp]);
+
+  if (!showApp) return null;
 
   return (
-    <ReservedRegionsProvider style={styles.root}>
-      <Stack
-        screenOptions={{
-          animation: "slide_from_right",
-          contentStyle: { backgroundColor: colors.background },
-          headerShown: false,
-        }}
-      />
-      <SignedOutRedirect />
-      <StatusBar style="dark" />
-    </ReservedRegionsProvider>
+    <RootErrorBoundary>
+      <ReservedRegionsProvider style={styles.root}>
+        <Stack
+          screenOptions={{
+            animation: "slide_from_right",
+            contentStyle: { backgroundColor: colors.background },
+            headerShown: false,
+          }}
+        />
+        <SignedOutRedirect />
+        <StatusBar style="dark" />
+      </ReservedRegionsProvider>
+    </RootErrorBoundary>
   );
 }
 

@@ -4,6 +4,7 @@ import { test } from "node:test";
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
 import {
+  reservedRegionsEnabled,
   reservedRegionsOrEmpty,
   reservedRegionsViewAvailable,
   type ReservedRegion,
@@ -45,6 +46,12 @@ test("Expo Go and a missing native view yield empty regions and do not throw", (
   }), []);
 
   assert.deepEqual(reservedRegionsOrEmpty(false, () => [division]), []);
+});
+
+test("extra.reservedRegions false is the kill switch", () => {
+  assert.equal(reservedRegionsEnabled({ reservedRegions: false }), false);
+  assert.equal(reservedRegionsEnabled({ reservedRegions: true }), true);
+  assert.equal(reservedRegionsEnabled(undefined), true);
 });
 
 test("a linked dev or TestFlight binary can read reserved regions", () => {

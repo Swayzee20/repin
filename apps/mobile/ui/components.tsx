@@ -1,7 +1,6 @@
 import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useVerticalBarEdgeIOS } from "expo-status-bar";
 import { useCallback, useRef, useState, type ComponentRef, type ReactNode, type Ref } from "react";
 import type { StyleProp, TextInputProps, ViewInstance, ViewStyle } from "react-native";
 import {
@@ -31,6 +30,7 @@ import Animated, {
   type SharedValue,
 } from "react-native-reanimated";
 
+import { useVerticalBarEdge } from "./vertical-bar-edge";
 import { anchoredScrollOffset, topVisibleAnchor } from "./layout-math";
 import { readStoredScrollAnchor, writeStoredScrollAnchor } from "./scroll-anchor";
 
@@ -490,7 +490,7 @@ export function CommunityFeed({
   workouts: WorkoutFeedItem[];
 }) {
   const insets = useSafeAreaInsets();
-  const verticalBarEdge = useVerticalBarEdgeIOS();
+  const verticalBarEdge = useVerticalBarEdge();
   const feedBottomPadding = verticalBarEdge !== null ? insets.bottom + spacing.xxl : 132;
   const resolvedViewportHeight = viewportHeight ?? (mode === "preview" ? 320 : 340);
   const visibleWorkouts = mode === "preview" ? workouts.slice(0, 4) : workouts;

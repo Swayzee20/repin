@@ -25,11 +25,13 @@ function useActiveDivision(): ActiveDivision | null {
   if (Platform.OS !== "ios") return null;
   const division = regions.find((region) => region.kind === "division");
   if (!division || division.kind !== "division") return null;
+  const { height, width, x, y } = division.frame;
+  if (![height, width, x, y].every(Number.isFinite)) return null;
   return {
-    centerX: division.frame.x + division.frame.width / 2,
-    centerY: division.frame.y + division.frame.height / 2,
-    height: division.frame.height,
-    width: division.frame.width,
+    centerX: x + width / 2,
+    centerY: y + height / 2,
+    height,
+    width,
   };
 }
 
