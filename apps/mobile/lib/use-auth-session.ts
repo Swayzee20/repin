@@ -12,12 +12,17 @@ export function useAuthSession() {
   useEffect(() => {
     if (!supabase) return;
     let active = true;
+    const timeout = setTimeout(() => {
+      if (active) setReady(true);
+    }, 4_000);
     void supabase.auth.getSession().then(({ data }) => {
       if (!active) return;
       userId.current = data.session?.user.id ?? null;
       setSession(data.session);
       setReady(true);
-    });
+    }).catch(() => {
+      if (active) setReady(true);
+    }).finally(() => clearTimeout(timeout));
     const { data: subscription } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       const nextUserId = nextSession?.user.id ?? null;
       if (userId.current && userId.current !== nextUserId) {

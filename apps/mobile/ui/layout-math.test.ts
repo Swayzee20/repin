@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
-import { centeredCardFrame, resolveLayout, topVisibleAnchor } from "./layout-math";
+import { anchoredScrollOffset, centeredCardFrame, resolveLayout, topVisibleAnchor } from "./layout-math";
 
 const flat = { left: 0, right: 0 };
 
@@ -100,6 +100,20 @@ test("centered cards use the content area, or the trailing pane when the fold is
   assert.equal(folded.left, 499.5);
   assert.equal(folded.width, 367.5);
   assert.ok(folded.left >= 475.5 + 24);
+});
+
+test("non-finite sizes collapse to a compact layout instead of NaN frames", () => {
+  const layout = resolveLayout({
+    division: { centerX: Number.NaN, centerY: 10, height: 24, width: 800 },
+    insets: { left: Number.NaN, right: -4 },
+    width: Number.NaN,
+  });
+  assert.equal(layout.mode, "compact");
+  assert.equal(layout.contentWidth, 0);
+  assert.equal(layout.split.left.width, 0);
+  assert.equal(layout.split.right.width, 0);
+  assert.equal(Number.isFinite(layout.split.splitX), true);
+  assert.equal(anchoredScrollOffset({ height: 10, y: Number.NaN }, { id: "a", offset: Number.NaN }, Number.NaN, 100), 0);
 });
 
 test("scroll anchors restore the top visible item", () => {

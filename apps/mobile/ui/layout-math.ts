@@ -39,9 +39,29 @@ export type LayoutInput = {
 
 const cardInset = spacing.xxl * 2;
 
+function finite(value: number, fallback = 0) {
+  return Number.isFinite(value) ? value : fallback;
+}
+
+function nonNegative(value: number) {
+  return Math.max(0, finite(value));
+}
+
+function safeDivision(division: ActiveDivision | null | undefined): ActiveDivision | null {
+  if (!division) return null;
+  const centerX = finite(division.centerX, Number.NaN);
+  const centerY = finite(division.centerY, Number.NaN);
+  const width = finite(division.width, Number.NaN);
+  const height = finite(division.height, Number.NaN);
+  if (![centerX, centerY, width, height].every(Number.isFinite)) return null;
+  return { centerX, centerY, height: Math.max(0, height), width: Math.max(0, width) };
+}
+
 export function resolveLayout({ division = null, insets, width }: LayoutInput): LayoutSnapshot {
-  const contentWidth = width - insets.left - insets.right;
-  const split = paneSplit({ division, insets, width });
+  const safeWidth = nonNegative(width);
+  const safeInsets = { left: nonNegative(insets.left), right: nonNegative(insets.right) };
+  const contentWidth = Math.max(0, safeWidth - safeInsets.left - safeInsets.right);
+  const split = paneSplit({ division: safeDivision(division), insets: safeInsets, width: safeWidth });
   const panesFit = split.left.width >= layout.paneMin && split.right.width >= layout.paneMin;
   const mode: LayoutMode = contentWidth < layout.compactMax
     ? "compact"
@@ -56,11 +76,15 @@ export function paneSplit({
   insets,
   width,
 }: LayoutInput): LayoutSplit {
-  const vertical = Boolean(division && division.height >= division.width && division.width > 0);
-  const splitX = vertical && division ? division.centerX : width / 2;
-  const foldHalf = vertical && division ? division.width / 2 : 0;
-  const gap = Math.max(layout.paneGutter, foldHalf + layout.foldClearance);
-  const leftX = insets.left + layout.margin;
+  const safeWidth = nonNegative(width);
+  const leftInset = nonNegative(insets.left);
+  const rightInset = nonNegative(insets.right);
+  const fold = safeDivision(division);
+  const vertical = Boolean(fold && fold.height >= fold.width && fold.width > 0);
+  const splitX = nonNegative(vertical && fold ? fold.centerX : safeWidth / 2);
+  const foldHalf = nonNegative(vertical && fold ? fold.width / 2 : 0);
+  const gap = nonNegative(Math.max(layout.paneGutter, foldHalf + layout.foldClearance));
+  const leftX = leftInset + layout.margin;
   const rightX = splitX + gap;
   return {
     foldActive: vertical,
@@ -72,7 +96,7 @@ export function paneSplit({
     },
     right: {
       x: rightX,
-      width: Math.max(0, width - insets.right - layout.margin - rightX),
+      width: Math.max(0, safeWidth - rightInset - layout.margin - rightX),
     },
     splitX,
     vertical,
@@ -98,38 +122,47 @@ export function centeredCardFrame({
   insets: { bottom: number; left: number; right: number; top: number };
   width: number;
 }): CenteredCardFrame {
-  const contentWidth = width - insets.left - insets.right;
+  const safeWidth = nonNegative(width);
+  const safeHeight = nonNegative(height);
+  const safeInsets = {
+    bottom: nonNegative(insets.bottom),
+    left: nonNegative(insets.left),
+    right: nonNegative(insets.right),
+    top: nonNegative(insets.top),
+  };
+  const contentWidth = Math.max(0, safeWidth - safeInsets.left - safeInsets.right);
   const preferred = Math.min(Math.max(0, contentWidth - cardInset), layout.formMax);
-  const horizontalFold = Boolean(division && division.width > division.height && division.height > 0);
-  const verticalFold = Boolean(division && !horizontalFold && division.width > 0);
+  const fold = safeDivision(division);
+  const horizontalFold = Boolean(fold && fold.width > fold.height && fold.height > 0);
+  const verticalFold = Boolean(fold && !horizontalFold && fold.width > 0);
   const split = paneSplit({
-    division: verticalFold ? division : null,
-    insets,
-    width,
+    division: verticalFold ? fold : null,
+    insets: safeInsets,
+    width: safeWidth,
   });
-  const regionLeft = verticalFold ? split.splitX + split.gap : insets.left;
-  const regionRight = width - insets.right;
+  const regionLeft = verticalFold ? split.splitX + split.gap : safeInsets.left;
+  const regionRight = safeWidth - safeInsets.right;
   const regionWidth = Math.max(0, regionRight - regionLeft);
   const cardWidth = Math.min(preferred, regionWidth);
   const left = regionLeft + Math.max(0, regionWidth - cardWidth) / 2;
 
-  if (!horizontalFold || !division) {
+  if (!horizontalFold || !fold) {
     return {
-      height: Math.max(0, height - insets.top - insets.bottom),
+      height: Math.max(0, safeHeight - safeInsets.top - safeInsets.bottom),
       justifyContent: "center",
       left,
-      top: insets.top,
+      top: safeInsets.top,
       width: cardWidth,
     };
   }
 
-  const band = division.height / 2 + layout.foldClearance;
-  const above = division.centerY - band - insets.top;
-  const below = height - insets.bottom - (division.centerY + band);
+  const band = fold.height / 2 + layout.foldClearance;
+  const above = fold.centerY - band - safeInsets.top;
+  const below = safeHeight - safeInsets.bottom - (fold.centerY + band);
   if (below >= above) {
-    const top = division.centerY + band;
+    const top = fold.centerY + band;
     return {
-      height: Math.max(0, height - insets.bottom - top),
+      height: Math.max(0, safeHeight - safeInsets.bottom - top),
       justifyContent: "center",
       left,
       top,
@@ -137,10 +170,10 @@ export function centeredCardFrame({
     };
   }
   return {
-    height: Math.max(0, division.centerY - band - insets.top),
+    height: Math.max(0, fold.centerY - band - safeInsets.top),
     justifyContent: "center",
     left,
-    top: insets.top,
+    top: safeInsets.top,
     width: cardWidth,
   };
 }
@@ -170,6 +203,7 @@ export function anchoredScrollOffset(
   contentHeight: number,
   viewportHeight: number,
 ): number {
-  const maxOffset = Math.max(0, contentHeight - viewportHeight);
-  return Math.min(maxOffset, Math.max(0, item.y + anchor.offset));
+  const maxOffset = Math.max(0, nonNegative(contentHeight) - nonNegative(viewportHeight));
+  const target = nonNegative(finite(item.y) + finite(anchor.offset));
+  return Math.min(maxOffset, target);
 }
