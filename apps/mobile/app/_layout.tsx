@@ -11,8 +11,11 @@ import { Redirect, Stack, useGlobalSearchParams, usePathname } from "expo-router
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { StyleSheet } from "react-native";
+import { ReservedRegionsProvider } from "react-native-reserved-regions";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
+import { isLayoutPreview } from "../lib/layout-preview";
 import { useAuthSession } from "../lib/use-auth-session";
 import { colors } from "../ui/theme";
 
@@ -37,7 +40,7 @@ export default function RootLayout() {
   if (!fontsLoaded) return null;
 
   return (
-    <>
+    <ReservedRegionsProvider style={styles.root}>
       <Stack
         screenOptions={{
           animation: "slide_from_right",
@@ -47,9 +50,13 @@ export default function RootLayout() {
       />
       <SignedOutRedirect />
       <StatusBar style="dark" />
-    </>
+    </ReservedRegionsProvider>
   );
 }
+
+const styles = StyleSheet.create({
+  root: { backgroundColor: colors.background, flex: 1 },
+});
 
 const signedOutTabPaths = new Set(["/", "/community", "/profile"]);
 
@@ -57,6 +64,7 @@ function SignedOutRedirect() {
   const pathname = usePathname();
   const params = useGlobalSearchParams<{ redirect?: string | string[] }>();
   const { ready, session } = useAuthSession();
+  if (__DEV__ && isLayoutPreview()) return null;
   if (!ready || session || !signedOutTabPaths.has(pathname)) return null;
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
   return (

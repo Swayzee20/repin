@@ -20,6 +20,7 @@ import {
   StateCard,
   TextField,
 } from "../../ui/components";
+import { WideColumn } from "../../ui/layout";
 import { colors, fonts, radii, spacing, type } from "../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(
@@ -151,6 +152,7 @@ export default function JoinFirstGroupScreen() {
           keyboardShouldPersistTaps="handled"
         >
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn max="form">
           <BackButton label="Get Started" onPress={() => router.back()} />
           <Text style={styles.eyebrow}>JOIN YOUR CREW</Text>
           <Text style={styles.title}>Join a group</Text>
@@ -189,6 +191,7 @@ export default function JoinFirstGroupScreen() {
               Join Group
             </Button>
           </View>
+          </WideColumn>
           </SafeAreaView>
         </ScrollView>
       </KeyboardAvoidingView>

@@ -3,6 +3,7 @@ import { type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
+import { isLayoutPreview } from "../lib/layout-preview";
 import { useAuthSession } from "../lib/use-auth-session";
 import { LogWorkoutChooser } from "./log-workout-chooser";
 import { useMainTabs } from "./main-tabs-context";
@@ -15,8 +16,9 @@ export function MainTabsGate({ children }: { children: ReactNode }) {
   const { selectedGroupId, setWorkoutChooserVisible, workoutChooserVisible } = useMainTabs();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
 
-  if (!ready) return <View style={styles.fill} />;
-  if (!session) {
+  const layoutPreview = __DEV__ && isLayoutPreview();
+  if (!ready && !layoutPreview) return <View style={styles.fill} />;
+  if (!session && !layoutPreview) {
     return (
       <Redirect
         href={inviteRedirect ? { pathname: "/sign-in", params: { redirect: inviteRedirect } } : "/sign-in"}

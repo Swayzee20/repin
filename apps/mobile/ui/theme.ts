@@ -43,6 +43,17 @@ export const spacing = {
   huge: 40,
 } as const;
 
+export const layout = {
+  compactMax: 600,
+  twoPaneMin: 760,
+  paneMin: 320,
+  maxReadable: 600,
+  formMax: 420,
+  margin: spacing.xxl,
+  paneGutter: spacing.xl,
+  foldClearance: spacing.md,
+} as const;
+
 export const radii = { sm: 8, input: 9, md: 10, lg: 14, xl: 18, pill: 999 } as const;
 
 export const floatingSurfaceStyle = {

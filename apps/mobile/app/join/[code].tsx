@@ -5,6 +5,8 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { WideColumn } from "../../ui/layout";
+
 import { invitePath, normalizeInviteCode } from "../../lib/invite-route";
 import { supabase } from "../../lib/supabase";
 import { BackButton, Button, LoadingState, StateCard } from "../../ui/components";
@@ -249,7 +251,7 @@ function InviteShell({ children }: { children: ReactNode }) {
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <ScrollView contentContainerStyle={styles.container}>
-        <SafeAreaView edges={["left", "right"]}>{children}</SafeAreaView>
+        <SafeAreaView edges={["left", "right"]}><WideColumn max="form">{children}</WideColumn></SafeAreaView>
       </ScrollView>
     </SafeAreaView>
   );

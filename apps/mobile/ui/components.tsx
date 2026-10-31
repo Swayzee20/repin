@@ -33,6 +33,7 @@ import repinLockup from "../assets/branding/repin-lockup.png";
 import repinLockupReversed from "../assets/branding/repin-lockup-reversed.png";
 import repinMark from "../assets/branding/repin-mark.png";
 import { formatWorkoutDate } from "../lib/workout-date";
+import { WideColumn } from "./layout";
 import { colors, controls, fonts, radii, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
 
@@ -48,16 +49,19 @@ const webFeedScrollerStyle =
     : undefined;
 
 export function Wordmark({
+  decorative = false,
   size = 22,
   tone = "default",
 }: {
+  decorative?: boolean;
   size?: number;
   tone?: "default" | "onBrand";
 }) {
   const onBrand = tone === "onBrand";
   return (
     <Text
-      accessibilityLabel="repin"
+      accessibilityLabel={decorative ? undefined : "repin"}
+      accessible={decorative ? false : undefined}
       style={[
         styles.wordmark,
         { fontFamily: fonts.display },
@@ -70,7 +74,7 @@ export function Wordmark({
       ]}
     >
       rep
-      <Text style={[styles.wordmark, { color: onBrand ? colors.ink : colors.brand, fontFamily: fonts.display }]}>in</Text>
+      <Text accessible={decorative ? false : undefined} style={[styles.wordmark, { color: onBrand ? colors.ink : colors.brand, fontFamily: fonts.display }]}>in</Text>
     </Text>
   );
 }
@@ -120,6 +124,7 @@ export function Screen({
         style={preserveTransformedContent ? styles.overflowVisible : undefined}
       >
         <SafeAreaView edges={["left", "right"]} style={styles.sideInset}>
+          <WideColumn>
           <View
             style={[
               styles.screenContent,
@@ -128,6 +133,7 @@ export function Screen({
           >
             {children}
           </View>
+          </WideColumn>
         </SafeAreaView>
       </ScrollView>
     </SafeAreaView>
