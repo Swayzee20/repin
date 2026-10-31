@@ -18,8 +18,6 @@ export default function SignInScreen() {
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const emailInput = useRef<ComponentRef<typeof TextInput>>(null);
@@ -85,16 +83,13 @@ export default function SignInScreen() {
           onBlur={() => {
             if (ignoreBlur.current) return;
             if (focusedField.current === "email") focusedField.current = null;
-            setEmailFocused(false);
           }}
           onChangeText={setEmail}
           onFocus={() => {
             focusedField.current = "email";
-            setEmailFocused(true);
           }}
           placeholder="you@example.com"
           ref={emailInput}
-          style={[styles.authInput, emailFocused && styles.authInputFocused]}
           value={email}
         />
         <TextField
@@ -104,17 +99,14 @@ export default function SignInScreen() {
           onBlur={() => {
             if (ignoreBlur.current) return;
             if (focusedField.current === "password") focusedField.current = null;
-            setPasswordFocused(false);
           }}
           onChangeText={setPassword}
           onFocus={() => {
             focusedField.current = "password";
-            setPasswordFocused(true);
           }}
           placeholder="Enter your password"
           ref={passwordInput}
           secureTextEntry
-          style={[styles.authInput, passwordFocused && styles.authInputFocused]}
           value={password}
         />
         <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push("/forgot-password")} style={styles.forgotPassword}>
@@ -172,8 +164,6 @@ const styles = StyleSheet.create({
   authTitleFlush: { marginTop: 0 },
   authCopy: { color: colors.muted, ...type.body, marginTop: spacing.sm },
   authForm: { gap: spacing.lg },
-  authInput: { borderRadius: radii.md },
-  authInputFocused: { borderColor: colors.brand },
   authButton: { borderRadius: radii.md },
   error: { color: colors.danger, ...type.bodySmall },
   signupPrompt: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.xxl },

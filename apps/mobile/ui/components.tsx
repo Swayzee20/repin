@@ -1,7 +1,7 @@
 import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
 import { LinearGradient } from "expo-linear-gradient";
-import { useCallback, useRef, useState, type ComponentRef, type ReactNode, type Ref } from "react";
-import type { StyleProp, TextInputProps, ViewInstance, ViewProps, ViewStyle } from "react-native";
+import { useCallback, useRef, useState, type ReactNode } from "react";
+import type { StyleProp, ViewInstance, ViewProps, ViewStyle } from "react-native";
 import {
   ActivityIndicator,
   Image,
@@ -12,7 +12,6 @@ import {
   StyleSheet,
   type ScrollViewInstance,
   Text,
-  TextInput,
   View,
   useWindowDimensions,
 } from "react-native";
@@ -48,7 +47,7 @@ import {
 import { Icon, type IconName } from "./icons";
 import { Menu, MenuItem } from "./menu";
 import { menuPopoverWidth, stateActionHeight, stateIconSize } from "./overlay-state";
-import { colors, controls, elevation, fonts, radii, size, spacing, type } from "./theme";
+import { colors, elevation, fonts, radii, size, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
 
 const webFeedScrollerStyle =
@@ -229,56 +228,7 @@ export function Card({
   );
 }
 
-export function TextField({
-  compact = false,
-  containerStyle,
-  focusedStyle,
-  label,
-  hint,
-  onBlur,
-  onFocus,
-  ref,
-  style,
-  ...props
-}: TextInputProps & {
-  compact?: boolean;
-  containerStyle?: StyleProp<ViewStyle>;
-  focusedStyle?: TextInputProps["style"];
-  label?: string;
-  hint?: string;
-  ref?: Ref<ComponentRef<typeof TextInput>>;
-}) {
-  const [focused, setFocused] = useState(false);
-
-  return (
-    <View style={[styles.field, compact && styles.fieldCompact, containerStyle]}>
-      {label ? <Text style={styles.fieldLabel}>{label}</Text> : null}
-      <TextInput
-        ref={ref}
-        onBlur={(event) => {
-          setFocused(false);
-          onBlur?.(event);
-        }}
-        onFocus={(event) => {
-          setFocused(true);
-          onFocus?.(event);
-        }}
-        placeholderTextColor={colors.subtle}
-        selectionColor={colors.brand}
-        style={[
-          styles.input,
-          compact && styles.inputCompact,
-          focused && styles.inputFocused,
-          props.multiline && styles.multiline,
-          style,
-          focused && focusedStyle,
-        ]}
-        {...props}
-      />
-      {hint ? <Text style={styles.hint}>{hint}</Text> : null}
-    </View>
-  );
-}
+export { TextField } from "./form-fields";
 
 export function SectionHeader({
   eyebrow,
@@ -802,14 +752,6 @@ const styles = StyleSheet.create({
   buttonHelper: { color: colors.disabledText, marginTop: controlHelperGap, ...type.bodySmall },
   card: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.lg, borderWidth: 1, boxShadow: elevation.e1, padding: spacing.lg },
   cardSelected: { boxShadow: `${elevation.e1}, inset 0 0 0 2px ${colors.brand}` },
-  field: { gap: spacing.sm },
-  fieldCompact: { gap: spacing.xs },
-  fieldLabel: { color: colors.inkSoft, ...type.label },
-  input: { backgroundColor: colors.surface, borderColor: colors.borderStrong, borderRadius: radii.md, borderWidth: 1, color: colors.ink, fontFamily: fonts.regular, fontSize: 16, minHeight: controls.inputHeight, paddingHorizontal: spacing.lg, paddingVertical: spacing.md },
-  inputCompact: { minHeight: 48, paddingVertical: spacing.sm },
-  inputFocused: { borderColor: colors.brand },
-  multiline: { minHeight: 108, textAlignVertical: "top" },
-  hint: { color: colors.muted, ...type.bodySmall },
   sectionHeader: { alignItems: "flex-end", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.lg },
   sectionCopy: { flex: 1 },
   eyebrow: { color: colors.brand, ...type.eyebrow, marginBottom: spacing.xs },

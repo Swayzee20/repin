@@ -6,7 +6,7 @@ import { Feather } from "@expo/vector-icons";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
-import { TextField } from "./components";
+import { NumberField } from "./form-fields";
 import { SegmentedControl } from "./primitives";
 import {
   buildRunResultSummary,
@@ -106,20 +106,17 @@ export function RunResultEditor({
           />
         ) : (
           <>
-            <View style={[styles.intervalMetricRow, styles.metricRowSurface, styles.firstMetricRow]}>
+            <View style={[styles.intervalMetricRow, styles.firstMetricRow]}>
               <Text style={styles.intervalMetricLabel}>Distance</Text>
               <View style={styles.intervalMetricControls}>
-                <TextField compact containerStyle={styles.metricField} focusedStyle={styles.integratedInputFocused} inputMode="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" style={styles.integratedInput} value={results.distance} />
+                <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" suffix={results.distanceUnit} value={results.distance} />
                 <DistanceUnitToggle onChange={(distanceUnit) => updateResults({ distanceUnit })} value={results.distanceUnit} />
               </View>
             </View>
-            <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+            <View style={styles.intervalMetricRow}>
               <Text style={styles.intervalMetricLabel}>Time</Text>
               <WorkoutTimeInput
                 containerStyle={styles.intervalTimeControls}
-                fieldStyle={styles.intervalTimeField}
-                focusedInputStyle={styles.integratedInputFocused}
-                inputStyle={styles.integratedInput}
                 minutes={results.timeMinutes}
                 onMinutesChange={(timeMinutes) => updateResults({ timeMinutes })}
                 onSecondsChange={(timeSeconds) => updateResults({ timeSeconds })}
@@ -221,22 +218,19 @@ function IntervalEditor({
           <InlineError field="interval" index={index} issue={validationError} />
 
           {expanded ? <>
-          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+          <View style={styles.intervalMetricRow}>
             <Text style={styles.intervalMetricLabel}>Distance</Text>
             <View style={styles.intervalMetricControls}>
-              <TextField compact containerStyle={styles.metricField} focusedStyle={styles.integratedInputFocused} inputMode="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" style={styles.integratedInput} value={interval.distance} />
+              <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" suffix={interval.distanceUnit} value={interval.distance} />
               <UnitToggle onChange={(distanceUnit) => updateInterval(interval.id, { distanceUnit })} value={interval.distanceUnit} />
             </View>
           </View>
           <InlineError field="distance" index={index} issue={validationError} />
 
-          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+          <View style={styles.intervalMetricRow}>
             <Text style={styles.intervalMetricLabel}>Time</Text>
             <WorkoutTimeInput
               containerStyle={styles.intervalTimeControls}
-              fieldStyle={styles.intervalTimeField}
-              focusedInputStyle={styles.integratedInputFocused}
-              inputStyle={styles.integratedInput}
               minutes={interval.timeMinutes}
               onMinutesChange={(timeMinutes) => updateInterval(interval.id, { timeMinutes })}
               onSecondsChange={(timeSeconds) => updateInterval(interval.id, { timeSeconds })}
@@ -245,11 +239,10 @@ function IntervalEditor({
           </View>
           <InlineError field="time" index={index} issue={validationError} />
 
-          <View style={[styles.intervalMetricRow, styles.metricRowSurface]}>
+          <View style={styles.intervalMetricRow}>
             <Text style={styles.intervalMetricLabel}>Recovery</Text>
-            <View style={styles.recoveryRow}>
-              <TextField compact accessibilityLabel="Recovery seconds" containerStyle={styles.recoveryField} focusedStyle={styles.integratedInputFocused} inputMode="numeric" keyboardType="number-pad" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" style={styles.integratedInput} value={interval.recoverySeconds} />
-              <Text style={styles.unitLabel}>sec</Text>
+            <View style={styles.intervalMetricControls}>
+              <NumberField accessibilityLabel="Recovery seconds" containerStyle={styles.metricField} kind="number" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" suffix="sec" value={interval.recoverySeconds} />
             </View>
           </View>
           <InlineError field="recovery" index={index} issue={validationError} />
@@ -377,13 +370,7 @@ const styles = StyleSheet.create({
   intervalMetricLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20, width: 64 },
   intervalMetricHeading: { flex: 1, minWidth: 120 },
   intervalMetricControls: { alignItems: "center", flex: 1, flexDirection: "row", gap: spacing.xs, minWidth: 182 },
-  intervalTimeControls: { flex: 1, gap: spacing.sm, marginTop: 0, minWidth: 168 },
-  intervalTimeField: { width: 52 },
-  integratedInput: { backgroundColor: "transparent", borderColor: colors.borderStrong, borderRadius: 0, borderWidth: 0, borderBottomWidth: 1, minHeight: 44, paddingHorizontal: spacing.xs, paddingVertical: spacing.xs },
-  integratedInputFocused: { borderBottomColor: colors.brand, borderBottomWidth: 2 },
-  recoveryRow: { alignItems: "center", flex: 1, flexDirection: "row", gap: spacing.sm, minWidth: 132 },
-  recoveryField: { marginTop: 0, width: 96 },
-  unitLabel: { color: colors.muted, ...type.bodySmall },
+  intervalTimeControls: { flex: 1, marginTop: 0, minWidth: 168 },
   inlineError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.xs },
   quantityRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between", marginTop: spacing.sm },
   quantityHelper: { color: colors.muted, ...type.bodySmall, marginTop: 2 },

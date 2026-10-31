@@ -1,15 +1,22 @@
 import { Stack } from "expo-router";
-import { useStripPresent } from "./vertical-bar-edge";
+import { Platform } from "react-native";
 
 import { useAuthSession } from "../lib/use-auth-session";
 import { useMainTabs } from "./main-tabs-context";
+import { RoundIconButton } from "./primitives";
+import { tabRootChrome } from "./tab-root-header";
 import { colors } from "./theme";
+import { useStripState } from "./vertical-bar-edge";
 
 export default function TabRootStack() {
-  const stripPresent = useStripPresent();
+  const strip = useStripState();
   const { session } = useAuthSession();
   const { openWorkoutChooser, selectedGroupId } = useMainTabs();
-  const showRepIn = stripPresent && Boolean(session && selectedGroupId);
+  const chrome = tabRootChrome(strip, {
+    hasSelectedGroup: Boolean(selectedGroupId),
+    hasSession: Boolean(session),
+    platform: Platform.OS,
+  });
 
   return (
     <Stack
@@ -17,14 +24,29 @@ export default function TabRootStack() {
         contentStyle: { backgroundColor: colors.background },
         headerBackVisible: false,
         headerShadowVisible: false,
-        headerShown: stripPresent,
+        headerShown: chrome.headerShown,
         headerStyle: { backgroundColor: colors.background },
         headerTintColor: colors.brand,
         title: "",
       }}
     >
-      <Stack.Screen name="index" options={{ headerShown: stripPresent, title: "" }}>
-        {showRepIn ? (
+      <Stack.Screen
+        name="index"
+        options={{
+          headerRight: chrome.control === "header-button"
+            ? () => (
+              <RoundIconButton
+                accessibilityLabel="Rep in"
+                kind="plus"
+                onPress={openWorkoutChooser}
+              />
+            )
+            : undefined,
+          headerShown: chrome.headerShown,
+          title: "",
+        }}
+      >
+        {chrome.control === "toolbar" ? (
           <Stack.Toolbar placement="right">
             <Stack.Toolbar.Button
               accessibilityLabel="Rep in"
