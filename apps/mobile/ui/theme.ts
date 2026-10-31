@@ -32,6 +32,8 @@ export const colors = {
   overlayStrong: "rgba(43,33,28,0.72)",
   overlayLine: "rgba(43,33,28,0.32)",
   scrimPhoto: "rgba(18,18,18,0.88)",
+  photoFill: "rgba(18,18,18,0.66)",
+  photoRing: "rgba(255,255,255,0.35)",
 } as const;
 
 export const spacing = {

@@ -5,9 +5,11 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { isEmailAddress, PASSWORD_RESET_SENT_MESSAGE, requestPasswordReset } from "../lib/password-reset";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
-import { BackButton, Button, StateCard, TextField } from "../ui/components";
+import { Button, StateCard, TextField } from "../ui/components";
+import { Icon } from "../ui/icons";
+import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
 import { WideColumn } from "../ui/layout";
-import { colors, fonts, radii, spacing, type } from "../ui/theme";
+import { colors, radii, size, spacing, type } from "../ui/theme";
 
 export default function ForgotPasswordScreen() {
   const router = useRouter();
@@ -59,12 +61,12 @@ export default function ForgotPasswordScreen() {
         <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
           <SafeAreaView edges={["left", "right"]} style={styles.flex}>
           <WideColumn max="form">
-          <BackButton label="Sign In" onPress={returnToSignIn} />
+          <RoundIconButton accessibilityLabel="Sign In" kind="back" onPress={returnToSignIn} style={roundNavButtonStyle} />
           <Text style={styles.eyebrow}>ACCOUNT</Text>
           <Text style={styles.title}>Forgot password?</Text>
           {sent ? (
             <View style={styles.sent}>
-              <View style={styles.confirmationIcon}><Text style={styles.confirmationGlyph}>✓</Text></View>
+              <View style={styles.confirmationIcon}><Icon color={colors.success} name="checkmark" size={size.icon.md} /></View>
               <Text style={styles.sentCopy}>{PASSWORD_RESET_SENT_MESSAGE}</Text>
               <Button onPress={returnToSignIn}>Back to Sign In</Button>
             </View>
@@ -85,7 +87,7 @@ export default function ForgotPasswordScreen() {
                 value={email}
               />
               {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
-              <Button disabled={!email.trim()} loading={submitting} onPress={() => void sendReset()}>Send reset link</Button>
+              <Button disabled={!email.trim()} disabledReason={email.trim() ? undefined : "Enter your email."} loading={submitting} loadingLabel="Sending link" onPress={() => void sendReset()}>Send reset link</Button>
             </View>
           )}
           </WideColumn>
@@ -108,7 +110,6 @@ const styles = StyleSheet.create({
   errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, padding: spacing.md },
   errorText: { color: colors.danger, ...type.bodySmall },
   sent: { gap: spacing.lg, marginTop: spacing.xxl },
-  confirmationIcon: { alignItems: "center", backgroundColor: colors.successSoft, borderRadius: radii.pill, height: 64, justifyContent: "center", width: 64 },
-  confirmationGlyph: { color: colors.success, fontFamily: fonts.bold, fontSize: 28 },
+  confirmationIcon: { alignItems: "center", backgroundColor: colors.successSoft, borderRadius: radii.pill, height: size.avatars.lg, justifyContent: "center", width: size.avatars.lg },
   sentCopy: { color: colors.inkSoft, ...type.body },
 });

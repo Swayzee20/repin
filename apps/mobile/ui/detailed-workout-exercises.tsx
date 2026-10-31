@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../lib/supabase";
 import { TextField } from "./components";
+import { SegmentedControl } from "./primitives";
 import { colors, fonts, radii, spacing, type } from "./theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -148,18 +149,16 @@ function DetailedExerciseEditor({
 
       <View style={styles.unitRow}>
         <Text style={styles.unitLabel}>Weight unit</Text>
-        <View style={styles.unitToggle}>
-          {(["lb", "kg"] as const).map((unit) => (
-            <Pressable
-              accessibilityRole="button"
-              key={unit}
-              onPress={() => onChange({ ...exercise, loadUnit: unit })}
-              style={[styles.unitOption, exercise.loadUnit === unit && styles.unitOptionSelected]}
-            >
-              <Text style={[styles.unitOptionText, exercise.loadUnit === unit && styles.unitOptionTextSelected]}>{unit}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <SegmentedControl
+          accessibilityLabel="Weight unit"
+          onChange={(loadUnit) => {
+            if (loadUnit) onChange({ ...exercise, loadUnit });
+          }}
+          options={[{ label: "lb", value: "lb" }, { label: "kg", value: "kg" }]}
+          size="sm"
+          style={styles.unitSegment}
+          value={exercise.loadUnit}
+        />
       </View>
 
       {exercise.sets.map((set, setIndex) => (
@@ -262,11 +261,7 @@ const styles = StyleSheet.create({
   suggestionMeta: { color: colors.muted, ...type.bodySmall },
   unitRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md },
   unitLabel: { color: colors.muted, ...type.bodySmall },
-  unitToggle: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexDirection: "row", padding: 3 },
-  unitOption: { alignItems: "center", borderRadius: radii.sm, justifyContent: "center", minHeight: 34, minWidth: 48 },
-  unitOptionSelected: { backgroundColor: colors.surface, borderColor: colors.border, borderWidth: 1 },
-  unitOptionText: { color: colors.muted, ...type.label },
-  unitOptionTextSelected: { color: colors.ink },
+  unitSegment: { alignSelf: "center" },
   setCard: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.md, paddingTop: spacing.md },
   setHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   setTitle: { color: colors.inkSoft, ...type.label },

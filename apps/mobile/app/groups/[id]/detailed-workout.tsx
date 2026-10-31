@@ -28,7 +28,9 @@ import {
   type IntervalValidationIssue,
   validateIntervals,
 } from "../../../lib/detailed-run-results";
-import { BackButton, Button, TextField } from "../../../ui/components";
+import { Button, TextField } from "../../../ui/components";
+import { Chevron } from "../../../ui/icons";
+import { RoundIconButton, roundNavButtonStyle } from "../../../ui/primitives";
 import { WideColumn } from "../../../ui/layout";
 import {
   buildDetailedMovements,
@@ -329,7 +331,7 @@ export default function DetailedWorkoutScreen() {
         <SafeAreaView edges={["left", "right"]}>
         <WideColumn>
         <View style={styles.header}>
-          <BackButton label="Cancel" onPress={() => router.back()} />
+          <RoundIconButton accessibilityLabel="Cancel" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
           <Text style={styles.eyebrow}>{editing ? "EDIT WORKOUT" : "DETAILED WORKOUT"}</Text>
           <Text style={styles.title}>{editing ? "Update your rep-in" : "Track your workout"}</Text>
         </View>
@@ -447,7 +449,7 @@ export default function DetailedWorkoutScreen() {
               <>
                 <Pressable accessibilityRole="button" onPress={() => { setPickerMode("date"); setShowPicker(true); }} style={({ pressed }) => [styles.whenRow, pressed && styles.pressed]}>
                   <Text style={styles.whenLabel}>Completed</Text>
-                  <View style={styles.whenValue}><Text style={styles.whenText}>{formatFriendlyDate(occurredAt)}</Text><Text style={styles.whenAction}>›</Text></View>
+                  <View style={styles.whenValue}><Text style={styles.whenText}>{formatFriendlyDate(occurredAt)}</Text><View style={styles.whenAction}><Chevron color={colors.brand} /></View></View>
                 </Pressable>
                 {showPicker ? <View style={styles.pickerWrap}><DateTimePicker mode={Platform.OS === "ios" ? "datetime" : pickerMode} onChange={handleNativeDateChange} value={occurredAt} />{Platform.OS === "ios" ? <Pressable accessibilityRole="button" onPress={() => setShowPicker(false)}><Text style={styles.pickerDone}>Done</Text></Pressable> : null}</View> : null}
               </>
@@ -455,7 +457,7 @@ export default function DetailedWorkoutScreen() {
           </View>
 
           {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
-          <Button disabled={loadingExisting || !workoutType || (!editing && workoutType === "run" && !runSubtype)} loading={submitting || loadingExisting} onPress={() => void submitWorkout()} style={styles.submitButton}>{editing ? "Save changes" : "Log workout"}</Button>
+          <Button disabled={loadingExisting || !workoutType || (!editing && workoutType === "run" && !runSubtype)} disabledReason={!workoutType ? "Choose a workout type." : !editing && workoutType === "run" && !runSubtype ? "Choose a run type." : undefined} loading={submitting || loadingExisting} loadingLabel={editing ? "Saving" : "Logging"} onPress={() => void submitWorkout()} style={styles.submitButton}>{editing ? "Save changes" : "Log workout"}</Button>
           </WideColumn>
           </SafeAreaView>
         </ScrollView>
@@ -536,7 +538,7 @@ const styles = StyleSheet.create({
   whenLabel: { color: colors.ink, ...type.heading },
   whenValue: { alignItems: "center", flexDirection: "row", flexShrink: 1, marginLeft: spacing.md },
   whenText: { color: colors.muted, ...type.bodySmall },
-  whenAction: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24, marginLeft: spacing.sm },
+  whenAction: { marginLeft: spacing.sm },
   pickerWrap: { alignItems: "flex-end", marginTop: spacing.sm },
   pickerDone: { color: colors.brand, ...type.label, padding: spacing.md },
   postField: { marginTop: spacing.md },

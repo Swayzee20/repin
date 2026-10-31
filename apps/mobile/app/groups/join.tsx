@@ -12,7 +12,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
-import { BackButton, Button, TextField } from "../../ui/components";
+import { Button, TextField } from "../../ui/components";
+import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { WideColumn } from "../../ui/layout";
 import { colors, radii, spacing, type } from "../../ui/theme";
 
@@ -131,7 +132,7 @@ export default function JoinGroupScreen() {
       <ScrollView contentContainerStyle={styles.container} keyboardShouldPersistTaps="handled">
         <SafeAreaView edges={["left", "right"]}>
         <WideColumn max="form">
-        <BackButton onPress={() => router.back()} />
+        <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
         <Text style={styles.eyebrow}>FIND YOUR CREW</Text>
         <Text style={styles.title}>Join a group</Text>
         <Text style={styles.intro}>
@@ -158,7 +159,9 @@ export default function JoinGroupScreen() {
             />
             <Button
               disabled={inviteLoading || !inviteCode.trim()}
+              disabledReason={inviteCode.trim() ? undefined : "Enter an invite code."}
               loading={inviteLoading}
+              loadingLabel="Finding"
               onPress={() => void findInvite()}
               style={styles.compactButton}
             >
@@ -175,7 +178,9 @@ export default function JoinGroupScreen() {
             <Text style={styles.muted}>{memberLabel(preview.memberCount)}</Text>
             <Button
               disabled={joining || preview.isMember}
+              disabledReason={preview.isMember ? "You’re already in this group." : undefined}
               loading={joining}
+              loadingLabel="Joining"
               onPress={() => void join()}
               variant={preview.isMember ? "secondary" : "primary"}
             >
