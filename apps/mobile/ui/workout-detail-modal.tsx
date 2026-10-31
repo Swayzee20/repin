@@ -17,8 +17,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 
 import { CenteredCard } from "./layout";
+import { ScrollAnchorProvider, useScrollAnchor } from "./scroll-anchor";
 import { colors, radii, spacing } from "./theme";
-import { WorkoutDetailView } from "./workout-detail";
+import { WorkoutDetailView, type WorkoutDetailFixture } from "./workout-detail";
 
 const webScrollerStyle = Platform.OS === "web"
   ? ({
@@ -30,6 +31,7 @@ const webScrollerStyle = Platform.OS === "web"
   : undefined;
 
 export function WorkoutDetailModal({
+  fixture = null,
   groupId,
   initialWorkout,
   onCommentCountChange,
@@ -38,6 +40,7 @@ export function WorkoutDetailModal({
   sessionId,
   visible,
 }: {
+  fixture?: WorkoutDetailFixture | null;
   groupId: string | null;
   initialWorkout?: WorkoutFeedItem | null;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
@@ -53,6 +56,10 @@ export function WorkoutDetailModal({
   const panelScale = useRef(new Animated.Value(0.96)).current;
   const closing = useRef(false);
   const useNativeDriver = Platform.OS !== "web";
+  const detailAnchor = useScrollAnchor(
+    `${sessionId ?? "none"}:${visible ? "open" : "closed"}`,
+    visible && sessionId ? `workout-detail:${sessionId}` : null,
+  );
   const panelMaxHeight = useMemo(
     () => Math.min(
       viewportHeight * 0.8,
@@ -159,21 +166,31 @@ export function WorkoutDetailModal({
             keyboardDismissMode={Platform.OS === "web" ? "none" : "on-drag"}
             keyboardShouldPersistTaps="handled"
             nestedScrollEnabled
+            onContentSizeChange={detailAnchor.onContentSizeChange}
+            onLayout={detailAnchor.onViewportLayout}
+            onScroll={detailAnchor.onScroll}
+            ref={detailAnchor.scrollRef}
+            scrollEventThrottle={16}
             showsVerticalScrollIndicator
             style={[styles.scroller, webScrollerStyle]}
           >
-            {groupId && sessionId ? (
-              <WorkoutDetailView
-                detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
-                detailPhotoMaxHeight={panelMaxHeight * 0.4}
-                groupId={groupId}
-                seedWorkout={initialWorkout ?? undefined}
-                onCommentCountChange={onCommentCountChange}
-                onReactionSummaryChange={onReactionSummaryChange}
-                presentation="community-modal"
-                sessionId={sessionId}
-              />
-            ) : null}
+            <View collapsable={false} ref={detailAnchor.contentRef}>
+              <ScrollAnchorProvider contentRef={detailAnchor.contentRef} onItemLayout={detailAnchor.onItemLayout} pane={null}>
+                {groupId && sessionId ? (
+                  <WorkoutDetailView
+                    detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
+                    detailPhotoMaxHeight={panelMaxHeight * 0.4}
+                    fixture={fixture}
+                    groupId={groupId}
+                    seedWorkout={initialWorkout ?? undefined}
+                    onCommentCountChange={onCommentCountChange}
+                    onReactionSummaryChange={onReactionSummaryChange}
+                    presentation="community-modal"
+                    sessionId={sessionId}
+                  />
+                ) : null}
+              </ScrollAnchorProvider>
+            </View>
           </ScrollView>
           <LinearGradient
             colors={[colors.surface, "rgba(255,255,255,0)"]}

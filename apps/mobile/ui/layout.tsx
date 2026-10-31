@@ -108,7 +108,11 @@ export function TwoPane({
   keyboardShouldPersistTaps = "handled",
   leadingFill,
   left,
+  leftAnchorKey = null,
   right,
+  rightAnchorKey = null,
+  scrollableLeft = true,
+  scrollableRight = true,
 }: {
   bleedLeading?: boolean;
   column?: "form" | "none" | "readable";
@@ -117,14 +121,18 @@ export function TwoPane({
   keyboardShouldPersistTaps?: "always" | "handled" | "never";
   leadingFill?: string;
   left: ReactNode;
+  leftAnchorKey?: string | null;
   right: ReactNode;
+  rightAnchorKey?: string | null;
+  scrollableLeft?: boolean;
+  scrollableRight?: boolean;
 }) {
   const { height, width } = useWindowDimensions();
   const { mode, split } = useLayoutMode();
   const relayoutKey = `${mode}:${width}:${height}:${split.gap}:${split.left.width}:${split.right.width}:${split.splitX}`;
-  const leftScroll = useScrollAnchor(relayoutKey);
-  const rightScroll = useScrollAnchor(relayoutKey);
-  const collapsedScroll = useScrollAnchor(relayoutKey);
+  const leftScroll = useScrollAnchor(relayoutKey, leftAnchorKey);
+  const rightScroll = useScrollAnchor(relayoutKey, rightAnchorKey);
+  const collapsedScroll = useScrollAnchor(relayoutKey, fallback === "hide-right" ? leftAnchorKey : rightAnchorKey);
   const registry = useRef(new Map<string, "left" | "right">());
   const modeRef = useRef(mode);
 
@@ -171,6 +179,7 @@ export function TwoPane({
                 paddingBottom={contentPaddingBottom}
                 pane="left"
                 pointerEvents={bleedLeading ? "none" : "auto"}
+                scrollable={scrollableLeft}
               >
                 {left}
               </PaneScroll>
@@ -182,6 +191,7 @@ export function TwoPane({
                 keyboardShouldPersistTaps={keyboardShouldPersistTaps}
                 paddingBottom={contentPaddingBottom}
                 pane="right"
+                scrollable={scrollableRight}
               >
                 {right}
               </PaneScroll>
@@ -211,6 +221,7 @@ function PaneScroll({
   paddingBottom,
   pane,
   pointerEvents = "auto",
+  scrollable,
 }: {
   anchor: ScrollAnchorController;
   children: ReactNode;
@@ -219,7 +230,16 @@ function PaneScroll({
   paddingBottom: number;
   pane: "left" | "right";
   pointerEvents?: "auto" | "none";
+  scrollable: boolean;
 }) {
+  const frameStyle = { bottom: 0, left: frame.x, position: "absolute" as const, top: 0, width: frame.width };
+  if (!scrollable) {
+    return (
+      <View pointerEvents={pointerEvents} style={frameStyle}>
+        {children}
+      </View>
+    );
+  }
   return (
     <ScrollView
       contentContainerStyle={styles.paneContent}
@@ -231,7 +251,7 @@ function PaneScroll({
       ref={anchor.scrollRef}
       scrollEventThrottle={16}
       showsVerticalScrollIndicator={false}
-      style={{ bottom: 0, left: frame.x, position: "absolute", top: 0, width: frame.width }}
+      style={frameStyle}
     >
       <View collapsable={false} ref={anchor.contentRef} style={{ flexGrow: 1, paddingBottom }}>
         <ScrollAnchorProvider contentRef={anchor.contentRef} onItemLayout={anchor.onItemLayout} pane={pane}>
