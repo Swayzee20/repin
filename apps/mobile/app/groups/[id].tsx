@@ -1,8 +1,8 @@
 import type { GroupSummary, WorkoutFeedItem } from "@repin/types";
 import * as Clipboard from "expo-clipboard";
-import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
@@ -11,7 +11,14 @@ import { Button, Card, CommunityFeed, LoadingState, SectionHeader, StateCard } f
 import { Icon } from "../../ui/icons";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
+import {
+  pushedHeaderClearance,
+  pushedHeaderScreenOptions,
+  pushedNativeHeaderEnabled,
+  pushedShowsRoundBack,
+} from "../../ui/pushed-header";
 import { colors, radii, size, spacing, type } from "../../ui/theme";
+import { useStripState } from "../../ui/vertical-bar-edge";
 
 const configuredPublicWebUrl = (process.env.EXPO_PUBLIC_WEB_URL ?? "").trim().replace(/\/$/, "");
 const publicWebUrl = configuredPublicWebUrl.startsWith("https://")
@@ -21,6 +28,10 @@ const publicWebUrl = configuredPublicWebUrl.startsWith("https://")
 export default function GroupDetailScreen() {
   const router = useRouter();
   const { mode } = useLayoutMode();
+  const strip = useStripState();
+  const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
+  const roundBack = pushedShowsRoundBack(Platform.OS);
+  const headerClearance = pushedHeaderClearance(Platform.OS, strip);
   const twoPane = mode === "twoPane";
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
@@ -78,6 +89,12 @@ export default function GroupDetailScreen() {
     }
   }, []);
 
+  const onShareInvite = useCallback(() => {
+    const inviteCode = group?.inviteCode;
+    if (!group || !inviteCode) return;
+    void shareInvite(group.name, inviteCode);
+  }, [group, shareInvite]);
+
   const openLog = useCallback(() => {
     if (!group) return;
     router.push(`./${group.id}/log-workout`);
@@ -86,60 +103,75 @@ export default function GroupDetailScreen() {
   const feedFillsPane = Boolean(group && workouts.length > 0 && twoPane);
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <TwoPane
-        column="readable"
-        contentPaddingBottom={spacing.xxl}
-        fallback="stack"
-        left={(
-          <View style={styles.pane}>
-            <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
-            {loading && !group ? <LoadingState message="Loading group…" /> : error && !group ? (
-              <StateCard actionLabel="Try again" message={error} onAction={() => void loadGroup()} title="Unable to open group" />
-            ) : group ? (
-              <>
-                {error ? <Text style={styles.refreshError}>Group refresh failed. Showing saved content.</Text> : null}
-                <View style={styles.hero}>
-                  <View style={styles.groupMark}><Text style={styles.groupMarkText}>{group.name[0]?.toUpperCase()}</Text></View>
-                  <View style={styles.heroCopy}>
-                    <Text style={styles.eyebrow}>GROUP</Text>
-                    <Text style={styles.title}>{group.name}</Text>
-                  </View>
-                  <View style={styles.roleChip}><Text style={styles.roleText}>{group.role}</Text></View>
-                </View>
-                {group.inviteCode ? (
-                  <Card style={styles.inviteCard}>
-                    <Text style={styles.inviteLabel}>INVITE YOUR CREW</Text>
-                    <Text accessibilityLabel={`Invite code ${group.inviteCode}`} selectable style={styles.inviteCode}>{group.inviteCode}</Text>
-                    <View style={styles.inviteActions}>
-                      <View style={styles.inviteAction}>
-                        <Button onPress={() => void copyInviteCode(group.inviteCode!)} variant="secondary">
-                          Copy code
-                        </Button>
+    <>
+      {nativeHeader ? <Stack.Screen options={pushedHeaderScreenOptions()} /> : null}
+      {nativeHeader && group?.inviteCode ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            accessibilityLabel="Share"
+            icon="square.and.arrow.up"
+            onPress={onShareInvite}
+            tintColor={colors.ink}
+          />
+        </Stack.Toolbar>
+      ) : null}
+      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+        <View style={headerClearance > 0 ? [styles.flex, { paddingTop: headerClearance }] : styles.flex}>
+          <TwoPane
+            column="readable"
+            contentPaddingBottom={spacing.xxl}
+            fallback="stack"
+            left={(
+              <View style={styles.pane}>
+                {roundBack ? <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} /> : null}
+                {loading && !group ? <LoadingState message="Loading group…" /> : error && !group ? (
+                  <StateCard actionLabel="Try again" message={error} onAction={() => void loadGroup()} title="Unable to open group" />
+                ) : group ? (
+                  <>
+                    {error ? <Text style={styles.refreshError}>Group refresh failed. Showing saved content.</Text> : null}
+                    <View style={styles.hero}>
+                      <View style={styles.groupMark}><Text style={styles.groupMarkText}>{group.name[0]?.toUpperCase()}</Text></View>
+                      <View style={styles.heroCopy}>
+                        <Text style={styles.eyebrow}>GROUP</Text>
+                        <Text style={styles.title}>{group.name}</Text>
                       </View>
-                      <View style={styles.inviteAction}>
-                        <Button onPress={() => void shareInvite(group.name, group.inviteCode!)}>Share</Button>
-                      </View>
+                      <View style={styles.roleChip}><Text style={styles.roleText}>{group.role}</Text></View>
                     </View>
-                    {inviteActionError ? (
-                      <Text accessibilityLiveRegion="polite" style={styles.inviteError}>{inviteActionError}</Text>
-                    ) : copied ? (
-                      <Text accessibilityLiveRegion="polite" style={styles.copied}>Copied</Text>
+                    {group.inviteCode ? (
+                      <Card style={styles.inviteCard}>
+                        <Text style={styles.inviteLabel}>INVITE YOUR CREW</Text>
+                        <Text accessibilityLabel={`Invite code ${group.inviteCode}`} selectable style={styles.inviteCode}>{group.inviteCode}</Text>
+                        <View style={styles.inviteActions}>
+                          <View style={styles.inviteAction}>
+                            <Button onPress={() => void copyInviteCode(group.inviteCode!)} variant="secondary">
+                              Copy code
+                            </Button>
+                          </View>
+                          <View style={styles.inviteAction}>
+                            <Button onPress={onShareInvite}>Share</Button>
+                          </View>
+                        </View>
+                        {inviteActionError ? (
+                          <Text accessibilityLiveRegion="polite" style={styles.inviteError}>{inviteActionError}</Text>
+                        ) : copied ? (
+                          <Text accessibilityLiveRegion="polite" style={styles.copied}>Copied</Text>
+                        ) : null}
+                      </Card>
                     ) : null}
-                  </Card>
+                  </>
                 ) : null}
-              </>
-            ) : null}
-          </View>
-        )}
-        right={group ? (
-          <GroupBoard feedFillsPane={feedFillsPane} onLog={openLog} stacked={!twoPane} workouts={workouts} />
-        ) : (
-          <View />
-        )}
-        scrollableRight={!feedFillsPane}
-      />
-    </SafeAreaView>
+              </View>
+            )}
+            right={group ? (
+              <GroupBoard feedFillsPane={feedFillsPane} onLog={openLog} stacked={!twoPane} workouts={workouts} />
+            ) : (
+              <View />
+            )}
+            scrollableRight={!feedFillsPane}
+          />
+        </View>
+      </SafeAreaView>
+    </>
   );
 }
 
@@ -192,6 +224,7 @@ function GroupBoard({
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
+  flex: { flex: 1 },
   pane: { flexGrow: 1 },
   refreshError: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
   hero: { alignItems: "center", flexDirection: "row" },

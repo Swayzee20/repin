@@ -12,8 +12,8 @@ import {
   type StripState,
 } from "./vertical-bar-edge-store";
 
-// The layout script lists files explicitly. This registers the Settings header cases.
-import "./settings-header.test";
+// The layout script lists files explicitly. This registers the pushed-header cases.
+import "./pushed-header.test";
 
 type HarnessOptions = {
   os?: string;
