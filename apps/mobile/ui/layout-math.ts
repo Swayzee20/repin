@@ -86,6 +86,43 @@ export function resolveLayout({ division = null, insets, width }: LayoutInput): 
   return { contentWidth, mode, split };
 }
 
+/**
+ * Workout forms go full screen only on an unfolded iPhone. iPad keeps the
+ * page sheet even when the window is wide enough for two panes. Android and
+ * web stay a page sheet too. The navigator reads this when the form is presented.
+ */
+export function formPresentation({
+  isPad,
+  mode,
+  os,
+}: {
+  isPad: boolean;
+  mode: LayoutMode;
+  os: string;
+}): "fullScreenModal" | "modal" {
+  return os === "ios" && !isPad && mode === "twoPane" ? "fullScreenModal" : "modal";
+}
+
+/**
+ * Two panes only when the form frame fills the window. A page sheet (folded,
+ * then unfolded, or iPad) is narrower and must stay one column. A null width
+ * has not been measured yet, so the mode decision stands and the full-screen
+ * form does not flash to one column.
+ */
+export function workoutFormTwoPane({
+  frameWidth,
+  mode,
+  os,
+  windowWidth,
+}: {
+  frameWidth: number | null;
+  mode: LayoutMode;
+  os: string;
+  windowWidth: number;
+}): boolean {
+  return os !== "web" && mode === "twoPane" && (frameWidth === null || frameWidth >= windowWidth - 1);
+}
+
 export function paneSplit({
   division = null,
   insets,
