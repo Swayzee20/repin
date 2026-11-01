@@ -56,7 +56,11 @@ export default function RootLayout() {
             contentStyle: { backgroundColor: colors.background },
             headerShown: false,
           }}
-        />
+        >
+          <Stack.Screen name="groups/[id]/log-workout" options={formModalOptions} />
+          <Stack.Screen name="groups/[id]/detailed-workout" options={formModalOptions} />
+          <Stack.Screen name="groups/[id]/workouts/[sessionId]/edit" options={formModalOptions} />
+        </Stack>
         <SignedOutRedirect />
         <StatusBar style="dark" />
       </ReservedRegionsProvider>
@@ -67,6 +71,18 @@ export default function RootLayout() {
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.background, flex: 1 },
 });
+
+/**
+ * Workout forms present as a modal (D3). The close control stays top-left:
+ * the Duo strip is the system vertical status bar, and nothing in this stack
+ * shows that bar remaining a hittable slot above `presentation: "modal"`.
+ */
+const formModalOptions = {
+  animation: "slide_from_bottom",
+  contentStyle: { backgroundColor: colors.background },
+  headerShown: false,
+  presentation: "modal",
+} as const;
 
 const signedOutTabPaths = new Set(["/", "/community", "/profile"]);
 

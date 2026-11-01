@@ -5,7 +5,7 @@ import { TextField } from "./components";
 import { FieldLabel, NumberField, secondsRangeError } from "./form-fields";
 import { SegmentedControl } from "./primitives";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
-import { spacing } from "./theme";
+import { size, spacing } from "./theme";
 
 type DistanceUnit = "mi" | "km";
 type FunctionalResultType = "time" | "rounds" | "score";
@@ -189,11 +189,11 @@ export function buildQuickLogResults(value: QuickLogResultsDraft, workoutType: W
 
 const styles = StyleSheet.create({
   section: { marginTop: spacing.lg },
-  metricRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
-  metricField: { flex: 1 },
+  metricRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
+  metricField: { flexGrow: 1, flexShrink: 1, minWidth: size.control },
   resultField: { marginTop: spacing.sm },
-  timeRow: { alignItems: "flex-start", flexDirection: "row", gap: spacing.lg, marginTop: spacing.sm },
-  timeField: { flex: 1 },
+  timeRow: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm, width: "100%" },
+  timeField: { flexGrow: 1, flexShrink: 1, minWidth: size.control },
   segment: { marginTop: spacing.sm },
   inlineSegment: { alignSelf: "center" },
 });

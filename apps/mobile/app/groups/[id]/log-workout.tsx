@@ -1,21 +1,26 @@
-import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import type { WorkoutFeedItem, WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useReducer, useRef, type ComponentRef, type ReactNode } from "react";
-import { KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View, type TextInput } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useCallback, useEffect, useReducer, useRef, type ComponentRef } from "react";
+import { View, type TextInput } from "react-native";
 
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { isLayoutPreview } from "../../../lib/layout-preview";
-import { Button, TextField, WorkoutSummaryCard } from "../../../ui/components";
-import { DateRow, FlameRating, PhotoTile, TextArea, effortLabels, photoUploadFieldError } from "../../../ui/form-fields";
-import { RoundIconButton, roundNavButtonStyle } from "../../../ui/primitives";
-import { TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
-import { ScrollAnchor, ScrollAnchorProvider, useScrollAnchor, writeStoredScrollAnchor } from "../../../ui/scroll-anchor";
-import { colors, controls, fonts, radii, spacing, type } from "../../../ui/theme";
-import { WorkoutTypeGrid, WorkoutTypeSelector, workoutTypeLabels } from "../../../ui/workout-type-selector";
+import { Button, WorkoutSummaryCard } from "../../../ui/components";
+import { FieldLabel, FlameRating, PhotoTile, TextArea, photoUploadFieldError } from "../../../ui/form-fields";
+import { useLayoutMode } from "../../../ui/layout";
+import { ScrollAnchor, useScrollAnchor, writeStoredScrollAnchor } from "../../../ui/scroll-anchor";
+import { spacing } from "../../../ui/theme";
+import { WorkoutTypeGrid, workoutTypeLabels } from "../../../ui/workout-type-selector";
+import {
+  CardHeading,
+  CompletedCard,
+  FormCard,
+  FormError,
+  WorkoutFormScaffold,
+  getLocalDateParts,
+} from "../../../ui/workout-form-frame";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const postAnchorKey = "log-workout-post";
@@ -53,7 +58,6 @@ type LogFormAction =
 
 export default function LogWorkoutScreen() {
   const router = useRouter();
-  const insets = useSafeAreaInsets();
   const { mode } = useLayoutMode();
   const layoutPreview = __DEV__ && isLayoutPreview();
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -65,7 +69,6 @@ export default function LogWorkoutScreen() {
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const ignoreBlur = useRef(false);
   const modeRef = useRef(mode);
-  const twoPane = mode === "twoPane";
   const occurredAt = new Date(form.occurredAt);
   const canSubmit = Boolean(form.workoutType);
   const photoError = photoUploadFieldError(form.error);
@@ -193,238 +196,96 @@ export default function LogWorkoutScreen() {
     }
   }, [form.caption, form.effort, form.occurredAt, form.photo, form.workoutType, groupId, router]);
 
-  const handleNativeDateChange = useCallback((event: DateTimePickerEvent, value?: Date) => {
-    if (event.type === "dismissed" || !value) {
-      dispatch({ showPicker: false, type: "picker" });
-      return;
-    }
-    dispatch({ occurredAt: value.toISOString(), type: "occurred" });
-    if (Platform.OS === "android" && form.pickerMode === "date") {
-      dispatch({ pickerMode: "time", showPicker: false, type: "picker" });
-      requestAnimationFrame(() => dispatch({ pickerMode: "time", showPicker: true, type: "picker" }));
-      return;
-    }
-    if (Platform.OS === "android") dispatch({ showPicker: false, type: "picker" });
-  }, [form.pickerMode]);
-
-  const captionField = (
-    <ScrollAnchor id="log-caption">
-      <TextArea
-        accessibilityLabel="Caption"
-        label="Caption"
-        maxLength={2_000}
-        onBlur={() => {
-          if (blurTimer.current) clearTimeout(blurTimer.current);
-          blurTimer.current = setTimeout(() => {
-            if (ignoreBlur.current) return;
-            if (focusedField.current === "caption") focusedField.current = null;
-          }, 200);
-        }}
-        onChangeText={(caption) => dispatch({ caption, type: "caption" })}
-        onFocus={() => {
-          if (blurTimer.current) clearTimeout(blurTimer.current);
-          focusedField.current = "caption";
-        }}
-        optional
-        placeholder="Legs felt great today"
-        ref={captionRef}
-        value={form.caption}
-      />
-    </ScrollAnchor>
-  );
-
-  const photoBlock = (
-    <PhotoTile
-      busy={form.photoStatus === "picking" || form.photoStatus === "uploading"}
-      error={photoError}
-      label="Photo"
-      onAdd={() => void pickPhoto()}
-      onRemove={() => {
-        dispatch({ photo: null, type: "photo" });
-        dispatch({ error: null, type: "error" });
-      }}
-      onRetry={photoError ? () => void submitWorkout() : undefined}
-      optional
-      uri={form.photo?.uri}
-    />
-  );
-
-  const completed = (
-    <CompletedField
-      occurredAt={occurredAt}
-      onNativeChange={handleNativeDateChange}
-      onWebDate={(webDate) => dispatch({ type: "web-date", webDate })}
-      onWebTime={(webTime) => dispatch({ type: "web-time", webTime })}
-      onWebCommit={() => dispatch({ occurredAt: fromLocalParts(form.webDate, form.webTime, occurredAt).toISOString(), type: "occurred" })}
-      pickerMode={form.pickerMode}
-      showPicker={form.showPicker}
-      togglePicker={(pickerMode) => dispatch({ pickerMode, showPicker: true, type: "picker" })}
-      webDate={form.webDate}
-      webTime={form.webTime}
-      onPickerDone={() => dispatch({ showPicker: false, type: "picker" })}
-    />
-  );
-
-  const effort = (
-    <View style={styles.section}>
-      <View style={styles.labelRow}><Text style={styles.sectionTitle}>How'd it feel?</Text><Text style={styles.optional}>Optional</Text></View>
-      <View style={styles.controlSpacing}>
-        <FlameRating labels={effortLabels} onChange={(effort) => dispatch({ effort, type: "effort" })} value={form.effort} />
-      </View>
-    </View>
-  );
-
-  const preview = (
-    <View style={styles.previewBlock}>
-      <View style={styles.previewHeading}>
-        <Text style={styles.previewEyebrow}>PREVIEW</Text>
-        <Text style={styles.previewHint}>how your crew sees it</Text>
-      </View>
-      <WorkoutSummaryCard style={styles.previewCard} variant="full" workout={previewWorkout(form, layoutPreview ? "Maya L." : "You", groupId ?? "preview")} />
-    </View>
-  );
-
-  const submit = (
-    <Button disabled={!canSubmit} disabledReason={canSubmit ? undefined : "Choose a workout type."} loading={form.submitting} loadingLabel="Logging" onPress={() => void submitWorkout()} style={twoPane ? styles.pinnedSubmit : styles.submitButton}>Log workout</Button>
-  );
-
-  const scroll = (children: ReactNode) => (
-    <ScrollView
-      automaticallyAdjustKeyboardInsets={!twoPane}
-      contentContainerStyle={twoPane ? styles.paneScroll : styles.container}
-      keyboardDismissMode="on-drag"
-      keyboardShouldPersistTaps="handled"
-      onContentSizeChange={postAnchor.onContentSizeChange}
-      onLayout={postAnchor.onViewportLayout}
-      onScroll={postAnchor.onScroll}
-      ref={postAnchor.scrollRef}
-      scrollEventThrottle={16}
-      style={styles.scrollView}
-    >
-      <View collapsable={false} ref={postAnchor.contentRef}>
-        <ScrollAnchorProvider contentRef={postAnchor.contentRef} onItemLayout={postAnchor.onItemLayout} pane={twoPane ? "right" : null}>
-          {children}
-        </ScrollAnchorProvider>
-      </View>
-    </ScrollView>
-  );
-
-  if (twoPane) {
-    return (
-      <SafeAreaView edges={["top"]} style={styles.safeArea}>
-        <TwoPane
-          keyboardShouldPersistTaps="handled"
-          scrollableRight={false}
-          left={(
-            <View style={styles.paneBody}>
-              <RoundIconButton accessibilityLabel="Cancel" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
-              <Text style={styles.eyebrow}>QUICK CHECK-IN</Text>
-              <Text style={styles.title}>Log a workout</Text>
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>What&apos;d you do?</Text>
-                <WorkoutTypeGrid onChange={(workoutType) => dispatch({ type: "type", workoutType })} value={form.workoutType} />
-              </View>
-              {effort}
-              <View style={styles.section}>{completed}</View>
+  return (
+    <WorkoutFormScaffold
+      anchor={postAnchor}
+      eyebrow="QUICK CHECK-IN"
+      fields={(
+        <>
+          <FormCard>
+            <CardHeading>What&apos;d you do?</CardHeading>
+            <WorkoutTypeGrid onChange={(workoutType) => dispatch({ type: "type", workoutType })} value={form.workoutType} />
+          </FormCard>
+          <FormCard>
+            <FieldLabel label="How'd it feel?" optional />
+            <View style={{ marginTop: spacing.sm }}>
+              <FlameRating onChange={(effort) => dispatch({ effort, type: "effort" })} value={form.effort} />
             </View>
-          )}
-          right={(
-            <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
-              {scroll(
-                <View style={styles.paneBody}>
-                  <Text style={styles.subsectionTitle}>Add to your post</Text>
-                  {photoBlock}
-                  {captionField}
-                  {preview}
-                  {form.error && !photoError ? <View style={styles.errorBanner}><Text style={styles.errorText}>{form.error}</Text></View> : null}
-                </View>,
-              )}
-              <View style={[styles.pinnedBar, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
-                {submit}
-              </View>
-            </KeyboardAvoidingView>
-          )}
+          </FormCard>
+          <CompletedCard
+            occurredAt={occurredAt}
+            onOccurredAt={(value) => dispatch({ occurredAt: value.toISOString(), type: "occurred" })}
+            onPicker={(next) => dispatch({ pickerMode: next.pickerMode, showPicker: next.showPicker, type: "picker" })}
+            onWebDate={(webDate) => dispatch({ type: "web-date", webDate })}
+            onWebTime={(webTime) => dispatch({ type: "web-time", webTime })}
+            pickerMode={form.pickerMode}
+            showPicker={form.showPicker}
+            webDate={form.webDate}
+            webTime={form.webTime}
+          />
+          <FormCard>
+            <PhotoTile
+              busy={form.photoStatus === "picking" || form.photoStatus === "uploading"}
+              error={photoError}
+              label="Photo"
+              onAdd={() => void pickPhoto()}
+              onRemove={() => {
+                dispatch({ photo: null, type: "photo" });
+                dispatch({ error: null, type: "error" });
+              }}
+              onRetry={photoError ? () => void submitWorkout() : undefined}
+              optional
+              uri={form.photo?.uri}
+            />
+            <View style={{ marginTop: spacing.lg }}>
+              <ScrollAnchor id="log-caption">
+                <TextArea
+                  accessibilityLabel="Caption"
+                  label="Caption"
+                  maxLength={2_000}
+                  onBlur={() => {
+                    if (blurTimer.current) clearTimeout(blurTimer.current);
+                    blurTimer.current = setTimeout(() => {
+                      if (ignoreBlur.current) return;
+                      if (focusedField.current === "caption") focusedField.current = null;
+                    }, 200);
+                  }}
+                  onChangeText={(caption) => dispatch({ caption, type: "caption" })}
+                  onFocus={() => {
+                    if (blurTimer.current) clearTimeout(blurTimer.current);
+                    focusedField.current = "caption";
+                  }}
+                  optional
+                  placeholder="Legs felt great today"
+                  ref={captionRef}
+                  value={form.caption}
+                />
+              </ScrollAnchor>
+            </View>
+          </FormCard>
+        </>
+      )}
+      notice={form.error && !photoError ? <FormError message={form.error} /> : null}
+      onClose={() => router.back()}
+      preview={(
+        <WorkoutSummaryCard
+          variant="full"
+          workout={previewWorkout(form, layoutPreview ? "Maya L." : "You", groupId ?? "preview")}
         />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.keyboardAvoidingView}>
-        {scroll(
-          <SafeAreaView edges={["left", "right"]}>
-            <WideColumn>
-              <RoundIconButton accessibilityLabel="Cancel" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
-              <Text style={styles.eyebrow}>QUICK CHECK-IN</Text>
-              <Text style={styles.title}>Log a workout</Text>
-              <View style={styles.section}>
-                <Text style={styles.sectionTitle}>What&apos;d you do?</Text>
-                <WorkoutTypeSelector onChange={(workoutType) => dispatch({ type: "type", workoutType })} value={form.workoutType} />
-              </View>
-              {effort}
-              <View style={styles.postSection}>
-                <Text style={styles.subsectionTitle}>Add to your post</Text>
-                <View style={styles.postField}>{photoBlock}</View>
-                <View style={styles.postField}>{captionField}</View>
-              </View>
-              <View style={styles.section}>{completed}</View>
-              {form.error && !photoError ? <View style={styles.errorBanner}><Text style={styles.errorText}>{form.error}</Text></View> : null}
-              {submit}
-            </WideColumn>
-          </SafeAreaView>,
-        )}
-      </KeyboardAvoidingView>
-    </SafeAreaView>
-  );
-}
-
-function CompletedField({
-  occurredAt,
-  onNativeChange,
-  onPickerDone,
-  onWebCommit,
-  onWebDate,
-  onWebTime,
-  pickerMode,
-  showPicker,
-  togglePicker,
-  webDate,
-  webTime,
-}: {
-  occurredAt: Date;
-  onNativeChange: (event: DateTimePickerEvent, value?: Date) => void;
-  onPickerDone: () => void;
-  onWebCommit: () => void;
-  onWebDate: (value: string) => void;
-  onWebTime: (value: string) => void;
-  pickerMode: "date" | "time";
-  showPicker: boolean;
-  togglePicker: (mode: "date" | "time") => void;
-  webDate: string;
-  webTime: string;
-}) {
-  if (Platform.OS === "web") {
-    return (
-      <>
-        <Text style={styles.sectionTitle}>Completed</Text>
-        <View style={styles.webDateRow}>
-          <View style={styles.webDateField}><TextField autoCapitalize="none" label="Date" onBlur={onWebCommit} onChangeText={onWebDate} placeholder="YYYY-MM-DD" value={webDate} /></View>
-          <View style={styles.webDateField}><TextField autoCapitalize="none" label="Time" onBlur={onWebCommit} onChangeText={onWebTime} placeholder="HH:MM" value={webTime} /></View>
-        </View>
-      </>
-    );
-  }
-  return (
-    <>
-      <DateRow label="Completed" onPress={() => togglePicker("date")} value={formatFriendlyDate(occurredAt)} />
-      {showPicker ? (
-        <View style={styles.pickerWrap}>
-          <DateTimePicker mode={Platform.OS === "ios" ? "datetime" : pickerMode} onChange={onNativeChange} value={occurredAt} />
-          {Platform.OS === "ios" ? <Pressable accessibilityRole="button" onPress={onPickerDone}><Text style={styles.pickerDone}>Done</Text></Pressable> : null}
-        </View>
-      ) : null}
-    </>
+      )}
+      submit={(
+        <Button
+          disabled={!canSubmit}
+          disabledReason={canSubmit ? undefined : "Choose a workout type."}
+          loading={form.submitting}
+          loadingLabel="Logging"
+          onPress={() => void submitWorkout()}
+        >
+          Log workout
+        </Button>
+      )}
+      title="Log a workout"
+    />
   );
 }
 
@@ -504,48 +365,7 @@ function previewWorkout(form: LogFormState, displayName: string, groupId: string
   };
 }
 
-function getLocalDateParts(value: Date) {
-  const year = String(value.getFullYear()); const month = String(value.getMonth() + 1).padStart(2, "0"); const day = String(value.getDate()).padStart(2, "0");
-  const hours = String(value.getHours()).padStart(2, "0"); const minutes = String(value.getMinutes()).padStart(2, "0");
-  return { date: `${year}-${month}-${day}`, time: `${hours}:${minutes}` };
+function decodeBase64(value: string) {
+  const binary = globalThis.atob(value);
+  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
 }
-
-function fromLocalParts(date: string, time: string, fallback: Date) { const next = new Date(`${date}T${time}:00`); return Number.isNaN(next.getTime()) ? fallback : next; }
-function formatFriendlyDate(value: Date) {
-  const today = new Date(); const date = value.toDateString() === today.toDateString() ? "Today" : value.toLocaleDateString([], { month: "short", day: "numeric", year: value.getFullYear() === today.getFullYear() ? undefined : "numeric" });
-  return `${date}, ${value.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-}
-function decodeBase64(value: string) { const binary = globalThis.atob(value); return Uint8Array.from(binary, (character) => character.charCodeAt(0)); }
-
-const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 },
-  keyboardAvoidingView: { flex: 1 },
-  scrollView: { flex: 1 },
-  container: { padding: spacing.xxl, paddingBottom: 144 },
-  paneBody: { paddingBottom: spacing.xxl, paddingTop: spacing.lg },
-  paneScroll: { flexGrow: 1, paddingBottom: spacing.lg },
-  eyebrow: { color: colors.brand, ...type.eyebrow },
-  title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
-  section: { marginTop: spacing.xxl },
-  postSection: { marginTop: spacing.xxxl },
-  sectionTitle: { color: colors.ink, ...type.heading },
-  subsectionTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 18, lineHeight: 24 },
-  labelRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm },
-  optional: { color: colors.muted, ...type.label, fontFamily: fonts.medium },
-  controlSpacing: { marginTop: spacing.sm },
-  postField: { marginTop: spacing.lg },
-  pickerWrap: { alignItems: "flex-end", marginTop: spacing.sm },
-  pickerDone: { color: colors.brand, ...type.label, padding: spacing.md },
-  webDateRow: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
-  webDateField: { flex: 1 },
-  previewBlock: { marginTop: spacing.xxl },
-  previewHeading: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm },
-  previewEyebrow: { color: colors.brand, ...type.eyebrow },
-  previewHint: { color: colors.muted, ...type.bodySmall },
-  previewCard: { marginTop: spacing.md },
-  errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, marginTop: spacing.xl, padding: spacing.md },
-  errorText: { color: colors.danger, ...type.bodySmall },
-  submitButton: { marginTop: spacing.xl },
-  pinnedBar: { paddingTop: spacing.md },
-  pinnedSubmit: { minHeight: controls.buttonHeight },
-});
