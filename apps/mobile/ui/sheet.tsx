@@ -10,6 +10,23 @@ import { colors, elevation, radii, size, spacing, type } from "./theme";
 
 export type SheetClose = (afterClose?: () => void) => void;
 
+export function SheetHeader({
+  closeLabel,
+  onClose,
+  title,
+}: {
+  closeLabel: string;
+  onClose: () => void;
+  title: string;
+}) {
+  return (
+    <View style={styles.header}>
+      <RoundIconButton accessibilityLabel={closeLabel} kind="close" onPress={onClose} style={styles.close} />
+      <Text style={styles.title}>{title}</Text>
+    </View>
+  );
+}
+
 export function BottomSheet({
   children,
   closeLabel = "Close",
@@ -130,10 +147,7 @@ export function BottomSheet({
         >
           <View {...pan.panHandlers}>
             <View style={styles.grabber} />
-            <View style={styles.header}>
-              <Text style={styles.title}>{title}</Text>
-              <RoundIconButton accessibilityLabel={closeLabel} kind="close" onPress={() => close()} style={styles.close} />
-            </View>
+            <SheetHeader closeLabel={closeLabel} onClose={() => close()} title={title} />
           </View>
           {content}
         </Animated.View>

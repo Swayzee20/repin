@@ -12,7 +12,7 @@ const workoutLogOptions: readonly {
   title: string;
 }[] = [
   {
-    description: "Rep in fast, add details if you want",
+    description: "Log fast, add details if you want",
     icon: "bolt",
     key: "quick",
     title: "Quick Log",
@@ -37,7 +37,7 @@ export function LogWorkoutChooser({
   visible: boolean;
 }) {
   return (
-    <BottomSheet closeLabel="Close workout options" onDismiss={onDismiss} title="Rep in" visible={visible}>
+    <BottomSheet closeLabel="Close workout options" onDismiss={onDismiss} title="Log a workout" visible={visible}>
       {(close) => (
         <View style={styles.options}>
           {workoutLogOptions.map((option) => (

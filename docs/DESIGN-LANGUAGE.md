@@ -16,6 +16,7 @@
 | D4 | The "+ Rep in" pill showing with the strip is a **bug** (TestFlight build from PR #10, ~10:30 AM CT Oct 31) | Fix in §6. Ship it first (PR 0). |
 | D5 | Third tab label **"Profile"** (was "Me") | `app/(tabs)/_layout.tsx` and `_layout.web.tsx`. |
 | D6 | **Merge the duplicate colour names; drop radii 9 and 18** | §2.1 and §2.3 mappings. |
+| D7 | **X close top-left everywhere** (Oct 31, 2026, approved by Josue) | Every modal and sheet (form modals, (+) chooser, pickers) puts its 44pt X top-left, with or without the strip. Replaces "X at the top of the strip" (§3, §5.2, §8, §9). Oct 31, 2026: includes the photo viewer (row 11, §5 fix 3). |
 | — | Locked, unchanged: the strip tab pill (Home / Community / Profile) and the round orange (+) | Every token below is derived from them. |
 
 ## 2. Final tokens (`ui/theme.ts`)
@@ -133,7 +134,7 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
 
   Kinds: `close` (X), `back` (‹ chevron icon), `plus` (brand fill, header only).
 - **Back/close placement:**
-  - Modal (forms): X. With the strip, it sits at the top of the strip, with the tabs and (+) hidden. Without the strip, it sits top-left in the header.
+  - Modal (forms) and every sheet: X top-left, with or without the strip (D7).
   - Pushed screen: round ‹ top-left of the left pane / header.
   - The text `BackButton` (`ui/components.tsx:148-154`) is deleted (16 uses).
 - **Segmented control:** glass capsule, 48pt track, 4pt inset, `selection` thumb, brand SemiBold text. `size="sm"` is a 36pt track with hitSlop 4. It replaces 4 variants: `ui/quick-log-results.tsx` (36), exercises unitToggle (34), `ui/detailed-run-fields.tsx` subtypeToggle (38) and UnitToggle (38×38).
@@ -187,7 +188,7 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
 | 8 | Home | `app/(tabs)/(home)/index.tsx` | T3 kept. One Card everywhere (Highlights into a Card). 12pt bleed. ✓ → icon. Literals :536-568 → micro/label/bodySmall/section/title. weekStat bg → surfaceMuted. Remove `<RepInPill/>` (:181). |
 | 9 | Community + post pane | `app/(tabs)/community/index.tsx`, `ui/workout-detail.tsx`, `ui/components.tsx` (CommunityFeed) | Post pane = one Card surface (header, body, photo, reactions, comments) with the composer pinned inside: 44pt pill field + 44pt round send. cardTitle 19 for post titles. Bleed on feedViewport (`components.tsx:826`). Remove animated board shadow (:352-368) and `<RepInPill/>` (:507, :698). Literals :872-900 → tokens. Menus = e2. |
 | 10 | Post modal | `ui/workout-detail-modal.tsx` | 56pt header row ("Post" + group) with RoundIconButton X (replaces the 36pt absolute X, :227). radii.xl → lg. Composer pinned. Backdrop overlay 0.28. |
-| 11 | Photo viewer | `ui/photo-viewer.tsx` | X = RoundIconButton photo look at right = insets.right + 16, top = insets.top + 8 (:184, :197). Backdrop → scrimPhoto. |
+| 11 | Photo viewer | `ui/photo-viewer.tsx` | X = RoundIconButton photo look top-left at left = insets.left + 16, top = insets.top + 8 (D7) (:184, :197). Backdrop → scrimPhoto. |
 | 12 | Quick log | `app/groups/[id]/log-workout.tsx`, `ui/quick-log-results.tsx` | T4 modal: fields left (type tiles, flames, date row, photo, caption in group cards), preview + pinned 52 submit right. X (D3) replaces "‹ Cancel" (:322, :360). ChoiceTile 48. Disabled spec. Fallback: preview → 44pt "Preview" row above a sticky submit. |
 | 13 | Detailed / edit | `app/groups/[id]/detailed-workout.tsx`, `app/groups/[id]/workouts/[sessionId]/edit.tsx` (re-export), `ui/detailed-run-fields.tsx`, `ui/detailed-workout-exercises.tsx` | T4 modal on `background`. Fixes the 5 cut-off causes (§5). The header scrolls with the content. SegmentedControl replaces 3 variants; NumberField replaces underline inputs (:387). Tonal Done 44. X replaces "Cancel" (:332). |
 | 14 | Form fallback (no strip) | same as 12-13 | X top-left header, single column, preview row, sticky submit (board 05). |
@@ -212,10 +213,10 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
    - No strip: the same `Stack.Toolbar` "plus" prominent button in the native top bar (D2).
    - Web: a 44pt brand round (+) in the page header.
    - `ui/rep-in-pill.tsx` is deleted (after PR 0's hotfix). Board 08.
-2. **Form close** is X with a modal presentation (D3). With the strip, it sits at the top of the strip (glass recipe), with tabs and (+) hidden while the form is up. Without the strip, it sits top-left. Boards 03-05.
+2. **Form close** is X with a modal presentation (D3). It sits top-left, with or without the strip (glass recipe; D7). Boards 03-05.
 3. **Modal and image X:**
    - Post modal: own 56pt header, X 36 visual / 44 hit (board 06).
-   - Photo viewer: 44pt photo-look X at insets + 16 / insets.top + 8, scrimPhoto (board 07).
+   - Photo viewer: 44pt photo-look X top-left at insets.left + 16 / insets.top + 8 (D7), scrimPhoto (board 07).
 4. **One card + no clipping** (D1, board 09):
    - Cause: `ui/layout.tsx` PaneScroll's ScrollView frame equals the pane and its content has no horizontal padding; ScrollViews clip to bounds.
    - Fix: a 12pt bleed. Each scroll frame gets `marginHorizontal: -12`, and its content gets `paddingHorizontal: 12`.
@@ -307,7 +308,7 @@ There is no width threshold and no platform check in this logic. Its only strip 
 **Design:**
 - [ ] Every card: white, 1pt border, r14, e1; no clipped shadows at pane edges (Home, Community, group detail) on iOS, Android 9+, web.
 - [ ] No pressable under 44pt; no text glyph icons; no literal fontSize, minHeight or radius (lint).
-- [ ] Form modals: X at the top of the strip (strip) or top-left (no strip); preview row + sticky submit on compact; the detailed form shows no cut-off at top, bottom or crease.
+- [ ] Form modals and sheets: X top-left (strip and no strip, D7); preview row + sticky submit on compact; the detailed form shows no cut-off at top, bottom or crease.
 - [ ] Field states (default/focus/filled/error/disabled) match board 10; VoiceOver reads errors (live region) and flame rating (radio group).
 - [ ] Post pane / modal / deep link: one surface, composer pinned and above the keyboard.
 - [ ] Tab label reads "Profile" (native + web).
@@ -326,6 +327,6 @@ There is no width threshold and no platform check in this logic. Its only strip 
 - The Rep in cause is from code, not observed on device. QA-R5 confirms it.
 - The expo-status-bar native source was read from `expo/expo` branch `sdk-58`, not from the exact `58.0.4` tag.
 - D1-D5 above.
-- Whether the strip stays visible while a form modal is up. Board 03/04 assume it does (X at the strip top). If it doesn't, use the fallback X top-left.
+- Whether the strip stays visible while a form modal is up. The X no longer depends on it: it is top-left either way (D7).
 - "Before (from code)" panels are reconstructed from main's style values. Josue's 4 screenshots are unmodified.
 - All estimates are Studio estimates.
