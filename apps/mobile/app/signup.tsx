@@ -1,20 +1,18 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { StyleSheet, Text, View } from "react-native";
 
-import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { normalizeInviteRedirect } from "../lib/invite-route";
+import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import { AuthScreen, AuthSuccessMark, FormError, usePaneFieldFocus } from "../ui/auth-screen";
 import { Button, StateCard, TextField } from "../ui/components";
-import { Icon } from "../ui/icons";
-import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
-import { WideColumn } from "../ui/layout";
-import { colors, radii, size, spacing, type } from "../ui/theme";
+import { colors, spacing, type } from "../ui/theme";
 
 export default function SignupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ redirect?: string | string[] }>();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
+  const fieldProps = usePaneFieldFocus();
   const returnToSignIn = useCallback(() => {
     router.replace({
       pathname: "/sign-in",
@@ -86,75 +84,132 @@ export default function SignupScreen() {
     }
   }, [confirmPassword, email, firstName, inviteRedirect, lastName, password, router]);
 
-  if (!isSupabaseConfigured) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <StateCard message="Add the Expo public Supabase URL and publishable key before creating an account." title="Supabase is not configured" />
-          <Button onPress={returnToSignIn} variant="secondary">Back to Sign In</Button>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  let body = (
+    <>
+      <Text style={styles.eyebrow}>JOIN REPIN</Text>
+      <Text style={styles.title}>Create your account</Text>
+      <Text style={styles.intro}>Set up your profile, then find your community.</Text>
 
-  if (confirmationEmail) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <View style={styles.confirmationIcon}><Icon color={colors.success} name="checkmark" size={size.icon.md} /></View>
-          <Text style={styles.title}>Check your email</Text>
-          <Text style={styles.confirmationCopy}>
-            We sent a confirmation link to {confirmationEmail}. Confirm your account, then sign in to continue.
-          </Text>
-          <Button onPress={returnToSignIn} style={styles.fullWidth}>Back to Sign In</Button>
+      <View style={styles.form}>
+        <View style={styles.nameRow}>
+          <View style={styles.nameField}>
+            <TextField
+              autoComplete="given-name"
+              label="First name"
+              maxLength={60}
+              onChangeText={setFirstName}
+              placeholder="First name"
+              textContentType="givenName"
+              value={firstName}
+              {...fieldProps("first")}
+            />
+          </View>
+          <View style={styles.nameField}>
+            <TextField
+              autoComplete="family-name"
+              label="Last name"
+              maxLength={60}
+              onChangeText={setLastName}
+              placeholder="Last name"
+              textContentType="familyName"
+              value={lastName}
+              {...fieldProps("last")}
+            />
+          </View>
         </View>
-      </SafeAreaView>
+        <TextField
+          autoCapitalize="none"
+          autoComplete="email"
+          inputMode="email"
+          label="Email"
+          onChangeText={setEmail}
+          placeholder="you@example.com"
+          textContentType="emailAddress"
+          value={email}
+          {...fieldProps("email")}
+        />
+        <TextField
+          autoCapitalize="none"
+          autoComplete="new-password"
+          label="Password"
+          onChangeText={setPassword}
+          placeholder="At least 8 characters"
+          secureTextEntry
+          textContentType="newPassword"
+          value={password}
+          {...fieldProps("password")}
+        />
+        <TextField
+          autoCapitalize="none"
+          autoComplete="new-password"
+          label="Confirm password"
+          onChangeText={setConfirmPassword}
+          onSubmitEditing={() => void createAccount()}
+          placeholder="Enter it again"
+          secureTextEntry
+          textContentType="newPassword"
+          value={confirmPassword}
+          {...fieldProps("confirm")}
+        />
+        {error ? <FormError message={error} /> : null}
+        <Button
+          disabled={!firstName || !lastName || !email || !password || !confirmPassword}
+          disabledReason={!firstName || !lastName ? "Enter your first and last name." : !email ? "Enter your email." : "Enter and confirm a password."}
+          loading={submitting}
+          loadingLabel="Creating account"
+          onPress={() => void createAccount()}
+        >
+          Create Account
+        </Button>
+      </View>
+
+      <View style={styles.signinPrompt}>
+        <Text style={styles.promptCopy}>Already have an account?</Text>
+        <Button onPress={returnToSignIn} variant="secondary">Sign In</Button>
+      </View>
+    </>
+  );
+
+  if (!isSupabaseConfigured) {
+    body = (
+      <StateCard
+        actionLabel="Back to Sign In"
+        message="Add the Expo public Supabase URL and publishable key before creating an account."
+        onAction={returnToSignIn}
+        title="Supabase is not configured"
+      />
+    );
+  } else if (confirmationEmail) {
+    body = (
+      <View style={styles.confirmation}>
+        <AuthSuccessMark />
+        <Text style={styles.confirmationTitle}>Check your email</Text>
+        <Text style={styles.confirmationCopy}>
+          We sent a confirmation link to {confirmationEmail}. Confirm your account, then sign in to continue.
+        </Text>
+        <Button onPress={returnToSignIn} style={styles.fullWidth}>Back to Sign In</Button>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
-        <ScrollView contentContainerStyle={styles.container} keyboardDismissMode="on-drag" keyboardShouldPersistTaps="handled">
-          <SafeAreaView edges={["left", "right"]} style={styles.flex}>
-          <WideColumn max="form">
-          <RoundIconButton accessibilityLabel="Sign In" kind="back" onPress={returnToSignIn} style={roundNavButtonStyle} />
-          <Text style={styles.eyebrow}>JOIN REPIN</Text>
-          <Text style={styles.title}>Create your account</Text>
-          <Text style={styles.intro}>Set up your profile, then find your community.</Text>
-
-          <View style={styles.formCard}>
-            <View style={styles.nameRow}>
-              <View style={styles.nameField}><TextField autoComplete="given-name" label="First name" maxLength={60} onChangeText={setFirstName} placeholder="First name" textContentType="givenName" value={firstName} /></View>
-              <View style={styles.nameField}><TextField autoComplete="family-name" label="Last name" maxLength={60} onChangeText={setLastName} placeholder="Last name" textContentType="familyName" value={lastName} /></View>
-            </View>
-            <TextField autoCapitalize="none" autoComplete="email" inputMode="email" label="Email" onChangeText={setEmail} placeholder="you@example.com" textContentType="emailAddress" value={email} />
-            <TextField autoCapitalize="none" autoComplete="new-password" label="Password" onChangeText={setPassword} placeholder="At least 8 characters" secureTextEntry textContentType="newPassword" value={password} />
-            <TextField autoCapitalize="none" autoComplete="new-password" label="Confirm password" onChangeText={setConfirmPassword} onSubmitEditing={() => void createAccount()} placeholder="Enter it again" secureTextEntry textContentType="newPassword" value={confirmPassword} />
-            {error ? <View style={styles.errorBanner}><Text style={styles.errorText}>{error}</Text></View> : null}
-            <Button disabled={!firstName || !lastName || !email || !password || !confirmPassword} disabledReason={!firstName || !lastName ? "Enter your first and last name." : !email ? "Enter your email." : "Enter and confirm a password."} loading={submitting} loadingLabel="Creating account" onPress={() => void createAccount()}>Create Account</Button>
-          </View>
-
-          <View style={styles.signinPrompt}>
-            <Text style={styles.promptCopy}>Already have an account?</Text>
-            <Button onPress={returnToSignIn} variant="secondary">Sign In</Button>
-          </View>
-          </WideColumn>
-          </SafeAreaView>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <AuthScreen backLabel="Sign In" onBack={returnToSignIn}>
+      {body}
+    </AuthScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  safeArea: { backgroundColor: colors.background, flex: 1 }, flex: { flex: 1 },
-  container: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 }, centered: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
-  eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
-  intro: { color: colors.muted, ...type.body, marginBottom: spacing.xxl, marginTop: spacing.sm },
-  formCard: { gap: spacing.lg }, nameRow: { flexDirection: "row", gap: spacing.md }, nameField: { flex: 1 },
-  errorBanner: { backgroundColor: colors.dangerSoft, borderRadius: radii.md, padding: spacing.md }, errorText: { color: colors.danger, ...type.bodySmall },
-  signinPrompt: { gap: spacing.md, marginTop: spacing.xl }, promptCopy: { color: colors.muted, ...type.bodySmall, textAlign: "center" },
-  confirmationIcon: { alignItems: "center", backgroundColor: colors.successSoft, borderRadius: radii.pill, height: size.avatars.lg, justifyContent: "center", marginBottom: spacing.xl, width: size.avatars.lg },
-  confirmationCopy: { color: colors.muted, ...type.body, marginBottom: spacing.xxl, marginTop: spacing.md, maxWidth: 340, textAlign: "center" }, fullWidth: { alignSelf: "stretch" },
+  eyebrow: { color: colors.brand, ...type.eyebrow },
+  title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
+  intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
+  form: { gap: spacing.lg, marginTop: spacing.xxl },
+  nameRow: { flexDirection: "row", gap: spacing.md },
+  nameField: { flex: 1 },
+  signinPrompt: { gap: spacing.md, marginTop: spacing.xl },
+  promptCopy: { color: colors.muted, ...type.bodySmall, textAlign: "center" },
+  confirmation: { alignItems: "center", gap: spacing.lg, marginTop: spacing.xxl },
+  confirmationTitle: { color: colors.ink, ...type.display, textAlign: "center" },
+  confirmationCopy: { color: colors.muted, ...type.body, textAlign: "center" },
+  fullWidth: { alignSelf: "stretch" },
 });
