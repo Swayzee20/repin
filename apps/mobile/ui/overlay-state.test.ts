@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
@@ -103,4 +104,49 @@ test("a sheet with no room falls back to the safe width", () => {
   assert.equal(frame.width, 0);
   assert.equal(frame.maxHeight, 0);
   assert.equal(frame.bottomInset, 0);
+});
+
+function source(name: string) {
+  return readFileSync(new URL(`./${name}`, import.meta.url), "utf8");
+}
+
+test("sheet and modal close buttons lead their headers", () => {
+  const sheet = source("sheet.tsx");
+  const header = sheet.slice(sheet.indexOf("export function SheetHeader"), sheet.indexOf("export function BottomSheet"));
+  assert.ok(header.includes("export function SheetHeader"));
+  assert.ok(header.indexOf('kind="close"') < header.indexOf("{title}"));
+  assert.match(sheet, /header:\s*\{[^}]*gap: spacing\.md/);
+  assert.match(sheet, /title:\s*\{[^}]*flex: 1/);
+  assert.ok(sheet.indexOf("<View style={styles.grabber} />") < sheet.indexOf("<SheetHeader"));
+
+  const post = source("workout-detail-modal.tsx");
+  const postHeader = post.slice(post.indexOf("<View style={styles.header}>"), post.indexOf("styles.headerCopy"));
+  assert.match(postHeader, /kind="close"/);
+  const focusAt = post.indexOf("accessibilityViewIsModal");
+  const closeAt = post.indexOf('kind="close"');
+  const scrimAt = post.indexOf("styles.backdropPressable");
+  assert.ok(scrimAt < focusAt && focusAt < closeAt);
+
+  const photo = source("photo-viewer.tsx");
+  assert.match(photo, /left: insets\.left \+ spacing\.lg/);
+  assert.match(photo, /top: insets\.top \+ spacing\.sm/);
+  assert.equal(photo.includes("right: insets.right + spacing.lg"), false);
+  assert.ok(photo.indexOf('kind="close"') < photo.indexOf("styles.backdrop"));
+
+  const dialog = source("dialog.tsx");
+  assert.equal(dialog.includes('kind="close"'), false);
+});
+
+test("log actions say Log a workout", () => {
+  const chooser = source("log-workout-chooser.tsx");
+  const stack = source("tab-root-stack.tsx");
+  const empty = source("check-in-empty-content.tsx");
+  for (const code of [chooser, stack, empty]) assert.equal(code.includes("Rep in"), false);
+  assert.match(chooser, /title="Log a workout"/);
+  assert.match(chooser, /Log fast, add details if you want/);
+  assert.match(stack, /accessibilityLabel="Log a workout"/);
+  assert.match(stack, />\s*Log a workout\s*</);
+  assert.match(empty, /accessibilityLabel="Log a workout"/);
+  assert.match(empty, /No one’s repped in yet/);
+  assert.match(empty, /Be the first to rep in/);
 });
