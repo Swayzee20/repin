@@ -63,7 +63,7 @@ const webFeedScrollerStyle =
 
 export function Wordmark({
   decorative = false,
-  size = 22,
+  size = type.title.fontSize,
   tone = "default",
 }: {
   decorative?: boolean;
@@ -761,25 +761,26 @@ const styles = StyleSheet.create({
   stateTitle: { color: colors.ink, ...type.heading },
   bodyMuted: { color: colors.muted, ...type.bodySmall },
   stateAction: { alignSelf: "flex-start", height: stateActionHeight, marginTop: spacing.sm, minHeight: stateActionHeight },
+  // eslint-disable-next-line repin/no-style-literals -- empty-state floor so the spinner can center; not a control size
   loadingState: { flex: 1, justifyContent: "center", minHeight: 300 },
   workoutTopline: { alignItems: "center", flexDirection: "row" },
   compactWorkoutCard: { padding: spacing.lg },
   fullWorkoutCard: { padding: spacing.lg },
   avatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 38, justifyContent: "center", width: 38 },
-  avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 12 },
+  avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: type.label.fontSize },
   workoutAuthor: { flex: 1, marginLeft: spacing.md },
-  author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 15 },
-  timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: 12, marginTop: 2 },
+  author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize },
+  timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: type.label.fontSize, marginTop: 2 },
   typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 11 },
+  typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.micro.fontSize },
   postOptionsButton: { alignItems: "center", height: size.hit, justifyContent: "center", marginLeft: spacing.xs, width: size.hit },
   postMenuBackdrop: { flex: 1 },
   postMenu: { position: "absolute", width: menuPopoverWidth },
   workoutTitle: { color: colors.ink, ...type.cardTitle, marginTop: spacing.lg },
   compactWorkoutTitle: { marginTop: spacing.md },
-  workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.xs },
-  workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, marginTop: spacing.xs },
-  reactionSummary: { alignSelf: "flex-end", color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18, marginTop: spacing.sm },
+  workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, lineHeight: type.label.lineHeight, marginTop: spacing.xs },
+  workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight, marginTop: spacing.xs },
+  reactionSummary: { alignSelf: "flex-end", color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, lineHeight: type.label.lineHeight, marginTop: spacing.sm },
   workoutCardPressed: { opacity: 0.94 },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
   feedCardShell: {
@@ -801,6 +802,7 @@ const styles = StyleSheet.create({
     marginHorizontal: -spacing.md,
     overflow: "hidden",
   },
+  // eslint-disable-next-line repin/no-style-literals -- square edge for the edge-to-edge feed; spec §2.3 keeps borderRadius 0
   edgeToEdgeFeedViewport: { backgroundColor: colors.surfaceMuted, borderRadius: 0 },
   feedScroller: { overflow: "visible" },
   // 12pt bleed plus the feed's previous 16pt inset, so staggered cards stay put.

@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
   error: { color: colors.danger, ...type.bodySmall },
   signupPrompt: { alignItems: "center", flexDirection: "row", gap: spacing.xs, justifyContent: "center", marginTop: spacing.xxl },
   signupCopy: { color: colors.muted, ...type.bodySmall },
-  signupLink: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
+  signupLink: { color: colors.brand, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight },
   forgotPassword: { alignSelf: "flex-end" },
-  forgotPasswordText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 14, lineHeight: 20 },
+  forgotPasswordText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight },
 });
