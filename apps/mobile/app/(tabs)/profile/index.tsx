@@ -1,7 +1,7 @@
 import { getUserInitials, resolveUserDisplayName, type ProfileData } from "@repin/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
@@ -11,14 +11,21 @@ import {
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
 import { BrandHeader, Card, LoadingState, StateCard } from "../../../ui/components";
-import { WideColumn } from "../../../ui/layout";
+import { Icon } from "../../../ui/icons";
+import { TwoPane, useLayoutMode } from "../../../ui/layout";
 import { useMainTabs } from "../../../ui/main-tabs-context";
-import { colors, fonts, radii, spacing, type } from "../../../ui/theme";
+import { ListRow } from "../../../ui/primitives";
+import { colors, fonts, radii, size, spacing, type } from "../../../ui/theme";
+import { useStripPresent } from "../../../ui/vertical-bar-edge";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export default function ProfileTabScreen() {
   const router = useRouter();
+  const { mode } = useLayoutMode();
+  const twoPane = mode === "twoPane";
+  const stripPresent = useStripPresent();
+  const insets = useSafeAreaInsets();
   const { selectedGroupId, setSelectedGroupId } = useMainTabs();
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,92 +104,124 @@ export default function ProfileTabScreen() {
 
   const displayName = useMemo(() => resolveUserDisplayName({ displayName: data?.user.displayName }), [data]);
   const initials = useMemo(() => getUserInitials({ displayName: data?.user.displayName }), [data]);
-  const insets = useSafeAreaInsets();
+  const contentPaddingBottom = stripPresent ? insets.bottom + spacing.xxl : insets.bottom + size.primary + spacing.xxl;
 
-  if (loading && !data) return <SafeAreaView style={styles.safeArea}><WideColumn fill><LoadingState message="Loading profile…" /></WideColumn></SafeAreaView>;
-  if (error && !data) return <SafeAreaView style={styles.safeArea}><WideColumn fill><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadProfile()} title="Profile unavailable" /></View></WideColumn></SafeAreaView>;
+  if (loading && !data) {
+    return (
+      <View style={styles.safeArea}>
+        <SafeAreaView edges={["top"]} style={styles.flex}>
+          <TwoPane column="readable" fallback="hide-right" left={<LoadingState message="Loading profile…" />} right={<View />} />
+        </SafeAreaView>
+      </View>
+    );
+  }
+
+  if (error && !data) {
+    return (
+      <View style={styles.safeArea}>
+        <SafeAreaView edges={["top"]} style={styles.flex}>
+          <TwoPane
+            column="readable"
+            fallback="hide-right"
+            left={(
+              <View style={styles.state}>
+                <StateCard actionLabel="Try again" message={error} onAction={() => void loadProfile()} title="Profile unavailable" />
+              </View>
+            )}
+            right={<View />}
+          />
+        </SafeAreaView>
+      </View>
+    );
+  }
+
   if (!data) return null;
+
+  const reppedIn = data.snapshot.hasWorkoutToday;
+  const latest = data.snapshot.mostRecentWorkoutToday;
 
   return (
     <View style={styles.safeArea}>
       <SafeAreaView edges={["top"]} style={styles.flex}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <SafeAreaView edges={["left", "right"]} style={styles.flexGrow}>
-        <WideColumn>
-        <View style={styles.content}>
-        <BrandHeader />
-        <View style={styles.identity}>
-          <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
-          <View style={styles.identityCopy}>
-            <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.memberSince}>repin member since {new Date(data.user.createdAt).getFullYear()}</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>PERSONAL ACTIVITY</Text>
-          <Card style={styles.activityPanel}>
-            <View style={styles.activitySummary}>
-              <View>
-                <Text style={styles.weekCount}>{data.snapshot.workoutsThisWeek}</Text>
-                <Text style={styles.weekCountLabel}>WORKOUTS THIS WEEK</Text>
+        <TwoPane
+          column="readable"
+          contentPaddingBottom={contentPaddingBottom}
+          fallback="stack"
+          left={(
+            <View style={styles.identityPane}>
+              <BrandHeader />
+              <Card>
+                <View style={styles.identity}>
+                  <View style={styles.avatar}><Text style={styles.avatarText}>{initials}</Text></View>
+                  <View style={styles.identityCopy}>
+                    <Text style={styles.name}>{displayName}</Text>
+                    <Text style={styles.memberSince}>repin member since {new Date(data.user.createdAt).getFullYear()}</Text>
+                  </View>
+                </View>
+              </Card>
+              <Card style={styles.weekCard}>
+                <Text style={styles.weekHeading}>This week</Text>
+                <View style={styles.weekSummary}>
+                  <View>
+                    <Text style={styles.weekCount}>{data.snapshot.workoutsThisWeek}</Text>
+                    <Text style={styles.weekUnit}>{data.snapshot.workoutsThisWeek === 1 ? "workout" : "workouts"}</Text>
+                  </View>
+                  <View style={[styles.todayStatus, reppedIn && styles.todayStatusDone]}>
+                    {reppedIn ? <Icon color={colors.success} name="checkmark" size={size.icon.sm} /> : null}
+                    <Text style={[styles.todayStatusText, reppedIn && styles.todayStatusTextDone]}>
+                      {reppedIn ? "Repped in today" : "Today is open"}
+                    </Text>
+                  </View>
+                </View>
+                <Text style={styles.weekMessage}>{data.snapshot.message}</Text>
+                {latest ? (
+                  <View style={styles.activityRow}>
+                    <View style={styles.activityMark} />
+                    <View style={styles.activityCopy}>
+                      <Text style={styles.activityEyebrow}>Latest today</Text>
+                      <Text style={styles.activityTitle}>{latest.title}</Text>
+                      <Text style={styles.activityMeta}>
+                        {latest.workoutType}{latest.durationMinutes ? ` · ${latest.durationMinutes} min` : ""}
+                      </Text>
+                    </View>
+                  </View>
+                ) : null}
+              </Card>
+            </View>
+          )}
+          right={(
+            <View style={[styles.lists, !twoPane && styles.listsStacked]}>
+              <View style={styles.block}>
+                <Text style={styles.blockTitle}>Groups</Text>
+                {data.groups.length === 0 ? (
+                  <Card><Text style={styles.emptyCopy}>You’re not in a group yet.</Text></Card>
+                ) : (
+                  <Card style={styles.listCard}>
+                    {data.groups.map((group, index) => (
+                      <View key={group.id} style={index > 0 ? styles.rowRule : undefined}>
+                        <ListRow
+                          label={group.name}
+                          leading={<GroupMark name={group.name} />}
+                          onPress={() => {
+                            setSelectedGroupId(group.id);
+                            router.push(`/groups/${group.id}`);
+                          }}
+                          value={roleLabel(group.role)}
+                        />
+                      </View>
+                    ))}
+                  </Card>
+                )}
               </View>
-              <View style={[styles.todayStatus, data.snapshot.hasWorkoutToday && styles.todayStatusDone]}>
-                <Text style={[styles.todayStatusText, data.snapshot.hasWorkoutToday && styles.todayStatusTextDone]}>
-                  {data.snapshot.hasWorkoutToday ? "✓ Repped in today" : "Today is open"}
-                </Text>
+              <View style={styles.block}>
+                <Text style={styles.blockTitle}>Account</Text>
+                <Card style={styles.listCard}>
+                  <ListRow label="Settings" onPress={() => router.push("/settings")} />
+                </Card>
               </View>
             </View>
-            <Text style={styles.weekMessage}>{data.snapshot.message}</Text>
-            {data.snapshot.mostRecentWorkoutToday ? (
-            <View style={styles.activityRow}>
-              <View style={styles.activityMark} />
-              <View style={styles.activityCopy}>
-                <Text style={styles.activityEyebrow}>LATEST TODAY</Text>
-                <Text style={styles.activityTitle}>{data.snapshot.mostRecentWorkoutToday.title}</Text>
-                <Text style={styles.activityMeta}>{data.snapshot.mostRecentWorkoutToday.workoutType}{data.snapshot.mostRecentWorkoutToday.durationMinutes ? ` · ${data.snapshot.mostRecentWorkoutToday.durationMinutes} min` : ""}</Text>
-              </View>
-            </View>
-            ) : null}
-          </Card>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>MY GROUPS</Text>
-          <View style={styles.groups}>
-            {data.groups.map((group) => (
-              <Pressable
-                accessibilityRole="button"
-                key={group.id}
-                onPress={() => {
-                  setSelectedGroupId(group.id);
-                  router.push(`/groups/${group.id}`);
-                }}
-                style={({ pressed }) => [styles.groupRow, pressed && styles.pressed]}
-              >
-                <View style={styles.groupMark}><Text style={styles.groupMarkText}>{group.name[0]?.toUpperCase()}</Text></View>
-                <View style={styles.groupCopy}><Text numberOfLines={1} style={styles.groupName}>{group.name}</Text><Text style={styles.groupRole}>{group.role}</Text></View>
-                <Text style={styles.rowArrow}>›</Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.sectionLabel}>ACCOUNT</Text>
-          <Pressable
-            accessibilityRole="button"
-            onPress={() => router.push("/settings")}
-            style={({ pressed }) => [styles.settingsRow, pressed && styles.pressed]}
-          >
-            <Text style={styles.settingsLabel}>Settings</Text>
-            <Text style={styles.rowArrow}>›</Text>
-          </Pressable>
-        </View>
-        </View>
-        </WideColumn>
-        </SafeAreaView>
-      </ScrollView>
+          )}
+        />
       </SafeAreaView>
       {error ? (
         <Pressable
@@ -197,47 +236,83 @@ export default function ProfileTabScreen() {
   );
 }
 
+function GroupMark({ name }: { name: string }) {
+  return (
+    <View accessibilityElementsHidden importantForAccessibility="no-hide-descendants" style={styles.groupMark}>
+      <Text style={styles.groupMarkText}>{name[0]?.toUpperCase()}</Text>
+    </View>
+  );
+}
+
+function roleLabel(role: string) {
+  return role ? role.slice(0, 1).toUpperCase() + role.slice(1) : role;
+}
+
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   flex: { flex: 1 },
-  flexGrow: { flexGrow: 1 },
-  scroll: { flexGrow: 1 },
-  content: { padding: spacing.xxl, paddingBottom: 160 },
-  state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
-  identity: { alignItems: "center", flexDirection: "row", marginTop: spacing.xl },
-  avatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 64, justifyContent: "center", width: 64 },
-  avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 23 },
+  state: { flexGrow: 1, justifyContent: "center" },
+  identityPane: { flexGrow: 1, gap: spacing.lg },
+  identity: { alignItems: "center", flexDirection: "row" },
+  avatar: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.pill,
+    height: size.avatars.lg,
+    justifyContent: "center",
+    width: size.avatars.lg,
+  },
+  avatarText: { color: colors.brand, ...type.title },
   identityCopy: { flex: 1, marginLeft: spacing.lg },
   name: { color: colors.ink, ...type.title },
   memberSince: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  section: { marginTop: spacing.xxxl },
-  sectionLabel: { color: colors.muted, ...type.eyebrow, fontSize: 11 },
-  activityPanel: { marginTop: spacing.md },
-  activitySummary: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  weekCount: { color: colors.ink, fontFamily: fonts.bold, fontSize: 28, lineHeight: 32 },
-  weekCountLabel: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.9, marginTop: spacing.xs },
-  todayStatus: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
+  weekCard: { gap: spacing.md },
+  weekHeading: { color: colors.ink, ...type.section },
+  weekSummary: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.md, justifyContent: "space-between" },
+  weekCount: { color: colors.ink, ...type.display },
+  weekUnit: { color: colors.muted, ...type.bodySmall },
+  todayStatus: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    flexDirection: "row",
+    gap: spacing.xs,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
   todayStatusDone: { backgroundColor: colors.successSoft },
   todayStatusText: { color: colors.muted, ...type.label },
   todayStatusTextDone: { color: colors.success },
-  weekMessage: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
-  activityRow: { alignItems: "center", borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", marginTop: spacing.lg, paddingTop: spacing.lg },
-  activityMark: { backgroundColor: colors.brand, borderRadius: radii.pill, height: 9, width: 9 },
+  weekMessage: { color: colors.muted, ...type.bodySmall },
+  activityRow: { alignItems: "center", borderTopColor: colors.border, borderTopWidth: 1, flexDirection: "row", paddingTop: spacing.lg },
+  activityMark: { backgroundColor: colors.brand, borderRadius: radii.pill, height: spacing.sm, width: spacing.sm },
   activityCopy: { flex: 1, marginLeft: spacing.md },
-  activityEyebrow: { color: colors.muted, fontFamily: fonts.bold, fontSize: 10, letterSpacing: 0.8, marginBottom: spacing.xs },
-  activityTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16 },
+  activityEyebrow: { color: colors.muted, ...type.micro, marginBottom: spacing.xs },
+  activityTitle: { color: colors.ink, ...type.body, fontFamily: fonts.semibold },
   activityMeta: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs, textTransform: "capitalize" },
-  groups: { marginTop: spacing.sm },
-  groupRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 68 },
-  groupMark: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, height: 42, justifyContent: "center", width: 42 },
-  groupMarkText: { color: colors.brand, fontFamily: fonts.bold, fontSize: 16 },
-  groupCopy: { flex: 1, marginLeft: spacing.md },
-  groupName: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16 },
-  groupRole: { color: colors.muted, ...type.label, marginTop: spacing.xs, textTransform: "capitalize" },
-  settingsRow: { alignItems: "center", borderBottomColor: colors.border, borderBottomWidth: 1, flexDirection: "row", minHeight: 56 },
-  settingsLabel: { color: colors.ink, flex: 1, fontFamily: fonts.semibold, fontSize: 16 },
-  rowArrow: { color: colors.brand, fontFamily: fonts.medium, fontSize: 24 },
-  pressed: { opacity: 0.7 },
-  refreshError: { backgroundColor: colors.dangerSoft, borderRadius: radii.sm, paddingHorizontal: spacing.md, paddingVertical: spacing.sm, position: "absolute" },
+  lists: { flexGrow: 1, gap: spacing.xxl },
+  listsStacked: { marginTop: spacing.xxl },
+  block: { gap: spacing.sm },
+  blockTitle: { color: colors.ink, ...type.section },
+  listCard: { overflow: "hidden", padding: 0 },
+  rowRule: { borderTopColor: colors.border, borderTopWidth: 1 },
+  emptyCopy: { color: colors.muted, ...type.bodySmall },
+  groupMark: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.md,
+    height: size.avatars.md,
+    justifyContent: "center",
+    width: size.avatars.md,
+  },
+  groupMarkText: { color: colors.brand, ...type.body, fontFamily: fonts.bold },
+  refreshError: {
+    backgroundColor: colors.dangerSoft,
+    borderRadius: radii.sm,
+    justifyContent: "center",
+    minHeight: size.hit,
+    paddingHorizontal: spacing.md,
+    position: "absolute",
+  },
   refreshErrorText: { color: colors.danger, ...type.label },
 });

@@ -1,38 +1,44 @@
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import { ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
-import { Button, TextField } from "../ui/components";
+import { Button, Card, TextField } from "../ui/components";
+import { TwoPane, useLayoutMode } from "../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
-import { WideColumn } from "../ui/layout";
-import { colors, radii, spacing, type } from "../ui/theme";
+import { colors, layout, size, spacing, type } from "../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { mode } = useLayoutMode();
+  const { session } = useAuthSession();
+  const twoPane = mode === "twoPane";
   const [signingOut, setSigningOut] = useState(false);
-  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [confirmation, setConfirmation] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [accountError, setAccountError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const email = session?.user.email?.trim();
+  const confirmed = confirmation.trim() === "DELETE";
 
   const signOut = async () => {
     if (!supabase) return;
     setSigningOut(true);
-    setError(null);
+    setAccountError(null);
     const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
     setSigningOut(false);
-    if (signOutError) setError(signOutError.message);
+    if (signOutError) setAccountError(signOutError.message);
     else router.replace("/");
   };
 
   const deleteAccount = async () => {
-    if (confirmation.trim() !== "DELETE" || !supabase) return;
+    if (!confirmed || !supabase) return;
     setDeleting(true);
-    setError(null);
+    setDeleteError(null);
     try {
       const { data, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !data.session) {
@@ -53,97 +59,91 @@ export default function SettingsScreen() {
       }
       await supabase.auth.signOut({ scope: "local" });
       router.replace("/");
-    } catch (deleteError) {
+    } catch (deleteFailure) {
       setDeleting(false);
-      setError(deleteError instanceof Error ? deleteError.message : "Account could not be deleted.");
+      setDeleteError(deleteFailure instanceof Error ? deleteFailure.message : "Account could not be deleted.");
     }
   };
 
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-        <SafeAreaView edges={["left", "right"]}>
-        <WideColumn max="form">
-        <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
-        <Text style={styles.title}>Settings</Text>
-        <Text style={styles.intro}>Manage your repin account.</Text>
-        {error ? <Text style={styles.error}>{error}</Text> : null}
-        <Button loading={signingOut} loadingLabel="Signing out" onPress={() => void signOut()} variant="secondary">Sign out</Button>
-
-        <View style={styles.deleteSection}>
-          <Text style={styles.deleteTitle}>Delete account</Text>
-          <Text style={styles.deleteCopy}>
-            This permanently deletes your profile, workouts, comments, reactions, and photos. It can’t be undone.
-          </Text>
-          <Text style={styles.deleteCopy}>
-            If you own a group, the member who has been there the longest becomes the owner. A group with no other members is deleted, including its invite code and posts.
-          </Text>
-          {confirmingDelete ? (
-            <View style={styles.confirmPanel}>
-              <Text style={styles.confirmTitle}>Confirm deletion</Text>
-              <Text style={styles.confirmCopy}>Type DELETE to permanently delete your account.</Text>
-              <TextField
-                autoCapitalize="characters"
-                autoComplete="off"
-                autoCorrect={false}
-                editable={!deleting}
-                label="Confirmation"
-                onChangeText={setConfirmation}
-                placeholder="DELETE"
-                value={confirmation}
-              />
-              <Button
-                disabled={confirmation.trim() !== "DELETE"}
-                disabledReason={confirmation.trim() === "DELETE" ? undefined : "Type DELETE to confirm."}
-                loading={deleting}
-                loadingLabel="Deleting"
-                onPress={() => void deleteAccount()}
-                variant="danger"
-              >
-                Delete account
-              </Button>
-              <Button
-                disabled={deleting}
-                disabledReason={deleting ? "Wait until deletion finishes." : undefined}
-                onPress={() => {
-                  setConfirmingDelete(false);
-                  setConfirmation("");
-                  setError(null);
-                }}
-                variant="secondary"
-              >
-                Cancel
-              </Button>
+      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
+        <TwoPane
+          column="form"
+          contentPaddingBottom={spacing.xxl}
+          fallback="stack"
+          keyboardShouldPersistTaps="handled"
+          left={(
+            <View style={styles.pane}>
+              <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
+              <Text style={styles.title}>Settings</Text>
+              <Text style={styles.intro}>Manage your repin account.</Text>
+              <Card style={styles.accountCard}>
+                <Text style={styles.signedInLabel}>Signed in as</Text>
+                <Text style={styles.signedInValue}>{email || "your repin account"}</Text>
+                {accountError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{accountError}</Text> : null}
+                <Button loading={signingOut} loadingLabel="Signing out" onPress={() => void signOut()} variant="secondary">Sign out</Button>
+              </Card>
             </View>
-          ) : (
-            <Button onPress={() => setConfirmingDelete(true)} variant="danger">Delete account</Button>
           )}
-        </View>
-        </WideColumn>
-        </SafeAreaView>
-      </ScrollView>
+          right={(
+            <View style={twoPane ? styles.actionSplit : styles.actionStack}>
+              <Card style={styles.dangerCard}>
+                <Text style={styles.dangerTitle}>Danger zone</Text>
+                <Text style={styles.dangerCopy}>
+                  This permanently deletes your profile, workouts, comments, reactions, and photos. It can’t be undone.
+                </Text>
+                <Text style={styles.dangerCopy}>
+                  If you own a group, the member who has been there the longest becomes the owner. A group with no other members is deleted, including its invite code and posts.
+                </Text>
+                <TextField
+                  autoCapitalize="characters"
+                  autoComplete="off"
+                  autoCorrect={false}
+                  disabled={deleting}
+                  label="Type DELETE to confirm"
+                  onChangeText={setConfirmation}
+                  placeholder="DELETE"
+                  value={confirmation}
+                />
+                {deleteError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{deleteError}</Text> : null}
+                <Button
+                  disabled={!confirmed}
+                  disabledReason={confirmed ? undefined : "Type DELETE to confirm."}
+                  loading={deleting}
+                  loadingLabel="Deleting"
+                  onPress={() => void deleteAccount()}
+                  variant="danger"
+                >
+                  Delete account
+                </Button>
+              </Card>
+            </View>
+          )}
+        />
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  content: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
+  flex: { flex: 1 },
+  pane: { flexGrow: 1, maxWidth: layout.formMax, width: "100%" },
   title: { color: colors.ink, ...type.screenTitle },
-  intro: { color: colors.muted, ...type.body, marginBottom: spacing.xxl, marginTop: spacing.sm },
-  error: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
-  deleteSection: { gap: spacing.md, marginTop: spacing.xxxl },
-  deleteTitle: { color: colors.ink, ...type.heading },
-  deleteCopy: { color: colors.muted, ...type.bodySmall },
-  confirmPanel: {
+  intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
+  accountCard: { gap: spacing.lg, marginTop: spacing.xxl },
+  signedInLabel: { color: colors.muted, ...type.label },
+  signedInValue: { color: colors.ink, ...type.body },
+  error: { color: colors.danger, ...type.bodySmall },
+  actionSplit: { maxWidth: layout.formMax, paddingTop: size.hit + spacing.xl, width: "100%" },
+  actionStack: { marginTop: spacing.xxl, maxWidth: layout.formMax, width: "100%" },
+  dangerCard: {
     backgroundColor: colors.dangerSoft,
-    borderColor: colors.danger,
-    borderRadius: radii.lg,
-    borderWidth: 1,
-    gap: spacing.md,
-    marginTop: spacing.sm,
-    padding: spacing.lg,
+    borderColor: colors.dangerSoft,
+    gap: spacing.lg,
+    padding: spacing.xl,
   },
-  confirmTitle: { color: colors.danger, ...type.heading },
-  confirmCopy: { color: colors.inkSoft, ...type.bodySmall },
+  dangerTitle: { color: colors.danger, ...type.heading },
+  dangerCopy: { color: colors.inkSoft, ...type.bodySmall },
 });

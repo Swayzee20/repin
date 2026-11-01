@@ -3,12 +3,15 @@ import * as Clipboard from "expo-clipboard";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, Share, StyleSheet, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { fetchGroupBoard } from "../../lib/group-board";
-import { Card, CommunityFeed, LoadingState, Screen, SectionHeader, StateCard } from "../../ui/components";
+import { Button, Card, CommunityFeed, LoadingState, SectionHeader, StateCard } from "../../ui/components";
+import { Icon } from "../../ui/icons";
+import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
-import { colors, fonts, radii, spacing, type } from "../../ui/theme";
+import { colors, radii, size, spacing, type } from "../../ui/theme";
 
 const configuredPublicWebUrl = (process.env.EXPO_PUBLIC_WEB_URL ?? "").trim().replace(/\/$/, "");
 const publicWebUrl = configuredPublicWebUrl.startsWith("https://")
@@ -17,6 +20,8 @@ const publicWebUrl = configuredPublicWebUrl.startsWith("https://")
 
 export default function GroupDetailScreen() {
   const router = useRouter();
+  const { mode } = useLayoutMode();
+  const twoPane = mode === "twoPane";
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [group, setGroup] = useState<GroupSummary | null>(null);
@@ -73,79 +78,154 @@ export default function GroupDetailScreen() {
     }
   }, []);
 
+  const openLog = useCallback(() => {
+    if (!group) return;
+    router.push(`./${group.id}/log-workout`);
+  }, [group, router]);
+
+  const feedFillsPane = Boolean(group && workouts.length > 0 && twoPane);
+
   return (
-    <Screen preserveTransformedContent>
-      <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
-      {loading && !group ? <LoadingState message="Loading group…" /> : error && !group ? (
-        <StateCard actionLabel="Try again" message={error} onAction={() => void loadGroup()} title="Unable to open group" />
-      ) : group ? (
-        <>
-          {error ? <Text style={styles.refreshError}>Group refresh failed. Showing saved content.</Text> : null}
-          <View style={styles.hero}>
-            <View style={styles.groupMark}><Text style={styles.groupMarkText}>{group.name[0]?.toUpperCase()}</Text></View>
-            <View style={styles.heroCopy}><Text style={styles.eyebrow}>GROUP</Text><Text style={styles.title}>{group.name}</Text></View>
-            <View style={styles.rolePill}><Text style={styles.roleText}>{group.role}</Text></View>
-          </View>
-
-          {group.inviteCode ? (
-            <Card style={styles.inviteCard}>
-              <View style={styles.inviteTopRow}>
-                <View style={styles.inviteCopy}>
-                  <Text style={styles.inviteLabel}>INVITE YOUR CREW</Text>
-                  <Text accessibilityLabel={`Invite code ${group.inviteCode}`} selectable style={styles.inviteCode}>{group.inviteCode}</Text>
+    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+      <TwoPane
+        column="readable"
+        contentPaddingBottom={spacing.xxl}
+        fallback="stack"
+        left={(
+          <View style={styles.pane}>
+            <RoundIconButton accessibilityLabel="Home" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
+            {loading && !group ? <LoadingState message="Loading group…" /> : error && !group ? (
+              <StateCard actionLabel="Try again" message={error} onAction={() => void loadGroup()} title="Unable to open group" />
+            ) : group ? (
+              <>
+                {error ? <Text style={styles.refreshError}>Group refresh failed. Showing saved content.</Text> : null}
+                <View style={styles.hero}>
+                  <View style={styles.groupMark}><Text style={styles.groupMarkText}>{group.name[0]?.toUpperCase()}</Text></View>
+                  <View style={styles.heroCopy}>
+                    <Text style={styles.eyebrow}>GROUP</Text>
+                    <Text style={styles.title}>{group.name}</Text>
+                  </View>
+                  <View style={styles.roleChip}><Text style={styles.roleText}>{group.role}</Text></View>
                 </View>
-                <View style={styles.inviteActions}>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => void copyInviteCode(group.inviteCode!)}
-                    style={({ pressed }) => [styles.copyAction, pressed && styles.actionPressed]}
-                  >
-                    <Text accessibilityLiveRegion="polite" style={styles.copyActionText}>{copied ? "Copied" : "Copy Code"}</Text>
-                  </Pressable>
-                  <Pressable
-                    accessibilityRole="button"
-                    onPress={() => void shareInvite(group.name, group.inviteCode!)}
-                    style={({ pressed }) => [styles.shareAction, pressed && styles.actionPressed]}
-                  >
-                    <Text style={styles.shareActionText}>Share</Text>
-                  </Pressable>
-                </View>
-              </View>
-              {inviteActionError ? <Text accessibilityLiveRegion="polite" style={styles.inviteError}>{inviteActionError}</Text> : null}
-            </Card>
-          ) : null}
-
-          <View style={styles.board}>
-            <SectionHeader eyebrow="COMMUNITY BOARD" title="Recent workouts" action={
-              <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push(`./${group.id}/log-workout`)}><Text style={styles.logLink}>+ Log workout</Text></Pressable>
-            } />
-            {workouts.length === 0 ? (
-              <StateCard
-                actionLabel="Log a Workout"
-                message="Log a workout to start this group’s Community Board."
-                onAction={() => router.push(`./${group.id}/log-workout`)}
-                title="Be the first to rep in"
-              />
-            ) : <CommunityFeed workouts={workouts} />}
+                {group.inviteCode ? (
+                  <Card style={styles.inviteCard}>
+                    <Text style={styles.inviteLabel}>INVITE YOUR CREW</Text>
+                    <Text accessibilityLabel={`Invite code ${group.inviteCode}`} selectable style={styles.inviteCode}>{group.inviteCode}</Text>
+                    <View style={styles.inviteActions}>
+                      <View style={styles.inviteAction}>
+                        <Button onPress={() => void copyInviteCode(group.inviteCode!)} variant="secondary">
+                          Copy code
+                        </Button>
+                      </View>
+                      <View style={styles.inviteAction}>
+                        <Button onPress={() => void shareInvite(group.name, group.inviteCode!)}>Share</Button>
+                      </View>
+                    </View>
+                    {inviteActionError ? (
+                      <Text accessibilityLiveRegion="polite" style={styles.inviteError}>{inviteActionError}</Text>
+                    ) : copied ? (
+                      <Text accessibilityLiveRegion="polite" style={styles.copied}>Copied</Text>
+                    ) : null}
+                  </Card>
+                ) : null}
+              </>
+            ) : null}
           </View>
-        </>
-      ) : null}
-    </Screen>
+        )}
+        right={group ? (
+          <GroupBoard feedFillsPane={feedFillsPane} onLog={openLog} stacked={!twoPane} workouts={workouts} />
+        ) : (
+          <View />
+        )}
+        scrollableRight={!feedFillsPane}
+      />
+    </SafeAreaView>
+  );
+}
+
+function GroupBoard({
+  feedFillsPane,
+  onLog,
+  stacked,
+  workouts,
+}: {
+  feedFillsPane: boolean;
+  onLog: () => void;
+  stacked: boolean;
+  workouts: WorkoutFeedItem[];
+}) {
+  const [feedHeight, setFeedHeight] = useState(0);
+  return (
+    <View style={[styles.board, feedFillsPane ? styles.boardSplit : styles.boardStack, stacked && styles.boardStacked]}>
+      <SectionHeader
+        action={(
+          <Pressable accessibilityRole="button" onPress={onLog} style={styles.logLink}>
+            <Icon color={colors.brand} name="plus" size={size.icon.sm} />
+            <Text style={styles.logLinkText}>Log workout</Text>
+          </Pressable>
+        )}
+        eyebrow="COMMUNITY BOARD"
+        title="Recent workouts"
+      />
+      {workouts.length === 0 ? (
+        <StateCard
+          actionLabel="Log a Workout"
+          message="Log a workout to start this group’s Community Board."
+          onAction={onLog}
+          title="Be the first to rep in"
+        />
+      ) : (
+        <View
+          onLayout={(event) => {
+            if (!feedFillsPane) return;
+            const next = Math.round(event.nativeEvent.layout.height);
+            setFeedHeight((current) => (current === next ? current : next));
+          }}
+          style={feedFillsPane ? styles.feedSlot : undefined}
+        >
+          <CommunityFeed viewportHeight={feedFillsPane && feedHeight > 0 ? feedHeight : undefined} workouts={workouts} />
+        </View>
+      )}
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: { backgroundColor: colors.background, flex: 1 },
+  pane: { flexGrow: 1 },
   refreshError: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
   hero: { alignItems: "center", flexDirection: "row" },
-  groupMark: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.lg, height: 52, justifyContent: "center", width: 52 },
-  groupMarkText: { color: colors.surface, fontFamily: fonts.bold, fontSize: 22 },
-  heroCopy: { flex: 1, marginHorizontal: spacing.md }, eyebrow: { color: colors.brand, ...type.eyebrow }, title: { color: colors.ink, ...type.title, marginTop: spacing.xs },
-  rolePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  roleText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 11, textTransform: "capitalize" },
-  inviteCard: { marginTop: spacing.xl, padding: spacing.md }, inviteTopRow: { alignItems: "center", flexDirection: "row" }, inviteCopy: { flex: 1 },
-  inviteLabel: { color: colors.brandPressed, ...type.eyebrow }, inviteCode: { color: colors.ink, fontFamily: fonts.bold, fontSize: 19, letterSpacing: 2, marginTop: spacing.xs },
-  inviteActions: { flexDirection: "row", gap: spacing.sm, marginLeft: spacing.md }, copyAction: { alignItems: "center", backgroundColor: colors.surface, borderColor: colors.boardBorder, borderRadius: radii.sm, borderWidth: 1, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.sm },
-  copyActionText: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 }, shareAction: { alignItems: "center", backgroundColor: colors.brand, borderRadius: radii.sm, justifyContent: "center", minHeight: 38, paddingHorizontal: spacing.sm }, shareActionText: { color: colors.surface, fontFamily: fonts.semibold, fontSize: 13 }, actionPressed: { opacity: 0.72 }, inviteError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.sm },
-  board: { backgroundColor: colors.surfaceMuted, borderColor: colors.boardBorder, borderRadius: radii.lg, borderWidth: 1, marginTop: spacing.xxxl, overflow: "visible", padding: spacing.lg },
-  logLink: { color: colors.brand, fontFamily: fonts.semibold, fontSize: 13 },
+  groupMark: {
+    alignItems: "center",
+    backgroundColor: colors.brand,
+    borderRadius: radii.lg,
+    height: size.primary,
+    justifyContent: "center",
+    width: size.primary,
+  },
+  groupMarkText: { color: colors.surface, ...type.title },
+  heroCopy: { flex: 1, marginHorizontal: spacing.md },
+  eyebrow: { color: colors.brand, ...type.eyebrow },
+  title: { color: colors.ink, ...type.title, marginTop: spacing.xs },
+  roleChip: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  roleText: { color: colors.brand, ...type.micro, textTransform: "capitalize" },
+  inviteCard: { gap: spacing.md, marginTop: spacing.xl },
+  inviteLabel: { color: colors.brandPressed, ...type.eyebrow },
+  inviteCode: { color: colors.ink, ...type.cardTitle, letterSpacing: 2 },
+  inviteActions: { flexDirection: "row", gap: spacing.sm },
+  inviteAction: { flex: 1 },
+  copied: { color: colors.success, ...type.bodySmall },
+  inviteError: { color: colors.danger, ...type.bodySmall },
+  board: { backgroundColor: colors.surfaceMuted, borderColor: colors.boardBorder, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg },
+  boardStack: { overflow: "visible" },
+  boardStacked: { marginTop: spacing.xxl },
+  boardSplit: { borderRadius: radii.lg, flex: 1, overflow: "visible" },
+  feedSlot: { flex: 1, minHeight: 0 },
+  logLink: { alignItems: "center", flexDirection: "row", gap: spacing.xs, minHeight: size.hit },
+  logLinkText: { color: colors.brand, ...type.label },
 });
