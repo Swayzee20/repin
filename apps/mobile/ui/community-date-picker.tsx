@@ -2,6 +2,7 @@ import DateTimePicker, { type DateTimePickerEvent } from "@react-native-communit
 import { useEffect, useState } from "react";
 import { Platform, StyleSheet, Text } from "react-native";
 
+import { BrandCalendar } from "./brand-calendar";
 import { DatePickerActions } from "./date-picker-actions";
 import { Dialog } from "./dialog";
 import { colors, type } from "./theme";
@@ -26,9 +27,7 @@ export function CommunityDatePicker({
     if (Platform.OS === "android") {
       if (event.type === "set" && next) onChange(next);
       onDismiss();
-      return;
     }
-    if (next) setDraft(next);
   };
 
   if (!visible) return null;
@@ -37,9 +36,9 @@ export function CommunityDatePicker({
   }
 
   return (
-    <Dialog closeLabel="Close date picker" onDismiss={onDismiss} visible>
+    <Dialog closeLabel="Close date picker" onDismiss={onDismiss} size="wide" visible>
       <Text style={styles.title}>Choose a day</Text>
-      <DateTimePicker display="inline" maximumDate={maximumDate} mode="date" onChange={handleChange} value={draft} />
+      <BrandCalendar initialDate={value} maximumDate={maximumDate} onChange={setDraft} value={draft} />
       <DatePickerActions onCancel={onDismiss} onDone={() => { onChange(draft); onDismiss(); }} />
     </Dialog>
   );

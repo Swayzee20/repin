@@ -52,7 +52,7 @@ export function activeDivisionFromRegions(regions: readonly ReservedRegion[]): A
   };
 }
 
-const cardInset = spacing.xxl * 2;
+const defaultCardInset = spacing.xxl * 2;
 
 function finite(value: number, fallback = 0) {
   return Number.isFinite(value) ? value : fallback;
@@ -164,11 +164,14 @@ export type CenteredCardFrame = {
 };
 
 export function centeredCardFrame({
+  cardInset = defaultCardInset,
   division = null,
   height,
   insets,
   width,
 }: {
+  /** Horizontal inset subtracted from the content width before the form-max cap. Default is 48. */
+  cardInset?: number;
   division?: ActiveDivision | null;
   height: number;
   insets: { bottom: number; left: number; right: number; top: number };
@@ -183,7 +186,7 @@ export function centeredCardFrame({
     top: nonNegative(insets.top),
   };
   const contentWidth = Math.max(0, safeWidth - safeInsets.left - safeInsets.right);
-  const preferred = Math.min(Math.max(0, contentWidth - cardInset), layout.formMax);
+  const preferred = Math.min(Math.max(0, contentWidth - nonNegative(cardInset)), layout.formMax);
   const fold = safeDivision(division);
   const horizontalFold = Boolean(fold && fold.width > fold.height && fold.height > 0);
   const verticalFold = Boolean(fold && !horizontalFold && fold.width > 0);
