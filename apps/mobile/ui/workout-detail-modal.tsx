@@ -187,6 +187,7 @@ const styles = StyleSheet.create({
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   keyboard: { width: "100%" },
   panel: { backgroundColor: colors.surface, borderColor: colors.overlaySoft, borderRadius: radii.lg, borderWidth: 1, boxShadow: elevation.e3 },
+  // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
   panelClip: { borderRadius: radii.lg, flexShrink: 1, minHeight: 0, overflow: "hidden" },
   header: {
     alignItems: "center",

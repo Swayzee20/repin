@@ -225,6 +225,7 @@ const styles = StyleSheet.create({
   boardStack: { overflow: "visible" },
   boardStacked: { marginTop: spacing.xxl },
   boardSplit: { borderRadius: radii.lg, flex: 1, overflow: "visible" },
+  // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
   feedSlot: { flex: 1, minHeight: 0 },
   logLink: { alignItems: "center", flexDirection: "row", gap: spacing.xs, minHeight: size.hit },
   logLinkText: { color: colors.brand, ...type.label },
