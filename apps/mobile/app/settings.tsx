@@ -1,4 +1,4 @@
-import { useRouter } from "expo-router";
+import { Stack, useRouter } from "expo-router";
 import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -8,7 +8,14 @@ import { supabase } from "../lib/supabase";
 import { Button, Card, TextField } from "../ui/components";
 import { TwoPane, useLayoutMode } from "../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
+import {
+  settingsHeaderClearance,
+  settingsHeaderScreenOptions,
+  settingsNativeHeaderEnabled,
+  settingsShowsRoundBack,
+} from "../ui/settings-header";
 import { colors, layout, size, spacing, type } from "../ui/theme";
+import { useStripState } from "../ui/vertical-bar-edge";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -16,6 +23,10 @@ export default function SettingsScreen() {
   const router = useRouter();
   const { mode } = useLayoutMode();
   const { session } = useAuthSession();
+  const strip = useStripState();
+  const nativeHeader = settingsNativeHeaderEnabled(Platform.OS);
+  const roundBack = settingsShowsRoundBack(Platform.OS);
+  const headerClearance = settingsHeaderClearance(Platform.OS, strip);
   const twoPane = mode === "twoPane";
   const [signingOut, setSigningOut] = useState(false);
   const [confirmation, setConfirmation] = useState("");
@@ -66,63 +77,80 @@ export default function SettingsScreen() {
   };
 
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
-        <TwoPane
-          column="form"
-          contentPaddingBottom={spacing.xxl}
-          fallback="stack"
-          keyboardShouldPersistTaps="handled"
-          left={(
-            <View style={styles.pane}>
-              <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
-              <Text style={styles.title}>Settings</Text>
-              <Text style={styles.intro}>Manage your repin account.</Text>
-              <Card style={styles.accountCard}>
-                <Text style={styles.signedInLabel}>Signed in as</Text>
-                <Text style={styles.signedInValue}>{email || "your repin account"}</Text>
-                {accountError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{accountError}</Text> : null}
-                <Button loading={signingOut} loadingLabel="Signing out" onPress={() => void signOut()} variant="secondary">Sign out</Button>
-              </Card>
-            </View>
-          )}
-          right={(
-            <View style={twoPane ? styles.actionSplit : styles.actionStack}>
-              <Card style={styles.dangerCard}>
-                <Text style={styles.dangerTitle}>Danger zone</Text>
-                <Text style={styles.dangerCopy}>
-                  This permanently deletes your profile, workouts, comments, reactions, and photos. It can’t be undone.
-                </Text>
-                <Text style={styles.dangerCopy}>
-                  If you own a group, the member who has been there the longest becomes the owner. A group with no other members is deleted, including its invite code and posts.
-                </Text>
-                <TextField
-                  autoCapitalize="characters"
-                  autoComplete="off"
-                  autoCorrect={false}
-                  disabled={deleting}
-                  label="Type DELETE to confirm"
-                  onChangeText={setConfirmation}
-                  placeholder="DELETE"
-                  value={confirmation}
-                />
-                {deleteError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{deleteError}</Text> : null}
-                <Button
-                  disabled={!confirmed}
-                  disabledReason={confirmed ? undefined : "Type DELETE to confirm."}
-                  loading={deleting}
-                  loadingLabel="Deleting"
-                  onPress={() => void deleteAccount()}
-                  variant="danger"
-                >
-                  Delete account
-                </Button>
-              </Card>
-            </View>
-          )}
-        />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <>
+      {nativeHeader ? <Stack.Screen options={settingsHeaderScreenOptions()} /> : null}
+      {nativeHeader ? (
+        <Stack.Toolbar placement="right">
+          <Stack.Toolbar.Button
+            accessibilityLabel="Sign out"
+            disabled={signingOut}
+            icon="rectangle.portrait.and.arrow.right"
+            onPress={() => void signOut()}
+            tintColor={colors.ink}
+          />
+        </Stack.Toolbar>
+      ) : null}
+      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={headerClearance > 0 ? [styles.flex, { paddingTop: headerClearance }] : styles.flex}
+        >
+          <TwoPane
+            column="form"
+            contentPaddingBottom={spacing.xxl}
+            fallback="stack"
+            keyboardShouldPersistTaps="handled"
+            left={(
+              <View style={styles.pane}>
+                {roundBack ? <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} /> : null}
+                <Text style={styles.title}>Settings</Text>
+                <Text style={styles.intro}>Manage your repin account.</Text>
+                <Card style={styles.accountCard}>
+                  <Text style={styles.signedInLabel}>Signed in as</Text>
+                  <Text style={styles.signedInValue}>{email || "your repin account"}</Text>
+                  {accountError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{accountError}</Text> : null}
+                  <Button loading={signingOut} loadingLabel="Signing out" onPress={() => void signOut()} variant="secondary">Sign out</Button>
+                </Card>
+              </View>
+            )}
+            right={(
+              <View style={twoPane ? (roundBack ? [styles.actionSplit, styles.actionSplitOffset] : styles.actionSplit) : styles.actionStack}>
+                <Card style={styles.dangerCard}>
+                  <Text style={styles.dangerTitle}>Danger zone</Text>
+                  <Text style={styles.dangerCopy}>
+                    This permanently deletes your profile, workouts, comments, reactions, and photos. It can’t be undone.
+                  </Text>
+                  <Text style={styles.dangerCopy}>
+                    If you own a group, the member who has been there the longest becomes the owner. A group with no other members is deleted, including its invite code and posts.
+                  </Text>
+                  <TextField
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    autoCorrect={false}
+                    disabled={deleting}
+                    label="Type DELETE to confirm"
+                    onChangeText={setConfirmation}
+                    placeholder="DELETE"
+                    value={confirmation}
+                  />
+                  {deleteError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{deleteError}</Text> : null}
+                  <Button
+                    disabled={!confirmed}
+                    disabledReason={confirmed ? undefined : "Type DELETE to confirm."}
+                    loading={deleting}
+                    loadingLabel="Deleting"
+                    onPress={() => void deleteAccount()}
+                    variant="danger"
+                  >
+                    Delete account
+                  </Button>
+                </Card>
+              </View>
+            )}
+          />
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </>
   );
 }
 
@@ -136,7 +164,8 @@ const styles = StyleSheet.create({
   signedInLabel: { color: colors.muted, ...type.label },
   signedInValue: { color: colors.ink, ...type.body },
   error: { color: colors.danger, ...type.bodySmall },
-  actionSplit: { maxWidth: layout.formMax, paddingTop: size.hit + spacing.xl, width: "100%" },
+  actionSplit: { maxWidth: layout.formMax, width: "100%" },
+  actionSplitOffset: { paddingTop: size.hit + spacing.xl },
   actionStack: { marginTop: spacing.xxl, maxWidth: layout.formMax, width: "100%" },
   dangerCard: {
     backgroundColor: colors.dangerSoft,

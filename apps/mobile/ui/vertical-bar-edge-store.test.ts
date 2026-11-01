@@ -12,6 +12,9 @@ import {
   type StripState,
 } from "./vertical-bar-edge-store";
 
+// The layout script lists files explicitly. This registers the Settings header cases.
+import "./settings-header.test";
+
 type HarnessOptions = {
   os?: string;
   statusBar?: StatusBarModule | null;
