@@ -9,14 +9,18 @@ export function Dialog({
   closeLabel = "Close",
   dismissDisabled = false,
   onDismiss,
+  size = "default",
   visible,
 }: {
   children: ReactNode;
   closeLabel?: string;
   dismissDisabled?: boolean;
   onDismiss: () => void;
+  /** Wide uses a 32pt card inset so a 7-column grid fits. Default stays 48. */
+  size?: "default" | "wide";
   visible: boolean;
 }) {
+  const cardInset = size === "wide" ? spacing.lg * 2 : undefined;
   return (
     <Modal
       animationType="fade"
@@ -35,7 +39,7 @@ export function Dialog({
           onPress={onDismiss}
           style={[StyleSheet.absoluteFill, styles.backdrop]}
         />
-        <CenteredCard>
+        <CenteredCard cardInset={cardInset}>
           <View accessibilityViewIsModal style={styles.panel}>
             {children}
           </View>

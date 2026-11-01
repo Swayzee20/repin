@@ -157,6 +157,7 @@ export function Button({
   children,
   disabled = false,
   disabledReason,
+  labelColor,
   loading = false,
   loadingLabel,
   onPress,
@@ -166,6 +167,8 @@ export function Button({
   children: string;
   disabled?: boolean;
   disabledReason?: string;
+  /** Enabled-label override. Disabled and loading keep the variant colour. */
+  labelColor?: string;
   loading?: boolean;
   loadingLabel?: string;
   onPress: () => void;
@@ -174,6 +177,7 @@ export function Button({
 }) {
   const showHelper = buttonShowsDisabledReason(disabled, loading, disabledReason);
   const resting = buttonAppearance({ disabled, loading, pressed: false, variant });
+  const textColor = !disabled && !loading && labelColor ? labelColor : resting.color;
   const label = loading ? (loadingLabel ?? children) : children;
   return (
     <View>
@@ -203,11 +207,11 @@ export function Button({
           {resting.showSpinner ? (
             <ActivityIndicator
               accessibilityElementsHidden
-              color={resting.color}
+              color={textColor}
               importantForAccessibility="no-hide-descendants"
             />
           ) : null}
-          <Text style={[styles.buttonText, { color: resting.color }]}>{label}</Text>
+          <Text style={[styles.buttonText, { color: textColor }]}>{label}</Text>
         </View>
       </Pressable>
       {showHelper ? <Text accessibilityLiveRegion="polite" style={styles.buttonHelper}>{disabledReason}</Text> : null}

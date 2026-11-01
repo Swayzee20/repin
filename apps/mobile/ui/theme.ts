@@ -67,6 +67,12 @@ export const elevation = {
   glass: "0 3px 10px rgba(43,33,28,.10)",
 } as const;
 
+/** Choose-a-day marks. 40pt is spacing.huge; the ring thickness is not on the size scale. */
+export const calendar = {
+  dayMark: spacing.huge,
+  dayRing: 1.5,
+} as const;
+
 export const size = {
   hit: 44,
   control: 48,
@@ -110,6 +116,8 @@ export const type = {
   bodySmall: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
   eyebrow: { fontFamily: fonts.extrabold, fontSize: 13, letterSpacing: 1.1, lineHeight: 18 },
+  /** Weekday letters. ExtraBold 12; the shared steps jump from micro 11 to label 13. */
+  calendarWeekday: { fontFamily: fonts.extrabold, fontSize: 12, lineHeight: 18 },
   micro: { fontFamily: fonts.bold, fontSize: 11, lineHeight: 14 },
   button: { fontFamily: fonts.extrabold, fontSize: 16, lineHeight: 20 },
 } as const;
