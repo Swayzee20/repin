@@ -184,6 +184,8 @@ test("Log a workout is the header control and the pill is gone", () => {
   assert.equal(stack.includes("Rep in"), false);
   assert.equal(stack.includes('accessibilityLabel="Log a workout"'), true);
   assert.match(stack, />\s*Log a workout\s*</);
+  assert.equal(stack.includes("toggleWorkoutChooser"), true);
+  assert.equal(stack.includes("openWorkoutChooser"), false);
   assert.equal(stack.includes("useStripPresent"), false);
   assert.equal(stack.includes("headerShown: stripPresent"), false);
   assert.equal(stack.includes("chrome.headerShown"), true);
