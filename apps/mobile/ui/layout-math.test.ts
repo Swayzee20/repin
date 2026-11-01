@@ -3,7 +3,7 @@ import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
-import { activeDivisionFromRegions, anchoredScrollOffset, centeredCardFrame, resolveLayout, topVisibleAnchor } from "./layout-math";
+import { activeDivisionFromRegions, anchoredScrollOffset, centeredCardFrame, formPresentation, resolveLayout, topVisibleAnchor, workoutFormTwoPane } from "./layout-math";
 import type { ReservedRegion } from "./reserved-regions-availability";
 import { layout, spacing } from "./theme";
 
@@ -205,6 +205,43 @@ test("a wide inset still fills a 370-wide trailing pane at its leading edge", ()
   });
   assert.equal(existingFold.left, 499.5);
   assert.equal(existingFold.width, 367.5);
+});
+
+test("workout forms are full screen only for an iOS phone in twoPane", () => {
+  const unfolded = resolveLayout({ insets: { left: 0, right: 84 }, width: 951 });
+  assert.equal(unfolded.mode, "twoPane");
+  assert.equal(unfolded.contentWidth, 867);
+  assert.equal(formPresentation({ isPad: false, mode: unfolded.mode, os: "ios" }), "fullScreenModal");
+
+  const folded = resolveLayout({ insets: flat, width: 382 });
+  assert.equal(folded.mode, "compact");
+  assert.equal(formPresentation({ isPad: false, mode: folded.mode, os: "ios" }), "modal");
+
+  const phone = resolveLayout({ insets: flat, width: 390 });
+  assert.equal(phone.mode, "compact");
+  assert.equal(formPresentation({ isPad: false, mode: phone.mode, os: "ios" }), "modal");
+
+  const ipad = resolveLayout({ insets: flat, width: 1024 });
+  assert.equal(ipad.mode, "twoPane");
+  assert.equal(formPresentation({ isPad: true, mode: ipad.mode, os: "ios" }), "modal");
+
+  assert.equal(formPresentation({ isPad: false, mode: "wide", os: "ios" }), "modal");
+  assert.equal(formPresentation({ isPad: false, mode: "compact", os: "ios" }), "modal");
+  assert.equal(formPresentation({ isPad: true, mode: "compact", os: "ios" }), "modal");
+  assert.equal(formPresentation({ isPad: false, mode: "twoPane", os: "android" }), "modal");
+  assert.equal(formPresentation({ isPad: false, mode: "twoPane", os: "web" }), "modal");
+});
+
+test("a page sheet narrower than the window stays one column", () => {
+  assert.equal(workoutFormTwoPane({ frameWidth: null, mode: "twoPane", os: "ios", windowWidth: 951 }), true);
+  assert.equal(workoutFormTwoPane({ frameWidth: 951, mode: "twoPane", os: "ios", windowWidth: 951 }), true);
+  assert.equal(workoutFormTwoPane({ frameWidth: 950, mode: "twoPane", os: "ios", windowWidth: 951 }), true);
+  assert.equal(workoutFormTwoPane({ frameWidth: 653, mode: "twoPane", os: "ios", windowWidth: 951 }), false);
+  assert.equal(workoutFormTwoPane({ frameWidth: 700, mode: "twoPane", os: "ios", windowWidth: 1024 }), false);
+  assert.equal(workoutFormTwoPane({ frameWidth: null, mode: "compact", os: "ios", windowWidth: 390 }), false);
+  assert.equal(workoutFormTwoPane({ frameWidth: 390, mode: "compact", os: "ios", windowWidth: 390 }), false);
+  assert.equal(workoutFormTwoPane({ frameWidth: null, mode: "twoPane", os: "web", windowWidth: 1200 }), false);
+  assert.equal(workoutFormTwoPane({ frameWidth: 800, mode: "twoPane", os: "android", windowWidth: 800 }), true);
 });
 
 test("scroll anchors restore the top visible item", () => {

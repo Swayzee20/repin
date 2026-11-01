@@ -17,7 +17,7 @@ export function CheckInEmptyContent({ onCheckIn }: { onCheckIn?: () => void }) {
       <Text style={styles.primary}>Be the first to rep in</Text>
       {onCheckIn ? (
         <Pressable
-          accessibilityLabel="Rep in"
+          accessibilityLabel="Log a workout"
           accessibilityRole="button"
           hitSlop={8}
           onPress={onCheckIn}

@@ -154,7 +154,7 @@ test("web tabs use one icon set and the Profile label", () => {
   assert.equal(native.includes(">Me<"), false);
 });
 
-test("Rep in is the header control and the pill is gone", () => {
+test("Log a workout is the header control and the pill is gone", () => {
   const mobileRoot = new URL("..", import.meta.url);
   assert.equal(existsSync(new URL("./rep-in-pill.tsx", import.meta.url)), false);
 
@@ -181,6 +181,9 @@ test("Rep in is the header control and the pill is gone", () => {
   }
   assert.equal(stack.includes("useStripState"), true);
   assert.equal(stack.includes("tabRootChrome"), true);
+  assert.equal(stack.includes("Rep in"), false);
+  assert.equal(stack.includes('accessibilityLabel="Log a workout"'), true);
+  assert.match(stack, />\s*Log a workout\s*</);
   assert.equal(stack.includes("useStripPresent"), false);
   assert.equal(stack.includes("headerShown: stripPresent"), false);
   assert.equal(stack.includes("chrome.headerShown"), true);

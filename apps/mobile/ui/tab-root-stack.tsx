@@ -36,7 +36,7 @@ export default function TabRootStack() {
           headerRight: chrome.control === "header-button"
             ? () => (
               <RoundIconButton
-                accessibilityLabel="Rep in"
+                accessibilityLabel="Log a workout"
                 kind="plus"
                 onPress={openWorkoutChooser}
               />
@@ -49,13 +49,13 @@ export default function TabRootStack() {
         {chrome.control === "toolbar" ? (
           <Stack.Toolbar placement="right">
             <Stack.Toolbar.Button
-              accessibilityLabel="Rep in"
+              accessibilityLabel="Log a workout"
               icon="plus"
               onPress={openWorkoutChooser}
               tintColor={colors.brand}
               variant="prominent"
             >
-              Rep in
+              Log a workout
             </Stack.Toolbar.Button>
           </Stack.Toolbar>
         ) : null}

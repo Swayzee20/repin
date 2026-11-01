@@ -133,6 +133,16 @@ export function PhotoViewer({
           Platform.OS === "web" ? { flex: undefined, height: viewportHeight, width: viewportWidth } : null,
         ]}
       >
+        <RoundIconButton
+          accessibilityLabel="Close photo"
+          kind="close"
+          look="photo"
+          onPress={close}
+          style={[
+            styles.closeButton,
+            { left: insets.left + spacing.lg, top: insets.top + spacing.sm },
+          ]}
+        />
         <Animated.View style={[styles.backdrop, { opacity: backdropOpacity }]}>
           <Pressable
             accessibilityLabel="Close photo"
@@ -174,16 +184,6 @@ export function PhotoViewer({
             </Animated.View>
           </View>
         ) : null}
-        <RoundIconButton
-          accessibilityLabel="Close photo"
-          kind="close"
-          look="photo"
-          onPress={close}
-          style={[
-            styles.closeButton,
-            { right: insets.right + spacing.lg, top: insets.top + spacing.sm },
-          ]}
-        />
       </View>
     </Modal>
   );

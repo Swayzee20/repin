@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
   type ScrollViewInstance,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -17,20 +18,22 @@ import { pressableFocused, webFocusRing } from "./focus-ring";
 import { DateRow, TextField } from "./form-fields";
 import { Chevron } from "./icons";
 import { TwoPane, useLayoutMode } from "./layout";
+import { workoutFormTwoPane } from "./layout-math";
 import { RoundIconButton } from "./primitives";
 import { ScrollAnchorProvider, type ScrollAnchorController } from "./scroll-anchor";
 import { BottomSheet } from "./sheet";
 import { colors, elevation, layout, radii, size, spacing, type } from "./theme";
 
 /**
- * T4 workout forms. Unfolded Duo (`useLayoutMode` mode `"twoPane"`, not web)
- * puts fields in the leading pane and the preview plus submit in the trailing
- * pane, clear of the crease. Compact, folded, upright, and web stay one column:
- * a Preview row opens the shared sheet, and the submit stays pinned.
+ * T4 workout forms. When this scaffold fills the window and `useLayoutMode`
+ * is `"twoPane"` (not web), fields sit in the leading pane and the preview
+ * plus submit sit in the trailing pane, clear of the crease. A page sheet is
+ * narrower than the window — a form opened folded and then unfolded, or an
+ * iPad sheet — so it stays one column: a Preview row and a pinned submit.
+ * Until the root is measured, the mode decision stands so a full-screen form
+ * does not flash to one column.
  *
- * The Duo strip is system status-bar chrome, not a slot this stack can draw
- * into. `presentation: "modal"` does not document that chrome staying above
- * the modal, so the close control is always the round 44pt X at the top-left.
+ * Close stays the round 44pt X at the top-left.
  */
 export function WorkoutFormScaffold({
   anchor,
@@ -54,8 +57,15 @@ export function WorkoutFormScaffold({
   title: string;
 }) {
   const insets = useSafeAreaInsets();
+  const { width: windowWidth } = useWindowDimensions();
+  const [frameWidth, setFrameWidth] = useState<number | null>(null);
   const { mode, split } = useLayoutMode();
-  const twoPane = Platform.OS !== "web" && mode === "twoPane";
+  const twoPane = workoutFormTwoPane({
+    frameWidth,
+    mode,
+    os: Platform.OS,
+    windowWidth,
+  });
   const [previewOpen, setPreviewOpen] = useState(false);
   const contentBottom = twoPane ? Math.max(insets.bottom, spacing.xxl) : spacing.xxl;
 
@@ -73,6 +83,10 @@ export function WorkoutFormScaffold({
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+        setFrameWidth((current) => (current === next ? current : next));
+      }}
       style={styles.root}
     >
       <View

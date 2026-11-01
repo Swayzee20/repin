@@ -118,7 +118,6 @@ export function WorkoutDetailModal({
       visible={visible}
     >
       <View
-        accessibilityViewIsModal
         style={[
           styles.overlay,
           Platform.OS === "web" ? { height: viewportHeight, flex: undefined } : null,
@@ -131,49 +130,51 @@ export function WorkoutDetailModal({
           onPress={close}
           style={styles.backdropPressable}
         />
-        <CenteredCard>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-            style={[styles.keyboard, { maxHeight: panelMaxHeight }]}
-          >
-            <Animated.View
-              style={[
-                styles.panel,
-                {
-                  maxHeight: panelMaxHeight,
-                  opacity: panelOpacity,
-                  transform: [{ scale: panelScale }],
-                  width: "100%",
-                },
-              ]}
+        <View accessibilityViewIsModal pointerEvents="box-none" style={styles.modalFocus}>
+          <CenteredCard>
+            <KeyboardAvoidingView
+              behavior={Platform.OS === "ios" ? "padding" : "height"}
+              style={[styles.keyboard, { maxHeight: panelMaxHeight }]}
             >
-              <View style={styles.panelClip}>
-                <View style={styles.header}>
-                  <View style={styles.headerCopy}>
-                    <Text accessibilityRole="header" style={styles.headerTitle}>Post</Text>
-                    {groupName ? (
-                      <Text numberOfLines={1} style={styles.headerFrom}>from {groupName}</Text>
-                    ) : null}
+              <Animated.View
+                style={[
+                  styles.panel,
+                  {
+                    maxHeight: panelMaxHeight,
+                    opacity: panelOpacity,
+                    transform: [{ scale: panelScale }],
+                    width: "100%",
+                  },
+                ]}
+              >
+                <View style={styles.panelClip}>
+                  <View style={styles.header}>
+                    <RoundIconButton accessibilityLabel="Close workout details" kind="close" onPress={close} style={styles.headerClose} />
+                    <View style={styles.headerCopy}>
+                      <Text accessibilityRole="header" style={styles.headerTitle}>Post</Text>
+                      {groupName ? (
+                        <Text numberOfLines={1} style={styles.headerFrom}>from {groupName}</Text>
+                      ) : null}
+                    </View>
                   </View>
-                  <RoundIconButton accessibilityLabel="Close workout details" kind="close" onPress={close} style={styles.headerClose} />
+                  {groupId && sessionId ? (
+                    <WorkoutDetailView
+                      detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
+                      detailPhotoMaxHeight={panelMaxHeight * 0.4}
+                      fixture={fixture}
+                      groupId={groupId}
+                      seedWorkout={initialWorkout ?? undefined}
+                      onCommentCountChange={onCommentCountChange}
+                      onReactionSummaryChange={onReactionSummaryChange}
+                      presentation="community-modal"
+                      sessionId={sessionId}
+                    />
+                  ) : null}
                 </View>
-                {groupId && sessionId ? (
-                  <WorkoutDetailView
-                    detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
-                    detailPhotoMaxHeight={panelMaxHeight * 0.4}
-                    fixture={fixture}
-                    groupId={groupId}
-                    seedWorkout={initialWorkout ?? undefined}
-                    onCommentCountChange={onCommentCountChange}
-                    onReactionSummaryChange={onReactionSummaryChange}
-                    presentation="community-modal"
-                    sessionId={sessionId}
-                  />
-                ) : null}
-              </View>
-            </Animated.View>
-          </KeyboardAvoidingView>
-        </CenteredCard>
+              </Animated.View>
+            </KeyboardAvoidingView>
+          </CenteredCard>
+        </View>
       </View>
     </Modal>
   );
@@ -181,6 +182,7 @@ export function WorkoutDetailModal({
 
 const styles = StyleSheet.create({
   overlay: { alignItems: "center", flex: 1, justifyContent: "center", paddingVertical: spacing.lg },
+  modalFocus: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdrop: { backgroundColor: colors.overlay, bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   backdropPressable: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0 },
   keyboard: { width: "100%" },
