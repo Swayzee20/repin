@@ -11,13 +11,15 @@ import { Redirect, Stack, useGlobalSearchParams, usePathname } from "expo-router
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect, useState } from "react";
-import { StyleSheet } from "react-native";
+import { Platform, StyleSheet } from "react-native";
 import { ReservedRegionsProvider } from "../ui/reserved-regions";
 import { RootErrorBoundary } from "../ui/root-error-boundary";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isLayoutPreview } from "../lib/layout-preview";
 import { useAuthSession } from "../lib/use-auth-session";
+import { useLayoutMode } from "../ui/layout";
+import { formPresentation } from "../ui/layout-math";
 import { colors } from "../ui/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -50,17 +52,7 @@ export default function RootLayout() {
   return (
     <RootErrorBoundary>
       <ReservedRegionsProvider style={styles.root}>
-        <Stack
-          screenOptions={{
-            animation: "slide_from_right",
-            contentStyle: { backgroundColor: colors.background },
-            headerShown: false,
-          }}
-        >
-          <Stack.Screen name="groups/[id]/log-workout" options={formModalOptions} />
-          <Stack.Screen name="groups/[id]/detailed-workout" options={formModalOptions} />
-          <Stack.Screen name="groups/[id]/workouts/[sessionId]/edit" options={formModalOptions} />
-        </Stack>
+        <RootStack />
         <SignedOutRedirect />
         <StatusBar style="dark" />
       </ReservedRegionsProvider>
@@ -73,9 +65,12 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Workout forms present as a modal (D3). The close control stays top-left:
- * the Duo strip is the system vertical status bar, and nothing in this stack
- * shows that bar remaining a hittable slot above `presentation: "modal"`.
+ * Workout forms slide up from the bottom. An unfolded iPhone (iOS, not iPad,
+ * two-pane) presents `fullScreenModal` so the preview pane is not clipped by
+ * the page sheet. Folded phones, iPhone portrait, iPad, Android, and web stay
+ * `modal`. The navigator reads `presentation` when the form is presented;
+ * folding or unfolding while it is open does not re-present it. Close stays
+ * the top-left X — a full-screen modal has no swipe-down dismiss.
  */
 const formModalOptions = {
   animation: "slide_from_bottom",
@@ -83,6 +78,30 @@ const formModalOptions = {
   headerShown: false,
   presentation: "modal",
 } as const;
+
+function RootStack() {
+  const { mode } = useLayoutMode();
+  const isPad = Platform.OS === "ios" && Platform.isPad;
+  const presentation = formPresentation({
+    isPad,
+    mode,
+    os: Platform.OS,
+  });
+
+  return (
+    <Stack
+      screenOptions={{
+        animation: "slide_from_right",
+        contentStyle: { backgroundColor: colors.background },
+        headerShown: false,
+      }}
+    >
+      <Stack.Screen name="groups/[id]/log-workout" options={{ ...formModalOptions, presentation }} />
+      <Stack.Screen name="groups/[id]/detailed-workout" options={{ ...formModalOptions, presentation }} />
+      <Stack.Screen name="groups/[id]/workouts/[sessionId]/edit" options={{ ...formModalOptions, presentation }} />
+    </Stack>
+  );
+}
 
 const signedOutTabPaths = new Set(["/", "/community", "/profile"]);
 
