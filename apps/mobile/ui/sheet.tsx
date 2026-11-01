@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, type ReactNode } from "react";
-import { Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { useCallback, useEffect, useRef, type ReactNode, type RefObject } from "react";
+import { Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { pressableFocused, webFocusRing } from "./focus-ring";
@@ -13,30 +13,53 @@ export type SheetClose = (afterClose?: () => void) => void;
 export function SheetHeader({
   closeLabel,
   onClose,
+  style,
   title,
 }: {
   closeLabel: string;
   onClose: () => void;
+  style?: StyleProp<ViewStyle>;
   title: string;
 }) {
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, style]}>
       <RoundIconButton accessibilityLabel={closeLabel} kind="close" onPress={onClose} style={styles.close} />
       <Text style={styles.title}>{title}</Text>
     </View>
   );
 }
 
+/** Lets the (+) toggle run this sheet's animated close while it is open. */
+export function useRegisterSheetClose(
+  closeRef: RefObject<SheetClose>,
+  onRegisterClose: ((close: SheetClose | null) => void) | undefined,
+  visible: boolean,
+) {
+  useEffect(() => {
+    if (!onRegisterClose) return;
+    if (!visible) {
+      onRegisterClose(null);
+      return;
+    }
+    onRegisterClose(() => {
+      closeRef.current();
+    });
+    return () => onRegisterClose(null);
+  }, [closeRef, onRegisterClose, visible]);
+}
+
 export function BottomSheet({
   children,
   closeLabel = "Close",
   onDismiss,
+  onRegisterClose,
   title,
   visible,
 }: {
   children: ReactNode | ((close: SheetClose) => ReactNode);
   closeLabel?: string;
   onDismiss: () => void;
+  onRegisterClose?: (close: SheetClose | null) => void;
   title: string;
   visible: boolean;
 }) {
@@ -73,6 +96,7 @@ export function BottomSheet({
   }, [backdropOpacity, height, onDismiss, sheetTranslateY]);
 
   closeRef.current = close;
+  useRegisterSheetClose(closeRef, onRegisterClose, visible);
 
   useEffect(() => {
     if (!visible) return;
@@ -159,12 +183,14 @@ export function BottomSheet({
 export function SheetRow({
   accessibilityLabel,
   children,
+  divider = true,
   minHeight = sheetRowMinHeight,
   onPress,
   selected = false,
 }: {
   accessibilityLabel?: string;
   children: ReactNode;
+  divider?: boolean;
   minHeight?: number;
   onPress: () => void;
   selected?: boolean;
@@ -179,6 +205,7 @@ export function SheetRow({
         styles.row,
         {
           backgroundColor: sheetRowBackground(selected, state.pressed),
+          borderBottomWidth: divider ? StyleSheet.hairlineWidth : 0,
           minHeight,
         },
         webFocusRing(pressableFocused(state)),
@@ -223,7 +250,6 @@ const styles = StyleSheet.create({
   row: {
     alignItems: "center",
     borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     gap: spacing.md,
   },

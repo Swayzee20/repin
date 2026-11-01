@@ -1,9 +1,12 @@
-import { StyleSheet, Text, View } from "react-native";
+import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { Chevron, Icon, type IconName } from "./icons";
+import { useMainTabs } from "./main-tabs-context";
 import { chooserRowMinHeight } from "./overlay-state";
-import { BottomSheet, SheetRow } from "./sheet";
+import { BottomSheet, SheetRow, type SheetClose } from "./sheet";
+import { SidePanel } from "./side-panel";
 import { colors, spacing, type } from "./theme";
+import { stripPresent, useStripState } from "./vertical-bar-edge";
 
 const workoutLogOptions: readonly {
   description: string;
@@ -36,28 +39,77 @@ export function LogWorkoutChooser({
   onQuickLog: () => void;
   visible: boolean;
 }) {
+  const strip = useStripState();
+  const { registerWorkoutChooserClose } = useMainTabs();
+  const sidePanel = Platform.OS === "ios" && stripPresent(strip);
+  const edge = strip.edge === "leading" ? "leading" : "trailing";
+  const options = (close: SheetClose) => (
+    <ChooserOptions
+      close={close}
+      omitLastDivider={sidePanel}
+      onDetailedWorkout={onDetailedWorkout}
+      onQuickLog={onQuickLog}
+    />
+  );
+
+  if (sidePanel) {
+    return (
+      <SidePanel
+        closeLabel="Close workout options"
+        edge={edge}
+        onDismiss={onDismiss}
+        onRegisterClose={registerWorkoutChooserClose}
+        title="Log a workout"
+        visible={visible}
+      >
+        {options}
+      </SidePanel>
+    );
+  }
+
   return (
-    <BottomSheet closeLabel="Close workout options" onDismiss={onDismiss} title="Log a workout" visible={visible}>
-      {(close) => (
-        <View style={styles.options}>
-          {workoutLogOptions.map((option) => (
-            <SheetRow
-              accessibilityLabel={`${option.title}. ${option.description}`}
-              key={option.key}
-              minHeight={chooserRowMinHeight}
-              onPress={() => close(option.key === "quick" ? onQuickLog : onDetailedWorkout)}
-            >
-              <Icon color={colors.muted} name={option.icon} />
-              <View style={styles.optionCopy}>
-                <Text style={styles.optionTitle}>{option.title}</Text>
-                <Text style={styles.optionDescription}>{option.description}</Text>
-              </View>
-              <Chevron color={colors.brand} />
-            </SheetRow>
-          ))}
-        </View>
-      )}
+    <BottomSheet
+      closeLabel="Close workout options"
+      onDismiss={onDismiss}
+      onRegisterClose={registerWorkoutChooserClose}
+      title="Log a workout"
+      visible={visible}
+    >
+      {options}
     </BottomSheet>
+  );
+}
+
+function ChooserOptions({
+  close,
+  omitLastDivider,
+  onDetailedWorkout,
+  onQuickLog,
+}: {
+  close: SheetClose;
+  omitLastDivider: boolean;
+  onDetailedWorkout: () => void;
+  onQuickLog: () => void;
+}) {
+  return (
+    <View style={styles.options}>
+      {workoutLogOptions.map((option, index) => (
+        <SheetRow
+          accessibilityLabel={`${option.title}. ${option.description}`}
+          divider={!omitLastDivider || index < workoutLogOptions.length - 1}
+          key={option.key}
+          minHeight={chooserRowMinHeight}
+          onPress={() => close(option.key === "quick" ? onQuickLog : onDetailedWorkout)}
+        >
+          <Icon color={colors.muted} name={option.icon} />
+          <View style={styles.optionCopy}>
+            <Text style={styles.optionTitle}>{option.title}</Text>
+            <Text style={styles.optionDescription}>{option.description}</Text>
+          </View>
+          <Chevron color={colors.brand} />
+        </SheetRow>
+      ))}
+    </View>
   );
 }
 

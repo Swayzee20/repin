@@ -11,7 +11,7 @@ import { useStripState } from "./vertical-bar-edge";
 export default function TabRootStack() {
   const strip = useStripState();
   const { session } = useAuthSession();
-  const { openWorkoutChooser, selectedGroupId } = useMainTabs();
+  const { selectedGroupId, toggleWorkoutChooser } = useMainTabs();
   const chrome = tabRootChrome(strip, {
     hasSelectedGroup: Boolean(selectedGroupId),
     hasSession: Boolean(session),
@@ -38,7 +38,7 @@ export default function TabRootStack() {
               <RoundIconButton
                 accessibilityLabel="Log a workout"
                 kind="plus"
-                onPress={openWorkoutChooser}
+                onPress={toggleWorkoutChooser}
               />
             )
             : undefined,
@@ -51,7 +51,7 @@ export default function TabRootStack() {
             <Stack.Toolbar.Button
               accessibilityLabel="Log a workout"
               icon="plus"
-              onPress={openWorkoutChooser}
+              onPress={toggleWorkoutChooser}
               tintColor={colors.brand}
               variant="prominent"
             >
