@@ -841,8 +841,9 @@ const styles = StyleSheet.create({
   dateArrow: { alignItems: "center", justifyContent: "center", minHeight: size.hit, width: size.primary },
   dateArrowDisabled: { opacity: 0.28 },
   dateLabelButton: { alignItems: "center", justifyContent: "center", minHeight: size.hit, minWidth: 128, paddingHorizontal: spacing.md },
-  dateLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
-  boardTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 17, lineHeight: 23, marginBottom: spacing.sm, marginTop: spacing.sm },
+  dateLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
+  boardTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.section.fontSize, lineHeight: type.section.lineHeight, marginBottom: spacing.sm, marginTop: spacing.sm },
+  // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
   boardArea: { backgroundColor: colors.surfaceMuted, borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
   feedState: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   todayEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },

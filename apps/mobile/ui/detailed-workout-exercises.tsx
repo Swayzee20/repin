@@ -6,7 +6,7 @@ import { supabase } from "../lib/supabase";
 import { TextField } from "./components";
 import { NumberField } from "./form-fields";
 import { SegmentedControl } from "./primitives";
-import { colors, fonts, radii, spacing, type } from "./theme";
+import { colors, fonts, radii, size, spacing, type } from "./theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -253,7 +253,7 @@ function draftId() {
 const styles = StyleSheet.create({
   exerciseCard: { borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, marginTop: spacing.md, padding: spacing.md },
   exerciseHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md },
-  exerciseTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: 16, lineHeight: 22 },
+  exerciseTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
   removeText: { color: colors.muted, ...type.label },
   suggestions: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, marginTop: spacing.xs, overflow: "hidden" },
   suggestion: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
@@ -265,11 +265,11 @@ const styles = StyleSheet.create({
   setCard: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.md, paddingTop: spacing.md },
   setHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
   setTitle: { color: colors.inkSoft, ...type.label },
-  removeSetText: { color: colors.muted, fontFamily: fonts.medium, fontSize: 13, lineHeight: 18 },
+  removeSetText: { color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, lineHeight: type.label.lineHeight },
   setFields: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
   setInput: { flex: 1 },
-  addSet: { alignItems: "center", alignSelf: "flex-start", justifyContent: "center", marginTop: spacing.sm, minHeight: 40, paddingRight: spacing.lg },
-  addExercise: { alignItems: "center", alignSelf: "flex-start", justifyContent: "center", marginTop: spacing.md, minHeight: 44, paddingRight: spacing.lg },
+  addSet: { alignItems: "center", alignSelf: "flex-start", justifyContent: "center", marginTop: spacing.sm, minHeight: size.hit, paddingRight: spacing.lg },
+  addExercise: { alignItems: "center", alignSelf: "flex-start", justifyContent: "center", marginTop: spacing.md, minHeight: size.hit, paddingRight: spacing.lg },
   actionText: { color: colors.brand, ...type.label },
   pressed: { opacity: 0.7 },
 });
