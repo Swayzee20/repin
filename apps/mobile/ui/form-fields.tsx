@@ -1,4 +1,4 @@
-import { useState, type ComponentRef, type ReactNode, type Ref } from "react";
+import { useRef, useState, type ComponentRef, type ReactNode, type Ref } from "react";
 import {
   Image,
   Platform,
@@ -14,6 +14,12 @@ import {
 } from "react-native";
 
 import { pressableFocused, webFocusRing } from "./focus-ring";
+import {
+  accessoryLabelFor,
+  scheduleKeyboardAccessoryReset,
+  setKeyboardAccessory,
+} from "./keyboard-accessory";
+import { multilineAccessoryProps, numberPadAccessoryProps } from "./keyboard";
 import {
   choiceText,
   choiceTileChrome,
@@ -137,6 +143,7 @@ export function TextField({
   editable = true,
   error,
   hint,
+  inputAccessoryViewID,
   label,
   multiline = false,
   onBlur,
@@ -144,12 +151,17 @@ export function TextField({
   onFocus,
   optional = false,
   ref,
+  returnKeyType,
   style,
   ...props
 }: TextFieldProps) {
   const [focused, setFocused] = useState(false);
   const [grown, setGrown] = useState(textAreaMinHeight);
+  const accessoryGeneration = useRef(0);
+  const submitRef = useRef(props.onSubmitEditing);
+  submitRef.current = props.onSubmitEditing;
   const isDisabled = disabled || editable === false;
+  const showsAccessory = Boolean(inputAccessoryViewID) || multiline;
   const chrome = fieldChrome(resolveFieldInteraction({
     disabled: isDisabled,
     error: Boolean(error?.trim()),
@@ -161,6 +173,11 @@ export function TextField({
     <FieldFrame containerStyle={containerStyle} error={error} hint={hint} label={label} optional={optional}>
       <TextInput
         {...props}
+        {...(inputAccessoryViewID
+          ? { inputAccessoryViewID }
+          : multiline
+            ? multilineAccessoryProps(Platform.OS)
+            : {})}
         accessibilityHint={error?.trim() || hint || undefined}
         accessibilityLabel={inputLabel}
         accessibilityState={{ ...accessibilityState, disabled: isDisabled }}
@@ -168,6 +185,7 @@ export function TextField({
         multiline={multiline}
         onBlur={(event) => {
           setFocused(false);
+          if (Platform.OS === "ios" && showsAccessory) scheduleKeyboardAccessoryReset(accessoryGeneration.current);
           onBlur?.(event);
         }}
         onContentSizeChange={(event) => {
@@ -176,10 +194,19 @@ export function TextField({
         }}
         onFocus={(event) => {
           setFocused(true);
+          if (Platform.OS === "ios" && showsAccessory) {
+            accessoryGeneration.current = setKeyboardAccessory({
+              label: accessoryLabelFor(returnKeyType),
+              run: () => {
+                if (returnKeyType === "next") submitRef.current?.(event as never);
+              },
+            });
+          }
           onFocus?.(event);
         }}
         placeholderTextColor={chrome.placeholderColor}
         ref={ref}
+        returnKeyType={returnKeyType ?? (multiline ? undefined : "done")}
         scrollEnabled={!multiline || grown >= textAreaMaxHeight}
         selectionColor={colors.brand}
         style={[
@@ -213,6 +240,7 @@ export function NumberField({
   disabled = false,
   error,
   hint,
+  inputAccessoryViewID,
   kind = "number",
   label,
   onBlur,
@@ -220,6 +248,8 @@ export function NumberField({
   onFocus,
   optional = false,
   placeholder,
+  ref,
+  returnKeyType = "done",
   suffix,
   value,
   ...props
@@ -230,6 +260,9 @@ export function NumberField({
   value: string;
 }) {
   const [focused, setFocused] = useState(false);
+  const accessoryGeneration = useRef(0);
+  const submitRef = useRef(props.onSubmitEditing);
+  submitRef.current = props.onSubmitEditing;
   const isDisabled = disabled || props.editable === false;
   const chrome = fieldChrome(resolveFieldInteraction({
     disabled: isDisabled,
@@ -256,6 +289,7 @@ export function NumberField({
       >
         <TextInput
           {...props}
+          {...(inputAccessoryViewID ? { inputAccessoryViewID } : numberPadAccessoryProps(Platform.OS))}
           accessibilityHint={error?.trim() || hint || undefined}
           accessibilityLabel={inputLabel}
           accessibilityState={{ disabled: isDisabled }}
@@ -264,15 +298,26 @@ export function NumberField({
           keyboardType={keyboard.keyboardType}
           onBlur={(event) => {
             setFocused(false);
+            if (Platform.OS === "ios") scheduleKeyboardAccessoryReset(accessoryGeneration.current);
             onBlur?.(event);
           }}
           onChangeText={onChangeText}
           onFocus={(event) => {
             setFocused(true);
+            if (Platform.OS === "ios") {
+              accessoryGeneration.current = setKeyboardAccessory({
+                label: accessoryLabelFor(returnKeyType),
+                run: () => {
+                  if (returnKeyType === "next") submitRef.current?.(event as never);
+                },
+              });
+            }
             onFocus?.(event);
           }}
           placeholder={placeholder}
           placeholderTextColor={chrome.placeholderColor}
+          ref={ref}
+          returnKeyType={returnKeyType}
           selectionColor={colors.brand}
           style={[styles.numberInput, { color: chrome.color }, webInputOutline]}
           value={value}

@@ -1,8 +1,10 @@
 import type { QuickLogMetricInput, WorkoutDetailMetric, WorkoutType } from "@repin/types";
-import { StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
+import { useRef, type ComponentRef, type Ref } from "react";
+import { StyleSheet, View, type StyleProp, type TextInput, type ViewStyle } from "react-native";
 
 import { TextField } from "./components";
 import { FieldLabel, NumberField, secondsRangeError } from "./form-fields";
+import { fieldChainProps } from "./keyboard";
 import { SegmentedControl } from "./primitives";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
 import { size, spacing } from "./theme";
@@ -61,7 +63,13 @@ export function WorkoutMetricFields({
     || workoutType === "hiit"
     || workoutType === "other"
     || (workoutType === "functional_fitness" && value.functionalResultType === "time");
+  const timeRef = useRef<ComponentRef<typeof TextInput>>(null);
   const update = (change: Partial<QuickLogResultsDraft>) => onChange({ ...value, ...change });
+  const advanceToTime = fieldChainProps({
+    count: showTime ? 2 : 1,
+    index: 0,
+    onAdvance: () => timeRef.current?.focus(),
+  });
 
   return (
     <>
@@ -69,7 +77,7 @@ export function WorkoutMetricFields({
         <View style={styles.section}>
           <FieldLabel label="Distance" optional />
           <View style={styles.metricRow}>
-            <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => update({ distance })} placeholder="3.2" suffix={value.distanceUnit} value={value.distance} />
+            <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => update({ distance })} placeholder="3.2" suffix={value.distanceUnit} value={value.distance} {...advanceToTime} />
             <SegmentedControl<DistanceUnit>
               accessibilityLabel="Distance unit"
               onChange={(distanceUnit) => {
@@ -97,10 +105,10 @@ export function WorkoutMetricFields({
             value={value.functionalResultType}
           />
           {value.functionalResultType === "rounds" ? (
-            <NumberField accessibilityLabel="Rounds" containerStyle={styles.resultField} kind="number" onChangeText={(rounds) => update({ rounds })} placeholder="5" value={value.rounds} />
+            <NumberField accessibilityLabel="Rounds" containerStyle={styles.resultField} kind="number" onChangeText={(rounds) => update({ rounds })} placeholder="5" value={value.rounds} {...advanceToTime} />
           ) : null}
           {value.functionalResultType === "score" ? (
-            <TextField accessibilityLabel="Score" containerStyle={styles.resultField} maxLength={500} onChangeText={(score) => update({ score })} placeholder="5 rounds + 12 reps" value={value.score} />
+            <TextField accessibilityLabel="Score" containerStyle={styles.resultField} maxLength={500} onChangeText={(score) => update({ score })} placeholder="5 rounds + 12 reps" value={value.score} {...advanceToTime} />
           ) : null}
         </View>
       ) : null}
@@ -109,6 +117,7 @@ export function WorkoutMetricFields({
         <View style={styles.section}>
           <FieldLabel label="Time" optional />
           <WorkoutTimeInput
+            inputRef={timeRef}
             minutes={value.timeMinutes}
             onMinutesChange={(timeMinutes) => update({ timeMinutes })}
             onSecondsChange={(timeSeconds) => update({ timeSeconds })}
@@ -122,21 +131,57 @@ export function WorkoutMetricFields({
 
 export function WorkoutTimeInput({
   containerStyle,
+  inputRef,
   minutes,
   onMinutesChange,
   onSecondsChange,
+  onSubmit,
   seconds,
 }: {
   containerStyle?: StyleProp<ViewStyle>;
+  inputRef?: Ref<ComponentRef<typeof TextInput>>;
   minutes: string;
   onMinutesChange: (value: string) => void;
   onSecondsChange: (value: string) => void;
+  /** Return on seconds. Omit to dismiss the keyboard. */
+  onSubmit?: () => void;
   seconds: string;
 }) {
+  const secondsRef = useRef<ComponentRef<typeof TextInput>>(null);
   return (
     <View style={[styles.timeRow, containerStyle]}>
-      <NumberField accessibilityLabel="Minutes" containerStyle={styles.timeField} kind="number" onChangeText={onMinutesChange} placeholder="28" suffix="min" value={minutes} />
-      <NumberField accessibilityLabel="Seconds" containerStyle={styles.timeField} error={secondsRangeError(seconds)} kind="number" onChangeText={onSecondsChange} placeholder="14" suffix="sec" value={seconds} />
+      <NumberField
+        accessibilityLabel="Minutes"
+        containerStyle={styles.timeField}
+        kind="number"
+        onChangeText={onMinutesChange}
+        placeholder="28"
+        ref={inputRef}
+        suffix="min"
+        value={minutes}
+        {...fieldChainProps({
+          count: 2,
+          index: 0,
+          onAdvance: () => secondsRef.current?.focus(),
+        })}
+      />
+      <NumberField
+        accessibilityLabel="Seconds"
+        containerStyle={styles.timeField}
+        error={secondsRangeError(seconds)}
+        kind="number"
+        onChangeText={onSecondsChange}
+        placeholder="14"
+        ref={secondsRef}
+        suffix="sec"
+        value={seconds}
+        {...fieldChainProps({
+          count: onSubmit ? 2 : 1,
+          index: 0,
+          onAdvance: () => onSubmit?.(),
+          onFinish: onSubmit,
+        })}
+      />
     </View>
   );
 }
