@@ -151,7 +151,7 @@ export function dayMarkAppearance({
     return {
       backgroundColor: pressed ? colors.selection : "transparent",
       borderColor: colors.brand,
-      color: colors.brand,
+      color: pressed ? colors.brandPressed : colors.brand,
       emphasis: true,
     };
   }

@@ -100,9 +100,10 @@ test("segmented tracks are 48pt, or 36pt with hit slop that reaches 44", () => {
   assert.equal(sm.hitSlop, 4);
   assert.equal(sm.track + sm.hitSlop * 2, 44);
 
-  assert.equal(segmentTextColor(true, false), colors.brand);
+  assert.equal(segmentTextColor(true, false), colors.brandPressed);
   assert.equal(segmentTextColor(false, false), colors.ink);
   assert.equal(segmentTextColor(true, true), colors.disabledText);
+  assert.equal(segmentTextColor(false, true), colors.disabledText);
 });
 
 test("round icon buttons are 44pt with glass, photo, and plus chrome", () => {
