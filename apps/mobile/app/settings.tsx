@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
 import { Button, Card, TextField } from "../ui/components";
+import { ListRow } from "../ui/primitives";
 import { TwoPane, useLayoutMode } from "../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
 import {
@@ -109,6 +110,7 @@ export default function SettingsScreen() {
                   <Text style={styles.signedInLabel}>Signed in as</Text>
                   <Text style={styles.signedInValue}>{email || "your repin account"}</Text>
                   {accountError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{accountError}</Text> : null}
+                  <ListRow label="Blocked users" onPress={() => router.push("/blocked-users")} />
                   <Button loading={signingOut} loadingLabel="Signing out" onPress={() => void signOut()} variant="secondary">Sign out</Button>
                 </Card>
               </View>

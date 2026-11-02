@@ -655,6 +655,91 @@ export const communityPostComments = pgTable(
   ],
 );
 
+export const contentReportTargetTypes = ["post", "comment"] as const;
+export const contentReportReasons = [
+  "spam",
+  "harassment",
+  "inappropriate",
+  "other",
+] as const;
+export const contentReportStatuses = ["open", "dismissed", "removed"] as const;
+
+export const contentReports = pgTable(
+  "content_reports",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    reporterId: uuid("reporter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    targetType: text("target_type").notNull(),
+    targetId: uuid("target_id").notNull(),
+    reason: text().notNull(),
+    note: text(),
+    status: text().notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    reviewedBy: uuid("reviewed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => [
+    uniqueIndex("content_reports_reporter_target_unique").on(
+      table.reporterId,
+      table.targetType,
+      table.targetId,
+    ),
+    index("content_reports_group_status_created_idx").on(
+      table.groupId,
+      table.status,
+      table.createdAt,
+    ),
+    check(
+      "content_reports_target_type_check",
+      sql`${table.targetType} in ('post', 'comment')`,
+    ),
+    check(
+      "content_reports_reason_check",
+      sql`${table.reason} in ('spam', 'harassment', 'inappropriate', 'other')`,
+    ),
+    check(
+      "content_reports_status_check",
+      sql`${table.status} in ('open', 'dismissed', 'removed')`,
+    ),
+    check(
+      "content_reports_note_check",
+      sql`${table.note} is null or length(btrim(${table.note})) between 1 and 500`,
+    ),
+  ],
+);
+
+export const userBlocks = pgTable(
+  "user_blocks",
+  {
+    blockerId: uuid("blocker_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    blockedId: uuid("blocked_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.blockerId, table.blockedId] }),
+    index("user_blocks_blocked_id_idx").on(table.blockedId),
+    check(
+      "user_blocks_distinct_check",
+      sql`${table.blockerId} <> ${table.blockedId}`,
+    ),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type Group = typeof groups.$inferSelect;
@@ -686,3 +771,7 @@ export type CommunityPostReaction = typeof communityPostReactions.$inferSelect;
 export type NewCommunityPostReaction = typeof communityPostReactions.$inferInsert;
 export type CommunityPostComment = typeof communityPostComments.$inferSelect;
 export type NewCommunityPostComment = typeof communityPostComments.$inferInsert;
+export type ContentReport = typeof contentReports.$inferSelect;
+export type NewContentReport = typeof contentReports.$inferInsert;
+export type UserBlock = typeof userBlocks.$inferSelect;
+export type NewUserBlock = typeof userBlocks.$inferInsert;

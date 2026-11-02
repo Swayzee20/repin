@@ -35,6 +35,7 @@ import { readStoredScrollAnchor, writeStoredScrollAnchor } from "./scroll-anchor
 import repinLockup from "../assets/branding/repin-lockup.png";
 import repinLockupReversed from "../assets/branding/repin-lockup-reversed.png";
 import repinMark from "../assets/branding/repin-mark.png";
+import { postMenuItems, workoutMenuItems, type ContentMenuItem } from "../lib/content-menu";
 import { formatWorkoutDate } from "../lib/workout-date";
 import { WideColumn } from "./layout";
 import { pressableFocused, webFocusRing } from "./focus-ring";
@@ -299,9 +300,8 @@ export function LoadingState({ message }: { message: string }) {
 export function WorkoutCard({
   focalY,
   layoutY,
+  menuItems,
   onPress,
-  onDelete,
-  onEdit,
   scrollY,
   showReactionSummary = false,
   showCommentCount = false,
@@ -311,9 +311,8 @@ export function WorkoutCard({
 }: {
   focalY: number;
   layoutY: SharedValue<number>;
+  menuItems?: ContentMenuItem[];
   onPress?: () => void;
-  onDelete?: () => void;
-  onEdit?: () => void;
   scrollY: SharedValue<number>;
   showReactionSummary?: boolean;
   showCommentCount?: boolean;
@@ -375,16 +374,17 @@ export function WorkoutCard({
           onPress={onPress}
           style={({ pressed }) => pressed && styles.workoutCardPressed}
         >
-          <WorkoutSummaryCard onDelete={onDelete} onEdit={onEdit} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} style={styles.feedCardFlat} variant="full" workout={workout} />
+          <WorkoutSummaryCard menuItems={menuItems} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} style={styles.feedCardFlat} variant="full" workout={workout} />
         </Pressable>
       ) : (
-        <WorkoutSummaryCard onDelete={onDelete} onEdit={onEdit} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} style={styles.feedCardFlat} variant="full" workout={workout} />
+        <WorkoutSummaryCard menuItems={menuItems} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} style={styles.feedCardFlat} variant="full" workout={workout} />
       )}
     </Animated.View>
   );
 }
 
 export function WorkoutSummaryCard({
+  menuItems,
   onDelete,
   onEdit,
   selected = false,
@@ -394,6 +394,7 @@ export function WorkoutSummaryCard({
   variant = "full",
   workout,
 }: {
+  menuItems?: ContentMenuItem[];
   onDelete?: () => void;
   onEdit?: () => void;
   selected?: boolean;
@@ -423,6 +424,9 @@ export function WorkoutSummaryCard({
       ] as const).filter(([, value]) => value > 0)
     : [];
   const reactionTotal = reactionSummary.reduce((sum, [, value]) => sum + value, 0);
+  const resolvedMenuItems = menuItems ?? (onEdit && onDelete
+    ? postMenuItems({ onDelete, onEdit })
+    : []);
   const socialSummary = [
     ...(reactionSummary.length
       ? [{ accessibility: `${reactionTotal} reaction${reactionTotal === 1 ? "" : "s"}`, text: reactionSummary.map(([emoji, value]) => `${emoji} ${value}`).join("   ") }]
@@ -441,7 +445,9 @@ export function WorkoutSummaryCard({
           <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
         {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
-        {onEdit && onDelete ? <PostOptionsMenu onDelete={onDelete} onEdit={onEdit} /> : null}
+        {resolvedMenuItems.length ? (
+          <ContentOptionsMenu accessibilityLabel="Post options" items={resolvedMenuItems} />
+        ) : null}
       </View>
       <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
       {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
@@ -463,10 +469,14 @@ export function CommunityFeed({
   focusOffsetY = 0,
   mode = "full",
   onWorkoutPress,
+  onWorkoutBlock,
   onWorkoutDelete,
   onWorkoutEdit,
+  onWorkoutRemove,
+  onWorkoutReport,
   showCommentCount = false,
   showReactionSummary = false,
+  viewerIsOwner = false,
   viewerUserId,
   viewportHeight,
   workouts,
@@ -476,10 +486,14 @@ export function CommunityFeed({
   focusOffsetY?: number;
   mode?: "preview" | "full";
   onWorkoutPress?: (workout: WorkoutFeedItem) => void;
+  onWorkoutBlock?: (workout: WorkoutFeedItem) => void;
   onWorkoutDelete?: (workout: WorkoutFeedItem) => void;
   onWorkoutEdit?: (workout: WorkoutFeedItem) => void;
+  onWorkoutRemove?: (workout: WorkoutFeedItem) => void;
+  onWorkoutReport?: (workout: WorkoutFeedItem) => void;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
+  viewerIsOwner?: boolean;
   viewerUserId?: string | null;
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
@@ -558,9 +572,17 @@ export function CommunityFeed({
               positions.current.set(workout.id, frame);
               tryRestore();
             }}
+            menuItems={workoutMenuItems({
+              onBlock: onWorkoutBlock,
+              onDelete: onWorkoutDelete,
+              onEdit: onWorkoutEdit,
+              onRemove: onWorkoutRemove,
+              onReport: onWorkoutReport,
+              viewerIsOwner,
+              viewerUserId,
+              workout,
+            })}
             onPress={onWorkoutPress ? () => onWorkoutPress(workout) : undefined}
-            onDelete={viewerUserId === workout.userId && onWorkoutDelete ? () => onWorkoutDelete(workout) : undefined}
-            onEdit={viewerUserId === workout.userId && onWorkoutEdit ? () => onWorkoutEdit(workout) : undefined}
             orderedWorkoutIds={orderedWorkoutIds}
             scrollY={scrollY}
             showCommentCount={showCommentCount}
@@ -598,10 +620,9 @@ export function CommunityFeed({
 function CommunityFeedItem({
   focalY,
   itemHeights,
+  menuItems,
   onItemFrame,
   onPress,
-  onDelete,
-  onEdit,
   orderedWorkoutIds,
   scrollY,
   showCommentCount,
@@ -612,10 +633,9 @@ function CommunityFeedItem({
 }: {
   focalY: number;
   itemHeights: SharedValue<Record<string, number>>;
+  menuItems?: ContentMenuItem[];
   onItemFrame?: (frame: { height: number; y: number }) => void;
   onPress?: () => void;
-  onDelete?: () => void;
-  onEdit?: () => void;
   orderedWorkoutIds: string[];
   scrollY: SharedValue<number>;
   showCommentCount: boolean;
@@ -657,9 +677,8 @@ function CommunityFeedItem({
       <WorkoutCard
         focalY={focalY}
         layoutY={layoutY}
+        menuItems={menuItems}
         onPress={onPress}
-        onDelete={onDelete}
-        onEdit={onEdit}
         scrollY={scrollY}
         showCommentCount={showCommentCount}
         showReactionSummary={showReactionSummary}
@@ -671,7 +690,13 @@ function CommunityFeedItem({
   );
 }
 
-function PostOptionsMenu({ onDelete, onEdit }: { onDelete: () => void; onEdit: () => void }) {
+export function ContentOptionsMenu({
+  accessibilityLabel,
+  items,
+}: {
+  accessibilityLabel: string;
+  items: ContentMenuItem[];
+}) {
   const anchor = useRef<ViewInstance>(null);
   const insets = useSafeAreaInsets();
   const { width: viewportWidth } = useWindowDimensions();
@@ -695,7 +720,7 @@ function PostOptionsMenu({ onDelete, onEdit }: { onDelete: () => void; onEdit: (
     <>
       <View ref={anchor}>
         <Pressable
-          accessibilityLabel="Post options"
+          accessibilityLabel={accessibilityLabel}
           accessibilityRole="button"
           onPress={(event) => { event.stopPropagation(); open(); }}
           style={(state) => [
@@ -710,8 +735,15 @@ function PostOptionsMenu({ onDelete, onEdit }: { onDelete: () => void; onEdit: (
       <Modal animationType="fade" onRequestClose={() => setVisible(false)} transparent visible={visible}>
         <Pressable accessibilityLabel="Close post options" onPress={() => setVisible(false)} style={styles.postMenuBackdrop}>
           <Menu style={[styles.postMenu, position]}>
-            <MenuItem icon="pencil" label="Edit" onPress={() => choose(onEdit)} />
-            <MenuItem danger icon="trash" label="Delete" onPress={() => choose(onDelete)} />
+            {items.map((item) => (
+              <MenuItem
+                danger={item.danger}
+                icon={item.icon}
+                key={item.label}
+                label={item.label}
+                onPress={() => choose(item.onPress)}
+              />
+            ))}
           </Menu>
         </Pressable>
       </Modal>

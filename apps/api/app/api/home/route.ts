@@ -83,6 +83,7 @@ export async function GET(request: Request) {
       ? ((await timing.measure("db", () =>
           listRecentWorkoutsForAuthorizedGroup({
             groupId: selectedGroup.id,
+            viewerUserId: identity.id,
             limit: 20,
             includeReactionCounts: view === "community",
             includeCommentCounts: view === "community",

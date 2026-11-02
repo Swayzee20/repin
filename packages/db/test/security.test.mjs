@@ -18,11 +18,13 @@ const appTables = [
   "community_post_comments",
   "community_post_reactions",
   "community_posts",
+  "content_reports",
   "group_members",
   "groups",
   "movements",
   "session_movement_results",
   "set_results",
+  "user_blocks",
   "users",
   "workout_blocks",
   "workout_definitions",
@@ -1119,6 +1121,427 @@ test("account deletion transfers ownership and deletes an empty group", async ()
   }
 });
 
+test("moderation reports, blocks, removal, and blocked feeds", async () => {
+  const testUrl = await recreateDatabase();
+  process.env.DATABASE_URL = testUrl;
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+    const db = await import("../src/index.ts");
+
+    const ada = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Ada" });
+    const byron = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Byron" });
+    const cyrus = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Cyrus" });
+    const dana = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Dana" });
+    const eve = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Eve" });
+    const alpha = await db.createGroup({ ownerId: ada.id, name: "Alpha Crew" });
+    const other = await db.createGroup({ ownerId: eve.id, name: "Other Crew" });
+    await db.joinGroup({ userId: byron.id, groupId: alpha.id, inviteCode: alpha.inviteCode });
+    await db.joinGroup({ userId: cyrus.id, groupId: alpha.id, inviteCode: alpha.inviteCode });
+
+    const adaPost = await loggedWorkout(db, ada, alpha.id, "Ada workout");
+    const byronPost = await loggedWorkout(db, byron, alpha.id, "Byron workout");
+    const cyrusPost = await loggedWorkout(db, cyrus, alpha.id, "Cyrus workout");
+    assert.ok(adaPost && byronPost && cyrusPost);
+    const byronOnAda = await db.createCommunityPostCommentForMember({
+      userId: byron.id,
+      displayName: byron.displayName,
+      groupId: alpha.id,
+      workoutSessionId: adaPost.id,
+      text: "Nice work",
+    });
+    const adaOnByron = await db.createCommunityPostCommentForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: alpha.id,
+      workoutSessionId: byronPost.id,
+      text: "Thanks",
+    });
+    const cyrusOnByron = await db.createCommunityPostCommentForMember({
+      userId: cyrus.id,
+      displayName: cyrus.displayName,
+      groupId: alpha.id,
+      workoutSessionId: byronPost.id,
+      text: "Hello",
+    });
+    assert.ok(byronOnAda && adaOnByron && cyrusOnByron);
+    assert.equal((await db.setCommunityPostReactionForMember({
+      userId: byron.id,
+      groupId: alpha.id,
+      workoutSessionId: adaPost.id,
+      reactionType: "fire",
+    }))?.counts.fire, 1);
+    assert.equal((await db.setCommunityPostReactionForMember({
+      userId: ada.id,
+      groupId: alpha.id,
+      workoutSessionId: byronPost.id,
+      reactionType: "fire",
+    }))?.counts.fire, 1);
+
+    const membersBefore = await countRows(client, "group_members", "group_id = $1", [alpha.id]);
+    const blocked = await db.blockUserForMember({ blockerId: cyrus.id, blockedId: ada.id });
+    assert.deepEqual(blocked, { ok: true });
+    assert.equal(
+      await countRows(client, "group_members", "group_id = $1", [alpha.id]),
+      membersBefore,
+    );
+    assert.equal(
+      (await db.getGroupForMember({ groupId: alpha.id, userId: ada.id }))?.id,
+      alpha.id,
+    );
+    assert.deepEqual(
+      await db.blockUserForMember({ blockerId: cyrus.id, blockedId: cyrus.id }),
+      { ok: false, reason: "self" },
+    );
+    assert.deepEqual(
+      await db.blockUserForMember({ blockerId: ada.id, blockedId: dana.id }),
+      { ok: false, reason: "not_found" },
+    );
+
+    const cyrusFeed = await db.listRecentWorkoutsForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      includeReactionCounts: true,
+      includeCommentCounts: true,
+    });
+    assert.ok(cyrusFeed);
+    assert.equal(cyrusFeed.some((post) => post.id === adaPost.id), false);
+    const byronVisible = cyrusFeed.find((post) => post.id === byronPost.id);
+    assert.ok(byronVisible);
+    assert.equal(byronVisible.reactionCounts?.fire, 0);
+    assert.equal(byronVisible.commentCount, 1);
+    assert.equal(await db.getCommunityWorkoutDetailForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      workoutSessionId: adaPost.id,
+    }), null);
+    assert.equal(await db.listCommunityPostCommentsForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      workoutSessionId: adaPost.id,
+    }), null);
+    const byronCommentsForCyrus = await db.listCommunityPostCommentsForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      workoutSessionId: byronPost.id,
+    });
+    assert.deepEqual(byronCommentsForCyrus?.map((comment) => comment.id), [cyrusOnByron.id]);
+    const authorized = await db.listRecentWorkoutsForAuthorizedGroup({
+      groupId: alpha.id,
+      viewerUserId: cyrus.id,
+      includeReactionCounts: true,
+      includeCommentCounts: true,
+    });
+    assert.equal(authorized?.some((post) => post.userId === ada.id), false);
+
+    const byronFeed = await db.listRecentWorkoutsForMember({
+      userId: byron.id,
+      groupId: alpha.id,
+      includeReactionCounts: true,
+      includeCommentCounts: true,
+    });
+    assert.equal(byronFeed?.find((post) => post.id === adaPost.id)?.reactionCounts?.fire, 1);
+    assert.notEqual(await db.getCommunityWorkoutDetailForMember({
+      userId: byron.id,
+      groupId: alpha.id,
+      workoutSessionId: adaPost.id,
+    }), null);
+    const blockedList = await db.listBlockedUsersForMember(cyrus.id);
+    assert.deepEqual(blockedList.map((person) => person.userId), [ada.id]);
+    assert.deepEqual(await db.listBlockedUsersForMember(ada.id), []);
+
+    assert.deepEqual(await db.unblockUserForMember({ blockerId: cyrus.id, blockedId: ada.id }), { ok: true });
+    const restored = await db.listRecentWorkoutsForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      includeReactionCounts: true,
+    });
+    assert.equal(restored?.find((post) => post.id === byronPost.id)?.reactionCounts?.fire, 1);
+    assert.ok(restored?.some((post) => post.id === adaPost.id));
+
+    const ownReport = await db.createContentReportForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      targetType: "post",
+      workoutSessionId: cyrusPost.id,
+      reason: "spam",
+    });
+    assert.deepEqual(ownReport, { ok: false, reason: "own_content" });
+    const outsiderReport = await db.createContentReportForMember({
+      userId: dana.id,
+      groupId: alpha.id,
+      targetType: "post",
+      workoutSessionId: adaPost.id,
+      reason: "harassment",
+    });
+    assert.deepEqual(outsiderReport, { ok: false, reason: "not_member" });
+    const wrongGroup = await db.createContentReportForMember({
+      userId: cyrus.id,
+      groupId: other.id,
+      targetType: "post",
+      workoutSessionId: adaPost.id,
+      reason: "inappropriate",
+    });
+    assert.deepEqual(wrongGroup, { ok: false, reason: "not_member" });
+    const missing = await db.createContentReportForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      targetType: "comment",
+      commentId: crypto.randomUUID(),
+      reason: "other",
+      note: "  not in this group  ",
+    });
+    assert.deepEqual(missing, { ok: false, reason: "not_found" });
+
+    const postReport = await db.createContentReportForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      targetType: "post",
+      workoutSessionId: byronPost.id,
+      reason: "spam",
+      note: "  selling something  ",
+    });
+    assert.equal(postReport.ok, true);
+    const duplicate = await db.createContentReportForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      targetType: "post",
+      workoutSessionId: byronPost.id,
+      reason: "other",
+    });
+    assert.equal(duplicate.ok, true);
+    if (postReport.ok && duplicate.ok) assert.equal(duplicate.report.id, postReport.report.id);
+    assert.equal(await countRows(client, "content_reports", "reporter_id = $1 and target_type = 'post'", [cyrus.id]), 1);
+    const commentReport = await db.createContentReportForMember({
+      userId: byron.id,
+      groupId: alpha.id,
+      targetType: "comment",
+      commentId: cyrusOnByron.id,
+      reason: "harassment",
+    });
+    assert.equal(commentReport.ok, true);
+
+    const hiddenAfterReport = await db.listRecentWorkoutsForMember({ userId: cyrus.id, groupId: alpha.id });
+    assert.equal(hiddenAfterReport?.some((post) => post.id === byronPost.id), false);
+    assert.ok((await db.listRecentWorkoutsForMember({ userId: ada.id, groupId: alpha.id }))
+      ?.some((post) => post.id === byronPost.id));
+    const commentsForByron = await db.listCommunityPostCommentsForMember({
+      userId: byron.id,
+      groupId: alpha.id,
+      workoutSessionId: byronPost.id,
+    });
+    assert.equal(commentsForByron?.some((comment) => comment.id === cyrusOnByron.id), false);
+    assert.ok((await db.listCommunityPostCommentsForMember({
+      userId: ada.id,
+      groupId: alpha.id,
+      workoutSessionId: byronPost.id,
+    }))?.some((comment) => comment.id === cyrusOnByron.id));
+
+    assert.equal(await db.listOpenReportsForGroupOwner({ userId: byron.id, groupId: alpha.id }), null);
+    assert.equal(await db.listOpenReportsForGroupOwner({ userId: eve.id, groupId: alpha.id }), null);
+    assert.equal(await db.listOpenReportsForGroupOwner({ userId: cyrus.id, groupId: alpha.id }), null);
+    const openReports = await db.listOpenReportsForGroupOwner({ userId: ada.id, groupId: alpha.id });
+    assert.equal(openReports?.length, 2);
+    assert.equal(openReports?.find((report) => report.targetType === "post")?.excerpt, "Byron workout");
+    assert.equal(openReports?.find((report) => report.targetType === "post")?.note, "selling something");
+    assert.equal(openReports?.find((report) => report.targetType === "comment")?.authorDisplayName, "Cyrus");
+    assert.equal(await db.dismissContentReportForGroupOwner({
+      userId: byron.id,
+      groupId: alpha.id,
+      reportId: postReport.ok ? postReport.report.id : crypto.randomUUID(),
+    }), null);
+    const dismissed = await db.dismissContentReportForGroupOwner({
+      userId: ada.id,
+      groupId: alpha.id,
+      reportId: postReport.ok ? postReport.report.id : "",
+    });
+    assert.equal(dismissed?.status, "dismissed");
+    assert.equal((await db.listRecentWorkoutsForMember({ userId: cyrus.id, groupId: alpha.id }))
+      ?.some((post) => post.id === byronPost.id), false);
+    assert.equal((await db.listOpenReportsForGroupOwner({ userId: ada.id, groupId: alpha.id }))?.length, 1);
+
+    assert.equal(await db.deleteCommunityCommentForMember({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      commentId: adaOnByron.id,
+    }), null);
+    assert.deepEqual(await db.deleteCommunityCommentForMember({
+      userId: ada.id,
+      groupId: alpha.id,
+      commentId: adaOnByron.id,
+    }), { deletedBy: "author" });
+    assert.equal(await countRows(client, "community_post_comments", "id = $1", [adaOnByron.id]), 0);
+    assert.deepEqual(await db.deleteCommunityCommentForMember({
+      userId: ada.id,
+      groupId: alpha.id,
+      commentId: cyrusOnByron.id,
+    }), { deletedBy: "owner" });
+    assert.equal(
+      await scalar(client, "postgres", null, "select status from content_reports where id = $1", [
+        commentReport.ok ? commentReport.report.id : null,
+      ]),
+      "removed",
+    );
+
+    assert.equal(await db.removeCommunityPostForGroupOwner({
+      userId: byron.id,
+      groupId: alpha.id,
+      workoutSessionId: adaPost.id,
+    }), null);
+    assert.equal(await db.deleteCommunityPostForOwner({
+      userId: cyrus.id,
+      groupId: alpha.id,
+      workoutSessionId: adaPost.id,
+      deleteWorkout: false,
+    }), null);
+    const removedPost = await db.removeCommunityPostForGroupOwner({
+      userId: ada.id,
+      groupId: alpha.id,
+      workoutSessionId: byronPost.id,
+    });
+    assert.deepEqual(removedPost, { photoPaths: [] });
+    assert.equal(await countRows(client, "community_posts", "workout_session_id = $1", [byronPost.id]), 0);
+    assert.equal(await countRows(client, "workout_sessions", "id = $1", [byronPost.id]), 1);
+    assert.equal((await db.listRecentWorkoutsForMember({ userId: ada.id, groupId: alpha.id }))
+      ?.some((post) => post.id === byronPost.id), false);
+    assert.equal((await db.listOpenReportsForGroupOwner({ userId: ada.id, groupId: alpha.id }))?.length, 0);
+
+    const freshPost = await loggedWorkout(db, byron, alpha.id, "Still mine");
+    assert.ok(freshPost);
+    assert.ok(await db.deleteCommunityPostForOwner({
+      userId: byron.id,
+      groupId: alpha.id,
+      workoutSessionId: freshPost.id,
+      deleteWorkout: false,
+    }));
+    assert.equal(await countRows(client, "community_posts", "workout_session_id = $1", [freshPost.id]), 0);
+
+    const adaPostId = await scalar(
+      client,
+      "postgres",
+      null,
+      "select id from community_posts where workout_session_id = $1",
+      [adaPost.id],
+    );
+    const inserted = await queryAs(
+      client,
+      "authenticated",
+      cyrus.id,
+      `insert into content_reports (reporter_id, group_id, target_type, target_id, reason)
+       values ($1, $2, 'post', $3, 'spam')`,
+      [cyrus.id, alpha.id, adaPostId],
+    );
+    assert.equal(inserted.rowCount, 1);
+    await expectDenied(
+      client,
+      "authenticated",
+      cyrus.id,
+      `insert into content_reports (reporter_id, group_id, target_type, target_id, reason)
+       values ($1, $2, 'post', $3, 'spam')`,
+      [cyrus.id, alpha.id, await scalar(
+        client,
+        "postgres",
+        null,
+        "select id from community_posts where workout_session_id = $1",
+        [cyrusPost.id],
+      )],
+      /row-level security/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      dana.id,
+      `insert into content_reports (reporter_id, group_id, target_type, target_id, reason)
+       values ($1, $2, 'post', $3, 'other')`,
+      [dana.id, alpha.id, adaPostId],
+      /row-level security/i,
+    );
+    assert.deepEqual(
+      await idsAs(client, "authenticated", cyrus.id, "select id from content_reports"),
+      [],
+    );
+    assert.deepEqual(
+      await idsAs(client, "authenticated", eve.id, "select id from content_reports where group_id = $1", [alpha.id]),
+      [],
+    );
+    const ownerVisible = await idsAs(
+      client,
+      "authenticated",
+      ada.id,
+      "select id from content_reports where group_id = $1",
+      [alpha.id],
+    );
+    assert.ok(ownerVisible.length >= 1);
+    const memberUpdate = await queryAs(
+      client,
+      "authenticated",
+      cyrus.id,
+      "update content_reports set status = 'dismissed' where group_id = $1",
+      [alpha.id],
+    );
+    assert.equal(memberUpdate.rowCount, 0);
+
+    await queryAs(
+      client,
+      "authenticated",
+      cyrus.id,
+      "insert into user_blocks (blocker_id, blocked_id) values ($1, $2)",
+      [cyrus.id, byron.id],
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      cyrus.id,
+      "insert into user_blocks (blocker_id, blocked_id) values ($1, $1)",
+      [cyrus.id],
+      /row-level security|check constraint/i,
+    );
+    assert.deepEqual(
+      await columnAs(
+        client,
+        "authenticated",
+        ada.id,
+        "select blocked_id from user_blocks where blocker_id = $1",
+        [cyrus.id],
+        "blocked_id",
+      ),
+      [],
+    );
+    assert.deepEqual(
+      await columnAs(
+        client,
+        "authenticated",
+        cyrus.id,
+        "select blocked_id from user_blocks",
+        [],
+        "blocked_id",
+      ),
+      [byron.id],
+    );
+    const foreignUnblock = await queryAs(
+      client,
+      "authenticated",
+      ada.id,
+      "delete from user_blocks where blocker_id = $1",
+      [cyrus.id],
+    );
+    assert.equal(foreignUnblock.rowCount, 0);
+    assert.equal(await countRows(client, "user_blocks", "blocker_id = $1 and blocked_id = $2", [cyrus.id, byron.id]), 1);
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
 async function loggedWorkout(db, user, groupId, title) {
   return db.createWorkoutForMember({
     userId: user.id,
@@ -1237,6 +1660,7 @@ async function applySupabaseMigrations(client) {
   assert.deepEqual(files, [
     "20260822000000_workout_photos.sql",
     "20261030140000_enable_row_level_security.sql",
+    "20261102160000_moderation.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");

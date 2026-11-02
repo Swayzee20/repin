@@ -97,6 +97,48 @@ export type WorkoutType = (typeof workoutTypes)[number];
 
 export const communityReactionTypes = ["fire", "strong", "clap"] as const;
 
+export const contentReportTargetTypes = ["post", "comment"] as const;
+export const contentReportReasons = [
+  "spam",
+  "harassment",
+  "inappropriate",
+  "other",
+] as const;
+export const contentReportReasonLabels: Record<
+  (typeof contentReportReasons)[number],
+  string
+> = {
+  spam: "Spam",
+  harassment: "Harassment or hate",
+  inappropriate: "Inappropriate content",
+  other: "Other",
+};
+
+export type ContentReportTargetType = (typeof contentReportTargetTypes)[number];
+export type ContentReportReason = (typeof contentReportReasons)[number];
+
+export interface ContentReportSummary {
+  id: string;
+  targetType: ContentReportTargetType;
+  targetId: string;
+  workoutSessionId: string | null;
+  reason: ContentReportReason;
+  note: string | null;
+  createdAt: string;
+  excerpt: string;
+  authorDisplayName: string;
+  reporterDisplayName: string;
+}
+
+export interface BlockedUserSummary {
+  userId: string;
+  displayName: string;
+  blockedAt: string;
+}
+
+export const reportConfirmationMessage =
+  "Thanks, we got your report. This is hidden for you.";
+
 export type CommunityReactionType = (typeof communityReactionTypes)[number];
 
 export type CommunityReactionCounts = Record<CommunityReactionType, number>;
@@ -305,6 +347,7 @@ export interface WorkoutDetailSegment {
 
 export interface CommunityWorkoutDetail extends WorkoutFeedItem {
   communityPostId: string;
+  viewerRole?: GroupRole;
   workoutSubtype: WorkoutSubtype | null;
   metrics: WorkoutDetailMetric[];
   movements: WorkoutDetailMovement[];

@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
+import { termsAcceptanceSlot } from "../lib/terms-acceptance";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { AuthScreen, AuthSuccessMark, FormError, usePaneFieldFocus } from "../ui/auth-screen";
 import { Button, StateCard, TextField } from "../ui/components";
@@ -90,7 +91,7 @@ export default function SignupScreen() {
       <Text style={styles.title}>Create your account</Text>
       <Text style={styles.intro}>Set up your profile, then find your community.</Text>
 
-      <View style={styles.form}>
+      <View style={styles.form} testID={termsAcceptanceSlot}>
         <View style={styles.nameRow}>
           <View style={styles.nameField}>
             <TextField
@@ -152,6 +153,7 @@ export default function SignupScreen() {
           {...fieldProps("confirm")}
         />
         {error ? <FormError message={error} /> : null}
+        {/* termsAcceptanceSlot: agreement to terms with zero tolerance for abuse goes here, before Create Account. Legal copy is a separate task. */}
         <Button
           disabled={!firstName || !lastName || !email || !password || !confirmPassword}
           disabledReason={!firstName || !lastName ? "Enter your first and last name." : !email ? "Enter your email." : "Enter and confirm a password."}

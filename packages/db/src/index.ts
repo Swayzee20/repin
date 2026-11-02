@@ -16,60 +16,27 @@ import {
   ne,
   sql,
 } from "drizzle-orm";
-import { drizzle } from "drizzle-orm/node-postgres";
-import { Pool } from "pg";
 
+import {
+  checkDatabaseConnection,
+  getDatabase,
+  type DatabaseTransaction,
+} from "./connection";
+import {
+  closeOpenReportsForComment,
+  closeOpenReportsForCommunityPost,
+  notBlockedAuthor,
+  notReportedContent,
+  visibleCommentCountSql,
+  visibleReactionCountSql,
+} from "./moderation";
 import * as schema from "./schema";
 import {
   formatWorkoutResultSummary,
   type WorkoutResultMovement,
 } from "./workout-result-summary";
 
-type Database = ReturnType<typeof drizzle<typeof schema>>;
-type DatabaseTransaction = Parameters<Parameters<Database["transaction"]>[0]>[0];
-
-interface DatabaseGlobals {
-  repinDatabase?: Database;
-  repinPool?: Pool;
-}
-
-const databaseGlobals = globalThis as typeof globalThis & DatabaseGlobals;
-
-function getDatabaseUrl() {
-  const databaseUrl = process.env.DATABASE_URL;
-
-  if (!databaseUrl) {
-    throw new Error("DATABASE_URL is not configured");
-  }
-
-  return databaseUrl;
-}
-
-export function getDatabase() {
-  if (!databaseGlobals.repinPool) {
-    const isVercelRuntime = Boolean(process.env.VERCEL);
-    databaseGlobals.repinPool = new Pool({
-      allowExitOnIdle: isVercelRuntime,
-      connectionString: getDatabaseUrl(),
-      // A Vercel instance must not reserve most of Supabase's session-pool
-      // capacity. Queries still share this singleton and queue briefly when a
-      // request performs independent reads concurrently.
-      max: isVercelRuntime ? 1 : 10,
-      connectionTimeoutMillis: 5_000,
-      idleTimeoutMillis: isVercelRuntime ? 5_000 : 30_000,
-    });
-  }
-
-  databaseGlobals.repinDatabase ??= drizzle(databaseGlobals.repinPool, {
-    schema,
-  });
-
-  return databaseGlobals.repinDatabase;
-}
-
-export async function checkDatabaseConnection() {
-  await getDatabase().execute(sql`select 1`);
-}
+export { checkDatabaseConnection, getDatabase };
 
 export async function getOrCreateUser(input: {
   id: string;
@@ -1118,6 +1085,13 @@ export async function deleteCommunityPostForOwner(input: {
         ))
         .limit(1);
       if (foreignPost) throw new Error("Workout session has an inconsistent post owner");
+      const sessionPosts = await transaction
+        .select({ id: schema.communityPosts.id })
+        .from(schema.communityPosts)
+        .where(eq(schema.communityPosts.workoutSessionId, owned.sessionId));
+      for (const post of sessionPosts) {
+        await closeOpenReportsForCommunityPost(transaction, post.id, input.userId);
+      }
       await transaction.delete(schema.workoutSessions).where(
         and(
           eq(schema.workoutSessions.id, owned.sessionId),
@@ -1125,6 +1099,7 @@ export async function deleteCommunityPostForOwner(input: {
         ),
       );
     } else {
+      await closeOpenReportsForCommunityPost(transaction, owned.postId, input.userId);
       await transaction.delete(schema.communityPosts).where(
         and(
           eq(schema.communityPosts.id, owned.postId),
@@ -1223,6 +1198,31 @@ async function releaseOwnedGroups(
 }
 
 async function deleteRowsOwnedByUser(transaction: DatabaseTransaction, userId: string) {
+  const [ownedPosts, ownedComments] = await Promise.all([
+    transaction
+      .select({ id: schema.communityPosts.id })
+      .from(schema.communityPosts)
+      .where(eq(schema.communityPosts.userId, userId)),
+    transaction
+      .select({ id: schema.communityPostComments.id })
+      .from(schema.communityPostComments)
+      .where(eq(schema.communityPostComments.userId, userId)),
+  ]);
+  for (const post of ownedPosts) {
+    await closeOpenReportsForCommunityPost(transaction, post.id, userId);
+  }
+  for (const comment of ownedComments) {
+    await closeOpenReportsForComment(transaction, comment.id, userId);
+  }
+  await transaction
+    .delete(schema.userBlocks)
+    .where(eq(schema.userBlocks.blockerId, userId));
+  await transaction
+    .delete(schema.userBlocks)
+    .where(eq(schema.userBlocks.blockedId, userId));
+  await transaction
+    .delete(schema.contentReports)
+    .where(eq(schema.contentReports.reporterId, userId));
   await transaction
     .delete(schema.communityPostReactions)
     .where(eq(schema.communityPostReactions.userId, userId));
@@ -1257,13 +1257,23 @@ export async function listRecentWorkoutsForMember(input: {
 
 export async function listRecentWorkoutsForAuthorizedGroup(input: {
   groupId: string;
+  viewerUserId: string;
   limit?: number;
   includeReactionCounts?: boolean;
   includeCommentCounts?: boolean;
   occurredAtStart?: Date;
   occurredAtEnd?: Date;
 }) {
-  return listRecentWorkouts({ ...input, verifyMembership: false });
+  return listRecentWorkouts({
+    userId: input.viewerUserId,
+    groupId: input.groupId,
+    limit: input.limit,
+    includeReactionCounts: input.includeReactionCounts,
+    includeCommentCounts: input.includeCommentCounts,
+    occurredAtStart: input.occurredAtStart,
+    occurredAtEnd: input.occurredAtEnd,
+    verifyMembership: false,
+  });
 }
 
 async function listRecentWorkouts(input: {
@@ -1312,35 +1322,16 @@ async function listRecentWorkouts(input: {
       updatedAt: schema.communityPosts.updatedAt,
       displayName: schema.users.displayName,
       fireReactionCount: input.includeReactionCounts
-        ? sql<number>`(
-            select count(*)::int
-            from ${schema.communityPostReactions}
-            where ${schema.communityPostReactions.communityPostId} = ${schema.communityPosts.id}
-              and ${schema.communityPostReactions.reactionType} = 'fire'
-          )`.mapWith(Number)
+        ? visibleReactionCountSql(input.userId, "fire")
         : sql<number>`0`.mapWith(Number),
       strongReactionCount: input.includeReactionCounts
-        ? sql<number>`(
-            select count(*)::int
-            from ${schema.communityPostReactions}
-            where ${schema.communityPostReactions.communityPostId} = ${schema.communityPosts.id}
-              and ${schema.communityPostReactions.reactionType} = 'strong'
-          )`.mapWith(Number)
+        ? visibleReactionCountSql(input.userId, "strong")
         : sql<number>`0`.mapWith(Number),
       clapReactionCount: input.includeReactionCounts
-        ? sql<number>`(
-            select count(*)::int
-            from ${schema.communityPostReactions}
-            where ${schema.communityPostReactions.communityPostId} = ${schema.communityPosts.id}
-              and ${schema.communityPostReactions.reactionType} = 'clap'
-          )`.mapWith(Number)
+        ? visibleReactionCountSql(input.userId, "clap")
         : sql<number>`0`.mapWith(Number),
       commentCount: input.includeCommentCounts
-        ? sql<number>`(
-            select count(*)::int
-            from ${schema.communityPostComments}
-            where ${schema.communityPostComments.communityPostId} = ${schema.communityPosts.id}
-          )`.mapWith(Number)
+        ? visibleCommentCountSql(input.userId)
         : sql<number>`0`.mapWith(Number),
     })
     .from(schema.communityPosts)
@@ -1357,6 +1348,8 @@ async function listRecentWorkouts(input: {
     )
     .where(and(
       eq(schema.communityPosts.groupId, input.groupId),
+      input.userId ? notBlockedAuthor(input.userId, schema.communityPosts.userId) : undefined,
+      input.userId ? notReportedContent(input.userId, "post", schema.communityPosts.id) : undefined,
       input.occurredAtStart ? gte(schema.workoutSessions.occurredAt, input.occurredAtStart) : undefined,
       input.occurredAtEnd ? lt(schema.workoutSessions.occurredAt, input.occurredAtEnd) : undefined,
     ))
@@ -1567,6 +1560,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
       createdAt: schema.communityPosts.createdAt,
       updatedAt: schema.communityPosts.updatedAt,
       displayName: schema.users.displayName,
+      viewerRole: schema.groupMembers.role,
     })
     .from(schema.communityPosts)
     .innerJoin(
@@ -1588,6 +1582,8 @@ export async function getCommunityWorkoutDetailForMember(input: {
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        notBlockedAuthor(input.userId, schema.communityPosts.userId),
+        notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
     )
     .limit(1);
@@ -1676,7 +1672,10 @@ export async function getCommunityWorkoutDetailForMember(input: {
         value: count(),
       })
       .from(schema.communityPostReactions)
-      .where(eq(schema.communityPostReactions.communityPostId, post.communityPostId))
+      .where(and(
+        eq(schema.communityPostReactions.communityPostId, post.communityPostId),
+        notBlockedAuthor(input.userId, schema.communityPostReactions.userId),
+      ))
       .groupBy(schema.communityPostReactions.reactionType),
     database
       .select({ reactionType: schema.communityPostReactions.reactionType })
@@ -1806,7 +1805,7 @@ export async function setCommunityPostReactionForMember(input: {
       })
       .returning({ reactionType: schema.communityPostReactions.reactionType });
 
-    const countRows = await getReactionCounts(transaction, post.id);
+    const countRows = await getReactionCounts(transaction, post.id, input.userId);
     return buildReactionSummary(
       countRows,
       reaction?.reactionType ?? input.reactionType,
@@ -1832,7 +1831,7 @@ export async function removeCommunityPostReactionForMember(input: {
         ),
       );
 
-    const countRows = await getReactionCounts(transaction, post.id);
+    const countRows = await getReactionCounts(transaction, post.id, input.userId);
     return buildReactionSummary(countRows, null);
   });
 }
@@ -1857,6 +1856,8 @@ export async function listCommunityPostCommentsForMember(input: {
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        notBlockedAuthor(input.userId, schema.communityPosts.userId),
+        notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
     )
     .limit(1);
@@ -1877,7 +1878,11 @@ export async function listCommunityPostCommentsForMember(input: {
       schema.users,
       eq(schema.communityPostComments.userId, schema.users.id),
     )
-    .where(eq(schema.communityPostComments.communityPostId, post.id))
+    .where(and(
+      eq(schema.communityPostComments.communityPostId, post.id),
+      notBlockedAuthor(input.userId, schema.communityPostComments.userId),
+      notReportedContent(input.userId, "comment", schema.communityPostComments.id),
+    ))
     .orderBy(
       asc(schema.communityPostComments.createdAt),
       asc(schema.communityPostComments.id),
@@ -1937,6 +1942,8 @@ async function getAuthorizedCommunityPost(
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        notBlockedAuthor(input.userId, schema.communityPosts.userId),
+        notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
     )
     .limit(1);
@@ -1947,6 +1954,7 @@ async function getAuthorizedCommunityPost(
 async function getReactionCounts(
   transaction: DatabaseTransaction,
   communityPostId: string,
+  viewerId: string,
 ) {
   return transaction
     .select({
@@ -1954,7 +1962,10 @@ async function getReactionCounts(
       value: count(),
     })
     .from(schema.communityPostReactions)
-    .where(eq(schema.communityPostReactions.communityPostId, communityPostId))
+    .where(and(
+      eq(schema.communityPostReactions.communityPostId, communityPostId),
+      notBlockedAuthor(viewerId, schema.communityPostReactions.userId),
+    ))
     .groupBy(schema.communityPostReactions.reactionType);
 }
 
@@ -2057,15 +2068,28 @@ export async function getUserWorkoutSnapshot(input: {
 }
 
 export {
+  blockUserForMember,
+  createContentReportForMember,
+  deleteCommunityCommentForMember,
+  dismissContentReportForGroupOwner,
+  listBlockedUsersForMember,
+  listOpenReportsForGroupOwner,
+  removeCommunityPostForGroupOwner,
+  unblockUserForMember,
+} from "./moderation";
+
+export {
   blockMovements,
   communityPostComments,
   communityPostReactions,
   communityPosts,
+  contentReports,
   groupMembers,
   groups,
   movements,
   sessionMovementResults,
   setResults,
+  userBlocks,
   users,
   workouts,
   workoutBlocks,

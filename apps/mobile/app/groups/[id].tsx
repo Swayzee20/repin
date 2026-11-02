@@ -7,7 +7,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { fetchGroupBoard } from "../../lib/group-board";
+import { useAuthSession } from "../../lib/use-auth-session";
 import { Button, Card, CommunityFeed, LoadingState, SectionHeader, StateCard } from "../../ui/components";
+import { useModeration } from "../../ui/moderation";
 import { Icon } from "../../ui/icons";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
@@ -20,6 +22,7 @@ const publicWebUrl = configuredPublicWebUrl.startsWith("https://")
 
 export default function GroupDetailScreen() {
   const router = useRouter();
+  const { session } = useAuthSession();
   const { mode } = useLayoutMode();
   const twoPane = mode === "twoPane";
   const params = useLocalSearchParams<{ id?: string | string[] }>();
@@ -83,6 +86,10 @@ export default function GroupDetailScreen() {
     router.push(`./${group.id}/log-workout`);
   }, [group, router]);
 
+  const moderation = useModeration({
+    onPostHidden: (sessionId) => setWorkouts((current) => current.filter((workout) => workout.id !== sessionId)),
+    onUserBlocked: (userId) => setWorkouts((current) => current.filter((workout) => workout.userId !== userId)),
+  });
   const feedFillsPane = Boolean(group && workouts.length > 0 && twoPane);
 
   return (
@@ -128,30 +135,58 @@ export default function GroupDetailScreen() {
                     ) : null}
                   </Card>
                 ) : null}
+                {group.role === "owner" ? (
+                  <View style={styles.reportAction}>
+                    <Button onPress={() => router.push(`/groups/${group.id}/reports`)} variant="secondary">
+                      Review reports
+                    </Button>
+                  </View>
+                ) : null}
               </>
             ) : null}
           </View>
         )}
         right={group ? (
-          <GroupBoard feedFillsPane={feedFillsPane} onLog={openLog} stacked={!twoPane} workouts={workouts} />
+          <GroupBoard
+            feedFillsPane={feedFillsPane}
+            onBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName)}
+            onRemove={(workout) => moderation.askRemovePost(group.id, workout.id)}
+            onReport={(workout) => moderation.askReportPost(group.id, workout.id)}
+            onLog={openLog}
+            stacked={!twoPane}
+            viewerIsOwner={group.role === "owner"}
+            viewerUserId={session?.user.id ?? null}
+            workouts={workouts}
+          />
         ) : (
           <View />
         )}
         scrollableRight={!feedFillsPane}
       />
+      {moderation.ui}
     </SafeAreaView>
   );
 }
 
 function GroupBoard({
   feedFillsPane,
+  onBlock,
   onLog,
+  onRemove,
+  onReport,
   stacked,
+  viewerIsOwner,
+  viewerUserId,
   workouts,
 }: {
   feedFillsPane: boolean;
+  onBlock: (workout: WorkoutFeedItem) => void;
   onLog: () => void;
+  onRemove: (workout: WorkoutFeedItem) => void;
+  onReport: (workout: WorkoutFeedItem) => void;
   stacked: boolean;
+  viewerIsOwner: boolean;
+  viewerUserId: string | null;
   workouts: WorkoutFeedItem[];
 }) {
   const [feedHeight, setFeedHeight] = useState(0);
@@ -183,7 +218,15 @@ function GroupBoard({
           }}
           style={feedFillsPane ? styles.feedSlot : undefined}
         >
-          <CommunityFeed viewportHeight={feedFillsPane && feedHeight > 0 ? feedHeight : undefined} workouts={workouts} />
+          <CommunityFeed
+            onWorkoutBlock={onBlock}
+            onWorkoutRemove={onRemove}
+            onWorkoutReport={onReport}
+            viewerIsOwner={viewerIsOwner}
+            viewerUserId={viewerUserId}
+            viewportHeight={feedFillsPane && feedHeight > 0 ? feedHeight : undefined}
+            workouts={workouts}
+          />
         </View>
       )}
     </View>
@@ -221,6 +264,7 @@ const styles = StyleSheet.create({
   inviteAction: { flex: 1 },
   copied: { color: colors.success, ...type.bodySmall },
   inviteError: { color: colors.danger, ...type.bodySmall },
+  reportAction: { marginTop: spacing.lg },
   board: { backgroundColor: colors.surfaceMuted, borderColor: colors.boardBorder, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg },
   boardStack: { overflow: "visible" },
   boardStacked: { marginTop: spacing.xxl },
