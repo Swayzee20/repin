@@ -73,7 +73,7 @@ function enabledButton(variant: ButtonVariant, pressed: boolean): Omit<ButtonApp
         backgroundColor: pressed ? colors.selection : colors.brandTint,
         borderColor: pressed ? colors.selection : colors.brandTint,
         borderWidth: 0,
-        color: colors.brand,
+        color: colors.brandPressed,
       };
     case "danger":
       return {

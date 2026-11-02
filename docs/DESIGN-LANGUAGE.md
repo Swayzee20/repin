@@ -17,7 +17,7 @@
 | D5 | Third tab label **"Profile"** (was "Me") | `app/(tabs)/_layout.tsx` and `_layout.web.tsx`. |
 | D6 | **Merge the duplicate colour names; drop radii 9 and 18** | §2.1 and §2.3 mappings. |
 | D7 | **X close top-left everywhere** (Oct 31, 2026, approved by Josue) | Every modal and sheet (form modals, (+) chooser, pickers) puts its 44pt X top-left, with or without the strip. Replaces "X at the top of the strip" (§3, §5.2, §8, §9). Oct 31, 2026: includes the photo viewer (row 11, §5 fix 3). |
-| D8 | Selected option-tile label #9E3500 app-wide (Nov 2, 2026, approved by Josue) | Every selected `ChoiceTile` label uses `brandPressed` #9E3500 on brandTint (6.40:1, passes AA). Background, 2pt brand border and check are unchanged (§3). |
+| D8 | Selected option-tile labels and tonal button labels #9E3500 app-wide (Nov 2, 2026, approved by Josue; tonal extension approved by Josue Nov 2, 2026) | Every selected `ChoiceTile` label and every tonal button label uses `brandPressed` #9E3500 on brandTint (6.40:1, passes AA; brand was 4.43:1). ChoiceTile background, 2pt brand border and check are unchanged; tonal fill stays brandTint (§3). |
 | — | Locked, unchanged: the strip tab pill (Home / Community / Profile) and the round orange (+) | Every token below is derived from them. |
 
 ## 2. Final tokens (`ui/theme.ts`)
@@ -144,7 +144,7 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
   - loading: spinner + verb ("Logging")
   - disabled: disabledFill / disabledText, plus a helper line saying why (never opacity)
   - secondary: surface + borderStrong
-  - tonal (44pt): brandTint + brand text (inline "Done"; green is never a button)
+  - tonal (44pt): brandTint + `brandPressed` #9E3500 text (D8; inline "Done"; green is never a button)
   - danger: destructive confirm only
 - **ListRow:** 52pt, label left, value + chevron icon right, pressed = `selection`. No ‹/› text glyphs.
 - **Sheets:** top `radii.lg`, grabber, 44pt X, rows ≥48. No text "Cancel" row.

@@ -62,8 +62,15 @@ test("primary, secondary, tonal, and danger buttons follow the variant spec", ()
 
   const tonal = buttonAppearance({ disabled: false, loading: false, pressed: false, variant: "tonal" });
   assert.equal(tonal.backgroundColor, colors.brandTint);
-  assert.equal(tonal.color, colors.brand);
+  assert.equal(tonal.color, colors.brandPressed);
   assert.equal(tonal.height, 44);
+  const tonalPressed = buttonAppearance({ disabled: false, loading: false, pressed: true, variant: "tonal" });
+  assert.equal(tonalPressed.backgroundColor, colors.selection);
+  assert.equal(tonalPressed.color, colors.brandPressed);
+  const tonalLoading = buttonAppearance({ disabled: false, loading: true, pressed: true, variant: "tonal" });
+  assert.equal(tonalLoading.backgroundColor, colors.brandTint);
+  assert.equal(tonalLoading.color, colors.brandPressed);
+  assert.equal(tonalLoading.showSpinner, true);
 
   const danger = buttonAppearance({ disabled: false, loading: false, pressed: false, variant: "danger" });
   assert.equal(danger.backgroundColor, colors.danger);
