@@ -1,3 +1,4 @@
+import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
   AuthenticationError,
   requireApplicationUser,
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
       );
     }
 
-    console.error("Authenticated user request failed", error);
+    reportUnexpectedRouteError("Authenticated user request failed", error);
     return NextResponse.json(
       { error: "User service unavailable" },
       { status: 503, headers: { "Cache-Control": "no-store" } },

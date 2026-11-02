@@ -5,6 +5,7 @@ import {
 } from "@repin/db";
 import { homeQuerySchema } from "@repin/validation";
 
+import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
   AuthenticationError,
   ensureApplicationUser,
@@ -125,7 +126,7 @@ export async function GET(request: Request) {
       );
     }
 
-    console.error("Home data could not be loaded", error);
+    reportUnexpectedRouteError("Home data could not be loaded", error);
     return timedJson(
       timing,
       { error: "Home data could not be loaded" },

@@ -2,6 +2,7 @@ import { searchMovements } from "@repin/db";
 import { movementSearchQuerySchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
   AuthenticationError,
   requireApplicationUser,
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
       );
     }
 
-    console.error("Movements could not be loaded", error);
+    reportUnexpectedRouteError("Movements could not be loaded", error);
     return NextResponse.json(
       { error: "Movements could not be loaded" },
       { status: 503, headers: { "Cache-Control": "no-store" } },

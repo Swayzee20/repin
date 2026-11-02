@@ -3,6 +3,7 @@ import { useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { isSentryTestActionVisible, sendSentryTestError } from "../lib/sentry";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
 import { Button, Card, TextField } from "../ui/components";
@@ -33,6 +34,8 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [testStatus, setTestStatus] = useState<"sent" | "disabled" | null>(null);
+  const showSentryTest = isSentryTestActionVisible();
   const email = session?.user.email?.trim();
   const confirmed = confirmation.trim() === "DELETE";
 
@@ -111,6 +114,21 @@ export default function SettingsScreen() {
                   {accountError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{accountError}</Text> : null}
                   <Button loading={signingOut} loadingLabel="Signing out" onPress={() => void signOut()} variant="secondary">Sign out</Button>
                 </Card>
+                {showSentryTest ? (
+                  <Card style={styles.diagnosticsCard}>
+                    <Text style={styles.diagnosticsTitle}>Diagnostics</Text>
+                    <Text style={styles.diagnosticsCopy}>
+                      Sends one test error so monitoring can be confirmed. It does not include your email, workouts, or posts.
+                    </Text>
+                    <Button onPress={() => setTestStatus(sendSentryTestError())} variant="secondary">Send a test error</Button>
+                    {testStatus === "sent" ? (
+                      <Text accessibilityLiveRegion="polite" style={styles.diagnosticsSent}>Test error sent.</Text>
+                    ) : null}
+                    {testStatus === "disabled" ? (
+                      <Text accessibilityLiveRegion="polite" style={styles.diagnosticsCopy}>Error monitoring is off in this build.</Text>
+                    ) : null}
+                  </Card>
+                ) : null}
               </View>
             )}
             right={(
@@ -161,6 +179,10 @@ const styles = StyleSheet.create({
   title: { color: colors.ink, ...type.screenTitle },
   intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
   accountCard: { gap: spacing.lg, marginTop: spacing.xxl },
+  diagnosticsCard: { gap: spacing.lg, marginTop: spacing.xxl },
+  diagnosticsTitle: { color: colors.ink, ...type.heading },
+  diagnosticsCopy: { color: colors.muted, ...type.bodySmall },
+  diagnosticsSent: { color: colors.success, ...type.bodySmall },
   signedInLabel: { color: colors.muted, ...type.label },
   signedInValue: { color: colors.ink, ...type.body },
   error: { color: colors.danger, ...type.bodySmall },

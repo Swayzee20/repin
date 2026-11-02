@@ -2,6 +2,7 @@ import { joinGroup } from "@repin/db";
 import { groupIdSchema, joinGroupByInviteCodeSchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../../../lib/sentry";
 import {
   AuthenticationError,
   requireApplicationUser,
@@ -55,7 +56,7 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.error("Group could not be joined", error);
+    reportUnexpectedRouteError("Group could not be joined", error);
     return NextResponse.json(
       { error: "Group could not be joined" },
       { status: 503, headers: { "Cache-Control": "no-store" } },

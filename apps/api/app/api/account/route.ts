@@ -2,6 +2,7 @@ import { deleteUserAccount } from "@repin/db";
 import { NextResponse } from "next/server";
 
 import { deleteAuthUser, deleteUserWorkoutPhotos } from "../../../lib/account-deletion";
+import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
   AuthenticationError,
   requireAuthenticatedUser,
@@ -33,7 +34,7 @@ export async function DELETE(request: Request) {
       );
     }
 
-    console.error("Account could not be deleted", error);
+    reportUnexpectedRouteError("Account could not be deleted", error);
     return NextResponse.json(
       { error: "Account could not be deleted" },
       { status: 503, headers: { "Cache-Control": "no-store" } },

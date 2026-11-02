@@ -8,6 +8,7 @@ import {
   workoutSessionIdSchema,
 } from "@repin/validation";
 
+import { reportUnexpectedRouteError } from "../../../../../../../lib/sentry";
 import {
   AuthenticationError,
   requireAuthenticatedUser,
@@ -106,7 +107,7 @@ function handleRouteError(timing: ServerTiming, error: unknown) {
     );
   }
 
-  console.error("Workout reaction could not be updated", error);
+  reportUnexpectedRouteError("Workout reaction could not be updated", error);
   return timedJson(
     timing,
     { error: "Workout reaction could not be updated" },

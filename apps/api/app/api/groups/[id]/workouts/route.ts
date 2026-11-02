@@ -5,6 +5,7 @@ import {
 import { createWorkoutSchema, groupIdSchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../../../lib/sentry";
 import {
   AuthenticationError,
   requireAuthenticatedUser,
@@ -145,7 +146,7 @@ function handleRouteError(
       : NextResponse.json(body, init);
   }
 
-  console.error(message, error);
+  reportUnexpectedRouteError(message, error);
   const body = { error: message };
   const init = { status: 503, headers: { "Cache-Control": "no-store" } };
   return timing

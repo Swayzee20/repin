@@ -6,12 +6,14 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
+    "test": "pnpm --dir ../mobile exec tsx --test ../api/lib/sentry-config.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@repin/db": "workspace:*",
     "@repin/types": "workspace:*",
     "@repin/validation": "workspace:*",
+    "@sentry/nextjs": "^11.10.0",
     "@supabase/supabase-js": "^2.112.3",
     "next": "16.3.1",
     "react": "19.2.3",

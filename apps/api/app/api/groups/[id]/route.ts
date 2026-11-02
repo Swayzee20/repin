@@ -2,6 +2,7 @@ import { getGroupForMember } from "@repin/db";
 import { groupIdSchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../../lib/sentry";
 import {
   AuthenticationError,
   requireAuthenticatedUser,
@@ -44,7 +45,7 @@ export async function GET(
       );
     }
 
-    console.error("Group could not be loaded", error);
+    reportUnexpectedRouteError("Group could not be loaded", error);
     return NextResponse.json(
       { error: "Group could not be loaded" },
       { status: 503, headers: { "Cache-Control": "no-store" } },

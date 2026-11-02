@@ -17,6 +17,7 @@ import { RootErrorBoundary } from "../ui/root-error-boundary";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isLayoutPreview } from "../lib/layout-preview";
+import { initMobileSentry, wrapRoot } from "../lib/sentry";
 import { useAuthSession } from "../lib/use-auth-session";
 import { useLayoutMode } from "../ui/layout";
 import { formPresentation } from "../ui/layout-math";
@@ -24,9 +25,11 @@ import { colors } from "../ui/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+initMobileSentry();
+
 const fontGateMs = 2_500;
 
-export default function RootLayout() {
+function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     Fredoka_700Bold,
     Nunito_400Regular,
@@ -118,3 +121,5 @@ function SignedOutRedirect() {
     />
   );
 }
+
+export default wrapRoot(RootLayout);

@@ -8,6 +8,7 @@ import {
   workoutSessionIdSchema,
 } from "@repin/validation";
 
+import { reportUnexpectedRouteError } from "../../../../../../../lib/sentry";
 import {
   AuthenticationError,
   requireAuthenticatedUser,
@@ -135,7 +136,7 @@ function handleRouteError(
     );
   }
 
-  console.error(message, error);
+  reportUnexpectedRouteError(message, error);
   return timedJson(
     timing,
     { error: message },

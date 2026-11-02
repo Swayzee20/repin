@@ -1,6 +1,8 @@
 import { checkDatabaseConnection } from "@repin/db";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../lib/sentry";
+
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
@@ -13,7 +15,7 @@ export async function GET() {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    console.error("Database health check failed", error);
+    reportUnexpectedRouteError("Database health check failed", error);
 
     return NextResponse.json(
       { status: "error" },

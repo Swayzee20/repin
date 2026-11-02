@@ -2,6 +2,7 @@ import { searchGroupsForUser } from "@repin/db";
 import { groupSearchQuerySchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../../lib/sentry";
 import {
   AuthenticationError,
   requireApplicationUser,
@@ -40,7 +41,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.error("Groups could not be searched", error);
+    reportUnexpectedRouteError("Groups could not be searched", error);
     return NextResponse.json(
       { error: "Groups could not be searched" },
       { status: 503, headers: { "Cache-Control": "no-store" } },

@@ -2,6 +2,7 @@ import { getGroupPreviewByInviteCode } from "@repin/db";
 import { inviteCodeSchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../../../lib/sentry";
 import {
   AuthenticationError,
   requireApplicationUser,
@@ -47,7 +48,7 @@ export async function GET(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    console.error("Invite code could not be checked", error);
+    reportUnexpectedRouteError("Invite code could not be checked", error);
     return NextResponse.json(
       { error: "Invite code could not be checked" },
       { status: 503, headers: { "Cache-Control": "no-store" } },
