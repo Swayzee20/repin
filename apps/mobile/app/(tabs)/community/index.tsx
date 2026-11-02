@@ -365,23 +365,23 @@ export default function CommunityTabScreen() {
   }, [router, selectedGroup]);
 
   const feedMenu = useCallback((workout: WorkoutFeedItem) => workoutMenuItems({
-    onBlock: (item) => moderation.askBlock(item.userId, item.displayName),
+    onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
+      displayName: item.displayName,
+      hideId: item.id,
+      kind: "post",
+      targetId: item.communityPostId ?? item.id,
+      userId: item.userId,
+    }),
     onDelete: (item) => {
       setDeleteError(null);
       setDeleteStage("choose");
       setDeleteTarget(item);
     },
     onEdit: editWorkout,
-    onRemove: (item) => {
-      if (selectedGroup) moderation.askRemovePost(selectedGroup.id, item.id);
-    },
-    onReport: (item) => {
-      if (selectedGroup) moderation.askReportPost(selectedGroup.id, item.id);
-    },
-    viewerIsOwner: selectedGroup?.role === "owner",
+    onReport: (item) => moderation.askReportPost(item),
     viewerUserId: loadedUserId.current,
     workout,
-  }), [editWorkout, moderation, selectedGroup]);
+  }), [editWorkout, moderation]);
 
   const deleteWorkout = useCallback(async (scope: "post" | "workout") => {
     if (!deleteTarget || !selectedGroup || !supabase) return;
@@ -514,7 +514,6 @@ export default function CommunityTabScreen() {
                 groupId={selectedGroup.id}
                 onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}
                 onUserBlocked={(userId) => hideWorkouts((workout) => workout.userId === userId)}
-                viewerIsOwner={selectedGroup.role === "owner"}
                 paneHeader={(
                   <View style={styles.panePostHeader}>
                     <Text style={styles.panePostTitle}>Post</Text>
@@ -648,7 +647,7 @@ export default function CommunityTabScreen() {
               ) : error ? (
                 <View style={styles.feedState}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Activity unavailable" /></View>
               ) : (board?.communityWorkouts.length ?? 0) > 0 ? (
-                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName)} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} onWorkoutRemove={(workout) => { if (selectedGroup) moderation.askRemovePost(selectedGroup.id, workout.id); }} onWorkoutReport={(workout) => { if (selectedGroup) moderation.askReportPost(selectedGroup.id, workout.id); }} showCommentCount showReactionSummary viewerIsOwner={selectedGroup?.role === "owner"} viewerUserId={loadedUserId.current} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
+                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={loadedUserId.current} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
               ) : isSameLocalDay(selectedDate, currentDay) ? (
                 <View style={styles.todayEmpty}>
                   <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
@@ -680,7 +679,6 @@ export default function CommunityTabScreen() {
         onCommentCountChange={updateFeedCommentCount}
         onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}
         onUserBlocked={(userId) => hideWorkouts((workout) => workout.userId === userId)}
-        viewerIsOwner={selectedGroup?.role === "owner"}
         onDismiss={() => {
           setDetailTarget(null);
           setExplicitOverride(null);

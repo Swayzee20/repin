@@ -135,13 +135,6 @@ export default function GroupDetailScreen() {
                     ) : null}
                   </Card>
                 ) : null}
-                {group.role === "owner" ? (
-                  <View style={styles.reportAction}>
-                    <Button onPress={() => router.push(`/groups/${group.id}/reports`)} variant="secondary">
-                      Review reports
-                    </Button>
-                  </View>
-                ) : null}
               </>
             ) : null}
           </View>
@@ -149,12 +142,16 @@ export default function GroupDetailScreen() {
         right={group ? (
           <GroupBoard
             feedFillsPane={feedFillsPane}
-            onBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName)}
-            onRemove={(workout) => moderation.askRemovePost(group.id, workout.id)}
-            onReport={(workout) => moderation.askReportPost(group.id, workout.id)}
+            onBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, {
+              displayName: workout.displayName,
+              hideId: workout.id,
+              kind: "post",
+              targetId: workout.communityPostId ?? workout.id,
+              userId: workout.userId,
+            })}
+            onReport={(workout) => moderation.askReportPost(workout)}
             onLog={openLog}
             stacked={!twoPane}
-            viewerIsOwner={group.role === "owner"}
             viewerUserId={session?.user.id ?? null}
             workouts={workouts}
           />
@@ -172,20 +169,16 @@ function GroupBoard({
   feedFillsPane,
   onBlock,
   onLog,
-  onRemove,
   onReport,
   stacked,
-  viewerIsOwner,
   viewerUserId,
   workouts,
 }: {
   feedFillsPane: boolean;
   onBlock: (workout: WorkoutFeedItem) => void;
   onLog: () => void;
-  onRemove: (workout: WorkoutFeedItem) => void;
   onReport: (workout: WorkoutFeedItem) => void;
   stacked: boolean;
-  viewerIsOwner: boolean;
   viewerUserId: string | null;
   workouts: WorkoutFeedItem[];
 }) {
@@ -220,9 +213,7 @@ function GroupBoard({
         >
           <CommunityFeed
             onWorkoutBlock={onBlock}
-            onWorkoutRemove={onRemove}
             onWorkoutReport={onReport}
-            viewerIsOwner={viewerIsOwner}
             viewerUserId={viewerUserId}
             viewportHeight={feedFillsPane && feedHeight > 0 ? feedHeight : undefined}
             workouts={workouts}
@@ -264,7 +255,6 @@ const styles = StyleSheet.create({
   inviteAction: { flex: 1 },
   copied: { color: colors.success, ...type.bodySmall },
   inviteError: { color: colors.danger, ...type.bodySmall },
-  reportAction: { marginTop: spacing.lg },
   board: { backgroundColor: colors.surfaceMuted, borderColor: colors.boardBorder, borderRadius: radii.lg, borderWidth: 1, padding: spacing.lg },
   boardStack: { overflow: "visible" },
   boardStacked: { marginTop: spacing.xxl },

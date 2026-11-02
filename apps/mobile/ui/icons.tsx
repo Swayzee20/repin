@@ -6,6 +6,7 @@ import { colors, size } from "./theme";
 
 const vectorIcons = {
   "arrow.triangle.2.circlepath": "repeat",
+  "bell.slash": "bell-off",
   bolt: "zap",
   camera: "camera",
   checkmark: "check",
@@ -15,6 +16,7 @@ const vectorIcons = {
   "chevron.up": "chevron-up",
   clipboard: "clipboard",
   ellipsis: "more-horizontal",
+  "eye.slash": "eye-off",
   flag: "flag",
   "exclamationmark.circle": "alert-circle",
   "exclamationmark.triangle": "alert-triangle",

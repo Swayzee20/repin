@@ -17,6 +17,7 @@
 | D5 | Third tab label **"Profile"** (was "Me") | `app/(tabs)/_layout.tsx` and `_layout.web.tsx`. |
 | D6 | **Merge the duplicate colour names; drop radii 9 and 18** | §2.1 and §2.3 mappings. |
 | D7 | **X close top-left everywhere** (Oct 31, 2026, approved by Josue) | Every modal and sheet (form modals, (+) chooser, pickers) puts its 44pt X top-left, with or without the strip. Replaces "X at the top of the strip" (§3, §5.2, §8, §9). Oct 31, 2026: includes the photo viewer (row 11, §5 fix 3). |
+| D8 | Selected option-tile label #9E3500 app-wide (Nov 2, 2026, approved by Josue) | Every selected `ChoiceTile` label uses `brandPressed` #9E3500 on brandTint (6.40:1, passes AA). Background, 2pt brand border and check are unchanged (§3). |
 | — | Locked, unchanged: the strip tab pill (Home / Community / Profile) and the round orange (+) | Every token below is derived from them. |
 
 ## 2. Final tokens (`ui/theme.ts`)
@@ -163,7 +164,7 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
 | FlameRating | 5 × 44pt tiles; empty = grey flame at 35%; word label; radio-group a11y | — |
 | DateRow | ListRow: label 16 Bold, value 15 muted | — |
 | PhotoTile | dashed `radii.lg` tile, camera icon + "Add photo". Filled: photo + 32pt dark X (44 hit) | error "Upload failed. Retry" |
-| ChoiceTile | 48pt `radii.md`, 15 left-aligned. Selected = brandTint + 2pt brand + check | disabled |
+| ChoiceTile | 48pt `radii.md`, 15 left-aligned. Selected = brandTint + 2pt brand + check; selected label `brandPressed` #9E3500 (6.40:1 on brandTint; brand would be 4.43:1, fails AA) — D8 | disabled |
 
 **Spacing:**
 - label → control 8

@@ -446,7 +446,10 @@ export function WorkoutSummaryCard({
         </View>
         {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
         {resolvedMenuItems.length ? (
-          <ContentOptionsMenu accessibilityLabel="Post options" items={resolvedMenuItems} />
+          <ContentOptionsMenu
+            accessibilityLabel={`Options for ${displayName}'s post`}
+            items={resolvedMenuItems}
+          />
         ) : null}
       </View>
       <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
@@ -472,11 +475,9 @@ export function CommunityFeed({
   onWorkoutBlock,
   onWorkoutDelete,
   onWorkoutEdit,
-  onWorkoutRemove,
   onWorkoutReport,
   showCommentCount = false,
   showReactionSummary = false,
-  viewerIsOwner = false,
   viewerUserId,
   viewportHeight,
   workouts,
@@ -489,11 +490,9 @@ export function CommunityFeed({
   onWorkoutBlock?: (workout: WorkoutFeedItem) => void;
   onWorkoutDelete?: (workout: WorkoutFeedItem) => void;
   onWorkoutEdit?: (workout: WorkoutFeedItem) => void;
-  onWorkoutRemove?: (workout: WorkoutFeedItem) => void;
   onWorkoutReport?: (workout: WorkoutFeedItem) => void;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
-  viewerIsOwner?: boolean;
   viewerUserId?: string | null;
   viewportHeight?: number;
   workouts: WorkoutFeedItem[];
@@ -576,9 +575,7 @@ export function CommunityFeed({
               onBlock: onWorkoutBlock,
               onDelete: onWorkoutDelete,
               onEdit: onWorkoutEdit,
-              onRemove: onWorkoutRemove,
               onReport: onWorkoutReport,
-              viewerIsOwner,
               viewerUserId,
               workout,
             })}
@@ -693,9 +690,11 @@ function CommunityFeedItem({
 export function ContentOptionsMenu({
   accessibilityLabel,
   items,
+  visual = "post",
 }: {
   accessibilityLabel: string;
   items: ContentMenuItem[];
+  visual?: "comment" | "post";
 }) {
   const anchor = useRef<ViewInstance>(null);
   const insets = useSafeAreaInsets();
@@ -729,7 +728,7 @@ export function ContentOptionsMenu({
             webFocusRing(pressableFocused(state)),
           ]}
         >
-          <Icon color={colors.muted} name="ellipsis" />
+          <Icon color={colors.muted} name="ellipsis" size={visual === "comment" ? size.iconButton : size.icon.md} />
         </Pressable>
       </View>
       <Modal animationType="fade" onRequestClose={() => setVisible(false)} transparent visible={visible}>

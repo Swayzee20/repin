@@ -1,4 +1,4 @@
-import { resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
+import { personFirstName, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
 
 import type { IconName } from "../ui/icons";
 
@@ -14,15 +14,14 @@ export function postMenuItems(input: {
   onBlock?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
-  onRemove?: () => void;
   onReport?: () => void;
+  reportLabel?: string;
 }): ContentMenuItem[] {
   const items: ContentMenuItem[] = [];
   if (input.onEdit) items.push({ icon: "pencil", label: "Edit", onPress: input.onEdit });
   if (input.onDelete) items.push({ danger: true, icon: "trash", label: "Delete", onPress: input.onDelete });
-  if (input.onReport) items.push({ icon: "flag", label: "Report", onPress: input.onReport });
-  if (input.onBlock) items.push({ icon: "nosign", label: input.blockLabel ?? "Block", onPress: input.onBlock });
-  if (input.onRemove) items.push({ danger: true, icon: "trash", label: "Remove", onPress: input.onRemove });
+  if (input.onReport) items.push({ icon: "flag", label: input.reportLabel ?? "Report", onPress: input.onReport });
+  if (input.onBlock) items.push({ danger: true, icon: "nosign", label: input.blockLabel ?? "Block", onPress: input.onBlock });
   return items;
 }
 
@@ -30,9 +29,7 @@ export function workoutMenuItems(input: {
   onBlock?: (workout: WorkoutFeedItem) => void;
   onDelete?: (workout: WorkoutFeedItem) => void;
   onEdit?: (workout: WorkoutFeedItem) => void;
-  onRemove?: (workout: WorkoutFeedItem) => void;
   onReport?: (workout: WorkoutFeedItem) => void;
-  viewerIsOwner?: boolean;
   viewerUserId?: string | null;
   workout: WorkoutFeedItem;
 }): ContentMenuItem[] {
@@ -44,20 +41,19 @@ export function workoutMenuItems(input: {
       onEdit: input.onEdit ? () => input.onEdit?.(input.workout) : undefined,
     });
   }
+  const fullName = resolveUserDisplayName({ displayName: input.workout.displayName });
   return postMenuItems({
-    blockLabel: `Block ${resolveUserDisplayName({ displayName: input.workout.displayName })}`,
+    blockLabel: `Block ${personFirstName(fullName)}`,
     onBlock: input.onBlock ? () => input.onBlock?.(input.workout) : undefined,
-    onRemove: input.viewerIsOwner && input.onRemove ? () => input.onRemove?.(input.workout) : undefined,
     onReport: input.onReport ? () => input.onReport?.(input.workout) : undefined,
+    reportLabel: "Report post",
   });
 }
 
 export function commentMenuItems(input: {
   blockLabel?: string;
   onBlock?: () => void;
-  onDelete?: () => void;
-  onRemove?: () => void;
   onReport?: () => void;
 }): ContentMenuItem[] {
-  return postMenuItems(input);
+  return postMenuItems({ ...input, reportLabel: "Report comment" });
 }

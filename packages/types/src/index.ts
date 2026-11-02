@@ -19,6 +19,11 @@ export function isPlaceholderDisplayName(value: string | null | undefined) {
   return value === PLACEHOLDER_DISPLAY_NAME || LEGACY_PLACEHOLDER_DISPLAY_NAMES.includes(value ?? "");
 }
 
+export function personFirstName(displayName: string | null | undefined) {
+  const cleaned = displayName?.trim().replace(/\s+/g, " ") ?? "";
+  return cleaned.split(" ")[0] || "Someone";
+}
+
 export function resolveUserDisplayName(input: UserDisplayNameInput) {
   const firstName = cleanNameValue(input.firstName);
   const lastName = cleanNameValue(input.lastName);
@@ -101,7 +106,10 @@ export const contentReportTargetTypes = ["post", "comment"] as const;
 export const contentReportReasons = [
   "spam",
   "harassment",
-  "inappropriate",
+  "hate",
+  "sexual",
+  "violence_self_harm",
+  "false_info",
   "other",
 ] as const;
 export const contentReportReasonLabels: Record<
@@ -109,9 +117,24 @@ export const contentReportReasonLabels: Record<
   string
 > = {
   spam: "Spam",
-  harassment: "Harassment or hate",
-  inappropriate: "Inappropriate content",
-  other: "Other",
+  harassment: "Harassment or bullying",
+  hate: "Hate",
+  sexual: "Nudity or sexual content",
+  violence_self_harm: "Violence or self-harm",
+  false_info: "False information",
+  other: "Something else",
+};
+export const contentReportReasonDetails: Record<
+  (typeof contentReportReasons)[number],
+  string
+> = {
+  spam: "Ads, scams, or the same thing over and over",
+  harassment: "Picking on, threatening, or shaming someone",
+  hate: "Attacking someone for who they are",
+  sexual: "Explicit photos or sexual messages",
+  violence_self_harm: "Threats, gore, or someone who might hurt themselves",
+  false_info: "Misleading health claims or made-up results",
+  other: "Tell us what's going on",
 };
 
 export type ContentReportTargetType = (typeof contentReportTargetTypes)[number];
@@ -279,6 +302,7 @@ export interface MovementSummary {
 
 export interface WorkoutFeedItem {
   id: string;
+  communityPostId?: string;
   userId: string;
   groupId: string;
   workoutType: string;

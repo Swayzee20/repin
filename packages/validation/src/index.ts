@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   communityReactionTypes,
   contentReportReasons,
+  contentReportTargetTypes,
   runWorkoutSubtypes,
   workoutDistanceUnits,
   workoutMetricTypes,
@@ -31,25 +32,12 @@ export const createCommunityCommentSchema = z.object({
   text: z.string().trim().min(1, "Enter a comment").max(2_000, "Comment is too long"),
 }).strict();
 
-const reportNoteSchema = z.string().trim().max(500, "Note is too long").optional();
-
-export const createContentReportSchema = z.discriminatedUnion("targetType", [
-  z.object({
-    targetType: z.literal("post"),
-    workoutSessionId: z.uuid(),
-    reason: z.enum(contentReportReasons),
-    note: reportNoteSchema,
-  }).strict(),
-  z.object({
-    targetType: z.literal("comment"),
-    commentId: z.uuid(),
-    reason: z.enum(contentReportReasons),
-    note: reportNoteSchema,
-  }).strict(),
-]);
-
-export const blockUserSchema = z.object({
-  blockedUserId: z.uuid(),
+export const createContentReportSchema = z.object({
+  targetType: z.enum(contentReportTargetTypes),
+  targetId: z.uuid(),
+  reason: z.enum(contentReportReasons),
+  details: z.string().trim().max(500, "Details are too long").optional(),
+  alsoBlock: z.boolean().optional(),
 }).strict();
 
 export const groupSearchQuerySchema = z.object({

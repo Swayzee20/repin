@@ -54,6 +54,8 @@ export const communityPostReactionTypes = ["fire", "strong", "clap"] as const;
 export const users = pgTable("users", {
   id: uuid().primaryKey(),
   displayName: text("display_name").notNull(),
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  termsVersion: text("terms_version"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -570,6 +572,8 @@ export const communityPosts = pgTable(
       .references(() => workoutSessions.id, { onDelete: "cascade" }),
     caption: text(),
     photoPath: text("photo_path"),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: uuid("removed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -634,6 +638,8 @@ export const communityPostComments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     text: text().notNull(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: uuid("removed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -659,10 +665,13 @@ export const contentReportTargetTypes = ["post", "comment"] as const;
 export const contentReportReasons = [
   "spam",
   "harassment",
-  "inappropriate",
+  "hate",
+  "sexual",
+  "violence_self_harm",
+  "false_info",
   "other",
 ] as const;
-export const contentReportStatuses = ["open", "dismissed", "removed"] as const;
+export const contentReportStatuses = ["open", "removed", "dismissed"] as const;
 
 export const contentReports = pgTable(
   "content_reports",
@@ -676,14 +685,17 @@ export const contentReports = pgTable(
       .references(() => groups.id, { onDelete: "cascade" }),
     targetType: text("target_type").notNull(),
     targetId: uuid("target_id").notNull(),
+    targetUserId: uuid("target_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
     reason: text().notNull(),
-    note: text(),
+    details: text(),
     status: text().notNull().default("open"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
-    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
-    reviewedBy: uuid("reviewed_by").references(() => users.id, {
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: uuid("resolved_by").references(() => users.id, {
       onDelete: "set null",
     }),
   },
@@ -698,21 +710,31 @@ export const contentReports = pgTable(
       table.status,
       table.createdAt,
     ),
+    index("content_reports_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
     check(
       "content_reports_target_type_check",
       sql`${table.targetType} in ('post', 'comment')`,
     ),
     check(
       "content_reports_reason_check",
-      sql`${table.reason} in ('spam', 'harassment', 'inappropriate', 'other')`,
+      sql`${table.reason} in ('spam', 'harassment', 'hate', 'sexual', 'violence_self_harm', 'false_info', 'other')`,
     ),
     check(
       "content_reports_status_check",
-      sql`${table.status} in ('open', 'dismissed', 'removed')`,
+      sql`${table.status} in ('open', 'removed', 'dismissed')`,
     ),
     check(
-      "content_reports_note_check",
-      sql`${table.note} is null or length(btrim(${table.note})) between 1 and 500`,
+      "content_reports_details_check",
+      sql`(
+        ${table.reason} <> 'other'
+        and (${table.details} is null or length(btrim(${table.details})) between 1 and 500)
+      ) or (
+        ${table.reason} = 'other'
+        and length(btrim(${table.details})) between 1 and 500
+      )`,
     ),
   ],
 );

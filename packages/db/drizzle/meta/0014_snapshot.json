@@ -1,5 +1,5 @@
 {
-  "id": "26839f39-3274-4be5-81c7-7a0263268fb8",
+  "id": "88a3851e-be6c-45c0-a206-60653d72b724",
   "prevId": "f8ff5089-5e91-4a44-b18c-b12b1c20dac7",
   "version": "7",
   "dialect": "postgresql",
@@ -280,6 +280,18 @@
           "primaryKey": false,
           "notNull": true
         },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "removed_by": {
+          "name": "removed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -364,6 +376,19 @@
             "id"
           ],
           "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "community_post_comments_removed_by_users_id_fk": {
+          "name": "community_post_comments_removed_by_users_id_fk",
+          "tableFrom": "community_post_comments",
+          "tableTo": "users",
+          "columnsFrom": [
+            "removed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
           "onUpdate": "no action"
         }
       },
@@ -540,6 +565,18 @@
           "primaryKey": false,
           "notNull": false
         },
+        "removed_at": {
+          "name": "removed_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "removed_by": {
+          "name": "removed_by",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": false
+        },
         "created_at": {
           "name": "created_at",
           "type": "timestamp with time zone",
@@ -653,6 +690,19 @@
           ],
           "onDelete": "cascade",
           "onUpdate": "no action"
+        },
+        "community_posts_removed_by_users_id_fk": {
+          "name": "community_posts_removed_by_users_id_fk",
+          "tableFrom": "community_posts",
+          "tableTo": "users",
+          "columnsFrom": [
+            "removed_by"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "set null",
+          "onUpdate": "no action"
         }
       },
       "compositePrimaryKeys": {},
@@ -696,14 +746,20 @@
           "primaryKey": false,
           "notNull": true
         },
+        "target_user_id": {
+          "name": "target_user_id",
+          "type": "uuid",
+          "primaryKey": false,
+          "notNull": true
+        },
         "reason": {
           "name": "reason",
           "type": "text",
           "primaryKey": false,
           "notNull": true
         },
-        "note": {
-          "name": "note",
+        "details": {
+          "name": "details",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -722,14 +778,14 @@
           "notNull": true,
           "default": "now()"
         },
-        "reviewed_at": {
-          "name": "reviewed_at",
+        "resolved_at": {
+          "name": "resolved_at",
           "type": "timestamp with time zone",
           "primaryKey": false,
           "notNull": false
         },
-        "reviewed_by": {
-          "name": "reviewed_by",
+        "resolved_by": {
+          "name": "resolved_by",
           "type": "uuid",
           "primaryKey": false,
           "notNull": false
@@ -789,6 +845,27 @@
           "concurrently": false,
           "method": "btree",
           "with": {}
+        },
+        "content_reports_status_created_idx": {
+          "name": "content_reports_status_created_idx",
+          "columns": [
+            {
+              "expression": "status",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            },
+            {
+              "expression": "created_at",
+              "isExpression": false,
+              "asc": true,
+              "nulls": "last"
+            }
+          ],
+          "isUnique": false,
+          "concurrently": false,
+          "method": "btree",
+          "with": {}
         }
       },
       "foreignKeys": {
@@ -818,12 +895,25 @@
           "onDelete": "cascade",
           "onUpdate": "no action"
         },
-        "content_reports_reviewed_by_users_id_fk": {
-          "name": "content_reports_reviewed_by_users_id_fk",
+        "content_reports_target_user_id_users_id_fk": {
+          "name": "content_reports_target_user_id_users_id_fk",
           "tableFrom": "content_reports",
           "tableTo": "users",
           "columnsFrom": [
-            "reviewed_by"
+            "target_user_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "cascade",
+          "onUpdate": "no action"
+        },
+        "content_reports_resolved_by_users_id_fk": {
+          "name": "content_reports_resolved_by_users_id_fk",
+          "tableFrom": "content_reports",
+          "tableTo": "users",
+          "columnsFrom": [
+            "resolved_by"
           ],
           "columnsTo": [
             "id"
@@ -842,15 +932,15 @@
         },
         "content_reports_reason_check": {
           "name": "content_reports_reason_check",
-          "value": "\"content_reports\".\"reason\" in ('spam', 'harassment', 'inappropriate', 'other')"
+          "value": "\"content_reports\".\"reason\" in ('spam', 'harassment', 'hate', 'sexual', 'violence_self_harm', 'false_info', 'other')"
         },
         "content_reports_status_check": {
           "name": "content_reports_status_check",
-          "value": "\"content_reports\".\"status\" in ('open', 'dismissed', 'removed')"
+          "value": "\"content_reports\".\"status\" in ('open', 'removed', 'dismissed')"
         },
-        "content_reports_note_check": {
-          "name": "content_reports_note_check",
-          "value": "\"content_reports\".\"note\" is null or length(btrim(\"content_reports\".\"note\")) between 1 and 500"
+        "content_reports_details_check": {
+          "name": "content_reports_details_check",
+          "value": "(\n        \"content_reports\".\"reason\" <> 'other'\n        and (\"content_reports\".\"details\" is null or length(btrim(\"content_reports\".\"details\")) between 1 and 500)\n      ) or (\n        \"content_reports\".\"reason\" = 'other'\n        and length(btrim(\"content_reports\".\"details\")) between 1 and 500\n      )"
         }
       },
       "isRLSEnabled": false
@@ -1585,6 +1675,18 @@
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "terms_accepted_at": {
+          "name": "terms_accepted_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "terms_version": {
+          "name": "terms_version",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "created_at": {
           "name": "created_at",

@@ -30,7 +30,6 @@ export function WorkoutDetailModal({
   onReactionSummaryChange,
   onUserBlocked,
   sessionId,
-  viewerIsOwner = false,
   visible,
 }: {
   fixture?: WorkoutDetailFixture | null;
@@ -42,7 +41,6 @@ export function WorkoutDetailModal({
   onPostHidden?: (sessionId: string) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUserBlocked?: (userId: string) => void;
-  viewerIsOwner?: boolean;
   sessionId: string | null;
   visible: boolean;
 }) {
@@ -174,7 +172,6 @@ export function WorkoutDetailModal({
                       onPostHidden={onPostHidden}
                       onReactionSummaryChange={onReactionSummaryChange}
                       onUserBlocked={onUserBlocked}
-                      viewerIsOwner={viewerIsOwner}
                       presentation="community-modal"
                       sessionId={sessionId}
                     />

@@ -1,8 +1,9 @@
-import { Stack, useRouter } from "expo-router";
-import { useState } from "react";
+import { Stack, useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { listBlockedUsers } from "../lib/moderation-api";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
 import { Button, Card, TextField } from "../ui/components";
@@ -34,6 +35,18 @@ export default function SettingsScreen() {
   const [deleting, setDeleting] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [blockedCount, setBlockedCount] = useState(0);
+  useFocusEffect(useCallback(() => {
+    let active = true;
+    void listBlockedUsers().then((people) => {
+      if (active) setBlockedCount(people.length);
+    }).catch(() => {
+      if (active) setBlockedCount(0);
+    });
+    return () => {
+      active = false;
+    };
+  }, []));
   const email = session?.user.email?.trim();
   const confirmed = confirmation.trim() === "DELETE";
 
@@ -110,8 +123,15 @@ export default function SettingsScreen() {
                   <Text style={styles.signedInLabel}>Signed in as</Text>
                   <Text style={styles.signedInValue}>{email || "your repin account"}</Text>
                   {accountError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{accountError}</Text> : null}
-                  <ListRow label="Blocked users" onPress={() => router.push("/blocked-users")} />
                   <Button loading={signingOut} loadingLabel="Signing out" onPress={() => void signOut()} variant="secondary">Sign out</Button>
+                </Card>
+                <Card style={styles.privacyCard}>
+                  <Text style={styles.privacyTitle}>Privacy and safety</Text>
+                  <ListRow
+                    label="Blocked accounts"
+                    onPress={() => router.push("/blocked-accounts")}
+                    value={blockedCount > 0 ? String(blockedCount) : undefined}
+                  />
                 </Card>
               </View>
             )}
@@ -163,6 +183,8 @@ const styles = StyleSheet.create({
   title: { color: colors.ink, ...type.screenTitle },
   intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
   accountCard: { gap: spacing.lg, marginTop: spacing.xxl },
+  privacyCard: { gap: spacing.sm, marginTop: spacing.lg, paddingBottom: spacing.sm },
+  privacyTitle: { color: colors.ink, ...type.section },
   signedInLabel: { color: colors.muted, ...type.label },
   signedInValue: { color: colors.ink, ...type.body },
   error: { color: colors.danger, ...type.bodySmall },

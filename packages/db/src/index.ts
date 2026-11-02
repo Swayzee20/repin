@@ -11,6 +11,7 @@ import {
   gte,
   ilike,
   inArray,
+  isNull,
   lte,
   lt,
   ne,
@@ -23,8 +24,8 @@ import {
   type DatabaseTransaction,
 } from "./connection";
 import {
-  closeOpenReportsForComment,
-  closeOpenReportsForCommunityPost,
+  dismissOpenReportsForComment,
+  dismissOpenReportsForCommunityPost,
   notBlockedAuthor,
   notReportedContent,
   visibleCommentCountSql,
@@ -1090,7 +1091,7 @@ export async function deleteCommunityPostForOwner(input: {
         .from(schema.communityPosts)
         .where(eq(schema.communityPosts.workoutSessionId, owned.sessionId));
       for (const post of sessionPosts) {
-        await closeOpenReportsForCommunityPost(transaction, post.id, input.userId);
+        await dismissOpenReportsForCommunityPost(transaction, post.id);
       }
       await transaction.delete(schema.workoutSessions).where(
         and(
@@ -1099,7 +1100,7 @@ export async function deleteCommunityPostForOwner(input: {
         ),
       );
     } else {
-      await closeOpenReportsForCommunityPost(transaction, owned.postId, input.userId);
+      await dismissOpenReportsForCommunityPost(transaction, owned.postId);
       await transaction.delete(schema.communityPosts).where(
         and(
           eq(schema.communityPosts.id, owned.postId),
@@ -1209,10 +1210,10 @@ async function deleteRowsOwnedByUser(transaction: DatabaseTransaction, userId: s
       .where(eq(schema.communityPostComments.userId, userId)),
   ]);
   for (const post of ownedPosts) {
-    await closeOpenReportsForCommunityPost(transaction, post.id, userId);
+    await dismissOpenReportsForCommunityPost(transaction, post.id);
   }
   for (const comment of ownedComments) {
-    await closeOpenReportsForComment(transaction, comment.id, userId);
+    await dismissOpenReportsForComment(transaction, comment.id);
   }
   await transaction
     .delete(schema.userBlocks)
@@ -1308,6 +1309,7 @@ async function listRecentWorkouts(input: {
   const posts = await database
     .select({
       id: schema.workoutSessions.id,
+      communityPostId: schema.communityPosts.id,
       userId: schema.workoutSessions.userId,
       groupId: schema.communityPosts.groupId,
       workoutType: schema.workoutSessions.workoutType,
@@ -1348,6 +1350,7 @@ async function listRecentWorkouts(input: {
     )
     .where(and(
       eq(schema.communityPosts.groupId, input.groupId),
+      isNull(schema.communityPosts.removedAt),
       input.userId ? notBlockedAuthor(input.userId, schema.communityPosts.userId) : undefined,
       input.userId ? notReportedContent(input.userId, "post", schema.communityPosts.id) : undefined,
       input.occurredAtStart ? gte(schema.workoutSessions.occurredAt, input.occurredAtStart) : undefined,
@@ -1582,6 +1585,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        isNull(schema.communityPosts.removedAt),
         notBlockedAuthor(input.userId, schema.communityPosts.userId),
         notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
@@ -1856,6 +1860,7 @@ export async function listCommunityPostCommentsForMember(input: {
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        isNull(schema.communityPosts.removedAt),
         notBlockedAuthor(input.userId, schema.communityPosts.userId),
         notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
@@ -1880,6 +1885,7 @@ export async function listCommunityPostCommentsForMember(input: {
     )
     .where(and(
       eq(schema.communityPostComments.communityPostId, post.id),
+      isNull(schema.communityPostComments.removedAt),
       notBlockedAuthor(input.userId, schema.communityPostComments.userId),
       notReportedContent(input.userId, "comment", schema.communityPostComments.id),
     ))
@@ -1942,6 +1948,7 @@ async function getAuthorizedCommunityPost(
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        isNull(schema.communityPosts.removedAt),
         notBlockedAuthor(input.userId, schema.communityPosts.userId),
         notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
@@ -2071,10 +2078,8 @@ export {
   blockUserForMember,
   createContentReportForMember,
   deleteCommunityCommentForMember,
-  dismissContentReportForGroupOwner,
   listBlockedUsersForMember,
-  listOpenReportsForGroupOwner,
-  removeCommunityPostForGroupOwner,
+  softRemoveCommunityPost,
   unblockUserForMember,
 } from "./moderation";
 

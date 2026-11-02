@@ -185,14 +185,14 @@ export default function HomeScreen() {
               homeLoading={homeLoading}
               latestWorkoutToday={mode === "twoPane" ? null : latestWorkoutToday}
               menuFor={(workout) => workoutMenuItems({
-                onBlock: (item) => moderation.askBlock(item.userId, item.displayName),
-                onRemove: (item) => {
-                  if (selectedGroup) moderation.askRemovePost(selectedGroup.id, item.id);
-                },
-                onReport: (item) => {
-                  if (selectedGroup) moderation.askReportPost(selectedGroup.id, item.id);
-                },
-                viewerIsOwner: selectedGroup?.role === "owner",
+                onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
+                  displayName: item.displayName,
+                  hideId: item.id,
+                  kind: "post",
+                  targetId: item.communityPostId ?? item.id,
+                  userId: item.userId,
+                }),
+                onReport: (item) => moderation.askReportPost(item),
                 viewerUserId: session?.user.id ?? dashboardData.user.id,
                 workout,
               })}

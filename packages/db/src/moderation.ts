@@ -18,11 +18,19 @@ export type ContentReportReason = (typeof schema.contentReportReasons)[number];
 
 const reportReasons = new Set<string>(schema.contentReportReasons);
 
+/** Hide an author from a viewer when either person has blocked the other.
+ *  Mention and notification queries do not exist yet. When they do, they must
+ *  use this so a block in either direction drops that person's activity. */
 export function notBlockedAuthor(viewerId: string, authorColumn: AnyColumn) {
   return sql`not exists (
     select 1 from ${schema.userBlocks}
-    where ${schema.userBlocks.blockerId} = ${viewerId}
+    where (
+      ${schema.userBlocks.blockerId} = ${viewerId}
       and ${schema.userBlocks.blockedId} = ${authorColumn}
+    ) or (
+      ${schema.userBlocks.blockerId} = ${authorColumn}
+      and ${schema.userBlocks.blockedId} = ${viewerId}
+    )
   )`;
 }
 
@@ -60,42 +68,74 @@ export function visibleCommentCountSql(viewerId: string | undefined) {
     ? sql` and ${notBlockedAuthor(viewerId, schema.communityPostComments.userId)}
            and ${notReportedContent(viewerId, "comment", schema.communityPostComments.id)}`
     : sql``;
+  const visible = sql` and ${schema.communityPostComments.removedAt} is null ${hidden}`;
   return sql<number>`(
     select count(*)::int
     from ${schema.communityPostComments}
     where ${schema.communityPostComments.communityPostId} = ${schema.communityPosts.id}
-      ${hidden}
+      ${visible}
   )`.mapWith(Number);
 }
 
-export async function closeOpenReportsForCommunityPost(
+async function resolveOpenReports(
+  transaction: DatabaseTransaction,
+  input: {
+    commentIds?: string[];
+    postId?: string;
+    resolvedBy: string | null;
+    status: "dismissed" | "removed";
+  },
+) {
+  const now = new Date();
+  const patch = { status: input.status, resolvedAt: now, resolvedBy: input.resolvedBy };
+  if (input.postId) {
+    await transaction
+      .update(schema.contentReports)
+      .set(patch)
+      .where(and(
+        eq(schema.contentReports.status, "open"),
+        eq(schema.contentReports.targetType, "post"),
+        eq(schema.contentReports.targetId, input.postId),
+      ));
+  }
+  if (input.commentIds?.length) {
+    await transaction
+      .update(schema.contentReports)
+      .set(patch)
+      .where(and(
+        eq(schema.contentReports.status, "open"),
+        eq(schema.contentReports.targetType, "comment"),
+        inArray(schema.contentReports.targetId, input.commentIds),
+      ));
+  }
+}
+
+/** Content deleted before anyone reviews it. The report stays, marked dismissed. */
+export async function dismissOpenReportsForCommunityPost(
   transaction: DatabaseTransaction,
   communityPostId: string,
-  reviewedBy: string,
 ) {
   const comments = await transaction
     .select({ id: schema.communityPostComments.id })
     .from(schema.communityPostComments)
     .where(eq(schema.communityPostComments.communityPostId, communityPostId));
-  const now = new Date();
-  await transaction
-    .update(schema.contentReports)
-    .set({ status: "removed", reviewedAt: now, reviewedBy })
-    .where(and(
-      eq(schema.contentReports.status, "open"),
-      eq(schema.contentReports.targetType, "post"),
-      eq(schema.contentReports.targetId, communityPostId),
-    ));
-  const commentIds = comments.map((comment) => comment.id);
-  if (!commentIds.length) return;
-  await transaction
-    .update(schema.contentReports)
-    .set({ status: "removed", reviewedAt: now, reviewedBy })
-    .where(and(
-      eq(schema.contentReports.status, "open"),
-      eq(schema.contentReports.targetType, "comment"),
-      inArray(schema.contentReports.targetId, commentIds),
-    ));
+  await resolveOpenReports(transaction, {
+    commentIds: comments.map((comment) => comment.id),
+    postId: communityPostId,
+    resolvedBy: null,
+    status: "dismissed",
+  });
+}
+
+export async function dismissOpenReportsForComment(
+  transaction: DatabaseTransaction,
+  commentId: string,
+) {
+  await resolveOpenReports(transaction, {
+    commentIds: [commentId],
+    resolvedBy: null,
+    status: "dismissed",
+  });
 }
 
 function reportRow(row: {
@@ -118,19 +158,39 @@ function reportRow(row: {
   };
 }
 
-export async function closeOpenReportsForComment(
-  transaction: DatabaseTransaction,
-  commentId: string,
-  reviewedBy: string,
-) {
-  await transaction
-    .update(schema.contentReports)
-    .set({ status: "removed", reviewedAt: new Date(), reviewedBy })
-    .where(and(
-      eq(schema.contentReports.status, "open"),
-      eq(schema.contentReports.targetType, "comment"),
-      eq(schema.contentReports.targetId, commentId),
-    ));
+export async function softRemoveCommunityPost(input: {
+  actorId: string;
+  groupId: string;
+  workoutSessionId: string;
+}) {
+  return getDatabase().transaction(async (transaction) => {
+    const [post] = await transaction
+      .select({ id: schema.communityPosts.id })
+      .from(schema.communityPosts)
+      .where(and(
+        eq(schema.communityPosts.groupId, input.groupId),
+        eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        sql`${schema.communityPosts.removedAt} is null`,
+      ))
+      .limit(1);
+    if (!post) return null;
+    const now = new Date();
+    await transaction
+      .update(schema.communityPosts)
+      .set({ removedAt: now, removedBy: input.actorId, updatedAt: now })
+      .where(eq(schema.communityPosts.id, post.id));
+    const comments = await transaction
+      .select({ id: schema.communityPostComments.id })
+      .from(schema.communityPostComments)
+      .where(eq(schema.communityPostComments.communityPostId, post.id));
+    await resolveOpenReports(transaction, {
+      commentIds: comments.map((comment) => comment.id),
+      postId: post.id,
+      resolvedBy: input.actorId,
+      status: "removed",
+    });
+    return { postId: post.id };
+  });
 }
 
 async function isGroupMember(
@@ -144,23 +204,6 @@ async function isGroupMember(
     .where(and(
       eq(schema.groupMembers.groupId, groupId),
       eq(schema.groupMembers.userId, userId),
-    ))
-    .limit(1);
-  return Boolean(membership);
-}
-
-async function isGroupOwner(
-  database: Queryable,
-  userId: string,
-  groupId: string,
-) {
-  const [membership] = await database
-    .select({ role: schema.groupMembers.role })
-    .from(schema.groupMembers)
-    .where(and(
-      eq(schema.groupMembers.groupId, groupId),
-      eq(schema.groupMembers.userId, userId),
-      eq(schema.groupMembers.role, "owner"),
     ))
     .limit(1);
   return Boolean(membership);
@@ -183,26 +226,25 @@ export type ContentReportResult =
 
 export async function createContentReportForMember(input: {
   userId: string;
-  groupId: string;
   targetType: ContentReportTargetType;
-  workoutSessionId?: string;
-  commentId?: string;
+  targetId: string;
   reason: ContentReportReason;
-  note?: string | null;
-}): Promise<ContentReportResult> {
+  details?: string | null;
+  alsoBlock?: boolean;
+}): Promise<ContentReportResult & { blocked?: boolean }> {
   if (!reportReasons.has(input.reason)) return { ok: false, reason: "invalid" };
-  const note = input.note?.trim() || null;
-  if (note && note.length > 500) return { ok: false, reason: "invalid" };
+  const details = input.details?.trim() || null;
+  if (details && details.length > 500) return { ok: false, reason: "invalid" };
+  if (input.reason === "other" && !details) return { ok: false, reason: "invalid" };
 
   return getDatabase().transaction(async (transaction) => {
-    if (!await isGroupMember(transaction, input.userId, input.groupId)) {
+    const target = input.targetType === "post"
+      ? await resolvePostTarget(transaction, input.userId, input.targetId)
+      : await resolveCommentTarget(transaction, input.userId, input.targetId);
+    if (!target) return { ok: false, reason: "not_found" };
+    if (!await isGroupMember(transaction, input.userId, target.groupId)) {
       return { ok: false, reason: "not_member" };
     }
-
-    const target = input.targetType === "post"
-      ? await resolvePostTarget(transaction, input.groupId, input.workoutSessionId)
-      : await resolveCommentTarget(transaction, input.groupId, input.commentId);
-    if (!target) return { ok: false, reason: "not_found" };
     if (target.authorId === input.userId) return { ok: false, reason: "own_content" };
 
     const now = new Date();
@@ -211,11 +253,12 @@ export async function createContentReportForMember(input: {
       .values({
         id: randomUUID(),
         reporterId: input.userId,
-        groupId: input.groupId,
+        groupId: target.groupId,
         targetType: input.targetType,
         targetId: target.targetId,
+        targetUserId: target.authorId,
         reason: input.reason,
-        note,
+        details,
         status: "open",
         createdAt: now,
       })
@@ -235,60 +278,100 @@ export async function createContentReportForMember(input: {
         status: schema.contentReports.status,
         createdAt: schema.contentReports.createdAt,
       });
-    if (created) return { ok: true, report: reportRow(created) };
-
-    const [existing] = await transaction
-      .select({
-        id: schema.contentReports.id,
-        groupId: schema.contentReports.groupId,
-        targetType: schema.contentReports.targetType,
-        targetId: schema.contentReports.targetId,
-        reason: schema.contentReports.reason,
-        status: schema.contentReports.status,
-        createdAt: schema.contentReports.createdAt,
-      })
-      .from(schema.contentReports)
-      .where(and(
-        eq(schema.contentReports.reporterId, input.userId),
-        eq(schema.contentReports.targetType, input.targetType),
-        eq(schema.contentReports.targetId, target.targetId),
-      ))
-      .limit(1);
-    if (!existing) throw new Error("Content report could not be created");
-    return { ok: true, report: reportRow(existing) };
+    const report = created ?? await existingReport(transaction, input.userId, input.targetType, target.targetId);
+    if (!report) throw new Error("Content report could not be created");
+    let blocked = false;
+    if (input.alsoBlock) {
+      blocked = await blockInside(transaction, input.userId, target.authorId);
+    }
+    return { ok: true, report: reportRow(report), blocked };
   });
+}
+
+async function existingReport(
+  transaction: DatabaseTransaction,
+  reporterId: string,
+  targetType: ContentReportTargetType,
+  targetId: string,
+) {
+  const [existing] = await transaction
+    .select({
+      id: schema.contentReports.id,
+      groupId: schema.contentReports.groupId,
+      targetType: schema.contentReports.targetType,
+      targetId: schema.contentReports.targetId,
+      reason: schema.contentReports.reason,
+      status: schema.contentReports.status,
+      createdAt: schema.contentReports.createdAt,
+    })
+    .from(schema.contentReports)
+    .where(and(
+      eq(schema.contentReports.reporterId, reporterId),
+      eq(schema.contentReports.targetType, targetType),
+      eq(schema.contentReports.targetId, targetId),
+    ))
+    .limit(1);
+  return existing ?? null;
+}
+
+async function blockInside(
+  transaction: DatabaseTransaction,
+  blockerId: string,
+  blockedId: string,
+) {
+  if (blockerId === blockedId) return false;
+  await transaction
+    .insert(schema.userBlocks)
+    .values({ blockerId, blockedId, createdAt: new Date() })
+    .onConflictDoNothing({
+      target: [schema.userBlocks.blockerId, schema.userBlocks.blockedId],
+    });
+  return true;
 }
 
 async function resolvePostTarget(
   transaction: DatabaseTransaction,
-  groupId: string,
-  workoutSessionId: string | undefined,
+  _userId: string,
+  targetId: string,
 ) {
-  if (!workoutSessionId) return null;
-  const [post] = await transaction
+  const [byId] = await transaction
     .select({
       targetId: schema.communityPosts.id,
       authorId: schema.communityPosts.userId,
+      groupId: schema.communityPosts.groupId,
     })
     .from(schema.communityPosts)
     .where(and(
-      eq(schema.communityPosts.groupId, groupId),
-      eq(schema.communityPosts.workoutSessionId, workoutSessionId),
+      eq(schema.communityPosts.id, targetId),
+      sql`${schema.communityPosts.removedAt} is null`,
     ))
     .limit(1);
-  return post ?? null;
+  if (byId) return byId;
+  const [bySession] = await transaction
+    .select({
+      targetId: schema.communityPosts.id,
+      authorId: schema.communityPosts.userId,
+      groupId: schema.communityPosts.groupId,
+    })
+    .from(schema.communityPosts)
+    .where(and(
+      eq(schema.communityPosts.workoutSessionId, targetId),
+      sql`${schema.communityPosts.removedAt} is null`,
+    ))
+    .limit(1);
+  return bySession ?? null;
 }
 
 async function resolveCommentTarget(
   transaction: DatabaseTransaction,
-  groupId: string,
-  commentId: string | undefined,
+  _userId: string,
+  commentId: string,
 ) {
-  if (!commentId) return null;
   const [comment] = await transaction
     .select({
       targetId: schema.communityPostComments.id,
       authorId: schema.communityPostComments.userId,
+      groupId: schema.communityPosts.groupId,
     })
     .from(schema.communityPostComments)
     .innerJoin(
@@ -297,183 +380,11 @@ async function resolveCommentTarget(
     )
     .where(and(
       eq(schema.communityPostComments.id, commentId),
-      eq(schema.communityPosts.groupId, groupId),
+      sql`${schema.communityPostComments.removedAt} is null`,
+      sql`${schema.communityPosts.removedAt} is null`,
     ))
     .limit(1);
   return comment ?? null;
-}
-
-export type OpenContentReport = {
-  id: string;
-  targetType: ContentReportTargetType;
-  targetId: string;
-  workoutSessionId: string | null;
-  reason: ContentReportReason;
-  note: string | null;
-  createdAt: Date;
-  excerpt: string;
-  authorDisplayName: string;
-  reporterDisplayName: string;
-};
-
-export async function listOpenReportsForGroupOwner(input: {
-  userId: string;
-  groupId: string;
-}) {
-  const database = getDatabase();
-  if (!await isGroupOwner(database, input.userId, input.groupId)) return null;
-
-  const reports = await database
-    .select({
-      id: schema.contentReports.id,
-      targetType: schema.contentReports.targetType,
-      targetId: schema.contentReports.targetId,
-      reason: schema.contentReports.reason,
-      note: schema.contentReports.note,
-      createdAt: schema.contentReports.createdAt,
-      reporterDisplayName: schema.users.displayName,
-    })
-    .from(schema.contentReports)
-    .innerJoin(schema.users, eq(schema.contentReports.reporterId, schema.users.id))
-    .where(and(
-      eq(schema.contentReports.groupId, input.groupId),
-      eq(schema.contentReports.status, "open"),
-    ))
-    .orderBy(asc(schema.contentReports.createdAt), asc(schema.contentReports.id));
-
-  if (!reports.length) return [];
-
-  const postIds = reports
-    .filter((report) => report.targetType === "post")
-    .map((report) => report.targetId);
-  const commentIds = reports
-    .filter((report) => report.targetType === "comment")
-    .map((report) => report.targetId);
-
-  const [posts, comments] = await Promise.all([
-    postIds.length
-      ? database
-          .select({
-            id: schema.communityPosts.id,
-            workoutSessionId: schema.communityPosts.workoutSessionId,
-            caption: schema.communityPosts.caption,
-            name: schema.workoutSessions.name,
-            authorDisplayName: schema.users.displayName,
-          })
-          .from(schema.communityPosts)
-          .innerJoin(
-            schema.workoutSessions,
-            eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
-          )
-          .innerJoin(schema.users, eq(schema.communityPosts.userId, schema.users.id))
-          .where(inArray(schema.communityPosts.id, postIds))
-      : Promise.resolve([]),
-    commentIds.length
-      ? database
-          .select({
-            id: schema.communityPostComments.id,
-            text: schema.communityPostComments.text,
-            workoutSessionId: schema.communityPosts.workoutSessionId,
-            authorDisplayName: schema.users.displayName,
-          })
-          .from(schema.communityPostComments)
-          .innerJoin(
-            schema.communityPosts,
-            eq(schema.communityPostComments.communityPostId, schema.communityPosts.id),
-          )
-          .innerJoin(schema.users, eq(schema.communityPostComments.userId, schema.users.id))
-          .where(inArray(schema.communityPostComments.id, commentIds))
-      : Promise.resolve([]),
-  ]);
-
-  const postsById = new Map(posts.map((post) => [post.id, post]));
-  const commentsById = new Map(comments.map((comment) => [comment.id, comment]));
-
-  return reports.map((report): OpenContentReport => {
-    if (report.targetType === "post") {
-      const post = postsById.get(report.targetId);
-      const excerpt = post?.caption?.trim() || post?.name?.trim() || "Workout post";
-      return {
-        id: report.id,
-        targetType: "post",
-        targetId: report.targetId,
-        workoutSessionId: post?.workoutSessionId ?? null,
-        reason: report.reason as ContentReportReason,
-        note: report.note,
-        createdAt: report.createdAt,
-        excerpt: post ? excerpt : "This content is no longer available.",
-        authorDisplayName: post?.authorDisplayName ?? "Unknown",
-        reporterDisplayName: report.reporterDisplayName,
-      };
-    }
-
-    const comment = commentsById.get(report.targetId);
-    return {
-      id: report.id,
-      targetType: "comment",
-      targetId: report.targetId,
-      workoutSessionId: comment?.workoutSessionId ?? null,
-      reason: report.reason as ContentReportReason,
-      note: report.note,
-      createdAt: report.createdAt,
-      excerpt: comment?.text ?? "This content is no longer available.",
-      authorDisplayName: comment?.authorDisplayName ?? "Unknown",
-      reporterDisplayName: report.reporterDisplayName,
-    };
-  });
-}
-
-export async function dismissContentReportForGroupOwner(input: {
-  userId: string;
-  groupId: string;
-  reportId: string;
-}) {
-  const database = getDatabase();
-  if (!await isGroupOwner(database, input.userId, input.groupId)) return null;
-  const [updated] = await database
-    .update(schema.contentReports)
-    .set({
-      status: "dismissed",
-      reviewedAt: new Date(),
-      reviewedBy: input.userId,
-    })
-    .where(and(
-      eq(schema.contentReports.id, input.reportId),
-      eq(schema.contentReports.groupId, input.groupId),
-      eq(schema.contentReports.status, "open"),
-    ))
-    .returning({
-      id: schema.contentReports.id,
-      status: schema.contentReports.status,
-    });
-  return updated ?? null;
-}
-
-export async function removeCommunityPostForGroupOwner(input: {
-  userId: string;
-  groupId: string;
-  workoutSessionId: string;
-}) {
-  return getDatabase().transaction(async (transaction) => {
-    if (!await isGroupOwner(transaction, input.userId, input.groupId)) return null;
-    const [post] = await transaction
-      .select({
-        id: schema.communityPosts.id,
-        photoPath: schema.communityPosts.photoPath,
-      })
-      .from(schema.communityPosts)
-      .where(and(
-        eq(schema.communityPosts.groupId, input.groupId),
-        eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
-      ))
-      .limit(1);
-    if (!post) return null;
-    await closeOpenReportsForCommunityPost(transaction, post.id, input.userId);
-    await transaction
-      .delete(schema.communityPosts)
-      .where(eq(schema.communityPosts.id, post.id));
-    return { photoPaths: post.photoPath ? [post.photoPath] : [] };
-  });
 }
 
 export async function deleteCommunityCommentForMember(input: {
@@ -497,15 +408,12 @@ export async function deleteCommunityCommentForMember(input: {
         eq(schema.communityPosts.groupId, input.groupId),
       ))
       .limit(1);
-    if (!comment) return null;
-    const isAuthor = comment.userId === input.userId;
-    const isOwner = await isGroupOwner(transaction, input.userId, input.groupId);
-    if (!isAuthor && !isOwner) return null;
-    await closeOpenReportsForComment(transaction, comment.id, input.userId);
+    if (!comment || comment.userId !== input.userId) return null;
+    await dismissOpenReportsForComment(transaction, comment.id);
     await transaction
       .delete(schema.communityPostComments)
       .where(eq(schema.communityPostComments.id, comment.id));
-    return { deletedBy: isAuthor ? "author" as const : "owner" as const };
+    return { deletedBy: "author" as const };
   });
 }
 

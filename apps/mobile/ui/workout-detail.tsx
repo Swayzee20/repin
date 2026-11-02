@@ -3,6 +3,7 @@ import {
   formatGroupedIntervalSegment,
   getUserInitials,
   groupConsecutiveIntervalSegments,
+  personFirstName,
   resolveUserDisplayName,
   type CommunityReactionSummary,
   type CommunityReactionType,
@@ -110,7 +111,6 @@ export function WorkoutDetailView({
   refreshOnFocus = false,
   seedWorkout,
   sessionId,
-  viewerIsOwner = false,
 }: {
   detailExpansionResetKey?: string;
   detailPhotoMaxHeight?: number;
@@ -121,7 +121,6 @@ export function WorkoutDetailView({
   onPostHidden?: (sessionId: string) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUserBlocked?: (userId: string) => void;
-  viewerIsOwner?: boolean;
   paneHeader?: ReactNode;
   presentation?: "community-modal" | "community-pane" | "default" | "session";
   refreshOnFocus?: boolean;
@@ -249,7 +248,7 @@ export function WorkoutDetailView({
           };
           if (!response.ok || !body.workout) {
             if (response.status === 404) {
-              throw new Error("This workout is not available in your community.");
+              throw new Error("This post isn't available");
             }
             throw new Error(body.error ?? "Workout details could not be loaded.");
           }
@@ -484,9 +483,9 @@ export function WorkoutDetailView({
         <WideColumn>
           <StateCard
             actionLabel="Try again"
-            message={error}
+            message={error === "This post isn't available" ? "It may have been deleted or removed for breaking repin's community guidelines." : error}
             onAction={() => void loadWorkout()}
-            title="Workout unavailable"
+            title={error === "This post isn't available" ? "This post isn't available" : "Workout unavailable"}
           />
         </WideColumn>
       </View>
@@ -495,29 +494,45 @@ export function WorkoutDetailView({
 
   if (!workout) return null;
 
-  const owner = viewerIsOwner || workout.viewerRole === "owner";
   const canModerate = !fixture && Boolean(viewerUserId);
+  const postName = resolveUserDisplayName({ displayName: workout.displayName });
+  const postFirst = personFirstName(postName);
   const postItems = canModerate && viewerUserId !== workout.userId
     ? postMenuItems({
-        blockLabel: `Block ${resolveUserDisplayName({ displayName: workout.displayName })}`,
-        onBlock: () => moderation.askBlock(workout.userId, workout.displayName),
-        onRemove: owner ? () => moderation.askRemovePost(groupId, workout.id) : undefined,
-        onReport: () => moderation.askReportPost(groupId, workout.id),
+        blockLabel: `Block ${postFirst}`,
+        onBlock: () => moderation.askBlock(workout.userId, postName, {
+          displayName: postName,
+          hideId: workout.id,
+          kind: "post",
+          targetId: workout.communityPostId || workout.id,
+          userId: workout.userId,
+        }),
+        onReport: () => moderation.askReportPost(workout),
+        reportLabel: "Report post",
       })
     : [];
   const commentMenu = canModerate
     ? (comment: CommunityPostComment) => {
-        const ownComment = comment.userId === viewerUserId;
+        if (comment.userId === viewerUserId) return null;
+        const commentName = resolveUserDisplayName({ displayName: comment.displayName });
         const items = commentMenuItems({
-          blockLabel: `Block ${resolveUserDisplayName({ displayName: comment.displayName })}`,
-          onBlock: ownComment ? undefined : () => moderation.askBlock(comment.userId, comment.displayName),
-          onDelete: ownComment ? () => moderation.askRemoveComment(groupId, sessionId, comment.id) : undefined,
-          onRemove: !ownComment && owner ? () => moderation.askRemoveComment(groupId, sessionId, comment.id) : undefined,
-          onReport: ownComment ? undefined : () => moderation.askReportComment(groupId, sessionId, comment.id),
+          blockLabel: `Block ${personFirstName(commentName)}`,
+          onBlock: () => moderation.askBlock(comment.userId, commentName, {
+            displayName: commentName,
+            hideId: comment.id,
+            kind: "comment",
+            targetId: comment.id,
+            userId: comment.userId,
+          }),
+          onReport: () => moderation.askReportComment(comment),
         });
-        return items.length
-          ? <ContentOptionsMenu accessibilityLabel="Comment options" items={items} />
-          : null;
+        return (
+          <ContentOptionsMenu
+            accessibilityLabel={`Options for ${commentName}'s comment`}
+            items={items}
+            visual="comment"
+          />
+        );
       }
     : undefined;
 

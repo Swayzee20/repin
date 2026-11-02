@@ -357,23 +357,28 @@ export function Picker({
 }
 
 export function ChoiceTile({
+  accessibilityLabel,
   disabled = false,
   label,
   onPress,
+  role = "radio",
   selected,
   style,
 }: {
+  accessibilityLabel?: string;
   disabled?: boolean;
   label: string;
   onPress: () => void;
+  role?: "checkbox" | "radio";
   selected: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const chrome = choiceTileChrome({ disabled, selected });
   return (
     <Pressable
-      accessibilityRole="radio"
-      accessibilityState={{ disabled, selected }}
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole={role}
+      accessibilityState={{ disabled, checked: role === "checkbox" ? selected : undefined, selected }}
       disabled={disabled}
       onPress={onPress}
       style={(state) => [
