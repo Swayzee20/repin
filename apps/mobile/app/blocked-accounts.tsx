@@ -10,11 +10,11 @@ import { Button, Card, LoadingState, StateCard } from "../ui/components";
 import { TwoPane, useLayoutMode } from "../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
 import {
-  settingsHeaderClearance,
-  settingsHeaderScreenOptions,
-  settingsNativeHeaderEnabled,
-  settingsShowsRoundBack,
-} from "../ui/settings-header";
+  pushedHeaderClearance,
+  pushedHeaderScreenOptions,
+  pushedNativeHeaderEnabled,
+  pushedShowsRoundBack,
+} from "../ui/pushed-header";
 import { colors, fonts, layout, radii, size, spacing, type } from "../ui/theme";
 import { useStripState } from "../ui/vertical-bar-edge";
 
@@ -22,9 +22,9 @@ export default function BlockedAccountsScreen() {
   const router = useRouter();
   const { mode } = useLayoutMode();
   const strip = useStripState();
-  const nativeHeader = settingsNativeHeaderEnabled(Platform.OS);
-  const roundBack = settingsShowsRoundBack(Platform.OS);
-  const headerClearance = settingsHeaderClearance(Platform.OS, strip);
+  const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
+  const roundBack = pushedShowsRoundBack(Platform.OS);
+  const headerClearance = pushedHeaderClearance(Platform.OS, strip);
   const twoPane = mode === "twoPane";
   const [people, setPeople] = useState<BlockedUserSummary[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,7 +59,7 @@ export default function BlockedAccountsScreen() {
 
   return (
     <>
-      {nativeHeader ? <Stack.Screen options={settingsHeaderScreenOptions()} /> : null}
+      {nativeHeader ? <Stack.Screen options={pushedHeaderScreenOptions()} /> : null}
       <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
         <View style={headerClearance > 0 ? [styles.flex, { paddingTop: headerClearance }] : styles.flex}>
           <TwoPane
