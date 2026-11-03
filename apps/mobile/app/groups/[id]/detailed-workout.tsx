@@ -1,8 +1,8 @@
 import type { CommunityWorkoutDetail, RunWorkoutSubtype, WorkoutFeedItem, WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { StyleSheet, View, type ScrollViewInstance } from "react-native";
+import { useCallback, useEffect, useRef, useState, type ComponentRef } from "react";
+import { StyleSheet, View, type ScrollViewInstance, type TextInput } from "react-native";
 
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
@@ -39,6 +39,7 @@ import {
   validateQuickLogResults,
   WorkoutMetricFields,
 } from "../../../ui/quick-log-results";
+import { fieldChainProps } from "../../../ui/keyboard";
 import { spacing } from "../../../ui/theme";
 import {
   CardHeading,
@@ -73,6 +74,8 @@ export default function DetailedWorkoutScreen() {
   const [runResultsExpanded, setRunResultsExpanded] = useState(true);
   const [runResultError, setRunResultError] = useState<IntervalValidationIssue | { message: string } | null>(null);
   const scrollViewRef = useRef<ScrollViewInstance>(null);
+  const nameRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const captionRef = useRef<ComponentRef<typeof TextInput>>(null);
   const workoutCardY = useRef(0);
   const runEditorY = useRef(0);
   const [name, setName] = useState(layoutPreview ? "Saturday tempo" : "");
@@ -373,11 +376,28 @@ export default function DetailedWorkoutScreen() {
           {isStrengthWorkout ? (
             <FormCard>
               <CardHeading>Exercises</CardHeading>
-              <DetailedExerciseFields exercises={exercises} onChange={setExercises} />
+              <DetailedExerciseFields
+                exercises={exercises}
+                onAfterLast={() => nameRef.current?.focus()}
+                onChange={setExercises}
+              />
             </FormCard>
           ) : null}
           <FormCard>
-            <TextField label="Workout name" maxLength={120} onChangeText={setName} optional placeholder="Push day, Murph, morning run..." returnKeyType="next" value={name} />
+            <TextField
+              label="Workout name"
+              maxLength={120}
+              onChangeText={setName}
+              optional
+              placeholder="Push day, Murph, morning run..."
+              ref={nameRef}
+              value={name}
+              {...fieldChainProps({
+                count: 2,
+                index: 0,
+                onAdvance: () => captionRef.current?.focus(),
+              })}
+            />
           </FormCard>
           <FormCard>
             <FieldLabel label="How'd it feel?" optional />
@@ -400,7 +420,7 @@ export default function DetailedWorkoutScreen() {
               uri={photoUri}
             />
             <View style={styles.captionField}>
-              <TextArea label="Caption" maxLength={2_000} onChangeText={setCaption} optional placeholder="Legs felt great today" value={caption} />
+              <TextArea label="Caption" maxLength={2_000} onChangeText={setCaption} optional placeholder="Legs felt great today" ref={captionRef} value={caption} />
             </View>
           </FormCard>
           <CompletedCard

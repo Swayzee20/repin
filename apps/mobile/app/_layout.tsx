@@ -19,6 +19,7 @@ import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isLayoutPreview } from "../lib/layout-preview";
 import { initMobileSentry, wrapRoot } from "../lib/sentry";
 import { useAuthSession } from "../lib/use-auth-session";
+import { KeyboardDoneAccessory } from "../ui/keyboard-done";
 import { useLayoutMode } from "../ui/layout";
 import { formPresentation } from "../ui/layout-math";
 import { colors } from "../ui/theme";
@@ -57,6 +58,7 @@ function RootLayout() {
       <ReservedRegionsProvider style={styles.root}>
         <RootStack />
         <SignedOutRedirect />
+        <KeyboardDoneAccessory />
         <StatusBar style="dark" />
       </ReservedRegionsProvider>
     </RootErrorBoundary>

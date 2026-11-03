@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { Button, Card, TextField } from "../../ui/components";
+import { singleFieldReturn } from "../../ui/keyboard";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { colors, layout, size, spacing, type } from "../../ui/theme";
@@ -67,10 +68,9 @@ export default function CreateFirstGroupScreen() {
                   label="Group name"
                   maxLength={80}
                   onChangeText={setName}
-                  onSubmitEditing={() => void createGroup()}
                   placeholder="Sunday Strength Club"
-                  returnKeyType="done"
                   value={name}
+                  {...singleFieldReturn("go", () => void createGroup())}
                 />
                 <Button
                   disabled={!name.trim()}

@@ -41,6 +41,8 @@ import {
 } from "./components";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import { Chevron } from "./icons";
+import { scheduleKeyboardAccessoryReset, setKeyboardAccessory } from "./keyboard-accessory";
+import { keyboardScrollProps, multilineAccessoryProps } from "./keyboard";
 import { TwoPane, useLayoutMode, WideColumn } from "./layout";
 import { colors, fonts, radii, size, spacing, type } from "./theme";
 import { PhotoViewer } from "./photo-viewer";
@@ -510,8 +512,8 @@ export function WorkoutDetailView({
               <Card style={styles.surfaceCard}>
                 <View style={styles.surfaceClip}>
                   <ScrollView
+                    {...keyboardScrollProps(Platform.OS)}
                     contentContainerStyle={styles.surfaceScroll}
-                    keyboardShouldPersistTaps="handled"
                     style={[styles.surfaceScroller, webScrollerStyle]}
                   >
                     {detail("post")}
@@ -525,8 +527,8 @@ export function WorkoutDetailView({
               <Card style={styles.surfaceCard}>
                 <View style={styles.surfaceClip}>
                   <ScrollView
+                    {...keyboardScrollProps(Platform.OS)}
                     contentContainerStyle={styles.surfaceScroll}
-                    keyboardShouldPersistTaps="handled"
                     style={[styles.surfaceScroller, webScrollerStyle]}
                   >
                     {detail("comments")}
@@ -547,9 +549,8 @@ export function WorkoutDetailView({
     return (
       <View style={styles.modalBody}>
         <ScrollView
+          {...keyboardScrollProps(Platform.OS)}
           contentContainerStyle={styles.modalScroll}
-          keyboardDismissMode={Platform.OS === "web" ? "none" : "on-drag"}
-          keyboardShouldPersistTaps="handled"
           nestedScrollEnabled
           onContentSizeChange={detailAnchor.onContentSizeChange}
           onLayout={detailAnchor.onViewportLayout}
@@ -578,8 +579,8 @@ export function WorkoutDetailView({
           <Card style={styles.surfaceCard}>
             <View style={styles.surfaceClip}>
               <ScrollView
+                {...keyboardScrollProps(Platform.OS)}
                 contentContainerStyle={styles.surfaceScroll}
-                keyboardShouldPersistTaps="handled"
                 onContentSizeChange={detailAnchor.onContentSizeChange}
                 onLayout={detailAnchor.onViewportLayout}
                 onScroll={detailAnchor.onScroll}
@@ -934,6 +935,7 @@ function CommentComposer({
   sessionId: string;
 }) {
   const inputRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const accessoryGeneration = useRef(0);
   const [commentInputHeight, setCommentInputHeight] = useState<number>(size.hit);
   const empty = !commentText.trim();
 
@@ -950,11 +952,13 @@ function CommentComposer({
   return (
     <View style={[styles.composer, pinned && styles.composerPinned]}>
       <TextInput
+        {...multilineAccessoryProps(Platform.OS)}
         accessibilityLabel="Add a comment"
         editable={!commentSubmitting}
         maxLength={2_000}
         multiline
         onBlur={() => {
+          if (Platform.OS === "ios") scheduleKeyboardAccessoryReset(accessoryGeneration.current);
           if (composerBlurTimer) clearTimeout(composerBlurTimer);
           composerBlurTimer = setTimeout(() => markComposerBlurred(sessionId), 200);
         }}
@@ -965,6 +969,9 @@ function CommentComposer({
           );
         }}
         onFocus={() => {
+          if (Platform.OS === "ios") {
+            accessoryGeneration.current = setKeyboardAccessory({ label: "Done", run: () => {} });
+          }
           if (composerBlurTimer) clearTimeout(composerBlurTimer);
           markComposerFocused(sessionId);
         }}

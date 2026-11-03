@@ -1,10 +1,12 @@
 import type { MovementSummary, QuickLogMovementInput, WorkoutDetailMovement } from "@repin/types";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { supabase } from "../lib/supabase";
 import { TextField } from "./components";
 import { NumberField } from "./form-fields";
+import { fieldChainProps, type ReturnKeyType } from "./keyboard";
+import { useInputRegistry } from "./keyboard-focus";
 import { SegmentedControl } from "./primitives";
 import { colors, fonts, radii, size, spacing, type } from "./theme";
 
@@ -42,24 +44,43 @@ export function hydrateDetailedExercises(movements: WorkoutDetailMovement[]): De
 
 export function DetailedExerciseFields({
   exercises,
+  onAfterLast,
   onChange,
 }: {
   exercises: DetailedExerciseDraft[];
+  /** Return from the last set focuses the next field outside this list. */
+  onAfterLast?: () => void;
   onChange: (exercises: DetailedExerciseDraft[]) => void;
 }) {
+  const names = useRef(new Map<string, () => void>());
+  const registerName = useCallback((id: string, focus: (() => void) | null) => {
+    if (focus) names.current.set(id, focus);
+    else names.current.delete(id);
+  }, []);
+
   return (
     <View>
-      {exercises.map((exercise, index) => (
-        <DetailedExerciseEditor
-          exercise={exercise}
-          index={index}
-          key={exercise.id}
-          onChange={(nextExercise) => onChange(
-            exercises.map((item) => item.id === exercise.id ? nextExercise : item),
-          )}
-          onRemove={() => onChange(exercises.filter((item) => item.id !== exercise.id))}
-        />
-      ))}
+      {exercises.map((exercise, index) => {
+        const next = exercises[index + 1];
+        const advances = Boolean(next) || Boolean(onAfterLast);
+        return (
+          <DetailedExerciseEditor
+            exercise={exercise}
+            index={index}
+            key={exercise.id}
+            leaveKey={advances ? "next" : "done"}
+            onChange={(nextExercise) => onChange(
+              exercises.map((item) => item.id === exercise.id ? nextExercise : item),
+            )}
+            onLeave={advances ? () => {
+              if (next) names.current.get(next.id)?.();
+              else onAfterLast?.();
+            } : undefined}
+            onRegisterFocus={registerName}
+            onRemove={() => onChange(exercises.filter((item) => item.id !== exercise.id))}
+          />
+        );
+      })}
       <Pressable
         accessibilityRole="button"
         onPress={() => onChange([...exercises, createDetailedExercise()])}
@@ -74,16 +95,30 @@ export function DetailedExerciseFields({
 function DetailedExerciseEditor({
   exercise,
   index,
+  leaveKey = "done",
   onChange,
+  onLeave,
+  onRegisterFocus,
   onRemove,
 }: {
   exercise: DetailedExerciseDraft;
   index: number;
+  leaveKey?: ReturnKeyType;
   onChange: (exercise: DetailedExerciseDraft) => void;
+  onLeave?: () => void;
+  onRegisterFocus?: (id: string, focus: (() => void) | null) => void;
   onRemove: () => void;
 }) {
   const [suggestions, setSuggestions] = useState<MovementSummary[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const { focus, ref } = useInputRegistry();
+  const firstSet = exercise.sets[0];
+  const nameAdvances = Boolean(firstSet) || Boolean(onLeave);
+
+  useEffect(() => {
+    onRegisterFocus?.(exercise.id, () => focus("name"));
+    return () => onRegisterFocus?.(exercise.id, null);
+  }, [exercise.id, focus, onRegisterFocus]);
   const updateSet = (setId: string, change: Partial<DetailedSetDraft>) => onChange({
     ...exercise,
     sets: exercise.sets.map((set) => set.id === setId ? { ...set, ...change } : set),
@@ -126,7 +161,18 @@ function DetailedExerciseEditor({
           setShowSuggestions(true);
         }}
         placeholder="Barbell Bench Press"
+        ref={ref("name")}
         value={exercise.movementName}
+        {...fieldChainProps({
+          count: nameAdvances ? 2 : 1,
+          index: 0,
+          last: leaveKey,
+          onAdvance: () => {
+            if (firstSet) focus(`${firstSet.id}:reps`);
+            else onLeave?.();
+          },
+          onFinish: onLeave,
+        })}
       />
       {showSuggestions ? (
         <View style={styles.suggestions}>
@@ -161,7 +207,10 @@ function DetailedExerciseEditor({
         />
       </View>
 
-      {exercise.sets.map((set, setIndex) => (
+      {exercise.sets.map((set, setIndex) => {
+        const nextSet = exercise.sets[setIndex + 1];
+        const loadAdvances = Boolean(nextSet) || Boolean(onLeave);
+        return (
         <View key={set.id} style={styles.setCard}>
           <View style={styles.setHeader}>
             <Text style={styles.setTitle}>Set {setIndex + 1}</Text>
@@ -174,11 +223,44 @@ function DetailedExerciseEditor({
             </Pressable>
           </View>
           <View style={styles.setFields}>
-            <NumberField containerStyle={styles.setInput} kind="number" label="Reps" onChangeText={(reps) => updateSet(set.id, { reps })} placeholder="10" value={set.reps} />
-            <NumberField containerStyle={styles.setInput} kind="decimal" label="Weight" onChangeText={(load) => updateSet(set.id, { load })} placeholder="185" suffix={exercise.loadUnit} value={set.load} />
+            <NumberField
+              containerStyle={styles.setInput}
+              kind="number"
+              label="Reps"
+              onChangeText={(reps) => updateSet(set.id, { reps })}
+              placeholder="10"
+              ref={ref(`${set.id}:reps`)}
+              value={set.reps}
+              {...fieldChainProps({
+                count: 2,
+                index: 0,
+                onAdvance: () => focus(`${set.id}:load`),
+              })}
+            />
+            <NumberField
+              containerStyle={styles.setInput}
+              kind="decimal"
+              label="Weight"
+              onChangeText={(load) => updateSet(set.id, { load })}
+              placeholder="185"
+              ref={ref(`${set.id}:load`)}
+              suffix={exercise.loadUnit}
+              value={set.load}
+              {...fieldChainProps({
+                count: loadAdvances ? 2 : 1,
+                index: 0,
+                last: leaveKey,
+                onAdvance: () => {
+                  if (nextSet) focus(`${nextSet.id}:reps`);
+                  else onLeave?.();
+                },
+                onFinish: onLeave,
+              })}
+            />
           </View>
         </View>
-      ))}
+        );
+      })}
 
       <Pressable
         accessibilityRole="button"

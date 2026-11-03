@@ -21,11 +21,19 @@ import { colors, layout, radii, size, spacing } from "./theme";
 
 type FieldNode = ComponentRef<typeof TextInput>;
 
+type PaneFieldBinder = ((name: string) => {
+  onBlur: () => void;
+  onFocus: () => void;
+  ref: (node: FieldNode | null) => void;
+}) & {
+  focus: (name: string) => void;
+};
+
 /**
  * Keeps the focused field when TwoPane remounts its panes (fold, unfold, Split View).
  * Same approach as the sign-in form.
  */
-export function usePaneFieldFocus() {
+export function usePaneFieldFocus(): PaneFieldBinder {
   const { mode } = useLayoutMode();
   const focusedField = useRef<string | null>(null);
   const ignoreBlur = useRef(false);
@@ -49,7 +57,7 @@ export function usePaneFieldFocus() {
     return () => cancelAnimationFrame(frame);
   }, [mode]);
 
-  return (name: string) => {
+  const bind = ((name: string) => {
     let ref = refCallbacks.current.get(name);
     if (!ref) {
       ref = (node: FieldNode | null) => {
@@ -67,7 +75,11 @@ export function usePaneFieldFocus() {
       },
       ref,
     };
+  }) as PaneFieldBinder;
+  bind.focus = (name: string) => {
+    nodes.current.get(name)?.focus();
   };
+  return bind;
 }
 
 export function FormError({ message }: { message: string }) {

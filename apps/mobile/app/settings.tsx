@@ -7,14 +7,15 @@ import { isSentryTestActionVisible, sendSentryTestError } from "../lib/sentry";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
 import { Button, Card, TextField } from "../ui/components";
+import { singleFieldReturn } from "../ui/keyboard";
 import { TwoPane, useLayoutMode } from "../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
 import {
-  settingsHeaderClearance,
-  settingsHeaderScreenOptions,
-  settingsNativeHeaderEnabled,
-  settingsShowsRoundBack,
-} from "../ui/settings-header";
+  pushedHeaderClearance,
+  pushedHeaderScreenOptions,
+  pushedNativeHeaderEnabled,
+  pushedShowsRoundBack,
+} from "../ui/pushed-header";
 import { colors, layout, size, spacing, type } from "../ui/theme";
 import { useStripState } from "../ui/vertical-bar-edge";
 
@@ -25,9 +26,9 @@ export default function SettingsScreen() {
   const { mode } = useLayoutMode();
   const { session } = useAuthSession();
   const strip = useStripState();
-  const nativeHeader = settingsNativeHeaderEnabled(Platform.OS);
-  const roundBack = settingsShowsRoundBack(Platform.OS);
-  const headerClearance = settingsHeaderClearance(Platform.OS, strip);
+  const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
+  const roundBack = pushedShowsRoundBack(Platform.OS);
+  const headerClearance = pushedHeaderClearance(Platform.OS, strip);
   const twoPane = mode === "twoPane";
   const [signingOut, setSigningOut] = useState(false);
   const [confirmation, setConfirmation] = useState("");
@@ -81,18 +82,7 @@ export default function SettingsScreen() {
 
   return (
     <>
-      {nativeHeader ? <Stack.Screen options={settingsHeaderScreenOptions()} /> : null}
-      {nativeHeader ? (
-        <Stack.Toolbar placement="right">
-          <Stack.Toolbar.Button
-            accessibilityLabel="Sign out"
-            disabled={signingOut}
-            icon="rectangle.portrait.and.arrow.right"
-            onPress={() => void signOut()}
-            tintColor={colors.ink}
-          />
-        </Stack.Toolbar>
-      ) : null}
+      {nativeHeader ? <Stack.Screen options={pushedHeaderScreenOptions()} /> : null}
       <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
@@ -150,6 +140,7 @@ export default function SettingsScreen() {
                     onChangeText={setConfirmation}
                     placeholder="DELETE"
                     value={confirmation}
+                    {...singleFieldReturn("done")}
                   />
                   {deleteError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{deleteError}</Text> : null}
                   <Button
