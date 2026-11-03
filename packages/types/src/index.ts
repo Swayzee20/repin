@@ -19,6 +19,11 @@ export function isPlaceholderDisplayName(value: string | null | undefined) {
   return value === PLACEHOLDER_DISPLAY_NAME || LEGACY_PLACEHOLDER_DISPLAY_NAMES.includes(value ?? "");
 }
 
+export function personFirstName(displayName: string | null | undefined) {
+  const cleaned = displayName?.trim().replace(/\s+/g, " ") ?? "";
+  return cleaned.split(" ")[0] || "Someone";
+}
+
 export function resolveUserDisplayName(input: UserDisplayNameInput) {
   const firstName = cleanNameValue(input.firstName);
   const lastName = cleanNameValue(input.lastName);
@@ -96,6 +101,66 @@ export const workoutTypes = [
 export type WorkoutType = (typeof workoutTypes)[number];
 
 export const communityReactionTypes = ["fire", "strong", "clap"] as const;
+
+export const contentReportTargetTypes = ["post", "comment"] as const;
+export const contentReportReasons = [
+  "spam",
+  "harassment",
+  "hate",
+  "sexual",
+  "violence_self_harm",
+  "false_info",
+  "other",
+] as const;
+export const contentReportReasonLabels: Record<
+  (typeof contentReportReasons)[number],
+  string
+> = {
+  spam: "Spam",
+  harassment: "Harassment or bullying",
+  hate: "Hate",
+  sexual: "Nudity or sexual content",
+  violence_self_harm: "Violence or self-harm",
+  false_info: "False information",
+  other: "Something else",
+};
+export const contentReportReasonDetails: Record<
+  (typeof contentReportReasons)[number],
+  string
+> = {
+  spam: "Ads, scams, or the same thing over and over",
+  harassment: "Picking on, threatening, or shaming someone",
+  hate: "Attacking someone for who they are",
+  sexual: "Explicit photos or sexual messages",
+  violence_self_harm: "Threats, gore, or someone who might hurt themselves",
+  false_info: "Misleading health claims or made-up results",
+  other: "Tell us what's going on",
+};
+
+export type ContentReportTargetType = (typeof contentReportTargetTypes)[number];
+export type ContentReportReason = (typeof contentReportReasons)[number];
+
+export interface ContentReportSummary {
+  id: string;
+  targetType: ContentReportTargetType;
+  targetId: string;
+  workoutSessionId: string | null;
+  reason: ContentReportReason;
+  note: string | null;
+  createdAt: string;
+  excerpt: string;
+  authorDisplayName: string;
+  reporterDisplayName: string;
+}
+
+export interface BlockedUserSummary {
+  userId: string;
+  displayName: string;
+  blockedAt: string;
+}
+
+export const reportConfirmationMessage =
+  "Thanks, we got your report. This is hidden for you.";
 
 export type CommunityReactionType = (typeof communityReactionTypes)[number];
 
@@ -237,6 +302,7 @@ export interface MovementSummary {
 
 export interface WorkoutFeedItem {
   id: string;
+  communityPostId?: string;
   userId: string;
   groupId: string;
   workoutType: string;
@@ -305,6 +371,7 @@ export interface WorkoutDetailSegment {
 
 export interface CommunityWorkoutDetail extends WorkoutFeedItem {
   communityPostId: string;
+  viewerRole?: GroupRole;
   workoutSubtype: WorkoutSubtype | null;
   metrics: WorkoutDetailMetric[];
   movements: WorkoutDetailMovement[];

@@ -16,7 +16,9 @@ import {
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
 import { useMainTabs } from "../../../ui/main-tabs-context";
+import { workoutMenuItems } from "../../../lib/content-menu";
 import { BrandHeader, Card, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { useModeration } from "../../../ui/moderation";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { Icon } from "../../../ui/icons";
 import { TwoPane, useLayoutMode } from "../../../ui/layout";
@@ -131,6 +133,21 @@ export default function HomeScreen() {
 
   const dashboardData = __DEV__ && layoutPreview ? layoutPreviewHome() : homeData;
   const selectedGroup = useMemo(() => dashboardData?.groups.find((group) => group.id === dashboardData.selectedGroupId), [dashboardData]);
+  const hideHomeWorkouts = useCallback((matches: (workout: WorkoutFeedItem) => boolean) => {
+    setHomeData((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        communityWorkouts: current.communityWorkouts.filter((workout) => !matches(workout)),
+      };
+      homeDataRef.current = next;
+      return next;
+    });
+  }, []);
+  const moderation = useModeration({
+    onPostHidden: (sessionId) => hideHomeWorkouts((workout) => workout.id === sessionId),
+    onUserBlocked: (userId) => hideHomeWorkouts((workout) => workout.userId === userId),
+  });
   const dashboardBottomPadding = verticalBarEdge !== null ? insets.bottom + spacing.xxl : 160;
   if (!layoutPreview && authLoading && !session) return <Shell><LoadingState message="Checking your account…" /></Shell>;
   if (!layoutPreview && !session) return null;
@@ -167,6 +184,18 @@ export default function HomeScreen() {
               homeError={homeError}
               homeLoading={homeLoading}
               latestWorkoutToday={mode === "twoPane" ? null : latestWorkoutToday}
+              menuFor={(workout) => workoutMenuItems({
+                onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
+                  displayName: item.displayName,
+                  hideId: item.id,
+                  kind: "post",
+                  targetId: item.communityPostId ?? item.id,
+                  userId: item.userId,
+                }),
+                onReport: (item) => moderation.askReportPost(item),
+                viewerUserId: session?.user.id ?? dashboardData.user.id,
+                workout,
+              })}
               onCheckIn={selectedGroup ? openWorkoutChooser : undefined}
               onViewAll={selectedGroup ? () => {
                 setTabGroupId(selectedGroup.id);
@@ -177,6 +206,7 @@ export default function HomeScreen() {
           )}
         />
       </SafeAreaView>
+      {moderation.ui}
     </View>
   );
 }
@@ -260,6 +290,7 @@ function CrewZone({
   homeError,
   homeLoading,
   latestWorkoutToday,
+  menuFor,
   onCheckIn,
   onViewAll,
   workouts,
@@ -269,6 +300,7 @@ function CrewZone({
   homeError: string | null;
   homeLoading: boolean;
   latestWorkoutToday: WorkoutFeedItem | null;
+  menuFor?: (workout: WorkoutFeedItem) => ReturnType<typeof workoutMenuItems>;
   onCheckIn?: () => void;
   onViewAll?: () => void;
   workouts: WorkoutFeedItem[];
@@ -292,13 +324,13 @@ function CrewZone({
       {showList ? workouts.map((workout) => (
         <ScrollAnchor id={`home-workout-${workout.id}`} key={workout.id}>
           <View style={[styles.latestWorkout, compact && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard variant="compact" workout={workout} />
+            <WorkoutSummaryCard menuItems={menuFor?.(workout)} variant="compact" workout={workout} />
           </View>
         </ScrollAnchor>
       )) : latestWorkoutToday ? (
         <ScrollAnchor id={`home-workout-${latestWorkoutToday.id}`}>
           <View style={[styles.latestWorkout, compact && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard variant="compact" workout={latestWorkoutToday} />
+            <WorkoutSummaryCard menuItems={menuFor?.(latestWorkoutToday)} variant="compact" workout={latestWorkoutToday} />
           </View>
         </ScrollAnchor>
       ) : (

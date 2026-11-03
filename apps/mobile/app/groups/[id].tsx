@@ -7,7 +7,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { fetchGroupBoard } from "../../lib/group-board";
+import { useAuthSession } from "../../lib/use-auth-session";
 import { Button, Card, CommunityFeed, LoadingState, SectionHeader, StateCard } from "../../ui/components";
+import { useModeration } from "../../ui/moderation";
 import { Icon } from "../../ui/icons";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
@@ -27,6 +29,7 @@ const publicWebUrl = configuredPublicWebUrl.startsWith("https://")
 
 export default function GroupDetailScreen() {
   const router = useRouter();
+  const { session } = useAuthSession();
   const { mode } = useLayoutMode();
   const strip = useStripState();
   const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
@@ -100,6 +103,10 @@ export default function GroupDetailScreen() {
     router.push(`./${group.id}/log-workout`);
   }, [group, router]);
 
+  const moderation = useModeration({
+    onPostHidden: (sessionId) => setWorkouts((current) => current.filter((workout) => workout.id !== sessionId)),
+    onUserBlocked: (userId) => setWorkouts((current) => current.filter((workout) => workout.userId !== userId)),
+  });
   const feedFillsPane = Boolean(group && workouts.length > 0 && twoPane);
 
   return (
@@ -163,13 +170,28 @@ export default function GroupDetailScreen() {
               </View>
             )}
             right={group ? (
-              <GroupBoard feedFillsPane={feedFillsPane} onLog={openLog} stacked={!twoPane} workouts={workouts} />
+              <GroupBoard
+                feedFillsPane={feedFillsPane}
+                onBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, {
+                  displayName: workout.displayName,
+                  hideId: workout.id,
+                  kind: "post",
+                  targetId: workout.communityPostId ?? workout.id,
+                  userId: workout.userId,
+                })}
+                onLog={openLog}
+                onReport={(workout) => moderation.askReportPost(workout)}
+                stacked={!twoPane}
+                viewerUserId={session?.user.id ?? null}
+                workouts={workouts}
+              />
             ) : (
               <View />
             )}
             scrollableRight={!feedFillsPane}
           />
         </View>
+        {moderation.ui}
       </SafeAreaView>
     </>
   );
@@ -177,13 +199,19 @@ export default function GroupDetailScreen() {
 
 function GroupBoard({
   feedFillsPane,
+  onBlock,
   onLog,
+  onReport,
   stacked,
+  viewerUserId,
   workouts,
 }: {
   feedFillsPane: boolean;
+  onBlock: (workout: WorkoutFeedItem) => void;
   onLog: () => void;
+  onReport: (workout: WorkoutFeedItem) => void;
   stacked: boolean;
+  viewerUserId: string | null;
   workouts: WorkoutFeedItem[];
 }) {
   const [feedHeight, setFeedHeight] = useState(0);
@@ -215,7 +243,13 @@ function GroupBoard({
           }}
           style={feedFillsPane ? styles.feedSlot : undefined}
         >
-          <CommunityFeed viewportHeight={feedFillsPane && feedHeight > 0 ? feedHeight : undefined} workouts={workouts} />
+          <CommunityFeed
+            onWorkoutBlock={onBlock}
+            onWorkoutReport={onReport}
+            viewerUserId={viewerUserId}
+            viewportHeight={feedFillsPane && feedHeight > 0 ? feedHeight : undefined}
+            workouts={workouts}
+          />
         </View>
       )}
     </View>

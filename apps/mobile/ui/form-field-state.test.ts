@@ -182,6 +182,7 @@ test("choice tiles are 48pt, and selected tiles use brand tint, a 2pt brand bord
 
   const selected = choiceTileChrome({ disabled: false, selected: true });
   assert.equal(selected.backgroundColor, colors.brandTint);
+  assert.equal(selected.color, colors.brandPressed);
   assert.equal(selected.borderColor, colors.brand);
   assert.equal(selected.borderWidth, 2);
   assert.equal(selected.showCheck, true);

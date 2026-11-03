@@ -17,6 +17,7 @@
 | D5 | Third tab label **"Profile"** (was "Me") | `app/(tabs)/_layout.tsx` and `_layout.web.tsx`. |
 | D6 | **Merge the duplicate colour names; drop radii 9 and 18** | §2.1 and §2.3 mappings. |
 | D7 | **X close top-left everywhere** (Oct 31, 2026, approved by Josue) | Every modal and sheet (form modals, (+) chooser, pickers) puts its 44pt X top-left, with or without the strip. Replaces "X at the top of the strip" (§3, §5.2, §8, §9). Oct 31, 2026: includes the photo viewer (row 11, §5 fix 3). |
+| D8 | Selected option-tile labels, tonal button labels, segmented selected text, and calendar today-while-pressed #9E3500 app-wide (Nov 2, 2026, approved by Josue; tonal, segmented, and calendar extensions approved by Josue Nov 2, 2026) | Every selected `ChoiceTile` label and every tonal button label uses `brandPressed` #9E3500 on brandTint (6.40:1, passes AA; brand was 4.43:1). ChoiceTile background, 2pt brand border and check are unchanged; tonal fill stays brandTint (§3). Selected `SegmentedControl` text is `brandPressed` on the `selection` thumb (5.75:1; brand was 3.98:1). Calendar “today” while pressed uses `brandPressed` text on `selection` (5.75:1); the ring stays brand, and resting today stays brand text on surface (4.90:1). |
 | — | Locked, unchanged: the strip tab pill (Home / Community / Profile) and the round orange (+) | Every token below is derived from them. |
 
 ## 2. Final tokens (`ui/theme.ts`)
@@ -137,13 +138,13 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
   - Modal (forms) and every sheet: X top-left, with or without the strip (D7).
   - Pushed screen: round ‹ top-left of the left pane / header.
   - The text `BackButton` (`ui/components.tsx:148-154`) is deleted (16 uses).
-- **Segmented control:** glass capsule, 48pt track, 4pt inset, `selection` thumb, brand SemiBold text. `size="sm"` is a 36pt track with hitSlop 4. It replaces 4 variants: `ui/quick-log-results.tsx` (36), exercises unitToggle (34), `ui/detailed-run-fields.tsx` subtypeToggle (38) and UnitToggle (38×38).
+- **Segmented control:** glass capsule, 48pt track, 4pt inset, `selection` thumb, `brandPressed` #9E3500 SemiBold text (D8). `size="sm"` is a 36pt track with hitSlop 4. It replaces 4 variants: `ui/quick-log-results.tsx` (36), exercises unitToggle (34), `ui/detailed-run-fields.tsx` subtypeToggle (38) and UnitToggle (38×38).
 - **Buttons** (52pt, `radii.md`, `type.button`):
   - primary: brand, pressed `brandPressed`
   - loading: spinner + verb ("Logging")
   - disabled: disabledFill / disabledText, plus a helper line saying why (never opacity)
   - secondary: surface + borderStrong
-  - tonal (44pt): brandTint + brand text (inline "Done"; green is never a button)
+  - tonal (44pt): brandTint + `brandPressed` #9E3500 text (D8; inline "Done"; green is never a button)
   - danger: destructive confirm only
 - **ListRow:** 52pt, label left, value + chevron icon right, pressed = `selection`. No ‹/› text glyphs.
 - **Sheets:** top `radii.lg`, grabber, 44pt X, rows ≥48. No text "Cancel" row.
@@ -163,7 +164,7 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
 | FlameRating | 5 × 44pt tiles; empty = grey flame at 35%; word label; radio-group a11y | — |
 | DateRow | ListRow: label 16 Bold, value 15 muted | — |
 | PhotoTile | dashed `radii.lg` tile, camera icon + "Add photo". Filled: photo + 32pt dark X (44 hit) | error "Upload failed. Retry" |
-| ChoiceTile | 48pt `radii.md`, 15 left-aligned. Selected = brandTint + 2pt brand + check | disabled |
+| ChoiceTile | 48pt `radii.md`, 15 left-aligned. Selected = brandTint + 2pt brand + check; selected label `brandPressed` #9E3500 (6.40:1 on brandTint; brand would be 4.43:1, fails AA) — D8 | disabled |
 
 **Spacing:**
 - label → control 8

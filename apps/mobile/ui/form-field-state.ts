@@ -181,7 +181,7 @@ export function choiceTileChrome({ disabled, selected }: { disabled: boolean; se
       backgroundColor: colors.brandTint,
       borderColor: colors.brand,
       borderWidth: textFieldEmphasisBorderWidth,
-      color: colors.ink,
+      color: colors.brandPressed,
       height: choiceTileHeight,
       paddingHorizontal: textFieldPadding - 1,
       radius: radii.md,

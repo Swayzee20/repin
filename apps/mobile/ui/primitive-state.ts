@@ -73,7 +73,7 @@ function enabledButton(variant: ButtonVariant, pressed: boolean): Omit<ButtonApp
         backgroundColor: pressed ? colors.selection : colors.brandTint,
         borderColor: pressed ? colors.selection : colors.brandTint,
         borderWidth: 0,
-        color: colors.brand,
+        color: colors.brandPressed,
       };
     case "danger":
       return {
@@ -160,7 +160,7 @@ export function isSegmentSelected<T extends string>(current: T | null, option: T
 
 export function segmentTextColor(selected: boolean, disabled: boolean) {
   if (disabled) return colors.disabledText;
-  if (selected) return colors.brand;
+  if (selected) return colors.brandPressed;
   return colors.ink;
 }
 

@@ -24,7 +24,7 @@ export function SheetHeader({
   return (
     <View style={[styles.header, style]}>
       <RoundIconButton accessibilityLabel={closeLabel} kind="close" onPress={onClose} style={styles.close} />
-      <Text style={styles.title}>{title}</Text>
+      <Text accessibilityRole="header" style={styles.title}>{title}</Text>
     </View>
   );
 }

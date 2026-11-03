@@ -26,7 +26,9 @@ export function WorkoutDetailModal({
   initialWorkout,
   onCommentCountChange,
   onDismiss,
+  onPostHidden,
   onReactionSummaryChange,
+  onUserBlocked,
   sessionId,
   visible,
 }: {
@@ -36,7 +38,9 @@ export function WorkoutDetailModal({
   initialWorkout?: WorkoutFeedItem | null;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onDismiss: () => void;
+  onPostHidden?: (sessionId: string) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
+  onUserBlocked?: (userId: string) => void;
   sessionId: string | null;
   visible: boolean;
 }) {
@@ -165,7 +169,9 @@ export function WorkoutDetailModal({
                       groupId={groupId}
                       seedWorkout={initialWorkout ?? undefined}
                       onCommentCountChange={onCommentCountChange}
+                      onPostHidden={onPostHidden}
                       onReactionSummaryChange={onReactionSummaryChange}
+                      onUserBlocked={onUserBlocked}
                       presentation="community-modal"
                       sessionId={sessionId}
                     />
