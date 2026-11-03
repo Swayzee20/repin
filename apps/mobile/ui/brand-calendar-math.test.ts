@@ -138,6 +138,7 @@ test("day marks use brand tokens and the 40pt circle, never a system blue", () =
   const pressedToday = dayMarkAppearance({ disabled: false, pressed: true, selected: false, today: true });
   assert.equal(pressedToday.backgroundColor, colors.selection);
   assert.equal(pressedToday.borderColor, colors.brand);
+  assert.equal(pressedToday.color, colors.brandPressed);
 
   const pressedSelected = dayMarkAppearance({ disabled: false, pressed: true, selected: true, today: false });
   assert.equal(pressedSelected.backgroundColor, colors.brandPressed);

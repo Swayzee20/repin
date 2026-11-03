@@ -2,7 +2,7 @@ import { StyleSheet, View } from "react-native";
 
 import { Button } from "./components";
 import { dateActionHeight } from "./overlay-state";
-import { colors, spacing } from "./theme";
+import { spacing } from "./theme";
 
 export function DatePickerActions({
   onCancel,
@@ -17,7 +17,7 @@ export function DatePickerActions({
         <Button onPress={onCancel} style={styles.button} variant="secondary">Cancel</Button>
       </View>
       <View style={styles.action}>
-        <Button labelColor={colors.brandPressed} onPress={onDone} style={styles.button} variant="tonal">Done</Button>
+        <Button onPress={onDone} style={styles.button} variant="tonal">Done</Button>
       </View>
     </View>
   );

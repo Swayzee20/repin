@@ -62,8 +62,15 @@ test("primary, secondary, tonal, and danger buttons follow the variant spec", ()
 
   const tonal = buttonAppearance({ disabled: false, loading: false, pressed: false, variant: "tonal" });
   assert.equal(tonal.backgroundColor, colors.brandTint);
-  assert.equal(tonal.color, colors.brand);
+  assert.equal(tonal.color, colors.brandPressed);
   assert.equal(tonal.height, 44);
+  const tonalPressed = buttonAppearance({ disabled: false, loading: false, pressed: true, variant: "tonal" });
+  assert.equal(tonalPressed.backgroundColor, colors.selection);
+  assert.equal(tonalPressed.color, colors.brandPressed);
+  const tonalLoading = buttonAppearance({ disabled: false, loading: true, pressed: true, variant: "tonal" });
+  assert.equal(tonalLoading.backgroundColor, colors.brandTint);
+  assert.equal(tonalLoading.color, colors.brandPressed);
+  assert.equal(tonalLoading.showSpinner, true);
 
   const danger = buttonAppearance({ disabled: false, loading: false, pressed: false, variant: "danger" });
   assert.equal(danger.backgroundColor, colors.danger);
@@ -93,9 +100,10 @@ test("segmented tracks are 48pt, or 36pt with hit slop that reaches 44", () => {
   assert.equal(sm.hitSlop, 4);
   assert.equal(sm.track + sm.hitSlop * 2, 44);
 
-  assert.equal(segmentTextColor(true, false), colors.brand);
+  assert.equal(segmentTextColor(true, false), colors.brandPressed);
   assert.equal(segmentTextColor(false, false), colors.ink);
   assert.equal(segmentTextColor(true, true), colors.disabledText);
+  assert.equal(segmentTextColor(false, true), colors.disabledText);
 });
 
 test("round icon buttons are 44pt with glass, photo, and plus chrome", () => {

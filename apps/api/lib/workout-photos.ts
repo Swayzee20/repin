@@ -97,6 +97,18 @@ export async function addAuthorizedWorkoutPhotoUrls<T extends WorkoutWithPhotoPa
   });
 }
 
+const storedPhotoPath = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[^/].*$/i;
+
+export async function deleteStoredWorkoutPhotos(photoPaths: string[]) {
+  const paths = [...new Set(photoPaths.filter((path) => storedPhotoPath.test(path) && !path.includes("..")))];
+  if (!paths.length) return;
+  const bucket = getStorageAdminClient().client.storage.from("workout-photos");
+  const { error } = await bucket.remove(paths);
+  if (error) {
+    throw new Error("Workout photos could not be deleted", { cause: error });
+  }
+}
+
 function logSigningResult(input: {
   workoutId: string;
   keySource: "secret" | "service_role" | null;

@@ -21,6 +21,7 @@ import {
   markWorkoutDataStale,
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
+import { workoutMenuItems } from "../../../lib/content-menu";
 import { isLayoutPreview } from "../../../lib/layout-preview";
 import {
   communityFoldTransition,
@@ -39,6 +40,7 @@ import { useMainTabs } from "../../../ui/main-tabs-context";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
 import { colors, fonts, size, spacing, type } from "../../../ui/theme";
 import { holdComposerFocus, releaseComposerFocus, WorkoutDetailView, type WorkoutDetailFixture } from "../../../ui/workout-detail";
+import { useModeration } from "../../../ui/moderation";
 import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -238,6 +240,29 @@ export default function CommunityTabScreen() {
     if (postParam) router.setParams({ post: "" });
   }, [postParam, router]);
 
+  const hideWorkouts = useCallback((matches: (workout: WorkoutFeedItem) => boolean) => {
+    setData((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        communityWorkouts: current.communityWorkouts.filter((workout) => !matches(workout)),
+      };
+      dataRef.current = next;
+      return next;
+    });
+    setDetailTarget((current) => {
+      if (!current || !matches(current.workout)) return current;
+      setExplicitOverride(null);
+      if (postParam) router.setParams({ post: "" });
+      return null;
+    });
+  }, [postParam, router]);
+
+  const moderation = useModeration({
+    onPostHidden: (sessionId) => hideWorkouts((workout) => workout.id === sessionId),
+    onUserBlocked: (userId) => hideWorkouts((workout) => workout.userId === userId),
+  });
+
   const clearFeed = useCallback((nextGroupId?: string | null) => {
     latestRequestKey.current = null;
     setError(null);
@@ -338,6 +363,25 @@ export default function CommunityTabScreen() {
     if (!selectedGroup) return;
     router.push(`/groups/${encodeURIComponent(selectedGroup.id)}/workouts/${encodeURIComponent(workout.id)}/edit`);
   }, [router, selectedGroup]);
+
+  const feedMenu = useCallback((workout: WorkoutFeedItem) => workoutMenuItems({
+    onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
+      displayName: item.displayName,
+      hideId: item.id,
+      kind: "post",
+      targetId: item.communityPostId ?? item.id,
+      userId: item.userId,
+    }),
+    onDelete: (item) => {
+      setDeleteError(null);
+      setDeleteStage("choose");
+      setDeleteTarget(item);
+    },
+    onEdit: editWorkout,
+    onReport: (item) => moderation.askReportPost(item),
+    viewerUserId: loadedUserId.current,
+    workout,
+  }), [editWorkout, moderation]);
 
   const deleteWorkout = useCallback(async (scope: "post" | "workout") => {
     if (!deleteTarget || !selectedGroup || !supabase) return;
@@ -442,6 +486,7 @@ export default function CommunityTabScreen() {
                         style={styles.paneCardPress}
                       >
                         <WorkoutSummaryCard
+                          menuItems={feedMenu(workout)}
                           selected={selected}
                           showCommentCount
                           showReactionSummary
@@ -467,6 +512,8 @@ export default function CommunityTabScreen() {
                 key={openSessionId}
                 fixture={previewFixture}
                 groupId={selectedGroup.id}
+                onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}
+                onUserBlocked={(userId) => hideWorkouts((workout) => workout.userId === userId)}
                 paneHeader={(
                   <View style={styles.panePostHeader}>
                     <Text style={styles.panePostTitle}>Post</Text>
@@ -489,6 +536,7 @@ export default function CommunityTabScreen() {
           value={selectedDate}
           visible={datePickerOpen}
         />
+        {moderation.ui}
         <DeleteWorkoutModal
           error={deleteError}
           onDeletePost={() => void deleteWorkout("post")}
@@ -599,7 +647,7 @@ export default function CommunityTabScreen() {
               ) : error ? (
                 <View style={styles.feedState}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Activity unavailable" /></View>
               ) : (board?.communityWorkouts.length ?? 0) > 0 ? (
-                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} showCommentCount showReactionSummary viewerUserId={loadedUserId.current} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
+                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={loadedUserId.current} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
               ) : isSameLocalDay(selectedDate, currentDay) ? (
                 <View style={styles.todayEmpty}>
                   <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
@@ -621,6 +669,7 @@ export default function CommunityTabScreen() {
         value={selectedDate}
         visible={datePickerOpen}
       />
+      {moderation.ui}
       <WorkoutDetailModal
         key={detailTarget?.workout.id ?? "closed"}
         fixture={layoutPreview && detailTarget ? layoutPreviewDetail(detailTarget.workout.id) : null}
@@ -628,6 +677,8 @@ export default function CommunityTabScreen() {
         groupName={selectedGroup?.name ?? null}
         initialWorkout={detailTarget?.workout ?? null}
         onCommentCountChange={updateFeedCommentCount}
+        onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}
+        onUserBlocked={(userId) => hideWorkouts((workout) => workout.userId === userId)}
         onDismiss={() => {
           setDetailTarget(null);
           setExplicitOverride(null);

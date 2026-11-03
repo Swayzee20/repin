@@ -3,6 +3,7 @@ import {
   formatGroupedIntervalSegment,
   getUserInitials,
   groupConsecutiveIntervalSegments,
+  personFirstName,
   resolveUserDisplayName,
   type CommunityReactionSummary,
   type CommunityReactionType,
@@ -16,7 +17,9 @@ import { useCallback, useEffect, useRef, useState, type ComponentRef, type React
 import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { commentMenuItems, postMenuItems } from "../lib/content-menu";
 import { useCommentDraft } from "../lib/comment-draft";
+import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
 import {
   formatWorkoutMetric,
@@ -35,10 +38,12 @@ import {
 } from "../lib/workout-detail-cache";
 import {
   Card,
+  ContentOptionsMenu,
   formatWorkoutType,
   LoadingState,
   StateCard,
 } from "./components";
+import { useModeration } from "./moderation";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import { Chevron } from "./icons";
 import { scheduleKeyboardAccessoryReset, setKeyboardAccessory } from "./keyboard-accessory";
@@ -100,7 +105,9 @@ export function WorkoutDetailView({
   groupId,
   leading = null,
   onCommentCountChange,
+  onPostHidden,
   onReactionSummaryChange,
+  onUserBlocked,
   paneHeader = null,
   presentation = "default",
   refreshOnFocus = false,
@@ -113,7 +120,9 @@ export function WorkoutDetailView({
   groupId: string;
   leading?: ReactNode;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
+  onPostHidden?: (sessionId: string) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
+  onUserBlocked?: (userId: string) => void;
   paneHeader?: ReactNode;
   presentation?: "community-modal" | "community-pane" | "default" | "session";
   refreshOnFocus?: boolean;
@@ -173,7 +182,30 @@ export function WorkoutDetailView({
   const reactionRequestPending = useRef(false);
   const commentRequestPending = useRef(false);
   const mounted = useRef(true);
+  const { session } = useAuthSession();
+  const viewerUserId = session?.user.id ?? null;
   const workoutRef = useRef(workout);
+  const moderation = useModeration({
+    onCommentHidden: (commentId) => {
+      setComments((current) => {
+        const next = current.filter((comment) => comment.id !== commentId);
+        writeWorkoutCommentsCache(groupId, sessionId, next);
+        onCommentCountChange?.(sessionId, next.length);
+        return next;
+      });
+    },
+    onPostHidden: (hiddenSessionId) => onPostHidden?.(hiddenSessionId),
+    onUserBlocked: (userId) => {
+      onUserBlocked?.(userId);
+      setComments((current) => {
+        const next = current.filter((comment) => comment.userId !== userId);
+        writeWorkoutCommentsCache(groupId, sessionId, next);
+        onCommentCountChange?.(sessionId, next.length);
+        return next;
+      });
+      if (workoutRef.current?.userId === userId) onPostHidden?.(workoutRef.current.id);
+    },
+  });
   const reactionsWereChanged = useRef(false);
   const latestReactions = useRef(
     workout?.reactions ?? emptyCommunityReactionSummary(),
@@ -218,7 +250,7 @@ export function WorkoutDetailView({
           };
           if (!response.ok || !body.workout) {
             if (response.status === 404) {
-              throw new Error("This workout is not available in your community.");
+              throw new Error("This post isn't available");
             }
             throw new Error(body.error ?? "Workout details could not be loaded.");
           }
@@ -453,9 +485,9 @@ export function WorkoutDetailView({
         <WideColumn>
           <StateCard
             actionLabel="Try again"
-            message={error}
+            message={error === "This post isn't available" ? "It may have been deleted or removed for breaking repin's community guidelines." : error}
             onAction={() => void loadWorkout()}
-            title="Workout unavailable"
+            title={error === "This post isn't available" ? "This post isn't available" : "Workout unavailable"}
           />
         </WideColumn>
       </View>
@@ -463,6 +495,48 @@ export function WorkoutDetailView({
   }
 
   if (!workout) return null;
+
+  const canModerate = !fixture && Boolean(viewerUserId);
+  const postName = resolveUserDisplayName({ displayName: workout.displayName });
+  const postFirst = personFirstName(postName);
+  const postItems = canModerate && viewerUserId !== workout.userId
+    ? postMenuItems({
+        blockLabel: `Block ${postFirst}`,
+        onBlock: () => moderation.askBlock(workout.userId, postName, {
+          displayName: postName,
+          hideId: workout.id,
+          kind: "post",
+          targetId: workout.communityPostId || workout.id,
+          userId: workout.userId,
+        }),
+        onReport: () => moderation.askReportPost(workout),
+        reportLabel: "Report post",
+      })
+    : [];
+  const commentMenu = canModerate
+    ? (comment: CommunityPostComment) => {
+        if (comment.userId === viewerUserId) return null;
+        const commentName = resolveUserDisplayName({ displayName: comment.displayName });
+        const items = commentMenuItems({
+          blockLabel: `Block ${personFirstName(commentName)}`,
+          onBlock: () => moderation.askBlock(comment.userId, commentName, {
+            displayName: commentName,
+            hideId: comment.id,
+            kind: "comment",
+            targetId: comment.id,
+            userId: comment.userId,
+          }),
+          onReport: () => moderation.askReportComment(comment),
+        });
+        return (
+          <ContentOptionsMenu
+            accessibilityLabel={`Options for ${commentName}'s comment`}
+            items={items}
+            visual="comment"
+          />
+        );
+      }
+    : undefined;
 
   const detail = (part: "all" | "comments" | "post") => (
     <WorkoutDetailContent
@@ -474,8 +548,11 @@ export function WorkoutDetailView({
       detailError={error}
       detailExpansionResetKey={detailExpansionResetKey}
       detailPhotoMaxHeight={detailPhotoMaxHeight}
+      commentMenu={commentMenu}
+      moderationUi={moderation.ui}
       onCommentChange={setCommentText}
       onCommentSubmit={() => void submitComment()}
+      postMenu={postItems.length ? <ContentOptionsMenu accessibilityLabel="Post options" items={postItems} /> : null}
       onCommentsRetry={() => void loadComments(true)}
       onReactionPress={(reactionType) => void toggleReaction(reactionType)}
       part={part}
@@ -613,6 +690,7 @@ export function WorkoutDetailView({
 
 export function WorkoutDetailContent({
   commentError,
+  commentMenu,
   commentSubmitting = false,
   commentText = "",
   comments = [],
@@ -623,8 +701,10 @@ export function WorkoutDetailContent({
   onCommentChange,
   onCommentSubmit,
   onCommentsRetry,
+  moderationUi = null,
   onReactionPress,
   part = "all",
+  postMenu = null,
   presentation = "default",
   reactionError,
   reactionPending = false,
@@ -632,6 +712,7 @@ export function WorkoutDetailContent({
   workout,
 }: {
   commentError?: string | null;
+  commentMenu?: (comment: CommunityPostComment) => ReactNode;
   commentSubmitting?: boolean;
   commentText?: string;
   comments?: CommunityPostComment[];
@@ -642,8 +723,10 @@ export function WorkoutDetailContent({
   onCommentChange?: (text: string) => void;
   onCommentSubmit?: () => void;
   onCommentsRetry?: () => void;
+  moderationUi?: ReactNode;
   onReactionPress?: (reactionType: CommunityReactionType) => void;
   part?: "all" | "comments" | "post";
+  postMenu?: ReactNode;
   presentation?: "community-modal" | "community-pane" | "default" | "session";
   reactionError?: string | null;
   reactionPending?: boolean;
@@ -741,6 +824,7 @@ export function WorkoutDetailContent({
           <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
         {!isCommunityModal ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
+        {postMenu}
       </View>
 
       <Text style={[styles.title, isCommunitySheet ? styles.sheetTitle : styles.defaultTitle]}>{title}</Text>
@@ -860,9 +944,12 @@ export function WorkoutDetailContent({
                   <ScrollAnchor id={`comment:${comment.id}`} key={comment.id}>
                   <View style={[styles.commentRow, styles.modalCommentRow]}>
                     <View style={[styles.commentHeader, styles.modalCommentHeader]}>
-                      <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
-                      <Text style={styles.commentSeparator}>·</Text>
-                      <Text style={[styles.commentTimestamp, styles.modalCommentTimestamp]}>{formatCommentTime(comment.createdAt)}</Text>
+                      <View style={styles.commentIdentity}>
+                        <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
+                        <Text style={styles.commentSeparator}>·</Text>
+                        <Text style={[styles.commentTimestamp, styles.modalCommentTimestamp]}>{formatCommentTime(comment.createdAt)}</Text>
+                      </View>
+                      {commentMenu?.(comment)}
                     </View>
                     <Text style={[styles.commentBody, styles.modalCommentBody]}>{comment.text}</Text>
                   </View>
@@ -873,8 +960,11 @@ export function WorkoutDetailContent({
               <ScrollAnchor id={`comment:${comment.id}`} key={comment.id}>
               <View style={[styles.commentRow, index > 0 && styles.dividedRow]}>
                 <View style={styles.commentHeader}>
-                  <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
-                  <Text style={styles.commentTimestamp}>{formatCommentTimestamp(comment.createdAt)}</Text>
+                  <View style={styles.commentIdentity}>
+                    <Text style={styles.commentAuthor}>{resolveUserDisplayName({ displayName: comment.displayName })}</Text>
+                    <Text style={styles.commentTimestamp}>{formatCommentTimestamp(comment.createdAt)}</Text>
+                  </View>
+                  {commentMenu?.(comment)}
                 </View>
                 <Text style={styles.commentBody}>{comment.text}</Text>
               </View>
@@ -915,6 +1005,7 @@ export function WorkoutDetailContent({
           visible={photoViewerVisible}
         />
       ) : null}
+      {moderationUi}
     </View>
   );
 }
@@ -1382,7 +1473,8 @@ const styles = StyleSheet.create({
   firstCommentDateGroup: { marginTop: spacing.xs },
   commentDateLabel: { color: colors.subtle, ...type.bodySmall, textAlign: "center" },
   commentRow: { paddingVertical: spacing.md },
-  commentHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
+  commentHeader: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
+  commentIdentity: { alignItems: "center", flex: 1, flexDirection: "row", gap: spacing.sm },
   modalCommentRow: { paddingVertical: spacing.sm },
   modalCommentHeader: { justifyContent: "flex-start" },
   commentAuthor: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize },

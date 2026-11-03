@@ -54,6 +54,8 @@ export const communityPostReactionTypes = ["fire", "strong", "clap"] as const;
 export const users = pgTable("users", {
   id: uuid().primaryKey(),
   displayName: text("display_name").notNull(),
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  termsVersion: text("terms_version"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -570,6 +572,8 @@ export const communityPosts = pgTable(
       .references(() => workoutSessions.id, { onDelete: "cascade" }),
     caption: text(),
     photoPath: text("photo_path"),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: uuid("removed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -634,6 +638,8 @@ export const communityPostComments = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: "cascade" }),
     text: text().notNull(),
+    removedAt: timestamp("removed_at", { withTimezone: true }),
+    removedBy: uuid("removed_by").references(() => users.id, { onDelete: "set null" }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -651,6 +657,107 @@ export const communityPostComments = pgTable(
     check(
       "community_post_comments_text_check",
       sql`length(btrim(${table.text})) between 1 and 2000`,
+    ),
+  ],
+);
+
+export const contentReportTargetTypes = ["post", "comment"] as const;
+export const contentReportReasons = [
+  "spam",
+  "harassment",
+  "hate",
+  "sexual",
+  "violence_self_harm",
+  "false_info",
+  "other",
+] as const;
+export const contentReportStatuses = ["open", "removed", "dismissed"] as const;
+
+export const contentReports = pgTable(
+  "content_reports",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    reporterId: uuid("reporter_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    targetType: text("target_type").notNull(),
+    targetId: uuid("target_id").notNull(),
+    targetUserId: uuid("target_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    reason: text().notNull(),
+    details: text(),
+    status: text().notNull().default("open"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    resolvedAt: timestamp("resolved_at", { withTimezone: true }),
+    resolvedBy: uuid("resolved_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+  },
+  (table) => [
+    uniqueIndex("content_reports_reporter_target_unique").on(
+      table.reporterId,
+      table.targetType,
+      table.targetId,
+    ),
+    index("content_reports_group_status_created_idx").on(
+      table.groupId,
+      table.status,
+      table.createdAt,
+    ),
+    index("content_reports_status_created_idx").on(
+      table.status,
+      table.createdAt,
+    ),
+    check(
+      "content_reports_target_type_check",
+      sql`${table.targetType} in ('post', 'comment')`,
+    ),
+    check(
+      "content_reports_reason_check",
+      sql`${table.reason} in ('spam', 'harassment', 'hate', 'sexual', 'violence_self_harm', 'false_info', 'other')`,
+    ),
+    check(
+      "content_reports_status_check",
+      sql`${table.status} in ('open', 'removed', 'dismissed')`,
+    ),
+    check(
+      "content_reports_details_check",
+      sql`(
+        ${table.reason} <> 'other'
+        and (${table.details} is null or length(btrim(${table.details})) between 1 and 500)
+      ) or (
+        ${table.reason} = 'other'
+        and length(btrim(${table.details})) between 1 and 500
+      )`,
+    ),
+  ],
+);
+
+export const userBlocks = pgTable(
+  "user_blocks",
+  {
+    blockerId: uuid("blocker_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    blockedId: uuid("blocked_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.blockerId, table.blockedId] }),
+    index("user_blocks_blocked_id_idx").on(table.blockedId),
+    check(
+      "user_blocks_distinct_check",
+      sql`${table.blockerId} <> ${table.blockedId}`,
     ),
   ],
 );
@@ -686,3 +793,7 @@ export type CommunityPostReaction = typeof communityPostReactions.$inferSelect;
 export type NewCommunityPostReaction = typeof communityPostReactions.$inferInsert;
 export type CommunityPostComment = typeof communityPostComments.$inferSelect;
 export type NewCommunityPostComment = typeof communityPostComments.$inferInsert;
+export type ContentReport = typeof contentReports.$inferSelect;
+export type NewContentReport = typeof contentReports.$inferInsert;
+export type UserBlock = typeof userBlocks.$inferSelect;
+export type NewUserBlock = typeof userBlocks.$inferInsert;

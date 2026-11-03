@@ -159,7 +159,10 @@ export const sheetDismissDistance = spacing.huge + spacing.xxxl;
 export const menuItemMinHeight = size.primary;
 
 /** Popover width used when a menu is anchored to a button. */
-export const menuPopoverWidth = 176;
+export const menuPopoverWidth = 208;
+
+/** Reason rows are taller than a menu row so the detail line fits. */
+export const reportReasonRowMinHeight = 58;
 
 /** StateCard action is the 48pt secondary control. The icon slot is 36pt. */
 export const stateActionHeight = size.control;

@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import {
   communityReactionTypes,
+  contentReportReasons,
+  contentReportTargetTypes,
   runWorkoutSubtypes,
   workoutDistanceUnits,
   workoutMetricTypes,
@@ -19,6 +21,7 @@ export const createGroupSchema = z.object({
 });
 
 export const groupIdSchema = z.uuid();
+export const uuidSchema = z.uuid();
 export const workoutSessionIdSchema = z.uuid();
 
 export const setCommunityReactionSchema = z.object({
@@ -27,6 +30,14 @@ export const setCommunityReactionSchema = z.object({
 
 export const createCommunityCommentSchema = z.object({
   text: z.string().trim().min(1, "Enter a comment").max(2_000, "Comment is too long"),
+}).strict();
+
+export const createContentReportSchema = z.object({
+  targetType: z.enum(contentReportTargetTypes),
+  targetId: z.uuid(),
+  reason: z.enum(contentReportReasons),
+  details: z.string().trim().max(500, "Details are too long").optional(),
+  alsoBlock: z.boolean().optional(),
 }).strict();
 
 export const groupSearchQuerySchema = z.object({
