@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { Button, Card, LoadingState, StateCard, TextField } from "../../ui/components";
+import { singleFieldReturn } from "../../ui/keyboard";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import {
@@ -152,9 +153,9 @@ export default function JoinGroupScreen() {
                 setInviteError(null);
                 setJoinError(null);
               }}
-              onSubmitEditing={() => void findInvite()}
               placeholder="Invite code"
               value={inviteCode}
+              {...singleFieldReturn("search", () => void findInvite())}
             />
             <Button
               disabled={inviteLoading || !inviteCode.trim()}

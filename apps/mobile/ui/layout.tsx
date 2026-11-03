@@ -17,6 +17,7 @@ import {
   useScrollAnchor,
   type ScrollAnchorController,
 } from "./scroll-anchor";
+import { keyboardScrollProps } from "./keyboard";
 import { colors, layout, spacing } from "./theme";
 
 export type { LayoutMode, LayoutSnapshot, LayoutSplit } from "./layout-math";
@@ -253,6 +254,7 @@ function PaneScroll({
   }
   return (
     <ScrollView
+      {...keyboardScrollProps(Platform.OS)}
       contentContainerStyle={[styles.paneContent, styles.scrollBleedContent]}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       onContentSizeChange={anchor.onContentSizeChange}
@@ -293,6 +295,7 @@ function CollapsedColumn({
   );
   return (
     <ScrollView
+      {...keyboardScrollProps(Platform.OS)}
       contentContainerStyle={styles.collapsedScroll}
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       onContentSizeChange={anchor.onContentSizeChange}

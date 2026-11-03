@@ -5,6 +5,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { isEmailAddress, PASSWORD_RESET_SENT_MESSAGE, requestPasswordReset } from "../lib/password-reset";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { AuthScreen, AuthSuccessMark, usePaneFieldFocus } from "../ui/auth-screen";
+import { singleFieldReturn } from "../ui/keyboard";
 import { Button, StateCard, TextField } from "../ui/components";
 import { colors, spacing, type } from "../ui/theme";
 
@@ -73,11 +74,11 @@ export default function ForgotPasswordScreen() {
         inputMode="email"
         label="Email"
         onChangeText={setEmail}
-        onSubmitEditing={() => void sendReset()}
         placeholder="you@example.com"
         textContentType="emailAddress"
         value={email}
         {...fieldProps("email")}
+        {...singleFieldReturn("send", () => void sendReset())}
       />
       <Button
         disabled={!email.trim()}

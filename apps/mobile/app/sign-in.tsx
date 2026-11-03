@@ -7,6 +7,7 @@ import repinMarkLarge from "../assets/branding/repin-mark-large.png";
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { Button, Lockup, StateCard, TextField, Wordmark } from "../ui/components";
+import { fieldChainProps } from "../ui/keyboard";
 import { TwoPane, useLayoutMode } from "../ui/layout";
 import { colors, fonts, layout, radii, spacing, type } from "../ui/theme";
 
@@ -91,6 +92,13 @@ export default function SignInScreen() {
           placeholder="you@example.com"
           ref={emailInput}
           value={email}
+          {...fieldChainProps({
+            count: 2,
+            index: 0,
+            last: "go",
+            onAdvance: () => passwordInput.current?.focus(),
+            onFinish: () => void signIn(),
+          })}
         />
         <TextField
           autoCapitalize="none"
@@ -108,6 +116,13 @@ export default function SignInScreen() {
           ref={passwordInput}
           secureTextEntry
           value={password}
+          {...fieldChainProps({
+            count: 2,
+            index: 1,
+            last: "go",
+            onAdvance: () => {},
+            onFinish: () => void signIn(),
+          })}
         />
         <Pressable accessibilityRole="button" hitSlop={8} onPress={() => router.push("/forgot-password")} style={styles.forgotPassword}>
           <Text style={styles.forgotPasswordText}>Forgot password?</Text>

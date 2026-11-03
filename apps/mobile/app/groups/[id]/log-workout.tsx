@@ -217,6 +217,7 @@ export default function LogWorkoutScreen() {
             onOccurredAt={(value) => dispatch({ occurredAt: value.toISOString(), type: "occurred" })}
             onPicker={(next) => dispatch({ pickerMode: next.pickerMode, showPicker: next.showPicker, type: "picker" })}
             onWebDate={(webDate) => dispatch({ type: "web-date", webDate })}
+            onTimeSubmit={() => captionRef.current?.focus()}
             onWebTime={(webTime) => dispatch({ type: "web-time", webTime })}
             pickerMode={form.pickerMode}
             showPicker={form.showPicker}
