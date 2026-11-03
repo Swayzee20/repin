@@ -3,11 +3,12 @@ import type {
   WorkoutDistanceUnit,
 } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
-import { useEffect, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { useEffect, useRef, useState, type ComponentRef } from "react";
+import { Pressable, StyleSheet, Text, View, type TextInput } from "react-native";
 
 import { Button } from "./components";
 import { NumberField } from "./form-fields";
+import { fieldChainProps } from "./keyboard";
 import { SegmentedControl } from "./primitives";
 import {
   buildRunResultSummary,
@@ -72,6 +73,7 @@ export function RunResultEditor({
   subtype: RunWorkoutSubtype;
   validationError: IntervalValidationIssue | { message: string } | null;
 }) {
+  const timeRef = useRef<ComponentRef<typeof TextInput>>(null);
   if (!expanded) {
     const summaries = buildRunResultSummary(subtype, results, intervals);
 
@@ -110,7 +112,20 @@ export function RunResultEditor({
             <View style={[styles.intervalMetricRow, styles.firstMetricRow]}>
               <Text style={styles.intervalMetricLabel}>Distance</Text>
               <View style={styles.intervalMetricControls}>
-                <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => updateResults({ distance })} placeholder="3.2" suffix={results.distanceUnit} value={results.distance} />
+                <NumberField
+                  accessibilityLabel="Distance"
+                  containerStyle={styles.metricField}
+                  kind="decimal"
+                  onChangeText={(distance) => updateResults({ distance })}
+                  placeholder="3.2"
+                  suffix={results.distanceUnit}
+                  value={results.distance}
+                  {...fieldChainProps({
+                    count: 2,
+                    index: 0,
+                    onAdvance: () => timeRef.current?.focus(),
+                  })}
+                />
                 <DistanceUnitToggle onChange={(distanceUnit) => updateResults({ distanceUnit })} value={results.distanceUnit} />
               </View>
             </View>
@@ -118,6 +133,7 @@ export function RunResultEditor({
               <Text style={styles.intervalMetricLabel}>Time</Text>
               <WorkoutTimeInput
                 containerStyle={styles.intervalTimeControls}
+                inputRef={timeRef}
                 minutes={results.timeMinutes}
                 onMinutesChange={(timeMinutes) => updateResults({ timeMinutes })}
                 onSecondsChange={(timeSeconds) => updateResults({ timeSeconds })}
@@ -162,6 +178,8 @@ function IntervalEditor({
     if (invalidInterval) setActiveIntervalId(invalidInterval.id);
   }, [intervals, validationError]);
 
+  const timeRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const recoveryRef = useRef<ComponentRef<typeof TextInput>>(null);
   const updateInterval = (id: number, change: Partial<IntervalDraft>) => {
     onChange(intervals.map((interval) => interval.id === id ? { ...interval, ...change } : interval));
   };
@@ -222,7 +240,20 @@ function IntervalEditor({
           <View style={styles.intervalMetricRow}>
             <Text style={styles.intervalMetricLabel}>Distance</Text>
             <View style={styles.intervalMetricControls}>
-              <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => updateInterval(interval.id, { distance })} placeholder="400" suffix={interval.distanceUnit} value={interval.distance} />
+              <NumberField
+                accessibilityLabel="Distance"
+                containerStyle={styles.metricField}
+                kind="decimal"
+                onChangeText={(distance) => updateInterval(interval.id, { distance })}
+                placeholder="400"
+                suffix={interval.distanceUnit}
+                value={interval.distance}
+                {...fieldChainProps({
+                  count: 2,
+                  index: 0,
+                  onAdvance: () => timeRef.current?.focus(),
+                })}
+              />
               <UnitToggle onChange={(distanceUnit) => updateInterval(interval.id, { distanceUnit })} value={interval.distanceUnit} />
             </View>
           </View>
@@ -232,9 +263,11 @@ function IntervalEditor({
             <Text style={styles.intervalMetricLabel}>Time</Text>
             <WorkoutTimeInput
               containerStyle={styles.intervalTimeControls}
+              inputRef={timeRef}
               minutes={interval.timeMinutes}
               onMinutesChange={(timeMinutes) => updateInterval(interval.id, { timeMinutes })}
               onSecondsChange={(timeSeconds) => updateInterval(interval.id, { timeSeconds })}
+              onSubmit={() => recoveryRef.current?.focus()}
               seconds={interval.timeSeconds}
             />
           </View>
@@ -243,7 +276,17 @@ function IntervalEditor({
           <View style={styles.intervalMetricRow}>
             <Text style={styles.intervalMetricLabel}>Recovery</Text>
             <View style={styles.intervalMetricControls}>
-              <NumberField accessibilityLabel="Recovery seconds" containerStyle={styles.metricField} kind="number" onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })} placeholder="90" suffix="sec" value={interval.recoverySeconds} />
+              <NumberField
+                accessibilityLabel="Recovery seconds"
+                containerStyle={styles.metricField}
+                kind="number"
+                onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })}
+                placeholder="90"
+                ref={recoveryRef}
+                suffix="sec"
+                value={interval.recoverySeconds}
+                {...fieldChainProps({ count: 1, index: 0, onAdvance: () => {} })}
+              />
             </View>
           </View>
           <InlineError field="recovery" index={index} issue={validationError} />

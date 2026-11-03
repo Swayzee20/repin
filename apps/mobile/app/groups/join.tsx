@@ -1,15 +1,23 @@
 import type { GroupPreview, JoinGroupResponse } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { Stack, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { Button, Card, LoadingState, StateCard, TextField } from "../../ui/components";
+import { singleFieldReturn } from "../../ui/keyboard";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
+import {
+  pushedHeaderClearance,
+  pushedHeaderScreenOptions,
+  pushedNativeHeaderEnabled,
+  pushedShowsRoundBack,
+} from "../../ui/pushed-header";
 import { colors, layout, size, spacing, type } from "../../ui/theme";
+import { useStripState } from "../../ui/vertical-bar-edge";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(
   /\/$/,
@@ -19,6 +27,7 @@ const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").repl
 export default function JoinGroupScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ onboarding?: string }>();
+  const roundBack = pushedShowsRoundBack(Platform.OS);
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [inviteCode, setInviteCode] = useState("");
@@ -116,7 +125,7 @@ export default function JoinGroupScreen() {
   if (!session) {
     return (
       <FlowFrame>
-        <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
+        {roundBack ? <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} /> : null}
         <StateCard
           actionLabel="Back to Home"
           message="Sign in from Home before joining a group."
@@ -144,9 +153,9 @@ export default function JoinGroupScreen() {
                 setInviteError(null);
                 setJoinError(null);
               }}
-              onSubmitEditing={() => void findInvite()}
               placeholder="Invite code"
               value={inviteCode}
+              {...singleFieldReturn("search", () => void findInvite())}
             />
             <Button
               disabled={inviteLoading || !inviteCode.trim()}
@@ -179,7 +188,7 @@ export default function JoinGroupScreen() {
         </View>
       )}
     >
-      <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
+      {roundBack ? <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} /> : null}
       <Text style={styles.eyebrow}>FIND YOUR CREW</Text>
       <Text style={styles.title}>Join a group</Text>
       <Text style={styles.intro}>
@@ -192,19 +201,33 @@ export default function JoinGroupScreen() {
 function FlowFrame({ action, children }: { action?: ReactNode; children: ReactNode }) {
   const { mode } = useLayoutMode();
   const twoPane = mode === "twoPane";
+  const strip = useStripState();
+  const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
+  const roundBack = pushedShowsRoundBack(Platform.OS);
+  const headerClearance = pushedHeaderClearance(Platform.OS, strip);
   return (
-    <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
-      <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={styles.flex}>
-        <TwoPane
-          column="form"
-          contentPaddingBottom={spacing.xxl}
-          fallback={action ? "stack" : "hide-right"}
-          keyboardShouldPersistTaps="handled"
-          left={<View style={styles.pane}>{children}</View>}
-          right={action ? <View style={twoPane ? styles.actionSplit : styles.actionStack}>{action}</View> : <View />}
-        />
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+    <>
+      {nativeHeader ? <Stack.Screen options={pushedHeaderScreenOptions()} /> : null}
+      <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          style={headerClearance > 0 ? [styles.flex, { paddingTop: headerClearance }] : styles.flex}
+        >
+          <TwoPane
+            column="form"
+            contentPaddingBottom={spacing.xxl}
+            fallback={action ? "stack" : "hide-right"}
+            keyboardShouldPersistTaps="handled"
+            left={<View style={styles.pane}>{children}</View>}
+            right={action ? (
+              <View style={twoPane ? (roundBack ? [styles.actionSplit, styles.actionSplitOffset] : styles.actionSplit) : styles.actionStack}>
+                {action}
+              </View>
+            ) : <View />}
+          />
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+    </>
   );
 }
 
@@ -219,7 +242,8 @@ const styles = StyleSheet.create({
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
   intro: { color: colors.muted, ...type.body, marginTop: spacing.sm },
-  actionSplit: { maxWidth: layout.formMax, paddingTop: size.hit + spacing.xl, width: "100%" },
+  actionSplit: { maxWidth: layout.formMax, width: "100%" },
+  actionSplitOffset: { paddingTop: size.hit + spacing.xl },
   actionStack: { marginTop: spacing.xxl, maxWidth: layout.formMax, width: "100%" },
   form: { gap: spacing.lg },
   formCard: { gap: spacing.lg, padding: spacing.xl },

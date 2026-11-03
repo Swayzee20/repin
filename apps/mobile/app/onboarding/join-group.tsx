@@ -7,6 +7,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { supabase } from "../../lib/supabase";
 import { Button, Card, LoadingState, StateCard, TextField } from "../../ui/components";
+import { singleFieldReturn } from "../../ui/keyboard";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
 import { colors, layout, size, spacing, type } from "../../ui/theme";
@@ -143,11 +144,10 @@ export default function JoinFirstGroupScreen() {
               setInviteCode(value.replace(/\s/g, "").toUpperCase());
               setError(null);
             }}
-            onSubmitEditing={() => void joinGroup()}
             placeholder="ABC23XYZ"
-            returnKeyType="join"
             style={styles.codeInput}
             value={inviteCode}
+            {...singleFieldReturn("join", () => void joinGroup())}
           />
           <Button
             disabled={!inviteCodePattern.test(inviteCode)}
