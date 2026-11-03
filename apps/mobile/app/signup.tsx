@@ -6,6 +6,7 @@ import { normalizeInviteRedirect } from "../lib/invite-route";
 import { termsAcceptanceSlot } from "../lib/terms-acceptance";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { AuthScreen, AuthSuccessMark, FormError, usePaneFieldFocus } from "../ui/auth-screen";
+import { fieldChainProps } from "../ui/keyboard";
 import { Button, StateCard, TextField } from "../ui/components";
 import { colors, spacing, type } from "../ui/theme";
 
@@ -85,6 +86,21 @@ export default function SignupScreen() {
     }
   }, [confirmPassword, email, firstName, inviteRedirect, lastName, password, router]);
 
+  const fields = ["first", "last", "email", "password", "confirm"] as const;
+  const chain = (name: (typeof fields)[number]) => {
+    const index = fields.indexOf(name);
+    const next = fields[index + 1];
+    return fieldChainProps({
+      count: fields.length,
+      index,
+      last: "go",
+      onAdvance: () => {
+        if (next) fieldProps.focus(next);
+      },
+      onFinish: () => void createAccount(),
+    });
+  };
+
   let body = (
     <>
       <Text style={styles.eyebrow}>JOIN REPIN</Text>
@@ -103,6 +119,7 @@ export default function SignupScreen() {
               textContentType="givenName"
               value={firstName}
               {...fieldProps("first")}
+              {...chain("first")}
             />
           </View>
           <View style={styles.nameField}>
@@ -115,6 +132,7 @@ export default function SignupScreen() {
               textContentType="familyName"
               value={lastName}
               {...fieldProps("last")}
+              {...chain("last")}
             />
           </View>
         </View>
@@ -128,6 +146,7 @@ export default function SignupScreen() {
           textContentType="emailAddress"
           value={email}
           {...fieldProps("email")}
+          {...chain("email")}
         />
         <TextField
           autoCapitalize="none"
@@ -139,18 +158,19 @@ export default function SignupScreen() {
           textContentType="newPassword"
           value={password}
           {...fieldProps("password")}
+          {...chain("password")}
         />
         <TextField
           autoCapitalize="none"
           autoComplete="new-password"
           label="Confirm password"
           onChangeText={setConfirmPassword}
-          onSubmitEditing={() => void createAccount()}
           placeholder="Enter it again"
           secureTextEntry
           textContentType="newPassword"
           value={confirmPassword}
           {...fieldProps("confirm")}
+          {...chain("confirm")}
         />
         {error ? <FormError message={error} /> : null}
         {/* termsAcceptanceSlot: agreement to terms with zero tolerance for abuse goes here, before Create Account. Legal copy is a separate task. */}

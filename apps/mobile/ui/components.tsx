@@ -48,6 +48,7 @@ import {
 import { Icon, type IconName } from "./icons";
 import { Menu, MenuItem } from "./menu";
 import { menuPopoverWidth, stateActionHeight, stateIconSize } from "./overlay-state";
+import { keyboardScrollProps } from "./keyboard";
 import { colors, elevation, fonts, radii, size, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
 
@@ -130,9 +131,8 @@ export function Screen({
   return (
     <SafeAreaView edges={["top", "bottom"]} style={styles.safeArea}>
       <ScrollView
+        {...keyboardScrollProps(Platform.OS)}
         contentContainerStyle={styles.screenScroll}
-        keyboardDismissMode="on-drag"
-        keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
         removeClippedSubviews={false}
         style={[styles.screenBleed, preserveTransformedContent ? styles.overflowVisible : null]}
@@ -546,9 +546,9 @@ export function CommunityFeed({
   return (
     <View style={[styles.feedViewport, edgeToEdge && styles.edgeToEdgeFeedViewport, { height: resolvedViewportHeight }]}>
       <Animated.ScrollView
+        {...keyboardScrollProps(Platform.OS)}
         contentContainerStyle={[styles.feedContent, { paddingBottom: feedBottomPadding }]}
         directionalLockEnabled
-        keyboardShouldPersistTaps="handled"
         nestedScrollEnabled
         onContentSizeChange={(_width, height) => {
           contentHeight.current = height;

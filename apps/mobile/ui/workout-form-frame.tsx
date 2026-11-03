@@ -1,5 +1,5 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { useEffect, useState, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, type ComponentRef, type ReactNode, type RefObject } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -10,10 +10,12 @@ import {
   View,
   useWindowDimensions,
   type ScrollViewInstance,
+  type TextInput,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button, Card } from "./components";
+import { fieldChainProps, keyboardScrollProps } from "./keyboard";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import { DateRow, TextField } from "./form-fields";
 import { Chevron } from "./icons";
@@ -135,8 +137,8 @@ export function WorkoutFormScaffold({
               right={(
                 <View style={styles.previewColumn}>
                   <ScrollView
+                    {...keyboardScrollProps(Platform.OS)}
                     contentContainerStyle={styles.previewScrollContent}
-                    keyboardShouldPersistTaps="handled"
                     showsVerticalScrollIndicator={false}
                     style={styles.previewScroll}
                   >
@@ -187,8 +189,8 @@ export function WorkoutFormScaffold({
               visible={previewOpen}
             >
               <ScrollView
+                {...keyboardScrollProps(Platform.OS)}
                 contentContainerStyle={styles.sheetContent}
-                keyboardShouldPersistTaps="handled"
                 style={styles.sheetScroll}
               >
                 {preview}
@@ -227,9 +229,8 @@ function FieldsScroll({
 
   return (
     <ScrollView
+      {...keyboardScrollProps(Platform.OS)}
       contentContainerStyle={styles.fieldsContainer}
-      keyboardDismissMode="on-drag"
-      keyboardShouldPersistTaps="handled"
       onContentSizeChange={anchor?.onContentSizeChange}
       onLayout={anchor?.onViewportLayout}
       onScroll={anchor?.onScroll}
@@ -283,6 +284,7 @@ export function CompletedCard({
   occurredAt,
   onOccurredAt,
   onPicker,
+  onTimeSubmit,
   onWebDate,
   onWebTime,
   pickerMode,
@@ -299,6 +301,8 @@ export function CompletedCard({
   showPicker: boolean;
   webDate: string;
   webTime: string;
+  /** Return on the time field. Omit to dismiss the keyboard. */
+  onTimeSubmit?: () => void;
 }) {
   const handleNativeChange = (event: DateTimePickerEvent, value?: Date) => {
     if (event.type === "dismissed" || !value) {
@@ -314,6 +318,7 @@ export function CompletedCard({
     if (Platform.OS === "android") onPicker({ showPicker: false });
   };
 
+  const timeRef = useRef<ComponentRef<typeof TextInput>>(null);
   if (Platform.OS === "web") {
     return (
       <FormCard>
@@ -327,6 +332,11 @@ export function CompletedCard({
             onChangeText={onWebDate}
             placeholder="YYYY-MM-DD"
             value={webDate}
+            {...fieldChainProps({
+              count: 2,
+              index: 0,
+              onAdvance: () => timeRef.current?.focus(),
+            })}
           />
           <TextField
             autoCapitalize="none"
@@ -335,7 +345,14 @@ export function CompletedCard({
             onBlur={() => onOccurredAt(fromLocalParts(webDate, webTime, occurredAt))}
             onChangeText={onWebTime}
             placeholder="HH:MM"
+            ref={timeRef}
             value={webTime}
+            {...fieldChainProps({
+              count: onTimeSubmit ? 2 : 1,
+              index: 0,
+              onAdvance: () => onTimeSubmit?.(),
+              onFinish: onTimeSubmit,
+            })}
           />
         </View>
       </FormCard>

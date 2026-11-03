@@ -17,6 +17,7 @@ import {
 } from "../lib/password-reset";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import { AuthScreen, AuthSuccessMark, FormError, usePaneFieldFocus } from "../ui/auth-screen";
+import { fieldChainProps, singleFieldReturn } from "../ui/keyboard";
 import { Button, LoadingState, StateCard, TextField } from "../ui/components";
 import { colors, spacing, type } from "../ui/theme";
 
@@ -197,6 +198,7 @@ export default function ResetPasswordScreen() {
           textContentType="emailAddress"
           value={email}
           {...fieldProps("email")}
+          {...singleFieldReturn("send", () => void sendAnotherLink())}
         />
         {sent ? <Text style={styles.successText}>{PASSWORD_RESET_SENT_MESSAGE}</Text> : null}
         <Button
@@ -224,18 +226,31 @@ export default function ResetPasswordScreen() {
           textContentType="newPassword"
           value={password}
           {...fieldProps("password")}
+          {...fieldChainProps({
+            count: 2,
+            index: 0,
+            last: "go",
+            onAdvance: () => fieldProps.focus("confirm"),
+            onFinish: () => void updatePassword(),
+          })}
         />
         <TextField
           autoCapitalize="none"
           autoComplete="new-password"
           label="Confirm password"
           onChangeText={setConfirmPassword}
-          onSubmitEditing={() => void updatePassword()}
           placeholder="Enter it again"
           secureTextEntry
           textContentType="newPassword"
           value={confirmPassword}
           {...fieldProps("confirm")}
+          {...fieldChainProps({
+            count: 2,
+            index: 1,
+            last: "go",
+            onAdvance: () => {},
+            onFinish: () => void updatePassword(),
+          })}
         />
         {banner ? <FormError message={banner} /> : null}
         <Button

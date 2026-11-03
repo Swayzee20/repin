@@ -7,6 +7,7 @@ import { listBlockedUsers } from "../lib/moderation-api";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
 import { Button, Card, TextField } from "../ui/components";
+import { singleFieldReturn } from "../ui/keyboard";
 import { ListRow } from "../ui/primitives";
 import { TwoPane, useLayoutMode } from "../ui/layout";
 import { RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
@@ -143,6 +144,7 @@ export default function SettingsScreen() {
                     onChangeText={setConfirmation}
                     placeholder="DELETE"
                     value={confirmation}
+                    {...singleFieldReturn("done")}
                   />
                   {deleteError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{deleteError}</Text> : null}
                   <Button
