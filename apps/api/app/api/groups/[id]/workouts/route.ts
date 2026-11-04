@@ -1,7 +1,9 @@
 import {
   createWorkoutForMember,
   listRecentWorkoutsForMember,
+  WorkoutRequestError,
 } from "@repin/db";
+import { workoutTypeLabels } from "@repin/types";
 import { createWorkoutSchema, groupIdSchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
@@ -19,16 +21,6 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 type RouteContext = { params: Promise<{ id: string }> };
-
-const workoutTypeLabels = {
-  run: "Run",
-  walk: "Walk",
-  strength_training: "Strength Training",
-  powerlifting: "Powerlifting",
-  hiit: "HIIT",
-  functional_fitness: "Functional Fitness",
-  other: "Other",
-} as const;
 
 export async function GET(request: Request, context: RouteContext) {
   const timing = new ServerTiming();
@@ -141,6 +133,14 @@ function handleRouteError(
   if (error instanceof AuthenticationError) {
     const body = { error: "Unauthorized" };
     const init = { status: 401, headers: { "Cache-Control": "no-store" } };
+    return timing
+      ? timedJson(timing, body, init)
+      : NextResponse.json(body, init);
+  }
+
+  if (error instanceof WorkoutRequestError) {
+    const body = { error: error.message };
+    const init = { status: 400, headers: { "Cache-Control": "no-store" } };
     return timing
       ? timedJson(timing, body, init)
       : NextResponse.json(body, init);

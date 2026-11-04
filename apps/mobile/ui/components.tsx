@@ -1,4 +1,4 @@
-import { getUserInitials, resolveUserDisplayName, type WorkoutFeedItem } from "@repin/types";
+import { getUserInitials, resolveUserDisplayName, workoutTypeLabels, type WorkoutFeedItem } from "@repin/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import type { StyleProp, ViewInstance, ViewProps, ViewStyle } from "react-native";
@@ -750,19 +750,11 @@ export function ContentOptionsMenu({
   );
 }
 
-const workoutTypeLabels: Record<string, string> = {
-  run: "Run",
-  walk: "Walk",
-  strength_training: "Strength Training",
-  powerlifting: "Powerlifting",
-  hiit: "HIIT",
-  functional_fitness: "Functional Fitness",
-  other: "Other",
-};
-
 export function formatWorkoutType(value: string) {
   const fallback = value.split("_").filter(Boolean).map((word) => `${word[0]?.toUpperCase() ?? ""}${word.slice(1)}`).join(" ");
-  return workoutTypeLabels[value] ?? (fallback || "Workout");
+  return (value in workoutTypeLabels
+    ? workoutTypeLabels[value as keyof typeof workoutTypeLabels]
+    : undefined) ?? (fallback || "Workout");
 }
 
 function normalizeLabel(value: string) {

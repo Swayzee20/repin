@@ -1,4 +1,4 @@
-import type { WorkoutType } from "@repin/types";
+import { workoutTypeLabels, workoutTypes, type WorkoutType } from "@repin/types";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -7,19 +7,12 @@ import { Icon } from "./icons";
 import { BottomSheet, SheetRow } from "./sheet";
 import { colors, fonts, spacing, type } from "./theme";
 
-export const workoutTypeOptions: { label: string; value: WorkoutType }[] = [
-  { label: "Run", value: "run" },
-  { label: "Walk", value: "walk" },
-  { label: "Strength Training", value: "strength_training" },
-  { label: "Powerlifting", value: "powerlifting" },
-  { label: "HIIT", value: "hiit" },
-  { label: "Functional Fitness", value: "functional_fitness" },
-  { label: "Other", value: "other" },
-];
+export { workoutTypeLabels };
 
-export const workoutTypeLabels = Object.fromEntries(
-  workoutTypeOptions.map((option) => [option.value, option.label]),
-) as Record<WorkoutType, string>;
+export const workoutTypeOptions: { label: string; value: WorkoutType }[] = workoutTypes.map((value) => ({
+  label: workoutTypeLabels[value],
+  value,
+}));
 
 export function WorkoutTypeGrid({
   onChange,

@@ -11,6 +11,10 @@ import {
   workoutTypes,
 } from "@repin/types";
 
+function isWorkoutDistanceUnit(unit: string | null | undefined): unit is (typeof workoutDistanceUnits)[number] {
+  return unit != null && (workoutDistanceUnits as readonly string[]).includes(unit);
+}
+
 export const healthResponseSchema = z.object({
   status: z.literal("ok"),
   timestamp: z.iso.datetime(),
@@ -75,6 +79,7 @@ const canonicalWorkoutTypeSchema = z.string().trim().transform((value, context) 
   const aliases: Record<string, (typeof workoutTypes)[number]> = {
     functional_fitness: "functional_fitness",
     crossfit: "functional_fitness",
+    cycling: "cycling",
     strength: "strength_training",
     strength_training: "strength_training",
     yoga: "other",
@@ -114,8 +119,8 @@ const workoutMetricSchema = z
       if (!hasNumeric || (metric.numericValue ?? 0) <= 0) {
         context.addIssue({ code: "custom", message: "Distance must be greater than zero", path: ["numericValue"] });
       }
-      if (!(["mi", "km"] as const).includes(metric.unit as "mi" | "km")) {
-        context.addIssue({ code: "custom", message: "Distance must use mi or km", path: ["unit"] });
+      if (!isWorkoutDistanceUnit(metric.unit)) {
+        context.addIssue({ code: "custom", message: "Distance must use m, km, or mi", path: ["unit"] });
       }
     }
     if (metric.metricType === "rounds" && (!hasNumeric || !Number.isInteger(metric.numericValue) || (metric.numericValue ?? 0) <= 0)) {
@@ -126,11 +131,17 @@ const workoutMetricSchema = z
     }
   });
 
+const movementNameSchema = z
+  .string()
+  .transform((value) => value.trim().replace(/\s+/g, " "))
+  .pipe(z.string().min(1, "Exercise name is required").max(160));
+
 const workoutSetSchema = z
   .object({
     reps: z.number().int().positive().nullable().optional(),
     load: z.number().finite().min(0).nullable().optional(),
     loadUnit: z.enum(["lb", "kg"]).nullable().optional(),
+    count: z.number().int().min(1).max(20).optional(),
   })
   .strict()
   .superRefine((set, context) => {
@@ -145,10 +156,24 @@ const workoutSetSchema = z
 const workoutMovementSchema = z
   .object({
     movementId: z.uuid().nullable().optional(),
-    movementName: z.string().trim().min(1, "Exercise name is required").max(160),
+    movementName: movementNameSchema,
     sets: z.array(workoutSetSchema).max(100),
   })
   .strict();
+
+const workoutMovementInputSchema = workoutMovementSchema
+  .superRefine((movement, context) => {
+    const expandedCount = movement.sets.reduce((total, set) => total + (set.count ?? 1), 0);
+    if (expandedCount > 100) {
+      context.addIssue({ code: "custom", message: "A movement can have at most 100 sets", path: ["sets"] });
+    }
+  })
+  .transform((movement) => ({
+    ...movement,
+    sets: movement.sets.flatMap((set) =>
+      Array.from({ length: set.count ?? 1 }, () => set),
+    ),
+  }));
 
 const workoutSessionSegmentSchema = z
   .object({
@@ -180,6 +205,7 @@ const canonicalWorkoutSchema = z.object({
   caption: z.string().max(2_000).nullable(),
   photoPath: z.string().max(500).nullable(),
   occurredAt: z.iso.datetime(),
+  logVersion: z.number().int().positive().nullable(),
   metrics: z.array(workoutMetricSchema).max(20),
   movements: z.array(workoutMovementSchema).max(50),
   segments: z.array(workoutSessionSegmentSchema).max(500),
@@ -188,6 +214,7 @@ const canonicalWorkoutSchema = z.object({
   const allowedMetricTypes: Record<(typeof workoutTypes)[number], Set<string>> = {
     run: new Set(["distance", "duration"]),
     walk: new Set(["distance", "duration"]),
+    cycling: new Set(["distance", "duration"]),
     strength_training: new Set(),
     powerlifting: new Set(),
     hiit: new Set(["duration"]),
@@ -241,12 +268,13 @@ export const createWorkoutSchema = z.object({
     .optional(),
   photoPath: z.string().trim().max(500).nullable().optional().default(null),
   occurredAt: z.iso.datetime().optional(),
+  logVersion: z.number().int().positive().nullable().optional().default(null),
   // Accepted only to normalize requests from clients deployed before v1.
   title: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(2_000).optional(),
   completedAt: z.iso.datetime().optional(),
   metrics: z.array(workoutMetricSchema).max(20).optional().default([]),
-  movements: z.array(workoutMovementSchema).max(50).optional().default([]),
+  movements: z.array(workoutMovementInputSchema).max(50).optional().default([]),
   segments: z.array(workoutSessionSegmentSchema).max(500).optional().default([]),
 }).superRefine((workout, context) => {
   if (!workout.occurredAt && !workout.completedAt) {
@@ -265,6 +293,7 @@ export const createWorkoutSchema = z.object({
     caption: workout.caption !== undefined ? workout.caption || null : workout.notes ?? null,
     photoPath: workout.photoPath,
     occurredAt: workout.occurredAt ?? workout.completedAt ?? "",
+    logVersion: workout.logVersion ?? null,
     metrics: workout.metrics,
     movements: workout.movements,
     segments: workout.segments,
@@ -273,6 +302,22 @@ export const createWorkoutSchema = z.object({
 
 export const movementSearchQuerySchema = z.object({
   q: z.string().trim().max(100).optional().default(""),
+  recent: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
+});
+
+export const movementLastSessionQuerySchema = z.object({
+  movementId: z.uuid().optional(),
+  movementName: movementNameSchema.optional(),
+}).superRefine((query, context) => {
+  const hasId = Boolean(query.movementId);
+  const hasName = Boolean(query.movementName);
+  if (hasId === hasName) {
+    context.addIssue({
+      code: "custom",
+      message: "Provide movementId or movementName",
+      path: [hasId ? "movementName" : "movementId"],
+    });
+  }
 });
 
 export const homeQuerySchema = z.object({
