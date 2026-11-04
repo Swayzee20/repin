@@ -2,7 +2,8 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
-import { and, asc, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
+import { and, asc, count, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 
 import {
   getDatabase,
@@ -479,4 +480,367 @@ export async function listBlockedUsersForMember(blockerId: string) {
     .innerJoin(schema.users, eq(schema.userBlocks.blockedId, schema.users.id))
     .where(eq(schema.userBlocks.blockerId, blockerId))
     .orderBy(asc(schema.users.displayName), asc(schema.users.id));
+}
+
+export type ReviewContentReportAction = "remove" | "keep" | "restore";
+
+export type ReviewContentReportResult =
+  | { ok: true; action: ReviewContentReportAction; targetType: ContentReportTargetType; targetId: string }
+  | { ok: false; reason: "not_found" | "invalid" };
+
+export async function reviewContentReport(input: {
+  actorId: string;
+  reportId: string;
+  action: ReviewContentReportAction;
+}): Promise<ReviewContentReportResult> {
+  return getDatabase().transaction(async (transaction) => {
+    const [report] = await transaction
+      .select({
+        id: schema.contentReports.id,
+        targetType: schema.contentReports.targetType,
+        targetId: schema.contentReports.targetId,
+        status: schema.contentReports.status,
+      })
+      .from(schema.contentReports)
+      .where(eq(schema.contentReports.id, input.reportId))
+      .limit(1);
+    if (!report) return { ok: false, reason: "not_found" };
+    if (report.targetType !== "post" && report.targetType !== "comment") {
+      return { ok: false, reason: "invalid" };
+    }
+    const targetType = report.targetType;
+    const targetId = report.targetId;
+
+    if (input.action === "keep") {
+      await resolveOpenReports(transaction, {
+        ...(targetType === "post" ? { postId: targetId } : { commentIds: [targetId] }),
+        resolvedBy: input.actorId,
+        status: "dismissed",
+      });
+      return { ok: true, action: "keep", targetType, targetId };
+    }
+
+    if (input.action === "remove") {
+      const target = await loadReviewTarget(transaction, targetType, targetId);
+      if (!target) {
+        await resolveOpenReports(transaction, {
+          ...(targetType === "post" ? { postId: targetId } : { commentIds: [targetId] }),
+          resolvedBy: input.actorId,
+          status: "dismissed",
+        });
+        return { ok: true, action: "remove", targetType, targetId };
+      }
+      const now = new Date();
+      if (!target.removedAt) {
+        if (targetType === "post") {
+          await transaction
+            .update(schema.communityPosts)
+            .set({ removedAt: now, removedBy: input.actorId, updatedAt: now })
+            .where(eq(schema.communityPosts.id, targetId));
+        } else {
+          await transaction
+            .update(schema.communityPostComments)
+            .set({ removedAt: now, removedBy: input.actorId, updatedAt: now })
+            .where(eq(schema.communityPostComments.id, targetId));
+        }
+      }
+      await resolveOpenReports(transaction, {
+        ...(targetType === "post" ? { postId: targetId } : { commentIds: [targetId] }),
+        resolvedBy: input.actorId,
+        status: "removed",
+      });
+      return { ok: true, action: "remove", targetType, targetId };
+    }
+
+    if (report.status !== "removed") return { ok: false, reason: "invalid" };
+    const target = await loadReviewTarget(transaction, targetType, targetId);
+    if (!target) return { ok: false, reason: "not_found" };
+    const now = new Date();
+    if (targetType === "post") {
+      await transaction
+        .update(schema.communityPosts)
+        .set({ removedAt: null, removedBy: null, updatedAt: now })
+        .where(eq(schema.communityPosts.id, targetId));
+    } else {
+      await transaction
+        .update(schema.communityPostComments)
+        .set({ removedAt: null, removedBy: null, updatedAt: now })
+        .where(eq(schema.communityPostComments.id, targetId));
+    }
+    await transaction
+      .update(schema.contentReports)
+      .set({ status: "open", resolvedAt: null, resolvedBy: null })
+      .where(and(
+        eq(schema.contentReports.targetType, targetType),
+        eq(schema.contentReports.targetId, targetId),
+        eq(schema.contentReports.status, "removed"),
+      ));
+    return { ok: true, action: "restore", targetType, targetId };
+  });
+}
+
+async function loadReviewTarget(
+  transaction: DatabaseTransaction,
+  targetType: ContentReportTargetType,
+  targetId: string,
+) {
+  if (targetType === "post") {
+    const [post] = await transaction
+      .select({
+        id: schema.communityPosts.id,
+        removedAt: schema.communityPosts.removedAt,
+      })
+      .from(schema.communityPosts)
+      .where(eq(schema.communityPosts.id, targetId))
+      .limit(1);
+    return post ?? null;
+  }
+  const [comment] = await transaction
+    .select({
+      id: schema.communityPostComments.id,
+      removedAt: schema.communityPostComments.removedAt,
+    })
+    .from(schema.communityPostComments)
+    .where(eq(schema.communityPostComments.id, targetId))
+    .limit(1);
+  return comment ?? null;
+}
+
+export type AdminReportQueueStatus = "open" | "removed" | "dismissed";
+
+export type AdminReportEntry = {
+  id: string;
+  reporterDisplayName: string;
+  reason: ContentReportReason;
+  details: string | null;
+  createdAt: Date;
+};
+
+export type AdminReportQueueItem = {
+  id: string;
+  targetType: ContentReportTargetType;
+  targetId: string;
+  reason: ContentReportReason;
+  authorDisplayName: string;
+  groupName: string;
+  workoutName: string | null;
+  reportCount: number;
+  firstReportedAt: Date;
+  status: AdminReportQueueStatus;
+  resolvedAt: Date | null;
+  resolvedByDisplayName: string | null;
+  contentRemoved: boolean;
+  contentMissing: boolean;
+  contentText: string | null;
+  photoPath: string | null;
+  contentCreatedAt: Date | null;
+  reports: AdminReportEntry[];
+  authorHistory: {
+    displayName: string;
+    removedCount: number;
+    groupCount: number;
+  };
+};
+
+export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
+  const database = getDatabase();
+  const reporters = alias(schema.users, "report_reporters");
+  const authors = alias(schema.users, "report_authors");
+  const resolvers = alias(schema.users, "report_resolvers");
+
+  const rows = await database
+    .select({
+      id: schema.contentReports.id,
+      reporterName: reporters.displayName,
+      groupName: schema.groups.name,
+      targetType: schema.contentReports.targetType,
+      targetId: schema.contentReports.targetId,
+      targetUserId: schema.contentReports.targetUserId,
+      authorName: authors.displayName,
+      reason: schema.contentReports.reason,
+      details: schema.contentReports.details,
+      status: schema.contentReports.status,
+      createdAt: schema.contentReports.createdAt,
+      resolvedAt: schema.contentReports.resolvedAt,
+      resolvedByName: resolvers.displayName,
+    })
+    .from(schema.contentReports)
+    .innerJoin(reporters, eq(reporters.id, schema.contentReports.reporterId))
+    .innerJoin(authors, eq(authors.id, schema.contentReports.targetUserId))
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.contentReports.groupId))
+    .leftJoin(resolvers, eq(resolvers.id, schema.contentReports.resolvedBy))
+    .orderBy(asc(schema.contentReports.createdAt), asc(schema.contentReports.id));
+
+  const postIds = [...new Set(rows.filter((row) => row.targetType === "post").map((row) => row.targetId))];
+  const commentIds = [...new Set(rows.filter((row) => row.targetType === "comment").map((row) => row.targetId))];
+  const authorIds = [...new Set(rows.map((row) => row.targetUserId))];
+
+  const [posts, comments, removedPosts, removedComments, memberships] = await Promise.all([
+    postIds.length
+      ? database
+        .select({
+          id: schema.communityPosts.id,
+          caption: schema.communityPosts.caption,
+          photoPath: schema.communityPosts.photoPath,
+          createdAt: schema.communityPosts.createdAt,
+          removedAt: schema.communityPosts.removedAt,
+          workoutName: schema.workoutSessions.name,
+          workoutType: schema.workoutSessions.workoutType,
+        })
+        .from(schema.communityPosts)
+        .innerJoin(
+          schema.workoutSessions,
+          eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
+        )
+        .where(inArray(schema.communityPosts.id, postIds))
+      : Promise.resolve([]),
+    commentIds.length
+      ? database
+        .select({
+          id: schema.communityPostComments.id,
+          text: schema.communityPostComments.text,
+          createdAt: schema.communityPostComments.createdAt,
+          removedAt: schema.communityPostComments.removedAt,
+          workoutName: schema.workoutSessions.name,
+          workoutType: schema.workoutSessions.workoutType,
+        })
+        .from(schema.communityPostComments)
+        .innerJoin(
+          schema.communityPosts,
+          eq(schema.communityPostComments.communityPostId, schema.communityPosts.id),
+        )
+        .innerJoin(
+          schema.workoutSessions,
+          eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
+        )
+        .where(inArray(schema.communityPostComments.id, commentIds))
+      : Promise.resolve([]),
+    authorIds.length
+      ? database
+        .select({
+          userId: schema.communityPosts.userId,
+          total: count(),
+        })
+        .from(schema.communityPosts)
+        .where(and(
+          inArray(schema.communityPosts.userId, authorIds),
+          sql`${schema.communityPosts.removedAt} is not null`,
+        ))
+        .groupBy(schema.communityPosts.userId)
+      : Promise.resolve([]),
+    authorIds.length
+      ? database
+        .select({
+          userId: schema.communityPostComments.userId,
+          total: count(),
+        })
+        .from(schema.communityPostComments)
+        .where(and(
+          inArray(schema.communityPostComments.userId, authorIds),
+          sql`${schema.communityPostComments.removedAt} is not null`,
+        ))
+        .groupBy(schema.communityPostComments.userId)
+      : Promise.resolve([]),
+    authorIds.length
+      ? database
+        .select({
+          userId: schema.groupMembers.userId,
+          total: count(),
+        })
+        .from(schema.groupMembers)
+        .where(inArray(schema.groupMembers.userId, authorIds))
+        .groupBy(schema.groupMembers.userId)
+      : Promise.resolve([]),
+  ]);
+
+  const postsById = new Map(posts.map((post) => [post.id, post]));
+  const commentsById = new Map(comments.map((comment) => [comment.id, comment]));
+  const removedByAuthor = new Map<string, number>();
+  for (const row of removedPosts) {
+    removedByAuthor.set(row.userId, (removedByAuthor.get(row.userId) ?? 0) + Number(row.total));
+  }
+  for (const row of removedComments) {
+    removedByAuthor.set(row.userId, (removedByAuthor.get(row.userId) ?? 0) + Number(row.total));
+  }
+  const groupsByAuthor = new Map(memberships.map((row) => [row.userId, Number(row.total)]));
+
+  const grouped = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = `${row.targetType}:${row.targetId}`;
+    const list = grouped.get(key);
+    if (list) list.push(row);
+    else grouped.set(key, [row]);
+  }
+
+  const items: AdminReportQueueItem[] = [];
+  for (const group of grouped.values()) {
+    const first = group[0];
+    if (!first) continue;
+    const target = first.targetType === "post"
+      ? postsById.get(first.targetId)
+      : commentsById.get(first.targetId);
+    const contentRemoved = Boolean(target && "removedAt" in target && target.removedAt);
+    const statuses = new Set(group.map((row) => row.status));
+    const status: AdminReportQueueStatus = statuses.has("open")
+      ? "open"
+      : statuses.has("removed")
+        ? "removed"
+        : "dismissed";
+    const resolved = [...group].reverse().find((row) => row.resolvedAt);
+    const workoutName = target && "workoutName" in target
+      ? (target.workoutName?.trim() || humanizeWorkoutType(target.workoutType))
+      : null;
+    const removedTotal = removedByAuthor.get(first.targetUserId) ?? 0;
+
+    items.push({
+      id: first.id,
+      targetType: first.targetType as ContentReportTargetType,
+      targetId: first.targetId,
+      reason: first.reason as ContentReportReason,
+      authorDisplayName: first.authorName,
+      groupName: first.groupName,
+      workoutName,
+      reportCount: group.length,
+      firstReportedAt: first.createdAt,
+      status,
+      resolvedAt: resolved?.resolvedAt ?? null,
+      resolvedByDisplayName: resolved?.resolvedByName ?? null,
+      contentRemoved,
+      contentMissing: !target,
+      contentText: target
+        ? ("text" in target ? target.text : target.caption)
+        : null,
+      photoPath: target && "photoPath" in target ? target.photoPath : null,
+      contentCreatedAt: target?.createdAt ?? null,
+      reports: group.map((row) => ({
+        id: row.id,
+        reporterDisplayName: row.reporterName,
+        reason: row.reason as ContentReportReason,
+        details: row.details,
+        createdAt: row.createdAt,
+      })),
+      authorHistory: {
+        displayName: first.authorName,
+        removedCount: Math.max(0, removedTotal - (contentRemoved ? 1 : 0)),
+        groupCount: groupsByAuthor.get(first.targetUserId) ?? 0,
+      },
+    });
+  }
+
+  items.sort((left, right) => {
+    if (left.status === "open" && right.status !== "open") return -1;
+    if (left.status !== "open" && right.status === "open") return 1;
+    if (left.status === "open") {
+      return left.firstReportedAt.getTime() - right.firstReportedAt.getTime();
+    }
+    const leftResolved = left.resolvedAt?.getTime() ?? 0;
+    const rightResolved = right.resolvedAt?.getTime() ?? 0;
+    return rightResolved - leftResolved || left.firstReportedAt.getTime() - right.firstReportedAt.getTime();
+  });
+
+  return items;
+}
+
+function humanizeWorkoutType(workoutType: string) {
+  return workoutType.replaceAll("_", " ");
 }

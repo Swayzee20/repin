@@ -107,6 +107,15 @@ memberships, and one membership-authorized Community Board feed. The mobile
 Home Screen refreshes this aggregation when focused and lets users with multiple
 groups switch the selected community.
 
+### Moderation review
+
+`/admin/reports` is a desktop review page for reported posts and comments.
+Access is limited to Supabase Auth user ids listed in `ADMIN_USER_IDS` (comma-separated).
+Anyone else, including signed-out visitors after they authenticate, receives HTTP 404
+for the page data and for `POST /api/admin/reports/:id`. Admins sign in on that page
+with their normal repin email and password. An empty or whitespace `ADMIN_USER_IDS`
+value means nobody is an admin.
+
 The mobile app defaults to `http://localhost:3000`. Set `EXPO_PUBLIC_API_URL` when the API is available elsewhere:
 
 ```bash
