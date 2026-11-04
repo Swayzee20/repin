@@ -4,3 +4,7 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# Sentry prebuild artifacts. The auth token stays in EAS env, not in the repo.
+sentry.properties
+sentry.options.json

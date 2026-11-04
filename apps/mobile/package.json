@@ -10,7 +10,7 @@
     "dev": "expo start",
     "ios": "expo start --ios",
     "start": "expo start",
-    "test:layout": "tsx --test ui/layout-math.test.ts ui/brand-calendar-math.test.ts ui/reserved-regions-availability.test.ts ui/reserved-region-updates.test.ts ui/vertical-bar-edge-store.test.ts ui/tab-root-header.test.ts ui/primitive-state.test.ts ui/form-field-state.test.ts ui/overlay-state.test.ts ui/keyboard.test.ts lib/community-selection.test.ts lib/comment-draft.test.ts",
+    "test:layout": "tsx --test ui/layout-math.test.ts ui/brand-calendar-math.test.ts ui/reserved-regions-availability.test.ts ui/reserved-region-updates.test.ts ui/vertical-bar-edge-store.test.ts ui/tab-root-header.test.ts ui/primitive-state.test.ts ui/form-field-state.test.ts ui/overlay-state.test.ts ui/keyboard.test.ts lib/community-selection.test.ts lib/comment-draft.test.ts lib/sentry-config.test.ts ../api/lib/sentry-config.test.ts",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web"
   },
@@ -22,6 +22,7 @@
     "@expo/vector-icons": "^15.1.1",
     "@react-native-community/datetimepicker": "9.2.1",
     "@repin/types": "workspace:*",
+    "@sentry/react-native": "~8.28.0",
     "@supabase/supabase-js": "^2.112.3",
     "expo": "~58.0.21",
     "expo-clipboard": "~58.0.4",

@@ -4,6 +4,7 @@ import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-na
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { listBlockedUsers } from "../lib/moderation-api";
+import { isSentryTestActionVisible, sendSentryTestError } from "../lib/sentry";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
 import { Button, Card, TextField } from "../ui/components";
@@ -36,6 +37,8 @@ export default function SettingsScreen() {
   const [accountError, setAccountError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [blockedCount, setBlockedCount] = useState(0);
+  const [testStatus, setTestStatus] = useState<"sent" | "disabled" | null>(null);
+  const showSentryTest = isSentryTestActionVisible();
   useFocusEffect(useCallback(() => {
     let active = true;
     void listBlockedUsers().then((people) => {
@@ -122,6 +125,21 @@ export default function SettingsScreen() {
                     value={blockedCount > 0 ? String(blockedCount) : undefined}
                   />
                 </Card>
+                {showSentryTest ? (
+                  <Card style={styles.diagnosticsCard}>
+                    <Text style={styles.diagnosticsTitle}>Diagnostics</Text>
+                    <Text style={styles.diagnosticsCopy}>
+                      Sends one test error so monitoring can be confirmed. It does not include your email, workouts, or posts.
+                    </Text>
+                    <Button onPress={() => setTestStatus(sendSentryTestError())} variant="secondary">Send a test error</Button>
+                    {testStatus === "sent" ? (
+                      <Text accessibilityLiveRegion="polite" style={styles.diagnosticsSent}>Test error sent.</Text>
+                    ) : null}
+                    {testStatus === "disabled" ? (
+                      <Text accessibilityLiveRegion="polite" style={styles.diagnosticsCopy}>Error monitoring is off in this build.</Text>
+                    ) : null}
+                  </Card>
+                ) : null}
               </View>
             )}
             right={(
@@ -175,6 +193,10 @@ const styles = StyleSheet.create({
   accountCard: { gap: spacing.lg, marginTop: spacing.xxl },
   privacyCard: { gap: spacing.sm, marginTop: spacing.lg, paddingBottom: spacing.sm },
   privacyTitle: { color: colors.ink, ...type.section },
+  diagnosticsCard: { gap: spacing.lg, marginTop: spacing.xxl },
+  diagnosticsTitle: { color: colors.ink, ...type.heading },
+  diagnosticsCopy: { color: colors.muted, ...type.bodySmall },
+  diagnosticsSent: { color: colors.success, ...type.bodySmall },
   signedInLabel: { color: colors.muted, ...type.label },
   signedInValue: { color: colors.ink, ...type.body },
   error: { color: colors.danger, ...type.bodySmall },

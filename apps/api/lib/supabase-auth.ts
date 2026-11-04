@@ -5,6 +5,7 @@ import { resolveUserDisplayName } from "@repin/types";
 import { createClient } from "@supabase/supabase-js";
 
 import type { ServerTiming } from "./server-timing";
+import { setApiSentryUser } from "./sentry";
 
 export class AuthenticationError extends Error {
   constructor(message = "Unauthorized") {
@@ -94,6 +95,8 @@ export async function requireAuthenticatedUser(
     if (error || !data?.claims.sub) {
       throw new AuthenticationError();
     }
+
+    setApiSentryUser(data.claims.sub);
 
     return {
       id: data.claims.sub,

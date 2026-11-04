@@ -2,6 +2,7 @@ import Constants, { ExecutionEnvironment } from "expo-constants";
 import { Component, createContext, memo, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { UIManager, View, type StyleProp, type ViewStyle } from "react-native";
 
+import { captureMobileException } from "../lib/sentry";
 import { createReservedRegionApplier, reservedRegionsEqual } from "./reserved-region-updates";
 import {
   shouldMountReservedRegions,
@@ -75,9 +76,10 @@ class ReservedRegionsErrorBoundary extends Component<
     return { failed: true };
   }
 
-  componentDidCatch() {
+  componentDidCatch(error: Error) {
     nativeFailed = true;
     nativeAvailable = false;
+    captureMobileException(error);
   }
 
   render() {

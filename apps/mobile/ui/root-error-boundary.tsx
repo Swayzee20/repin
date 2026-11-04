@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
+import { captureMobileException } from "../lib/sentry";
 import { colors, spacing } from "./theme";
 import { StateCard } from "./components";
 
@@ -12,6 +13,10 @@ export class RootErrorBoundary extends Component<{ children: ReactNode }, Bounda
 
   static getDerivedStateFromError(error: Error): BoundaryState {
     return { error };
+  }
+
+  componentDidCatch(error: Error) {
+    captureMobileException(error);
   }
 
   reset = () => {

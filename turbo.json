@@ -5,7 +5,21 @@
     "build": {
       "dependsOn": ["^build"],
       "outputs": [".next/**", "!.next/cache/**", "dist/**"],
-      "env": ["DATABASE_URL", "SUPABASE_URL", "SUPABASE_PUBLISHABLE_KEY"]
+      "env": [
+        "DATABASE_URL",
+        "SUPABASE_URL",
+        "SUPABASE_PUBLISHABLE_KEY",
+        "SENTRY_DSN",
+        "SENTRY_AUTH_TOKEN",
+        "SENTRY_ORG",
+        "SENTRY_PROJECT_API",
+        "SENTRY_PROJECT_MOBILE",
+        "EXPO_PUBLIC_SENTRY_DSN",
+        "VERCEL_ENV",
+        "VERCEL_GIT_COMMIT_SHA",
+        "EAS_BUILD_PROFILE",
+        "EAS_BUILD_GIT_COMMIT_HASH"
+      ]
     },
     "dev": {
       "cache": false,

@@ -10,6 +10,7 @@ import {
 } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../../../../lib/sentry";
 import {
   AuthenticationError,
   requireAuthenticatedUser,
@@ -84,7 +85,7 @@ export async function GET(request: Request, context: RouteContext) {
       );
     }
 
-    console.error("Workout detail could not be loaded", error);
+    reportUnexpectedRouteError("Workout detail could not be loaded", error);
     return timedJson(
       timing,
       { error: "Workout detail could not be loaded" },
@@ -176,6 +177,6 @@ function mutationError(error: unknown, message: string) {
   if (error instanceof AuthenticationError) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  console.error(message, error);
+  reportUnexpectedRouteError(message, error);
   return NextResponse.json({ error: message }, { status: 503 });
 }

@@ -2,6 +2,7 @@ import { createGroup, listGroupsForUser } from "@repin/db";
 import { createGroupSchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
   AuthenticationError,
   requireApplicationUser,
@@ -59,7 +60,7 @@ function handleRouteError(error: unknown, message: string) {
     );
   }
 
-  console.error(message, error);
+  reportUnexpectedRouteError(message, error);
   return NextResponse.json(
     { error: message },
     { status: 503, headers: { "Cache-Control": "no-store" } },
