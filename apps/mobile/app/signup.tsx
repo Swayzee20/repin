@@ -1,10 +1,22 @@
+import * as Linking from "expo-linking";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
-import { termsAcceptanceSlot } from "../lib/terms-acceptance";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
+import {
+  agreeLineLinkPressedText,
+  agreeLineLinkText,
+  agreeLineSubmitGap,
+  agreeLineText,
+  agreeLinkHitSlop,
+  guidelinesAgreePhrase,
+  signupAuthMetadata,
+  termsAcceptanceSlot,
+  termsAgreePhrase,
+  type AgreePhrase,
+} from "../lib/terms-acceptance";
 import { AuthScreen, AuthSuccessMark, FormError, usePaneFieldFocus } from "../ui/auth-screen";
 import { fieldChainProps } from "../ui/keyboard";
 import { Button, StateCard, TextField } from "../ui/components";
@@ -59,17 +71,14 @@ export default function SignupScreen() {
 
     setSubmitting(true);
     try {
-      const displayName = `${normalizedFirstName} ${normalizedLastName}`;
       const { data, error: signupError } = await supabase.auth.signUp({
         email: normalizedEmail,
         password,
         options: {
-          data: {
-            display_name: displayName,
-            first_name: normalizedFirstName,
-            full_name: displayName,
-            last_name: normalizedLastName,
-          },
+          data: signupAuthMetadata({
+            firstName: normalizedFirstName,
+            lastName: normalizedLastName,
+          }),
         },
       });
 
@@ -107,7 +116,7 @@ export default function SignupScreen() {
       <Text style={styles.title}>Create your account</Text>
       <Text style={styles.intro}>Set up your profile, then find your community.</Text>
 
-      <View style={styles.form} testID={termsAcceptanceSlot}>
+      <View style={styles.form}>
         <View style={styles.nameRow}>
           <View style={styles.nameField}>
             <TextField
@@ -173,16 +182,18 @@ export default function SignupScreen() {
           {...chain("confirm")}
         />
         {error ? <FormError message={error} /> : null}
-        {/* termsAcceptanceSlot: agreement to terms with zero tolerance for abuse goes here, before Create Account. Legal copy is a separate task. */}
-        <Button
-          disabled={!firstName || !lastName || !email || !password || !confirmPassword}
-          disabledReason={!firstName || !lastName ? "Enter your first and last name." : !email ? "Enter your email." : "Enter and confirm a password."}
-          loading={submitting}
-          loadingLabel="Creating account"
-          onPress={() => void createAccount()}
-        >
-          Create Account
-        </Button>
+        <View style={styles.submit}>
+          <SignupAgreeLine />
+          <Button
+            disabled={!firstName || !lastName || !email || !password || !confirmPassword}
+            disabledReason={!firstName || !lastName ? "Enter your first and last name." : !email ? "Enter your email." : "Enter and confirm a password."}
+            loading={submitting}
+            loadingLabel="Creating account"
+            onPress={() => void createAccount()}
+          >
+            Create Account
+          </Button>
+        </View>
       </View>
 
       <View style={styles.signinPrompt}>
@@ -221,6 +232,40 @@ export default function SignupScreen() {
   );
 }
 
+function SignupAgreeLine() {
+  return (
+    <Text style={styles.agree} testID={termsAcceptanceSlot}>
+      By creating an account, you agree to repin's <AgreePhrase phrase={termsAgreePhrase} />
+      {" and "}
+      <AgreePhrase phrase={guidelinesAgreePhrase} />
+      .
+    </Text>
+  );
+}
+
+function AgreePhrase({ phrase }: { phrase: AgreePhrase }) {
+  if (phrase.kind === "text") {
+    return phrase.text;
+  }
+
+  return (
+    <Pressable
+      accessibilityLabel={phrase.label}
+      accessibilityRole="link"
+      hitSlop={agreeLinkHitSlop}
+      onPress={() => {
+        void Linking.openURL(phrase.url);
+      }}
+    >
+      {({ pressed }) => (
+        <Text accessible={false} style={[styles.link, pressed && styles.linkPressed]}>
+          {phrase.text}
+        </Text>
+      )}
+    </Pressable>
+  );
+}
+
 const styles = StyleSheet.create({
   eyebrow: { color: colors.brand, ...type.eyebrow },
   title: { color: colors.ink, ...type.display, marginTop: spacing.xs },
@@ -228,6 +273,10 @@ const styles = StyleSheet.create({
   form: { gap: spacing.lg, marginTop: spacing.xxl },
   nameRow: { flexDirection: "row", gap: spacing.md },
   nameField: { flex: 1 },
+  submit: { alignSelf: "stretch", gap: agreeLineSubmitGap },
+  agree: { alignSelf: "stretch", textAlign: "left", ...agreeLineText },
+  link: agreeLineLinkText,
+  linkPressed: agreeLineLinkPressedText,
   signinPrompt: { gap: spacing.md, marginTop: spacing.xl },
   promptCopy: { color: colors.muted, ...type.bodySmall, textAlign: "center" },
   confirmation: { alignItems: "center", gap: spacing.lg, marginTop: spacing.xxl },
