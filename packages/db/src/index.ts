@@ -2078,9 +2078,16 @@ export {
   blockUserForMember,
   createContentReportForMember,
   deleteCommunityCommentForMember,
+  listAdminReportQueue,
   listBlockedUsersForMember,
+  reviewContentReport,
   softRemoveCommunityPost,
   unblockUserForMember,
+} from "./moderation";
+export type {
+  AdminReportQueueItem,
+  ReviewContentReportAction,
+  ReviewContentReportResult,
 } from "./moderation";
 
 export {

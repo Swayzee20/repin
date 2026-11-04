@@ -1381,6 +1381,106 @@ test("moderation reports, blocks, removal, and blocked feeds", async () => {
     );
     assert.equal(memberUpdate.rowCount, 0);
 
+    const keepTarget = await loggedWorkout(db, byron, alpha.id, "Keep this");
+    assert.ok(keepTarget);
+    const keepReport = await db.createContentReportForMember({
+      userId: cyrus.id,
+      targetType: "post",
+      targetId: keepTarget.id,
+      reason: "spam",
+    });
+    assert.equal(keepReport.ok, true);
+    const kept = await db.reviewContentReport({
+      actorId: ada.id,
+      reportId: keepReport.ok ? keepReport.report.id : "",
+      action: "keep",
+    });
+    assert.equal(kept.ok, true);
+    assert.equal(
+      await scalar(client, "postgres", null, "select status from content_reports where id = $1", [
+        keepReport.ok ? keepReport.report.id : null,
+      ]),
+      "dismissed",
+    );
+    assert.equal(
+      await countRows(client, "community_posts", "workout_session_id = $1 and removed_at is null", [keepTarget.id]),
+      1,
+    );
+
+    const removeTarget = await loggedWorkout(db, byron, alpha.id, "Remove this");
+    assert.ok(removeTarget);
+    const removeComment = await db.createCommunityPostCommentForMember({
+      userId: byron.id,
+      displayName: byron.displayName,
+      groupId: alpha.id,
+      workoutSessionId: removeTarget.id,
+      text: "Please hide me",
+    });
+    assert.ok(removeComment);
+    const commentFlag = await db.createContentReportForMember({
+      userId: cyrus.id,
+      targetType: "comment",
+      targetId: removeComment.id,
+      reason: "hate",
+    });
+    assert.equal(commentFlag.ok, true);
+    const removedComment = await db.reviewContentReport({
+      actorId: ada.id,
+      reportId: commentFlag.ok ? commentFlag.report.id : "",
+      action: "remove",
+    });
+    assert.equal(removedComment.ok, true);
+    assert.equal(
+      await countRows(client, "community_post_comments", "id = $1 and removed_at is not null", [removeComment.id]),
+      1,
+    );
+    assert.equal(await countRows(client, "workout_sessions", "id = $1", [removeTarget.id]), 1);
+    const restoredComment = await db.reviewContentReport({
+      actorId: ada.id,
+      reportId: commentFlag.ok ? commentFlag.report.id : "",
+      action: "restore",
+    });
+    assert.equal(restoredComment.ok, true);
+    assert.equal(
+      await scalar(client, "postgres", null, "select status from content_reports where id = $1", [
+        commentFlag.ok ? commentFlag.report.id : null,
+      ]),
+      "open",
+    );
+    assert.equal(
+      await countRows(client, "community_post_comments", "id = $1 and removed_at is null", [removeComment.id]),
+      1,
+    );
+
+    const removePostReport = await db.createContentReportForMember({
+      userId: cyrus.id,
+      targetType: "post",
+      targetId: removeTarget.id,
+      reason: "spam",
+    });
+    assert.equal(removePostReport.ok, true);
+    const removedPostOnly = await db.reviewContentReport({
+      actorId: ada.id,
+      reportId: removePostReport.ok ? removePostReport.report.id : "",
+      action: "remove",
+    });
+    assert.equal(removedPostOnly.ok, true);
+    assert.equal(
+      await countRows(client, "community_posts", "workout_session_id = $1 and removed_at is not null", [removeTarget.id]),
+      1,
+    );
+    assert.equal(await countRows(client, "workout_sessions", "id = $1", [removeTarget.id]), 1);
+    const restoredPost = await db.reviewContentReport({
+      actorId: ada.id,
+      reportId: removePostReport.ok ? removePostReport.report.id : "",
+      action: "restore",
+    });
+    assert.equal(restoredPost.ok, true);
+    assert.equal(
+      await countRows(client, "community_posts", "workout_session_id = $1 and removed_at is null", [removeTarget.id]),
+      1,
+    );
+
     await queryAs(
       client,
       "authenticated",
