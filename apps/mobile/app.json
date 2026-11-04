@@ -14,7 +14,9 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow repin to attach a photo to your workout."
+          "photosPermission": "Allow repin to attach a photo to your workout.",
+          "cameraPermission": false,
+          "microphonePermission": false
         }
       ],
       [
@@ -46,10 +48,7 @@
         "foregroundImage": "./assets/branding/adaptive-foreground.png",
         "monochromeImage": "./assets/branding/adaptive-monochrome.png"
       },
-      "package": "com.repin.mobile",
-      "permissions": [
-        "android.permission.RECORD_AUDIO"
-      ]
+      "package": "com.repin.mobile"
     },
     "web": {
       "bundler": "metro",
