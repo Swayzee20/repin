@@ -3,6 +3,7 @@ import {
   groupConsecutiveIntervalSegments,
   type IntervalPresentationSegment,
   type RunWorkoutSubtype,
+  type WorkoutFormat,
 } from "@repin/types";
 
 interface WorkoutResultMetric {
@@ -26,10 +27,23 @@ export interface WorkoutResultMovement {
 export function formatWorkoutResultSummary(input: {
   workoutType: string;
   workoutSubtype?: RunWorkoutSubtype | null;
+  workoutFormat?: WorkoutFormat | null;
+  formatDurationSeconds?: number | null;
+  formatIntervalSeconds?: number | null;
+  formatRounds?: number | null;
+  timeCapSeconds?: number | null;
+  scoreFinished?: boolean | null;
+  scoreTimeSeconds?: number | null;
+  scoreRounds?: number | null;
+  scoreReps?: number | null;
   metrics: WorkoutResultMetric[];
   movements: WorkoutResultMovement[];
   segments?: IntervalPresentationSegment[];
 }) {
+  if (input.workoutFormat) {
+    return formatFormatSummary(input);
+  }
+
   switch (input.workoutType) {
     case "run": {
       if (input.workoutSubtype === "interval" && input.segments?.length) {
@@ -66,6 +80,141 @@ export function formatWorkoutResultSummary(input: {
     default:
       return null;
   }
+}
+
+function formatFormatSummary(input: {
+  workoutFormat?: WorkoutFormat | null;
+  formatDurationSeconds?: number | null;
+  formatIntervalSeconds?: number | null;
+  formatRounds?: number | null;
+  timeCapSeconds?: number | null;
+  scoreFinished?: boolean | null;
+  scoreTimeSeconds?: number | null;
+  scoreRounds?: number | null;
+  scoreReps?: number | null;
+  movements: WorkoutResultMovement[];
+}) {
+  switch (input.workoutFormat) {
+    case "amrap":
+      return truncateSummary(joinSummaryParts([
+        formatAmrapLabel(input.formatDurationSeconds),
+        formatAmrapScore(input.scoreRounds, input.scoreReps),
+      ]) ?? "AMRAP");
+    case "for_time":
+      return truncateSummary(joinSummaryParts([
+        "For Time",
+        formatForTimeScore(input),
+      ]) ?? "For Time");
+    case "emom":
+      return truncateSummary(joinSummaryParts([
+        formatEmomLabel(input.formatDurationSeconds, input.formatIntervalSeconds),
+        formatEmomWork(input.movements),
+      ]) ?? formatEmomLabel(input.formatDurationSeconds, input.formatIntervalSeconds));
+    case "rounds":
+      return truncateSummary(joinSummaryParts([
+        formatRoundsCount(input.formatRounds),
+        input.scoreTimeSeconds != null
+          ? formatClock(input.scoreTimeSeconds)
+          : formatRoundsMovements(input.movements),
+      ]) ?? formatRoundsCount(input.formatRounds));
+    default:
+      return null;
+  }
+}
+
+function formatAmrapLabel(durationSeconds: number | null | undefined) {
+  const minutes = formatWholeMinutes(durationSeconds);
+  return minutes ? `AMRAP ${minutes}` : "AMRAP";
+}
+
+function formatAmrapScore(rounds: number | null | undefined, reps: number | null | undefined) {
+  if (rounds == null) return null;
+  if (reps == null || reps === 0) {
+    return `${formatNumber(rounds)} ${rounds === 1 ? "round" : "rounds"}`;
+  }
+  return `${formatNumber(rounds)} ${rounds === 1 ? "round" : "rounds"} + ${formatNumber(reps)} ${reps === 1 ? "rep" : "reps"}`;
+}
+
+function formatForTimeScore(input: {
+  timeCapSeconds?: number | null;
+  scoreFinished?: boolean | null;
+  scoreTimeSeconds?: number | null;
+  scoreReps?: number | null;
+  movements: WorkoutResultMovement[];
+}) {
+  if (input.scoreFinished === true && input.scoreTimeSeconds != null) {
+    return formatClock(input.scoreTimeSeconds);
+  }
+  if (input.scoreFinished === false && input.scoreReps != null) {
+    const cap = input.timeCapSeconds != null ? ` (capped at ${formatClock(input.timeCapSeconds)})` : " (capped)";
+    return `${formatNumber(input.scoreReps)} ${input.scoreReps === 1 ? "rep" : "reps"}${cap}`;
+  }
+  return formatMovementCount(input.movements);
+}
+
+function formatEmomLabel(
+  durationSeconds: number | null | undefined,
+  intervalSeconds: number | null | undefined,
+) {
+  const prefix = emomPrefix(intervalSeconds);
+  const minutes = formatWholeMinutes(durationSeconds);
+  return minutes ? `${prefix} ${minutes}` : prefix;
+}
+
+function emomPrefix(intervalSeconds: number | null | undefined) {
+  if (intervalSeconds == null || intervalSeconds <= 0 || intervalSeconds === 60) return "EMOM";
+  if (intervalSeconds % 60 === 0) return `E${intervalSeconds / 60}MOM`;
+  return "EMOM";
+}
+
+function formatEmomWork(movements: WorkoutResultMovement[]) {
+  if (movements.length === 1) {
+    const movement = movements[0];
+    const name = movement?.movementName.trim();
+    const reps = movement?.sets[0]?.reps;
+    if (name && reps != null) return `${formatNumber(reps)} ${name}`;
+    return name || null;
+  }
+  return formatMovementCount(movements);
+}
+
+function formatRoundsCount(rounds: number | null | undefined) {
+  if (rounds == null) return "Rounds";
+  return `${formatNumber(rounds)} ${rounds === 1 ? "round" : "rounds"}`;
+}
+
+function formatRoundsMovements(movements: WorkoutResultMovement[]) {
+  const names = movements
+    .map((movement) => movement.movementName.trim())
+    .filter(Boolean);
+  if (!names.length) return formatMovementCount(movements);
+  const shown = names.slice(0, 2);
+  const remaining = names.length - shown.length;
+  return [...shown, remaining > 0 ? `+${remaining} more` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function formatMovementCount(movements: WorkoutResultMovement[]) {
+  if (!movements.length) return null;
+  return `${movements.length} ${movements.length === 1 ? "movement" : "movements"}`;
+}
+
+function formatWholeMinutes(seconds: number | null | undefined) {
+  if (seconds == null || seconds <= 0) return null;
+  if (seconds % 60 === 0) return formatNumber(seconds / 60);
+  return formatClock(seconds);
+}
+
+function formatClock(totalSeconds: number) {
+  const rounded = Math.round(totalSeconds);
+  const hours = Math.floor(rounded / 3_600);
+  const minutes = Math.floor((rounded % 3_600) / 60);
+  const seconds = rounded % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
+  return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
 function findMetric(metrics: WorkoutResultMetric[], metricType: string) {

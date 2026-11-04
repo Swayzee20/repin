@@ -11,6 +11,27 @@ import {
   workoutTypes,
 } from "@repin/types";
 
+import {
+  canonicalWorkoutFormatSchema,
+  durationMinutesFromFormat,
+  formatToColumns,
+  normalizeFormat,
+  workoutFormatSchema,
+} from "./workout-format";
+
+export {
+  amrapFormatSchema,
+  columnsToFormat,
+  durationMinutesFromFormat,
+  emomFormatSchema,
+  emptyFormatColumns,
+  formatToColumns,
+  forTimeFormatSchema,
+  requiresUpdatedClient,
+  roundsFormatSchema,
+  workoutFormatSchema,
+} from "./workout-format";
+
 function isWorkoutDistanceUnit(unit: string | null | undefined): unit is (typeof workoutDistanceUnits)[number] {
   return unit != null && (workoutDistanceUnits as readonly string[]).includes(unit);
 }
@@ -132,15 +153,32 @@ const workoutSetSchema = z
     reps: z.number().int().positive().nullable().optional(),
     load: z.number().finite().min(0).nullable().optional(),
     loadUnit: z.enum(["lb", "kg"]).nullable().optional(),
+    distance: z.number().finite().positive().nullable().optional(),
+    distanceUnit: z.enum(workoutDistanceUnits).nullable().optional(),
+    calories: z.number().int().nonnegative().nullable().optional(),
+    durationSeconds: z.number().int().positive().nullable().optional(),
     count: z.number().int().min(1).max(20).optional(),
   })
   .strict()
   .superRefine((set, context) => {
-    if (set.reps == null && set.load == null) {
+    if (
+      set.reps == null
+      && set.load == null
+      && set.distance == null
+      && set.calories == null
+      && set.durationSeconds == null
+    ) {
       context.addIssue({ code: "custom", message: "Add at least one result to this set" });
     }
     if (set.load != null && !set.loadUnit) {
       context.addIssue({ code: "custom", message: "Choose lb or kg", path: ["loadUnit"] });
+    }
+    if ((set.distance == null) !== (set.distanceUnit == null)) {
+      context.addIssue({
+        code: "custom",
+        message: "Set distance and unit must be provided together",
+        path: ["distance"],
+      });
     }
   });
 
@@ -161,8 +199,8 @@ const workoutMovementInputSchema = workoutMovementSchema
   })
   .transform((movement) => ({
     ...movement,
-    sets: movement.sets.flatMap((set) =>
-      Array.from({ length: set.count ?? 1 }, () => set),
+    sets: movement.sets.flatMap(({ count, ...set }) =>
+      Array.from({ length: count ?? 1 }, () => set),
     ),
   }));
 
@@ -197,6 +235,7 @@ const canonicalWorkoutSchema = z.object({
   photoPath: z.string().max(500).nullable(),
   occurredAt: z.iso.datetime(),
   logVersion: z.number().int().positive().nullable(),
+  format: canonicalWorkoutFormatSchema.nullable(),
   metrics: z.array(workoutMetricSchema).max(20),
   movements: z.array(workoutMovementSchema).max(50),
   segments: z.array(workoutSessionSegmentSchema).max(500),
@@ -221,7 +260,57 @@ const canonicalWorkoutSchema = z.object({
       context.addIssue({ code: "custom", message: "This result does not apply to the selected workout type", path: ["metrics", index, "metricType"] });
     }
   });
-  if (workout.movements.length && !["strength_training", "powerlifting"].includes(workout.workoutType)) {
+  if (workout.format && workout.workoutType !== "functional_fitness") {
+    context.addIssue({
+      code: "custom",
+      message: "Formats are only supported for Functional Fitness",
+      path: ["format"],
+    });
+  }
+  if (workout.format) {
+    if (workout.metrics.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Format workouts cannot include metrics",
+        path: ["metrics"],
+      });
+    }
+    if (workout.segments.length) {
+      context.addIssue({
+        code: "custom",
+        message: "Format workouts cannot include segments",
+        path: ["segments"],
+      });
+    }
+    if (workout.movements.length < 1 || workout.movements.length > 20) {
+      context.addIssue({
+        code: "custom",
+        message: "Add between 1 and 20 exercises",
+        path: ["movements"],
+      });
+    }
+    let totalSets = 0;
+    workout.movements.forEach((movement, index) => {
+      if (movement.sets.length < 1 || movement.sets.length > 20) {
+        context.addIssue({
+          code: "custom",
+          message: "Each exercise can have between 1 and 20 sets",
+          path: ["movements", index, "sets"],
+        });
+      }
+      totalSets += movement.sets.length;
+    });
+    if (totalSets > 100) {
+      context.addIssue({
+        code: "custom",
+        message: "A workout can have at most 100 sets",
+        path: ["movements"],
+      });
+    }
+  }
+  const allowsMovements = ["strength_training", "powerlifting"].includes(workout.workoutType)
+    || Boolean(workout.workoutType === "functional_fitness" && workout.format);
+  if (workout.movements.length && !allowsMovements) {
     context.addIssue({ code: "custom", message: "Exercises are only supported for strength workouts", path: ["movements"] });
   }
   if (workout.workoutSubtype && workout.workoutType !== "run") {
@@ -260,6 +349,7 @@ export const createWorkoutSchema = z.object({
   photoPath: z.string().trim().max(500).nullable().optional().default(null),
   occurredAt: z.iso.datetime().optional(),
   logVersion: z.number().int().positive().nullable().optional().default(null),
+  format: workoutFormatSchema.nullable().optional(),
   // Accepted only to normalize requests from clients deployed before v1.
   title: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(2_000).optional(),
@@ -273,23 +363,47 @@ export const createWorkoutSchema = z.object({
   }
 }).transform((workout) => {
   const durationSeconds = workout.metrics.find((metric) => metric.metricType === "duration")?.numericValue;
+  const format = normalizeFormat(workout.format);
   return {
     workoutType: workout.workoutType,
     workoutSubtype: workout.workoutSubtype,
     name: workout.name !== undefined ? workout.name || null : workout.title ?? null,
-    durationMinutes: durationSeconds == null
-      ? workout.durationMinutes
-      : Math.max(1, Math.min(1_440, Math.round(durationSeconds / 60))),
+    durationMinutes: durationMinutesFromFormat(
+      format,
+      durationSeconds == null
+        ? workout.durationMinutes
+        : Math.max(1, Math.min(1_440, Math.round(durationSeconds / 60))),
+    ),
     effort: workout.effort,
     caption: workout.caption !== undefined ? workout.caption || null : workout.notes ?? null,
     photoPath: workout.photoPath,
     occurredAt: workout.occurredAt ?? workout.completedAt ?? "",
     logVersion: workout.logVersion ?? null,
+    format,
     metrics: workout.metrics,
     movements: workout.movements,
     segments: workout.segments,
   };
 }).pipe(canonicalWorkoutSchema);
+
+export function workoutWriteFields(
+  workout: z.infer<typeof createWorkoutSchema>,
+) {
+  return {
+    workoutType: workout.workoutType,
+    workoutSubtype: workout.workoutSubtype,
+    name: workout.name,
+    durationMinutes: workout.durationMinutes,
+    effort: workout.effort,
+    caption: workout.caption,
+    photoPath: workout.photoPath,
+    occurredAt: workout.occurredAt,
+    metrics: workout.metrics,
+    movements: workout.movements,
+    segments: workout.segments,
+    ...formatToColumns(workout.format),
+  };
+}
 
 export const movementSearchQuerySchema = z.object({
   q: z.string().trim().max(100).optional().default(""),

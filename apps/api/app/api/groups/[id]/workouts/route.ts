@@ -4,7 +4,7 @@ import {
   WorkoutRequestError,
 } from "@repin/db";
 import { workoutTypeLabels } from "@repin/types";
-import { createWorkoutSchema, groupIdSchema } from "@repin/validation";
+import { createWorkoutSchema, groupIdSchema, workoutWriteFields } from "@repin/validation";
 import { NextResponse } from "next/server";
 
 import { reportUnexpectedRouteError } from "../../../../../lib/sentry";
@@ -94,7 +94,7 @@ export async function POST(request: Request, context: RouteContext) {
       userId: user.id,
       displayName: user.displayName,
       groupId,
-      ...input.data,
+      ...workoutWriteFields(input.data),
       title: input.data.name ?? workoutTypeLabels[input.data.workoutType],
       occurredAt: new Date(input.data.occurredAt),
     });

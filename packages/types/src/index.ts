@@ -223,6 +223,51 @@ export type WorkoutSessionSegmentType = (typeof workoutSessionSegmentTypes)[numb
 export const workoutDistanceUnits = ["m", "km", "mi"] as const;
 export type WorkoutDistanceUnit = (typeof workoutDistanceUnits)[number];
 
+export const workoutFormats = ["amrap", "for_time", "emom", "rounds"] as const;
+export type WorkoutFormat = (typeof workoutFormats)[number];
+
+export interface AmrapScore {
+  rounds: number;
+  reps: number;
+}
+
+export type ForTimeScore =
+  | { finished: true; timeSeconds: number }
+  | { finished: false; reps: number };
+
+export interface RoundsScore {
+  timeSeconds: number;
+}
+
+export type WorkoutFormatDetail =
+  | { type: "amrap"; durationSeconds: number | null; score: AmrapScore | null }
+  | {
+      type: "for_time";
+      timeCapSeconds: number | null;
+      rounds: number | null;
+      score: ForTimeScore | null;
+    }
+  | { type: "emom"; durationSeconds: number | null; intervalSeconds: number | null; score: null }
+  | { type: "rounds"; rounds: number; score: RoundsScore | null };
+
+export interface WorkoutFormatColumns {
+  workoutFormat: WorkoutFormat | null;
+  formatDurationSeconds: number | null;
+  formatIntervalSeconds: number | null;
+  formatRounds: number | null;
+  timeCapSeconds: number | null;
+  scoreFinished: boolean | null;
+  scoreTimeSeconds: number | null;
+  scoreRounds: number | null;
+  scoreReps: number | null;
+}
+
+export interface WorkoutEditState {
+  workoutType: string;
+  workoutFormat: WorkoutFormat | null;
+  hasMeterDistance: boolean;
+}
+
 export interface IntervalPresentationSegment {
   segmentType: WorkoutSessionSegmentType;
   distance: number | null;
@@ -295,6 +340,11 @@ export interface QuickLogSetInput {
   reps?: number | null;
   load?: number | null;
   loadUnit?: "lb" | "kg" | null;
+  distance?: number | null;
+  distanceUnit?: WorkoutDistanceUnit | null;
+  calories?: number | null;
+  durationSeconds?: number | null;
+  count?: number;
 }
 
 export interface QuickLogMovementInput {
@@ -348,6 +398,7 @@ export interface WorkoutFeedItem {
   userId: string;
   groupId: string;
   workoutType: string;
+  workoutFormat?: WorkoutFormat | null;
   title: string;
   name: string | null;
   durationMinutes: number | null;
@@ -415,6 +466,8 @@ export interface CommunityWorkoutDetail extends WorkoutFeedItem {
   communityPostId: string;
   viewerRole?: GroupRole;
   workoutSubtype: WorkoutSubtype | null;
+  format?: WorkoutFormatDetail | null;
+  logVersion?: 1 | 2;
   metrics: WorkoutDetailMetric[];
   movements: WorkoutDetailMovement[];
   segments: WorkoutDetailSegment[];

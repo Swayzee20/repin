@@ -2,7 +2,8 @@ import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
 
-import { workoutTypesWithFeedMetrics } from "@repin/types";
+import { workoutTypesWithFeedMetrics, type WorkoutFormat } from "@repin/types";
+import { columnsToFormat } from "@repin/validation";
 import {
   and,
   asc,
@@ -33,6 +34,10 @@ import {
   visibleReactionCountSql,
 } from "./moderation";
 import * as schema from "./schema";
+import {
+  deriveLogVersion,
+  derivedDisplayMetrics,
+} from "./workout-format-display";
 import {
   formatWorkoutResultSummary,
   type WorkoutResultMovement,
@@ -308,6 +313,18 @@ export interface CreateSessionMovementResultInput {
   sets: CreateSetResultInput[];
 }
 
+export interface WorkoutFormatColumnInput {
+  workoutFormat?: WorkoutFormat | null;
+  formatDurationSeconds?: number | null;
+  formatIntervalSeconds?: number | null;
+  formatRounds?: number | null;
+  timeCapSeconds?: number | null;
+  scoreFinished?: boolean | null;
+  scoreTimeSeconds?: number | null;
+  scoreRounds?: number | null;
+  scoreReps?: number | null;
+}
+
 export interface CreateWorkoutSessionWithResultsInput {
   session: {
     id?: string;
@@ -322,7 +339,7 @@ export interface CreateWorkoutSessionWithResultsInput {
     notes?: string | null;
     createdAt?: Date;
     updatedAt?: Date;
-  };
+  } & WorkoutFormatColumnInput;
   metrics?: CreateWorkoutSessionMetricInput[];
   movements?: CreateSessionMovementResultInput[];
   segments?: CreateWorkoutSessionSegmentInput[];
@@ -340,6 +357,15 @@ async function insertWorkoutSessionWithResults(
         workoutDefinitionId: input.session.workoutDefinitionId ?? null,
         workoutType: input.session.workoutType,
         workoutSubtype: input.session.workoutSubtype ?? null,
+        workoutFormat: input.session.workoutFormat ?? null,
+        formatDurationSeconds: input.session.formatDurationSeconds ?? null,
+        formatIntervalSeconds: input.session.formatIntervalSeconds ?? null,
+        formatRounds: input.session.formatRounds ?? null,
+        timeCapSeconds: input.session.timeCapSeconds ?? null,
+        scoreFinished: input.session.scoreFinished ?? null,
+        scoreTimeSeconds: input.session.scoreTimeSeconds ?? null,
+        scoreRounds: input.session.scoreRounds ?? null,
+        scoreReps: input.session.scoreReps ?? null,
         name: input.session.name ?? null,
         durationMinutes: input.session.durationMinutes ?? null,
         effort: input.session.effort ?? null,
@@ -972,7 +998,7 @@ export async function createWorkoutForMember(input: {
     }
   >;
   segments?: CreateWorkoutSessionSegmentInput[];
-}) {
+} & WorkoutFormatColumnInput) {
   return getDatabase().transaction(async (transaction) => {
     const [membership] = await transaction
       .select({ userId: schema.groupMembers.userId })
@@ -999,6 +1025,15 @@ export async function createWorkoutForMember(input: {
         userId: input.userId,
         workoutType: input.workoutType,
         workoutSubtype: input.workoutSubtype ?? null,
+        workoutFormat: input.workoutFormat ?? null,
+        formatDurationSeconds: input.formatDurationSeconds ?? null,
+        formatIntervalSeconds: input.formatIntervalSeconds ?? null,
+        formatRounds: input.formatRounds ?? null,
+        timeCapSeconds: input.timeCapSeconds ?? null,
+        scoreFinished: input.scoreFinished ?? null,
+        scoreTimeSeconds: input.scoreTimeSeconds ?? null,
+        scoreRounds: input.scoreRounds ?? null,
+        scoreReps: input.scoreReps ?? null,
         name: input.name ?? input.title,
         durationMinutes: input.durationMinutes,
         effort: input.effort,
@@ -1042,6 +1077,7 @@ export async function createWorkoutForMember(input: {
       userId: session.userId,
       groupId: post.groupId,
       workoutType: session.workoutType,
+      workoutFormat: session.workoutFormat ?? null,
       title: session.name ?? session.workoutType,
       name: session.name,
       durationMinutes: session.durationMinutes,
@@ -1077,7 +1113,7 @@ export async function updateWorkoutForOwner(input: {
     }
   >;
   segments?: CreateWorkoutSessionSegmentInput[];
-}) {
+} & WorkoutFormatColumnInput) {
   return getDatabase().transaction(async (transaction) => {
     const [owned] = await transaction
       .select({
@@ -1105,6 +1141,15 @@ export async function updateWorkoutForOwner(input: {
       .set({
         workoutType: input.workoutType,
         workoutSubtype: input.workoutSubtype ?? null,
+        workoutFormat: input.workoutFormat ?? null,
+        formatDurationSeconds: input.formatDurationSeconds ?? null,
+        formatIntervalSeconds: input.formatIntervalSeconds ?? null,
+        formatRounds: input.formatRounds ?? null,
+        timeCapSeconds: input.timeCapSeconds ?? null,
+        scoreFinished: input.scoreFinished ?? null,
+        scoreTimeSeconds: input.scoreTimeSeconds ?? null,
+        scoreRounds: input.scoreRounds ?? null,
+        scoreReps: input.scoreReps ?? null,
         name: input.name,
         durationMinutes: input.durationMinutes,
         effort: input.effort,
@@ -1472,6 +1517,15 @@ async function listRecentWorkouts(input: {
       groupId: schema.communityPosts.groupId,
       workoutType: schema.workoutSessions.workoutType,
       workoutSubtype: schema.workoutSessions.workoutSubtype,
+      workoutFormat: schema.workoutSessions.workoutFormat,
+      formatDurationSeconds: schema.workoutSessions.formatDurationSeconds,
+      formatIntervalSeconds: schema.workoutSessions.formatIntervalSeconds,
+      formatRounds: schema.workoutSessions.formatRounds,
+      timeCapSeconds: schema.workoutSessions.timeCapSeconds,
+      scoreFinished: schema.workoutSessions.scoreFinished,
+      scoreTimeSeconds: schema.workoutSessions.scoreTimeSeconds,
+      scoreRounds: schema.workoutSessions.scoreRounds,
+      scoreReps: schema.workoutSessions.scoreReps,
       name: schema.workoutSessions.name,
       durationMinutes: schema.workoutSessions.durationMinutes,
       effort: schema.workoutSessions.effort,
@@ -1536,7 +1590,8 @@ async function listRecentWorkouts(input: {
     ...new Set(
       posts
         .filter((post) =>
-          ["strength_training", "powerlifting"].includes(post.workoutType))
+          ["strength_training", "powerlifting"].includes(post.workoutType)
+          || (post.workoutType === "functional_fitness" && post.workoutFormat))
         .map((post) => post.id),
     ),
   ];
@@ -1670,15 +1725,33 @@ async function listRecentWorkouts(input: {
     clapReactionCount,
     commentCount,
     workoutSubtype,
+    formatDurationSeconds,
+    formatIntervalSeconds,
+    formatRounds,
+    timeCapSeconds,
+    scoreFinished,
+    scoreTimeSeconds,
+    scoreRounds,
+    scoreReps,
     ...post
   }) => ({
     ...post,
+    workoutFormat: post.workoutFormat ?? null,
     title: post.name ?? post.workoutType,
     notes: post.caption,
     completedAt: post.occurredAt,
     resultSummary: formatWorkoutResultSummary({
       workoutType: post.workoutType,
       workoutSubtype,
+      workoutFormat: post.workoutFormat,
+      formatDurationSeconds,
+      formatIntervalSeconds,
+      formatRounds,
+      timeCapSeconds,
+      scoreFinished,
+      scoreTimeSeconds,
+      scoreRounds,
+      scoreReps,
       metrics: metricsBySession.get(post.id) ?? [],
       movements: [...(movementsBySession.get(post.id)?.values() ?? [])],
       segments: segmentsBySession.get(post.id) ?? [],
@@ -1712,6 +1785,15 @@ export async function getCommunityWorkoutDetailForMember(input: {
       groupId: schema.communityPosts.groupId,
       workoutType: schema.workoutSessions.workoutType,
       workoutSubtype: schema.workoutSessions.workoutSubtype,
+      workoutFormat: schema.workoutSessions.workoutFormat,
+      formatDurationSeconds: schema.workoutSessions.formatDurationSeconds,
+      formatIntervalSeconds: schema.workoutSessions.formatIntervalSeconds,
+      formatRounds: schema.workoutSessions.formatRounds,
+      timeCapSeconds: schema.workoutSessions.timeCapSeconds,
+      scoreFinished: schema.workoutSessions.scoreFinished,
+      scoreTimeSeconds: schema.workoutSessions.scoreTimeSeconds,
+      scoreRounds: schema.workoutSessions.scoreRounds,
+      scoreReps: schema.workoutSessions.scoreReps,
       name: schema.workoutSessions.name,
       durationMinutes: schema.workoutSessions.durationMinutes,
       effort: schema.workoutSessions.effort,
@@ -1914,26 +1996,124 @@ export async function getCommunityWorkoutDetailForMember(input: {
       loadUnit: set.loadUnit,
     })),
   }));
+  const formatColumns = {
+    workoutFormat: post.workoutFormat ?? null,
+    formatDurationSeconds: post.formatDurationSeconds,
+    formatIntervalSeconds: post.formatIntervalSeconds,
+    formatRounds: post.formatRounds,
+    timeCapSeconds: post.timeCapSeconds,
+    scoreFinished: post.scoreFinished,
+    scoreTimeSeconds: post.scoreTimeSeconds,
+    scoreRounds: post.scoreRounds,
+    scoreReps: post.scoreReps,
+  };
+  const format = columnsToFormat(formatColumns);
+  const detailMovements = [...movements.values()];
 
   return {
-    ...post,
+    communityPostId: post.communityPostId,
+    id: post.id,
+    userId: post.userId,
+    groupId: post.groupId,
+    workoutType: post.workoutType,
+    workoutSubtype: post.workoutSubtype,
+    name: post.name,
+    durationMinutes: post.durationMinutes,
+    effort: post.effort,
+    caption: post.caption,
+    photoPath: post.photoPath,
+    occurredAt: post.occurredAt,
+    createdAt: post.createdAt,
+    updatedAt: post.updatedAt,
+    displayName: post.displayName,
+    viewerRole: post.viewerRole,
+    workoutFormat: post.workoutFormat ?? null,
     title: post.name ?? post.workoutType,
     notes: post.caption,
     completedAt: post.occurredAt,
+    format,
+    logVersion: deriveLogVersion({
+      workoutType: post.workoutType,
+      workoutFormat: post.workoutFormat ?? null,
+      metrics,
+      movements: detailMovements,
+    }),
     resultSummary: formatWorkoutResultSummary({
       workoutType: post.workoutType,
       workoutSubtype: post.workoutSubtype,
+      ...formatColumns,
       metrics,
       movements: summaryMovements,
       segments,
     }),
-    metrics,
-    movements: [...movements.values()],
+    metrics: format ? derivedDisplayMetrics(format, post.id) : metrics,
+    movements: detailMovements,
     segments,
     reactions: buildReactionSummary(
       reactionCountRows,
       viewerReactionRows[0]?.reactionType ?? null,
     ),
+  };
+}
+
+export async function getWorkoutEditStateForOwner(input: {
+  userId: string;
+  groupId: string;
+  workoutSessionId: string;
+}) {
+  const database = getDatabase();
+  const [owned] = await database
+    .select({
+      workoutType: schema.workoutSessions.workoutType,
+      workoutFormat: schema.workoutSessions.workoutFormat,
+    })
+    .from(schema.communityPosts)
+    .innerJoin(
+      schema.workoutSessions,
+      eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
+    )
+    .where(and(
+      eq(schema.communityPosts.groupId, input.groupId),
+      eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+      eq(schema.communityPosts.userId, input.userId),
+      eq(schema.workoutSessions.userId, input.userId),
+    ))
+    .limit(1);
+
+  if (!owned) return null;
+
+  const [meterMetric] = await database
+    .select({ id: schema.workoutSessionMetrics.id })
+    .from(schema.workoutSessionMetrics)
+    .where(and(
+      eq(schema.workoutSessionMetrics.workoutSessionId, input.workoutSessionId),
+      eq(schema.workoutSessionMetrics.metricType, "distance"),
+      eq(schema.workoutSessionMetrics.unit, "m"),
+    ))
+    .limit(1);
+
+  const [meterSet] = meterMetric
+    ? [meterMetric]
+    : await database
+      .select({ id: schema.setResults.id })
+      .from(schema.setResults)
+      .innerJoin(
+        schema.sessionMovementResults,
+        eq(
+          schema.setResults.sessionMovementResultId,
+          schema.sessionMovementResults.id,
+        ),
+      )
+      .where(and(
+        eq(schema.sessionMovementResults.workoutSessionId, input.workoutSessionId),
+        eq(schema.setResults.distanceUnit, "m"),
+      ))
+      .limit(1);
+
+  return {
+    workoutType: owned.workoutType,
+    workoutFormat: owned.workoutFormat ?? null,
+    hasMeterDistance: Boolean(meterMetric || meterSet),
   };
 }
 

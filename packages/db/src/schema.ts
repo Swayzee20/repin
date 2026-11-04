@@ -46,6 +46,7 @@ export const workoutSessionMetricTypes = [
 ] as const;
 
 export const runWorkoutSubtypes = ["distance", "tempo", "interval"] as const;
+export const workoutFormats = ["amrap", "for_time", "emom", "rounds"] as const;
 export const workoutSessionSegmentTypes = ["work", "recovery"] as const;
 export const workoutDistanceUnits = ["m", "km", "mi"] as const;
 
@@ -328,6 +329,15 @@ export const workoutSessions = pgTable(
     ),
     workoutType: text("workout_type").notNull(),
     workoutSubtype: text("workout_subtype").$type<(typeof runWorkoutSubtypes)[number]>(),
+    workoutFormat: text("workout_format").$type<(typeof workoutFormats)[number]>(),
+    formatDurationSeconds: integer("format_duration_seconds"),
+    formatIntervalSeconds: integer("format_interval_seconds"),
+    formatRounds: integer("format_rounds"),
+    timeCapSeconds: integer("time_cap_seconds"),
+    scoreFinished: boolean("score_finished"),
+    scoreTimeSeconds: integer("score_time_seconds"),
+    scoreRounds: integer("score_rounds"),
+    scoreReps: integer("score_reps"),
     name: text(),
     durationMinutes: integer("duration_minutes"),
     effort: integer(),
@@ -355,6 +365,97 @@ export const workoutSessions = pgTable(
     check(
       "workout_sessions_subtype_check",
       sql`${table.workoutSubtype} is null or (${table.workoutType} = 'run' and ${table.workoutSubtype} in ('distance', 'tempo', 'interval'))`,
+    ),
+    check(
+      "workout_sessions_format_check",
+      sql`${table.workoutFormat} is null or (${table.workoutType} = 'functional_fitness' and ${table.workoutFormat} in ('amrap', 'for_time', 'emom', 'rounds'))`,
+    ),
+    check(
+      "workout_sessions_format_columns_null_check",
+      sql`${table.workoutFormat} is not null or (
+        ${table.formatDurationSeconds} is null
+        and ${table.formatIntervalSeconds} is null
+        and ${table.formatRounds} is null
+        and ${table.timeCapSeconds} is null
+        and ${table.scoreFinished} is null
+        and ${table.scoreTimeSeconds} is null
+        and ${table.scoreRounds} is null
+        and ${table.scoreReps} is null
+      )`,
+    ),
+    check(
+      "workout_sessions_positive_values_check",
+      sql`(
+        ${table.formatDurationSeconds} is null or ${table.formatDurationSeconds} > 0
+      ) and (
+        ${table.formatIntervalSeconds} is null or ${table.formatIntervalSeconds} > 0
+      ) and (
+        ${table.formatRounds} is null or ${table.formatRounds} > 0
+      ) and (
+        ${table.timeCapSeconds} is null or ${table.timeCapSeconds} > 0
+      ) and (
+        ${table.scoreTimeSeconds} is null or ${table.scoreTimeSeconds} > 0
+      ) and (
+        ${table.scoreRounds} is null or ${table.scoreRounds} >= 0
+      ) and (
+        ${table.scoreReps} is null or ${table.scoreReps} >= 0
+      )`,
+    ),
+    check(
+      "workout_sessions_amrap_shape_check",
+      sql`${table.workoutFormat} <> 'amrap' or (
+        ${table.timeCapSeconds} is null
+        and ${table.scoreFinished} is null
+        and ${table.scoreTimeSeconds} is null
+        and ${table.formatIntervalSeconds} is null
+        and ${table.formatRounds} is null
+        and (${table.scoreReps} is null or ${table.scoreRounds} is not null)
+      )`,
+    ),
+    check(
+      "workout_sessions_for_time_shape_check",
+      sql`${table.workoutFormat} <> 'for_time' or (
+        ${table.formatDurationSeconds} is null
+        and ${table.formatIntervalSeconds} is null
+        and ${table.scoreRounds} is null
+        and (
+          (
+            ${table.scoreFinished} is null
+            and ${table.scoreTimeSeconds} is null
+            and ${table.scoreReps} is null
+          ) or (
+            ${table.scoreFinished} = true
+            and ${table.scoreTimeSeconds} is not null
+            and ${table.scoreReps} is null
+            and (${table.timeCapSeconds} is null or ${table.scoreTimeSeconds} <= ${table.timeCapSeconds})
+          ) or (
+            ${table.scoreFinished} = false
+            and ${table.scoreReps} is not null
+            and ${table.scoreTimeSeconds} is null
+            and ${table.timeCapSeconds} is not null
+          )
+        )
+      )`,
+    ),
+    check(
+      "workout_sessions_emom_shape_check",
+      sql`${table.workoutFormat} <> 'emom' or (
+        ${table.timeCapSeconds} is null
+        and ${table.scoreFinished} is null
+        and ${table.scoreTimeSeconds} is null
+        and ${table.formatRounds} is null
+      )`,
+    ),
+    check(
+      "workout_sessions_rounds_shape_check",
+      sql`${table.workoutFormat} <> 'rounds' or (
+        ${table.formatDurationSeconds} is null
+        and ${table.formatIntervalSeconds} is null
+        and ${table.timeCapSeconds} is null
+        and ${table.scoreFinished} is null
+        and ${table.scoreRounds} is null
+        and ${table.scoreReps} is null
+      )`,
     ),
   ],
 );
@@ -402,6 +503,10 @@ export const workoutSessionMetrics = pgTable(
     check(
       "workout_session_metrics_value_check",
       sql`${table.numericValue} is not null or ${table.textValue} is not null`,
+    ),
+    check(
+      "workout_session_metrics_distance_unit_check",
+      sql`${table.metricType} <> 'distance' or ${table.unit} in ('m', 'km', 'mi')`,
     ),
   ],
 );
@@ -553,6 +658,10 @@ export const setResults = pgTable(
     check(
       "set_results_calories_check",
       sql`${table.calories} is null or ${table.calories} >= 0`,
+    ),
+    check(
+      "set_results_distance_unit_check",
+      sql`(${table.distance} is null) = (${table.distanceUnit} is null) and (${table.distanceUnit} is null or ${table.distanceUnit} in ('m', 'km', 'mi'))`,
     ),
   ],
 );
