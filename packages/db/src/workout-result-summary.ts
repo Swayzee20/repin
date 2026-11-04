@@ -46,6 +46,7 @@ export function formatWorkoutResultSummary(input: {
       ]);
     }
     case "walk":
+    case "cycling":
       return joinSummaryParts([
         formatDistance(findMetric(input.metrics, "distance")),
         formatDuration(findMetric(input.metrics, "duration")),
@@ -127,18 +128,35 @@ function formatMovementSummary(movements: WorkoutResultMovement[]) {
     return truncateSummary(movementName);
   }
 
-  const movementNames = movements
-    .slice(0, 2)
-    .map((movement) => movement.movementName.trim())
-    .filter(Boolean);
-  if (!movementNames.length) return null;
+  const namedMovements = movements.filter((movement) => movement.movementName.trim());
+  if (!namedMovements.length) return null;
 
-  const remainingCount = movements.length - movementNames.length;
+  const shown = namedMovements.slice(0, 2).map(formatMultiExercisePart);
+  const remainingCount = namedMovements.length - shown.length;
   return truncateSummary(
-    [...movementNames, remainingCount > 0 ? `+${remainingCount} more` : null]
+    [...shown, remainingCount > 0 ? `+${remainingCount} more` : null]
       .filter(Boolean)
       .join(" · "),
   );
+}
+
+function formatMultiExercisePart(movement: WorkoutResultMovement) {
+  const movementName = movement.movementName.trim();
+  const uniformReps = getUniformReps(movement.sets);
+  if (uniformReps != null) {
+    return `${movementName} ${movement.sets.length}×${uniformReps}`;
+  }
+  if (movement.sets.length > 0) {
+    return `${movementName} ${movement.sets.length} ${movement.sets.length === 1 ? "set" : "sets"}`;
+  }
+  return movementName;
+}
+
+function getUniformReps(sets: WorkoutResultSet[]) {
+  if (!sets.length) return null;
+  const first = sets[0];
+  if (first?.reps == null) return null;
+  return sets.every((set) => set.reps === first.reps) ? first.reps : null;
 }
 
 function getIdenticalSet(sets: WorkoutResultSet[]) {

@@ -13,6 +13,7 @@
     "dev:mobile": "turbo dev --filter=@repin/mobile",
     "lint": "eslint . --max-warnings=0",
     "test:layout": "pnpm --dir apps/mobile run test:layout",
+    "test:validation": "pnpm --filter @repin/validation test && pnpm --filter @repin/db test:summary",
     "test:security": "pnpm --filter @repin/db test:security",
     "typecheck": "turbo typecheck",
     "build:web": "pnpm --dir apps/mobile run build:web"

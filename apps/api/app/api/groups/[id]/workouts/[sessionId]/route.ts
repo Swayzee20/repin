@@ -2,6 +2,7 @@ import {
   deleteCommunityPostForOwner,
   getCommunityWorkoutDetailForMember,
   updateWorkoutForOwner,
+  WorkoutRequestError,
 } from "@repin/db";
 import {
   createWorkoutSchema,
@@ -176,6 +177,9 @@ async function readIdentifiers(context: RouteContext) {
 function mutationError(error: unknown, message: string) {
   if (error instanceof AuthenticationError) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (error instanceof WorkoutRequestError) {
+    return NextResponse.json({ error: error.message }, { status: 400 });
   }
   reportUnexpectedRouteError(message, error);
   return NextResponse.json({ error: message }, { status: 503 });
