@@ -91,6 +91,7 @@ export interface JoinGroupResponse {
 export const workoutTypes = [
   "run",
   "walk",
+  "cycling",
   "strength_training",
   "powerlifting",
   "hiit",
@@ -99,6 +100,26 @@ export const workoutTypes = [
 ] as const;
 
 export type WorkoutType = (typeof workoutTypes)[number];
+
+export const workoutTypeLabels: Record<WorkoutType, string> = {
+  run: "Run",
+  walk: "Walk",
+  cycling: "Cycling",
+  strength_training: "Strength Training",
+  powerlifting: "Powerlifting",
+  hiit: "HIIT",
+  functional_fitness: "Functional Fitness",
+  other: "Other",
+};
+
+export const workoutTypesWithFeedMetrics = [
+  "run",
+  "walk",
+  "cycling",
+  "hiit",
+  "functional_fitness",
+  "other",
+] as const;
 
 export const communityReactionTypes = ["fire", "strong", "clap"] as const;
 
@@ -298,6 +319,27 @@ export interface MovementSummary {
   name: string;
   category: string | null;
   equipment: string | null;
+}
+
+export interface RecentCustomMovement {
+  name: string;
+}
+
+export interface MovementLastSessionSet {
+  reps: number | null;
+  load: number | null;
+  loadUnit: string | null;
+  durationSeconds: number | null;
+  distance: number | null;
+  distanceUnit: string | null;
+  calories: number | null;
+}
+
+export interface MovementLastSession {
+  occurredAt: string;
+  movementId: string | null;
+  movementName: string;
+  sets: MovementLastSessionSet[];
 }
 
 export interface WorkoutFeedItem {

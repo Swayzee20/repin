@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomBytes, randomUUID } from "node:crypto";
 
+import { workoutTypesWithFeedMetrics } from "@repin/types";
 import {
   and,
   asc,
@@ -38,6 +39,15 @@ import {
 } from "./workout-result-summary";
 
 export { checkDatabaseConnection, getDatabase };
+
+export class WorkoutRequestError extends Error {
+  readonly statusCode = 400;
+
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkoutRequestError";
+  }
+}
 
 export async function getOrCreateUser(input: {
   id: string;
@@ -345,6 +355,7 @@ async function insertWorkoutSessionWithResults(
     }
 
     const movementInputs = input.movements ?? [];
+    await assertKnownMovementIds(transaction, movementInputs);
     const prescribedMovementIds = movementInputs.flatMap((movement) =>
       movement.blockMovementId ? [movement.blockMovementId] : [],
     );
@@ -551,6 +562,152 @@ export async function searchMovements(input: { query: string; limit?: number }) 
     .where(query ? ilike(schema.movements.name, `%${query}%`) : undefined)
     .orderBy(asc(schema.movements.name))
     .limit(Math.min(Math.max(input.limit ?? 8, 1), 20));
+}
+
+const recentCatalogLimit = 8;
+const recentCustomLimit = 10;
+
+function normalizeMovementName(name: string) {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
+async function assertKnownMovementIds(
+  transaction: DatabaseTransaction,
+  movements: Array<{ movementId?: string | null }>,
+) {
+  const movementIds = [...new Set(
+    movements.flatMap((movement) => movement.movementId ? [movement.movementId] : []),
+  )];
+  if (!movementIds.length) return;
+
+  const found = await transaction
+    .select({ id: schema.movements.id })
+    .from(schema.movements)
+    .where(inArray(schema.movements.id, movementIds));
+
+  if (found.length !== movementIds.length) {
+    throw new WorkoutRequestError("That exercise could not be found");
+  }
+}
+
+export async function listRecentMovementsForUser(userId: string) {
+  const rows = await getDatabase()
+    .select({
+      movementId: schema.sessionMovementResults.movementId,
+      movementName: schema.sessionMovementResults.movementName,
+      occurredAt: schema.workoutSessions.occurredAt,
+      catalogId: schema.movements.id,
+      catalogName: schema.movements.name,
+      category: schema.movements.category,
+      equipment: schema.movements.equipment,
+    })
+    .from(schema.sessionMovementResults)
+    .innerJoin(
+      schema.workoutSessions,
+      eq(schema.sessionMovementResults.workoutSessionId, schema.workoutSessions.id),
+    )
+    .leftJoin(
+      schema.movements,
+      eq(schema.sessionMovementResults.movementId, schema.movements.id),
+    )
+    .where(eq(schema.workoutSessions.userId, userId))
+    .orderBy(
+      desc(schema.workoutSessions.occurredAt),
+      desc(schema.sessionMovementResults.createdAt),
+    )
+    .limit(80);
+
+  const recent: Array<{
+    id: string;
+    name: string;
+    category: string | null;
+    equipment: string | null;
+  }> = [];
+  const recentCustom: Array<{ name: string }> = [];
+  const seenCatalog = new Set<string>();
+  const seenCustom = new Set<string>();
+
+  for (const row of rows) {
+    if (row.catalogId && !seenCatalog.has(row.catalogId) && recent.length < recentCatalogLimit) {
+      seenCatalog.add(row.catalogId);
+      recent.push({
+        id: row.catalogId,
+        name: row.catalogName ?? row.movementName,
+        category: row.category,
+        equipment: row.equipment,
+      });
+      continue;
+    }
+
+    if (row.movementId || row.catalogId) continue;
+
+    const normalized = normalizeMovementName(row.movementName);
+    if (!normalized || seenCustom.has(normalized) || recentCustom.length >= recentCustomLimit) {
+      continue;
+    }
+    seenCustom.add(normalized);
+    recentCustom.push({ name: row.movementName.trim().replace(/\s+/g, " ") });
+  }
+
+  return { recent, recentCustom };
+}
+
+export async function getLastMovementSessionForUser(input: {
+  userId: string;
+  movementId?: string;
+  movementName?: string;
+}) {
+  const database = getDatabase();
+  const normalizedName = input.movementName ? normalizeMovementName(input.movementName) : "";
+  const [match] = await database
+    .select({
+      movementResultId: schema.sessionMovementResults.id,
+      movementId: schema.sessionMovementResults.movementId,
+      movementName: schema.sessionMovementResults.movementName,
+      occurredAt: schema.workoutSessions.occurredAt,
+    })
+    .from(schema.sessionMovementResults)
+    .innerJoin(
+      schema.workoutSessions,
+      eq(schema.sessionMovementResults.workoutSessionId, schema.workoutSessions.id),
+    )
+    .where(and(
+      eq(schema.workoutSessions.userId, input.userId),
+      input.movementId
+        ? eq(schema.sessionMovementResults.movementId, input.movementId)
+        : and(
+            isNull(schema.sessionMovementResults.movementId),
+            sql`lower(regexp_replace(btrim(${schema.sessionMovementResults.movementName}), '\\s+', ' ', 'g')) = ${normalizedName}`,
+          ),
+    ))
+    .orderBy(
+      desc(schema.workoutSessions.occurredAt),
+      desc(schema.sessionMovementResults.position),
+    )
+    .limit(1);
+
+  if (!match) return null;
+
+  const sets = await database
+    .select({
+      reps: schema.setResults.reps,
+      load: schema.setResults.load,
+      loadUnit: schema.setResults.loadUnit,
+      durationSeconds: schema.setResults.durationSeconds,
+      distance: schema.setResults.distance,
+      distanceUnit: schema.setResults.distanceUnit,
+      calories: schema.setResults.calories,
+    })
+    .from(schema.setResults)
+    .where(eq(schema.setResults.sessionMovementResultId, match.movementResultId))
+    .orderBy(asc(schema.setResults.position));
+
+  return {
+    occurredAt: match.occurredAt.toISOString(),
+    movementId: match.movementId,
+    movementName: match.movementName,
+    sets,
+  };
 }
 
 export async function createGroup(input: { ownerId: string; name: string }) {
@@ -1004,6 +1161,7 @@ export async function updateWorkoutForOwner(input: {
         })),
       );
     }
+    await assertKnownMovementIds(transaction, input.movements ?? []);
     for (const [position, movementInput] of (input.movements ?? []).entries()) {
       const [movement] = await transaction.insert(schema.sessionMovementResults).values({
         workoutSessionId: owned.sessionId,
@@ -1368,7 +1526,7 @@ async function listRecentWorkouts(input: {
     ...new Set(
       posts
         .filter((post) =>
-          ["run", "walk", "hiit", "functional_fitness", "other"].includes(
+          (workoutTypesWithFeedMetrics as readonly string[]).includes(
             post.workoutType,
           ))
         .map((post) => post.id),
