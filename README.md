@@ -123,3 +123,5 @@ Use your computer's LAN address for a physical device. An Android emulator commo
 - `pnpm build` builds production-capable workspaces
 - `pnpm typecheck` type-checks every workspace
 - `pnpm lint` lints the repository
+- `pnpm test:layout` runs the mobile unit tests plus the logging validation and feed-summary harnesses
+- `pnpm test:validation` runs only the logging validation and feed-summary harnesses
