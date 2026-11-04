@@ -53,7 +53,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["apps/mobile/ui/theme.ts"],
+    files: ["apps/mobile/ui/theme.ts", "apps/api/lib/theme.ts"],
     rules: {
       "repin/no-style-literals": "off",
     },

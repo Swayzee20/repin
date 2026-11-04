@@ -65,6 +65,15 @@ export const createContentReportSchema = z.object({
   alsoBlock: z.boolean().optional(),
 }).strict();
 
+export const reviewContentReportSchema = z.object({
+  action: z.enum(["remove", "keep", "restore"]),
+}).strict();
+
+export const adminSignInSchema = z.object({
+  email: z.string().trim().email(),
+  password: z.string().min(1),
+}).strict();
+
 export const groupSearchQuerySchema = z.object({
   q: z.string().trim().min(2).max(80),
 });

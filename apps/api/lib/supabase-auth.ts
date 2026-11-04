@@ -14,7 +14,7 @@ export class AuthenticationError extends Error {
   }
 }
 
-function getAuthClient() {
+export function getSupabaseAuthClient() {
   const supabaseUrl = process.env.SUPABASE_URL;
   const supabasePublishableKey = process.env.SUPABASE_PUBLISHABLE_KEY;
 
@@ -29,6 +29,24 @@ function getAuthClient() {
       detectSessionInUrl: false,
     },
   });
+}
+
+function getAuthClient() {
+  return getSupabaseAuthClient();
+}
+
+export async function verifyAccessToken(token: string) {
+  const { data, error } = await getAuthClient().auth.getClaims(token);
+
+  if (error || !data?.claims.sub) {
+    throw new AuthenticationError();
+  }
+
+  return {
+    id: data.claims.sub,
+    email: typeof data.claims.email === "string" ? data.claims.email : "",
+    suggestedDisplayName: getSuggestedDisplayName(data.claims),
+  };
 }
 
 function readBearerToken(request: Request) {
@@ -85,23 +103,21 @@ export async function requireAuthenticatedUser(
 ) {
   const authenticate = async () => {
     const token = readBearerToken(request);
-    const { data, error } = await getAuthClient().auth.getClaims(token);
-
-    console.info("[Supabase verification diagnostic]", {
-      error: error?.message ?? null,
-      status: error?.status ?? null,
-    });
-
-    if (error || !data?.claims.sub) {
-      throw new AuthenticationError();
+    try {
+      const identity = await verifyAccessToken(token);
+      console.info("[Supabase verification diagnostic]", {
+        error: null,
+        status: null,
+      });
+      setApiSentryUser(identity.id);
+      return identity;
+    } catch (error) {
+      console.info("[Supabase verification diagnostic]", {
+        error: error instanceof Error ? error.message : "Unauthorized",
+        status: null,
+      });
+      throw error;
     }
-
-    setApiSentryUser(data.claims.sub);
-
-    return {
-      id: data.claims.sub,
-      suggestedDisplayName: getSuggestedDisplayName(data.claims),
-    };
   };
 
   return timing ? timing.measure("auth", authenticate) : authenticate();
