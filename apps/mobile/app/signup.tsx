@@ -6,17 +6,16 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isSupabaseConfigured, supabase } from "../lib/supabase";
 import {
-  GUIDELINES_LINK_LABEL,
-  GUIDELINES_URL,
-  TERMS_LINK_LABEL,
-  TERMS_URL,
   agreeLineLinkPressedText,
   agreeLineLinkText,
   agreeLineSubmitGap,
   agreeLineText,
   agreeLinkHitSlop,
+  guidelinesAgreePhrase,
   signupAuthMetadata,
   termsAcceptanceSlot,
+  termsAgreePhrase,
+  type AgreePhrase,
 } from "../lib/terms-acceptance";
 import { AuthScreen, AuthSuccessMark, FormError, usePaneFieldFocus } from "../ui/auth-screen";
 import { fieldChainProps } from "../ui/keyboard";
@@ -236,40 +235,31 @@ export default function SignupScreen() {
 function SignupAgreeLine() {
   return (
     <Text style={styles.agree} testID={termsAcceptanceSlot}>
-      By creating an account, you agree to repin's{" "}
-      <AgreeLink label={TERMS_LINK_LABEL} url={TERMS_URL}>
-        Terms of Service
-      </AgreeLink>
+      By creating an account, you agree to repin's <AgreePhrase phrase={termsAgreePhrase} />
       {" and "}
-      <AgreeLink label={GUIDELINES_LINK_LABEL} url={GUIDELINES_URL}>
-        Community Guidelines
-      </AgreeLink>
+      <AgreePhrase phrase={guidelinesAgreePhrase} />
       .
     </Text>
   );
 }
 
-function AgreeLink({
-  children,
-  label,
-  url,
-}: {
-  children: string;
-  label: string;
-  url: string;
-}) {
+function AgreePhrase({ phrase }: { phrase: AgreePhrase }) {
+  if (phrase.kind === "text") {
+    return phrase.text;
+  }
+
   return (
     <Pressable
-      accessibilityLabel={label}
+      accessibilityLabel={phrase.label}
       accessibilityRole="link"
       hitSlop={agreeLinkHitSlop}
       onPress={() => {
-        void Linking.openURL(url);
+        void Linking.openURL(phrase.url);
       }}
     >
       {({ pressed }) => (
         <Text accessible={false} style={[styles.link, pressed && styles.linkPressed]}>
-          {children}
+          {phrase.text}
         </Text>
       )}
     </Pressable>

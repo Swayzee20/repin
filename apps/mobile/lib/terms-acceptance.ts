@@ -5,12 +5,17 @@ import { colors, fonts, size, spacing, type } from "../ui/theme";
  * zero tolerance for objectionable content or abusive users. Creating an
  * account is the acceptance (passive line, no checkbox).
  *
- * PLACEHOLDER — the public Terms of Service and Community Guidelines URLs
- * are not final yet (moderation spec §13). Swap these before submission.
- * TODO: replace TERMS_URL and GUIDELINES_URL with the published legal pages.
+ * Legal page URLs come from Expo public env only — EAS for native builds,
+ * Vercel repin-web for web. There is no default host. Leave the vars empty
+ * until Josue publishes pages on a domain we own.
  */
-export const TERMS_URL = "https://repin.app/terms";
-export const GUIDELINES_URL = "https://repin.app/guidelines";
+export function readConfiguredUrl(value: string | undefined | null): string | null {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+}
+
+export const TERMS_URL = readConfiguredUrl(process.env.EXPO_PUBLIC_TERMS_URL);
+export const GUIDELINES_URL = readConfiguredUrl(process.env.EXPO_PUBLIC_GUIDELINES_URL);
 
 export const TERMS_VERSION = "2027-02-10";
 
@@ -47,6 +52,22 @@ export const agreeLineSubmitGap = spacing.md;
  * the Pressable hit target is size.hit (44).
  */
 export const agreeLinkHitSlop = (size.hit - type.bodySmall.lineHeight) / 2;
+
+export type AgreePhrase =
+  | { kind: "text"; text: string }
+  | { kind: "link"; text: string; url: string; label: string };
+
+export function resolveAgreePhrase(text: string, url: string | null, label: string): AgreePhrase {
+  if (url) return { kind: "link", text, url, label };
+  return { kind: "text", text };
+}
+
+export const termsAgreePhrase = resolveAgreePhrase("Terms of Service", TERMS_URL, TERMS_LINK_LABEL);
+export const guidelinesAgreePhrase = resolveAgreePhrase(
+  "Community Guidelines",
+  GUIDELINES_URL,
+  GUIDELINES_LINK_LABEL,
+);
 
 export function termsAcceptanceMetadata(acceptedAt = new Date()) {
   return {

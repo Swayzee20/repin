@@ -17,17 +17,91 @@ import {
   agreeLineSubmitGap,
   agreeLineText,
   agreeLinkHitSlop,
+  guidelinesAgreePhrase,
+  readConfiguredUrl,
+  resolveAgreePhrase,
   signupAuthMetadata,
   termsAcceptanceMetadata,
   termsAcceptanceSlot,
+  termsAgreePhrase,
 } from "./terms-acceptance";
 
-test("placeholder legal URLs are marked for later swap", () => {
-  assert.equal(TERMS_URL, "https://repin.app/terms");
-  assert.equal(GUIDELINES_URL, "https://repin.app/guidelines");
-  const source = readFileSync(new URL("./terms-acceptance.ts", import.meta.url), "utf8");
-  assert.match(source, /PLACEHOLDER/);
-  assert.match(source, /TODO: replace TERMS_URL and GUIDELINES_URL/);
+const termsSource = readFileSync(new URL("./terms-acceptance.ts", import.meta.url), "utf8");
+const envExample = readFileSync(new URL("../.env.example", import.meta.url), "utf8");
+const signupSource = readFileSync(new URL("../app/signup.tsx", import.meta.url), "utf8");
+
+test("legal URLs come from Expo public env with no hardcoded host", () => {
+  assert.equal(TERMS_URL, readConfiguredUrl(process.env.EXPO_PUBLIC_TERMS_URL));
+  assert.equal(GUIDELINES_URL, readConfiguredUrl(process.env.EXPO_PUBLIC_GUIDELINES_URL));
+  assert.doesNotMatch(termsSource, /repin\.app/);
+  assert.doesNotMatch(signupSource, /repin\.app/);
+  assert.match(termsSource, /EXPO_PUBLIC_TERMS_URL/);
+  assert.match(termsSource, /EXPO_PUBLIC_GUIDELINES_URL/);
+});
+
+test("unset or blank env values are not URLs", () => {
+  for (const value of [undefined, null, "", "   "]) {
+    assert.equal(readConfiguredUrl(value), null);
+  }
+});
+
+test("a set env value is trimmed and kept", () => {
+  assert.equal(readConfiguredUrl(" https://legal.example/terms "), "https://legal.example/terms");
+  assert.equal(
+    readConfiguredUrl("https://legal.example/guidelines"),
+    "https://legal.example/guidelines",
+  );
+});
+
+test("unset phrases stay muted plain text", () => {
+  assert.deepEqual(resolveAgreePhrase("Terms of Service", null, TERMS_LINK_LABEL), {
+    kind: "text",
+    text: "Terms of Service",
+  });
+  assert.deepEqual(resolveAgreePhrase("Community Guidelines", null, GUIDELINES_LINK_LABEL), {
+    kind: "text",
+    text: "Community Guidelines",
+  });
+});
+
+test("set phrases become links with labels", () => {
+  assert.deepEqual(
+    resolveAgreePhrase("Terms of Service", "https://legal.example/terms", TERMS_LINK_LABEL),
+    {
+      kind: "link",
+      label: TERMS_LINK_LABEL,
+      text: "Terms of Service",
+      url: "https://legal.example/terms",
+    },
+  );
+  assert.deepEqual(
+    resolveAgreePhrase(
+      "Community Guidelines",
+      "https://legal.example/guidelines",
+      GUIDELINES_LINK_LABEL,
+    ),
+    {
+      kind: "link",
+      label: GUIDELINES_LINK_LABEL,
+      text: "Community Guidelines",
+      url: "https://legal.example/guidelines",
+    },
+  );
+});
+
+test("exported phrases follow the current env", () => {
+  assert.deepEqual(termsAgreePhrase, resolveAgreePhrase("Terms of Service", TERMS_URL, TERMS_LINK_LABEL));
+  assert.deepEqual(
+    guidelinesAgreePhrase,
+    resolveAgreePhrase("Community Guidelines", GUIDELINES_URL, GUIDELINES_LINK_LABEL),
+  );
+});
+
+test("the env example lists empty legal URL vars", () => {
+  assert.match(envExample, /^EXPO_PUBLIC_TERMS_URL=$/m);
+  assert.match(envExample, /^EXPO_PUBLIC_GUIDELINES_URL=$/m);
+  assert.doesNotMatch(envExample, /EXPO_PUBLIC_TERMS_URL=https?:/);
+  assert.doesNotMatch(envExample, /EXPO_PUBLIC_GUIDELINES_URL=https?:/);
 });
 
 test("terms version is the Feb 10 2027 submission date", () => {
