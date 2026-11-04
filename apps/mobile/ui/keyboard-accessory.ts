@@ -9,7 +9,10 @@
 export type AccessoryLabel = "Done" | "Next";
 
 export type AccessoryCommand = {
+  context?: string;
   label: AccessoryLabel;
+  onDown?: () => void;
+  onUp?: () => void;
   run: () => void;
 };
 

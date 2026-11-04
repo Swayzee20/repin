@@ -1,128 +1,250 @@
-import type { MovementSummary, QuickLogMovementInput, WorkoutDetailMovement } from "@repin/types";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import type { MovementSummary } from "@repin/types";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import {
+  Animated,
+  PanResponder,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+  type AccessibilityActionEvent,
+} from "react-native";
 
-import { supabase } from "../lib/supabase";
-import { TextField } from "./components";
+import { ContentOptionsMenu } from "./components";
 import { NumberField } from "./form-fields";
+import { Chevron, Icon } from "./icons";
 import { fieldChainProps, type ReturnKeyType } from "./keyboard";
 import { useInputRegistry } from "./keyboard-focus";
 import { SegmentedControl } from "./primitives";
+import { pressableFocused, webFocusRing } from "./focus-ring";
+import { supabase } from "../lib/supabase";
+import {
+  appendCopiedSet,
+  canAddSet,
+  canRemoveSet,
+  clampSetRowTranslate,
+  createDetailedExercise,
+  deleteSetAt,
+  deletedSetMessage,
+  formatExerciseSummary,
+  moveItem,
+  nextStrengthField,
+  prevStrengthField,
+  removeLastSet,
+  restoreSet,
+  setDeleteRevealWidth,
+  setIndexWidth,
+  setLoadFlex,
+  setRepsFlex,
+  setRowPitch,
+  setRowSwipeRelease,
+  setTableHeaderHeight,
+  setTableHeaderLetterSpacing,
+  setsStepperWidth,
+  strengthAccessoryContext,
+  strengthFieldKey,
+  strengthNumericFields,
+  undoToastMs,
+  type DetailedExerciseDraft,
+  type DetailedSetDraft,
+  type LoadUnit,
+  type StrengthFieldRef,
+  type StrengthNumericField,
+} from "./strength-form-state";
 import { colors, fonts, radii, size, spacing, type } from "./theme";
+import { CardHeading } from "./workout-form-frame";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
-type LoadUnit = "lb" | "kg";
-type DetailedSetDraft = { id: string; reps: string; load: string };
+export type { DetailedExerciseDraft, LoadUnit } from "./strength-form-state";
+export {
+  buildDetailedMovements,
+  hydrateDetailedExercises,
+  hydrateWorkoutLoadUnitFromMovements,
+  readStoredLoadUnit,
+  validateDetailedExercises,
+  writeStoredLoadUnit,
+} from "./strength-form-state";
 
-export type DetailedExerciseDraft = {
-  id: string;
-  movementId: string | null;
-  movementName: string;
-  loadUnit: LoadUnit;
-  sets: DetailedSetDraft[];
-};
-
-export function hydrateDetailedExercises(movements: WorkoutDetailMovement[]): DetailedExerciseDraft[] {
-  return movements.map((movement) => {
-    const loadUnit: LoadUnit = movement.sets.find((set) => set.loadUnit === "kg") ? "kg" : "lb";
-    return {
-      id: movement.id,
-      movementId: movement.movementId,
-      movementName: movement.movementName,
-      loadUnit,
-      sets: movement.sets.length
-        ? movement.sets.map((set) => ({
-            id: set.id,
-            reps: set.reps == null ? "" : String(set.reps),
-            load: set.load == null ? "" : String(set.load),
-          }))
-        : [createDetailedSet()],
-    };
-  });
-}
-
-export function DetailedExerciseFields({
-  exercises,
-  onAfterLast,
+export function WorkoutUnitToggle({
   onChange,
+  value,
 }: {
-  exercises: DetailedExerciseDraft[];
-  /** Return from the last set focuses the next field outside this list. */
-  onAfterLast?: () => void;
-  onChange: (exercises: DetailedExerciseDraft[]) => void;
+  onChange: (unit: LoadUnit) => void;
+  value: LoadUnit;
 }) {
-  const names = useRef(new Map<string, () => void>());
-  const registerName = useCallback((id: string, focus: (() => void) | null) => {
-    if (focus) names.current.set(id, focus);
-    else names.current.delete(id);
-  }, []);
-
   return (
-    <View>
-      {exercises.map((exercise, index) => {
-        const next = exercises[index + 1];
-        const advances = Boolean(next) || Boolean(onAfterLast);
-        return (
-          <DetailedExerciseEditor
-            exercise={exercise}
-            index={index}
-            key={exercise.id}
-            leaveKey={advances ? "next" : "done"}
-            onChange={(nextExercise) => onChange(
-              exercises.map((item) => item.id === exercise.id ? nextExercise : item),
-            )}
-            onLeave={advances ? () => {
-              if (next) names.current.get(next.id)?.();
-              else onAfterLast?.();
-            } : undefined}
-            onRegisterFocus={registerName}
-            onRemove={() => onChange(exercises.filter((item) => item.id !== exercise.id))}
-          />
-        );
-      })}
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => onChange([...exercises, createDetailedExercise()])}
-        style={({ pressed }) => [styles.addExercise, pressed && styles.pressed]}
-      >
-        <Text style={styles.actionText}>+ Add exercise</Text>
-      </Pressable>
+    <View style={styles.unitHit}>
+      <SegmentedControl
+        accessibilityLabel="Weight unit"
+        onChange={(loadUnit) => {
+          if (loadUnit) onChange(loadUnit);
+        }}
+        options={[{ label: "lb", value: "lb" }, { label: "kg", value: "kg" }]}
+        size="sm"
+        value={value}
+      />
     </View>
   );
 }
 
-function DetailedExerciseEditor({
-  exercise,
-  index,
-  leaveKey = "done",
+export function DetailedExerciseFields({
+  exercises,
+  loadUnit,
+  onAfterLast,
   onChange,
-  onLeave,
-  onRegisterFocus,
+  onLoadUnitChange,
+}: {
+  exercises: DetailedExerciseDraft[];
+  loadUnit: LoadUnit;
+  onAfterLast?: () => void;
+  onChange: (exercises: DetailedExerciseDraft[]) => void;
+  onLoadUnitChange: (unit: LoadUnit) => void;
+}) {
+  const { focus, ref } = useInputRegistry();
+  const [expandedId, setExpandedId] = useState<string | null>(() => exercises.at(-1)?.id ?? null);
+  const [undo, setUndo] = useState<{ message: string; restore: () => void } | null>(null);
+  const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingFocusKey = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (expandedId && exercises.some((exercise) => exercise.id === expandedId)) return;
+    setExpandedId(exercises.at(-1)?.id ?? null);
+  }, [exercises, expandedId]);
+
+  useEffect(() => {
+    if (!pendingFocusKey.current) return;
+    const key = pendingFocusKey.current;
+    pendingFocusKey.current = null;
+    focus(key);
+  }, [expandedId, exercises, focus]);
+
+  useEffect(() => () => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+  }, []);
+
+  const showUndo = useCallback((message: string, restore: () => void) => {
+    if (undoTimer.current) clearTimeout(undoTimer.current);
+    setUndo({ message, restore });
+    undoTimer.current = setTimeout(() => setUndo(null), undoToastMs);
+  }, []);
+
+  const numericFields = strengthNumericFields(exercises);
+
+  const focusField = useCallback((target: StrengthFieldRef | null, fallback?: () => void) => {
+    if (!target) {
+      fallback?.();
+      return;
+    }
+    const exercise = exercises[target.exerciseIndex];
+    const set = exercise?.sets[target.setIndex];
+    if (!exercise || !set) {
+      fallback?.();
+      return;
+    }
+    const key = strengthFieldKey(set.id, target.field);
+    if (exercise.id !== expandedId) {
+      pendingFocusKey.current = key;
+      setExpandedId(exercise.id);
+      return;
+    }
+    focus(key);
+  }, [exercises, expandedId, focus]);
+
+  return (
+    <View>
+      <CardHeading trailing={<WorkoutUnitToggle onChange={onLoadUnitChange} value={loadUnit} />}>
+        Exercises
+      </CardHeading>
+      {exercises.map((exercise, index) => (
+        <ExerciseCard
+          exercise={exercise}
+          expanded={exercise.id === expandedId}
+          focus={focus}
+          index={index}
+          inputRef={ref}
+          key={exercise.id}
+          loadUnit={loadUnit}
+          numericFields={numericFields}
+          onAfterLast={onAfterLast}
+          onChange={(nextExercise) => onChange(
+            exercises.map((item) => item.id === exercise.id ? nextExercise : item),
+          )}
+          onExpand={() => setExpandedId(exercise.id)}
+          onFocusField={focusField}
+          onMove={(direction) => onChange(moveItem(exercises, index, direction))}
+          onRemove={() => onChange(exercises.filter((item) => item.id !== exercise.id))}
+          onUndo={showUndo}
+        />
+      ))}
+      <Pressable
+        accessibilityRole="button"
+        onPress={() => {
+          const next = createDetailedExercise();
+          onChange([...exercises, next]);
+          setExpandedId(next.id);
+        }}
+        style={(state) => [styles.addExercise, state.pressed && styles.addExercisePressed, webFocusRing(pressableFocused(state))]}
+      >
+        <Icon color={colors.brandPressed} name="plus" size={size.icon.sm} />
+        <Text style={styles.addExerciseLabel}>Add exercise</Text>
+      </Pressable>
+      {undo ? (
+        <View accessibilityLiveRegion="polite" style={styles.undoToast}>
+          <Text style={styles.undoMessage}>{undo.message}</Text>
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => {
+              if (undoTimer.current) clearTimeout(undoTimer.current);
+              undo.restore();
+              setUndo(null);
+            }}
+            style={(state) => [styles.undoAction, state.pressed && styles.pressed, webFocusRing(pressableFocused(state))]}
+          >
+            <Text style={styles.undoActionLabel}>Undo</Text>
+          </Pressable>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function ExerciseCard({
+  exercise,
+  expanded,
+  focus,
+  index,
+  inputRef,
+  loadUnit,
+  numericFields,
+  onAfterLast,
+  onChange,
+  onExpand,
+  onFocusField,
+  onMove,
   onRemove,
+  onUndo,
 }: {
   exercise: DetailedExerciseDraft;
+  expanded: boolean;
+  focus: (key: string) => void;
   index: number;
-  leaveKey?: ReturnKeyType;
+  inputRef: ReturnType<typeof useInputRegistry>["ref"];
+  loadUnit: LoadUnit;
+  numericFields: StrengthFieldRef[];
+  onAfterLast?: () => void;
   onChange: (exercise: DetailedExerciseDraft) => void;
-  onLeave?: () => void;
-  onRegisterFocus?: (id: string, focus: (() => void) | null) => void;
+  onExpand: () => void;
+  onFocusField: (target: StrengthFieldRef | null, fallback?: () => void) => void;
+  onMove: (direction: -1 | 1) => void;
   onRemove: () => void;
+  onUndo: (message: string, restore: () => void) => void;
 }) {
   const [suggestions, setSuggestions] = useState<MovementSummary[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
-  const { focus, ref } = useInputRegistry();
+  const name = exercise.movementName.trim() || `Exercise ${index + 1}`;
   const firstSet = exercise.sets[0];
-  const nameAdvances = Boolean(firstSet) || Boolean(onLeave);
-
-  useEffect(() => {
-    onRegisterFocus?.(exercise.id, () => focus("name"));
-    return () => onRegisterFocus?.(exercise.id, null);
-  }, [exercise.id, focus, onRegisterFocus]);
-  const updateSet = (setId: string, change: Partial<DetailedSetDraft>) => onChange({
-    ...exercise,
-    sets: exercise.sets.map((set) => set.id === setId ? { ...set, ...change } : set),
-  });
 
   useEffect(() => {
     const query = exercise.movementName.trim();
@@ -146,34 +268,77 @@ function DetailedExerciseEditor({
     return () => clearTimeout(timer);
   }, [exercise.movementId, exercise.movementName]);
 
+  if (!expanded) {
+    return (
+      <Pressable
+        accessibilityHint="Shows the set table"
+        accessibilityLabel={`${name}, ${formatExerciseSummary(exercise.sets, loadUnit)}`}
+        accessibilityRole="button"
+        onPress={onExpand}
+        style={(state) => [styles.summaryRow, state.pressed && styles.summaryPressed, webFocusRing(pressableFocused(state))]}
+      >
+        <View style={styles.summaryCopy}>
+          <Text numberOfLines={1} style={styles.summaryName}>{name}</Text>
+          <Text numberOfLines={1} style={styles.summaryMeta}>{formatExerciseSummary(exercise.sets, loadUnit)}</Text>
+        </View>
+        <Chevron direction="down" />
+      </Pressable>
+    );
+  }
+
+  const updateSets = (sets: DetailedSetDraft[]) => onChange({ ...exercise, sets });
+  const applyDelete = (indexToRemove: number) => {
+    const snapshot = deleteSetAt(exercise.sets, indexToRemove);
+    if (!snapshot) return;
+    updateSets(snapshot.sets);
+    onUndo(deletedSetMessage(snapshot.index + 1), () => updateSets(restoreSet(snapshot.sets, snapshot.removed, snapshot.index)));
+  };
+
+  const meta = exercise.equipment
+    ? `${exercise.equipment} · tap name to change`
+    : "tap name to change";
+
   return (
     <View style={styles.exerciseCard}>
       <View style={styles.exerciseHeader}>
-        <Text style={styles.exerciseTitle}>{exercise.movementName.trim() || `Exercise ${index + 1}`}</Text>
-        <Pressable accessibilityRole="button" hitSlop={8} onPress={onRemove}>
-          <Text style={styles.removeText}>Remove</Text>
-        </Pressable>
+        <View style={styles.exerciseTitleBlock}>
+          <TextInput
+            accessibilityLabel="Exercise name"
+            onChangeText={(movementName) => {
+              onChange({ ...exercise, equipment: null, movementId: null, movementName });
+              setShowSuggestions(true);
+            }}
+            placeholder="Barbell Bench Press"
+            placeholderTextColor={colors.subtle}
+            ref={inputRef(exercise.id)}
+            selectionColor={colors.brand}
+            style={styles.exerciseName}
+            value={exercise.movementName}
+            {...fieldChainProps({
+              count: firstSet ? 2 : 1,
+              index: 0,
+              last: "next",
+              onAdvance: () => {
+                if (firstSet) focus(strengthFieldKey(firstSet.id, "reps"));
+                else onAfterLast?.();
+              },
+              onFinish: onAfterLast,
+            })}
+          />
+          <Text style={styles.exerciseMeta}>{meta}</Text>
+        </View>
+        <ContentOptionsMenu
+          accessibilityLabel={`${name} options`}
+          items={[
+            { label: "Move up", onPress: () => onMove(-1) },
+            { label: "Move down", onPress: () => onMove(1) },
+            ...(canRemoveSet(exercise.sets.length)
+              ? [{ danger: true, label: "Delete set", onPress: () => applyDelete(exercise.sets.length - 1) }]
+              : []),
+            { danger: true, icon: "trash" as const, label: "Delete exercise", onPress: onRemove },
+          ]}
+        />
       </View>
-      <TextField
-        label="Exercise name"
-        onChangeText={(movementName) => {
-          onChange({ ...exercise, movementId: null, movementName });
-          setShowSuggestions(true);
-        }}
-        placeholder="Barbell Bench Press"
-        ref={ref("name")}
-        value={exercise.movementName}
-        {...fieldChainProps({
-          count: nameAdvances ? 2 : 1,
-          index: 0,
-          last: leaveKey,
-          onAdvance: () => {
-            if (firstSet) focus(`${firstSet.id}:reps`);
-            else onLeave?.();
-          },
-          onFinish: onLeave,
-        })}
-      />
       {showSuggestions ? (
         <View style={styles.suggestions}>
           {suggestions.map((movement) => (
@@ -181,7 +346,12 @@ function DetailedExerciseEditor({
               accessibilityRole="button"
               key={movement.id}
               onPress={() => {
-                onChange({ ...exercise, movementId: movement.id, movementName: movement.name });
+                onChange({
+                  ...exercise,
+                  equipment: movement.equipment,
+                  movementId: movement.id,
+                  movementName: movement.name,
+                });
                 setShowSuggestions(false);
               }}
               style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}
@@ -193,165 +363,567 @@ function DetailedExerciseEditor({
         </View>
       ) : null}
 
-      <View style={styles.unitRow}>
-        <Text style={styles.unitLabel}>Weight unit</Text>
-        <SegmentedControl
-          accessibilityLabel="Weight unit"
-          onChange={(loadUnit) => {
-            if (loadUnit) onChange({ ...exercise, loadUnit });
-          }}
-          options={[{ label: "lb", value: "lb" }, { label: "kg", value: "kg" }]}
-          size="sm"
-          style={styles.unitSegment}
-          value={exercise.loadUnit}
-        />
+      <View style={styles.tableHeader} accessibilityElementsHidden>
+        <Text style={[styles.tableHeading, styles.setIndex]} >Set</Text>
+        <Text style={[styles.tableHeading, styles.repsColumn]}>Reps</Text>
+        <Text style={[styles.tableHeading, styles.loadColumn]}>Weight ({loadUnit})</Text>
       </View>
 
-      {exercise.sets.map((set, setIndex) => {
-        const nextSet = exercise.sets[setIndex + 1];
-        const loadAdvances = Boolean(nextSet) || Boolean(onLeave);
-        return (
-        <View key={set.id} style={styles.setCard}>
-          <View style={styles.setHeader}>
-            <Text style={styles.setTitle}>Set {setIndex + 1}</Text>
-            <Pressable
-              accessibilityRole="button"
-              hitSlop={8}
-              onPress={() => onChange({ ...exercise, sets: exercise.sets.filter((item) => item.id !== set.id) })}
-            >
-              <Text style={styles.removeSetText}>Remove</Text>
-            </Pressable>
-          </View>
-          <View style={styles.setFields}>
-            <NumberField
-              containerStyle={styles.setInput}
-              kind="number"
-              label="Reps"
-              onChangeText={(reps) => updateSet(set.id, { reps })}
-              placeholder="10"
-              ref={ref(`${set.id}:reps`)}
-              value={set.reps}
-              {...fieldChainProps({
-                count: 2,
-                index: 0,
-                onAdvance: () => focus(`${set.id}:load`),
-              })}
-            />
-            <NumberField
-              containerStyle={styles.setInput}
-              kind="decimal"
-              label="Weight"
-              onChangeText={(load) => updateSet(set.id, { load })}
-              placeholder="185"
-              ref={ref(`${set.id}:load`)}
-              suffix={exercise.loadUnit}
-              value={set.load}
-              {...fieldChainProps({
-                count: loadAdvances ? 2 : 1,
-                index: 0,
-                last: leaveKey,
-                onAdvance: () => {
-                  if (nextSet) focus(`${nextSet.id}:reps`);
-                  else onLeave?.();
-                },
-                onFinish: onLeave,
-              })}
-            />
-          </View>
-        </View>
-        );
-      })}
+      {exercise.sets.map((set, setIndex) => (
+        <SetRow
+          canDelete={canRemoveSet(exercise.sets.length)}
+          exerciseIndex={index}
+          exerciseName={exercise.movementName}
+          inputRef={inputRef}
+          key={set.id}
+          loadUnit={loadUnit}
+          numericFields={numericFields}
+          onAfterLast={onAfterLast}
+          onChange={(change) => updateSets(exercise.sets.map((item) => item.id === set.id ? { ...item, ...change } : item))}
+          onDelete={() => applyDelete(setIndex)}
+          onFocusField={onFocusField}
+          set={set}
+          setIndex={setIndex}
+        />
+      ))}
 
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => onChange({ ...exercise, sets: [...exercise.sets, createDetailedSet()] })}
-        style={({ pressed }) => [styles.addSet, pressed && styles.pressed]}
-      >
-        <Text style={styles.actionText}>+ Add set</Text>
-      </Pressable>
+      <SetsStepper
+        count={exercise.sets.length}
+        onAdd={() => updateSets(appendCopiedSet(exercise.sets))}
+        onRemove={() => {
+          const snapshot = removeLastSet(exercise.sets);
+          if (!snapshot) return;
+          updateSets(snapshot.sets);
+          onUndo(deletedSetMessage(snapshot.index + 1), () => updateSets(restoreSet(snapshot.sets, snapshot.removed, snapshot.index)));
+        }}
+      />
     </View>
   );
 }
 
-export function validateDetailedExercises(exercises: DetailedExerciseDraft[]) {
-  for (const exercise of exercises) {
-    if (!exercise.movementName.trim()) {
-      return "Add an exercise name or remove the empty exercise.";
-    }
-    for (const set of exercise.sets) {
-      if (!set.reps.trim() && !set.load.trim()) continue;
-      if (set.reps.trim()) {
-        const reps = Number(set.reps);
-        if (!Number.isInteger(reps) || reps <= 0) {
-          return `Enter positive whole-number reps for ${exercise.movementName}.`;
-        }
-      }
-      if (set.load.trim()) {
-        const load = Number(set.load);
-        if (!Number.isFinite(load) || load < 0) {
-          return `Enter a non-negative weight for ${exercise.movementName}.`;
-        }
-      }
-    }
-  }
-  return null;
-}
-
-export function buildDetailedMovements(exercises: DetailedExerciseDraft[]): QuickLogMovementInput[] {
-  return exercises.map((exercise) => ({
-    movementId: exercise.movementId,
-    movementName: exercise.movementName.trim(),
-    sets: exercise.sets.flatMap((set) => {
-      const hasReps = Boolean(set.reps.trim());
-      const hasLoad = Boolean(set.load.trim());
-      if (!hasReps && !hasLoad) return [];
-      return [{
-        reps: hasReps ? Number(set.reps) : null,
-        load: hasLoad ? Number(set.load) : null,
-        loadUnit: hasLoad ? exercise.loadUnit : null,
-      }];
-    }),
-  }));
-}
-
-function createDetailedExercise(): DetailedExerciseDraft {
-  return {
-    id: draftId(),
-    movementId: null,
-    movementName: "",
-    loadUnit: "lb",
-    sets: [createDetailedSet()],
+function SetRow({
+  canDelete,
+  exerciseIndex,
+  exerciseName,
+  inputRef,
+  loadUnit,
+  numericFields,
+  onAfterLast,
+  onChange,
+  onDelete,
+  onFocusField,
+  set,
+  setIndex,
+}: {
+  canDelete: boolean;
+  exerciseIndex: number;
+  exerciseName: string;
+  inputRef: ReturnType<typeof useInputRegistry>["ref"];
+  loadUnit: LoadUnit;
+  numericFields: StrengthFieldRef[];
+  onAfterLast?: () => void;
+  onChange: (change: Partial<DetailedSetDraft>) => void;
+  onDelete: () => void;
+  onFocusField: (target: StrengthFieldRef | null, fallback?: () => void) => void;
+  set: DetailedSetDraft;
+  setIndex: number;
+}) {
+  const repsRef: StrengthFieldRef = { exerciseIndex, field: "reps", setIndex };
+  const loadRef: StrengthFieldRef = { exerciseIndex, field: "load", setIndex };
+  const handleAction = (event: AccessibilityActionEvent) => {
+    if (event.nativeEvent.actionName === "delete" && canDelete) onDelete();
   };
+
+  return (
+    <SwipeableSetRow
+      accessibilityActions={canDelete ? [{ name: "delete", label: "Delete set" }] : undefined}
+      accessibilityHint={canDelete ? "Swipe left to delete this set" : undefined}
+      accessibilityLabel={`Set ${setIndex + 1}, ${set.reps || "no"} reps, ${set.load || "no"} ${loadUnit}`}
+      canDelete={canDelete}
+      onAccessibilityAction={handleAction}
+      onDelete={onDelete}
+    >
+      <View style={styles.setRow}>
+        <Text style={styles.setIndexLabel}>{setIndex + 1}</Text>
+        <SetNumberField
+          current={repsRef}
+          exerciseName={exerciseName}
+          field="reps"
+          inputRef={inputRef}
+          kind="number"
+          label="Reps"
+          numericFields={numericFields}
+          onAfterLast={onAfterLast}
+          onChangeText={(reps) => onChange({ reps })}
+          onFocusField={onFocusField}
+          set={set}
+          value={set.reps}
+        />
+        <SetNumberField
+          current={loadRef}
+          exerciseName={exerciseName}
+          field="load"
+          inputRef={inputRef}
+          kind="decimal"
+          label="Weight"
+          numericFields={numericFields}
+          onAfterLast={onAfterLast}
+          onChangeText={(load) => onChange({ load })}
+          onFocusField={onFocusField}
+          set={set}
+          value={set.load}
+        />
+      </View>
+    </SwipeableSetRow>
+  );
 }
 
-function createDetailedSet(): DetailedSetDraft {
-  return { id: draftId(), reps: "", load: "" };
+function SetNumberField({
+  current,
+  exerciseName,
+  field,
+  inputRef,
+  kind,
+  label,
+  numericFields,
+  onAfterLast,
+  onChangeText,
+  onFocusField,
+  set,
+  value,
+}: {
+  current: StrengthFieldRef;
+  exerciseName: string;
+  field: StrengthNumericField;
+  inputRef: ReturnType<typeof useInputRegistry>["ref"];
+  kind: "decimal" | "number";
+  label: string;
+  numericFields: StrengthFieldRef[];
+  onAfterLast?: () => void;
+  onChangeText: (value: string) => void;
+  onFocusField: (target: StrengthFieldRef | null, fallback?: () => void) => void;
+  set: DetailedSetDraft;
+  value: string;
+}) {
+  const next = nextStrengthField(numericFields, current);
+  const previous = prevStrengthField(numericFields, current);
+  const last: ReturnKeyType = next ? "next" : "done";
+  return (
+    <NumberField
+      accessory={{
+        context: strengthAccessoryContext({
+          exerciseIndex: current.exerciseIndex,
+          exerciseName,
+          field,
+          setIndex: current.setIndex,
+        }),
+        onDown: next ? () => onFocusField(next) : undefined,
+        onUp: previous ? () => onFocusField(previous) : undefined,
+      }}
+      accessibilityLabel={label}
+      containerStyle={field === "reps" ? styles.repsColumn : styles.loadColumn}
+      kind={kind}
+      onChangeText={onChangeText}
+      placeholder={field === "reps" ? "5" : "160"}
+      ref={inputRef(strengthFieldKey(set.id, field))}
+      style={styles.setInput}
+      value={value}
+      {...fieldChainProps({
+        count: next ? 2 : 1,
+        index: 0,
+        last,
+        onAdvance: () => onFocusField(next),
+        onFinish: onAfterLast,
+      })}
+    />
+  );
 }
 
-function draftId() {
-  return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+function SetsStepper({
+  count,
+  onAdd,
+  onRemove,
+}: {
+  count: number;
+  onAdd: () => void;
+  onRemove: () => void;
+}) {
+  return (
+    <View style={styles.stepperRow}>
+      <Text style={styles.stepperLabel}>Sets</Text>
+      <View style={styles.stepper}>
+        <Pressable
+          accessibilityLabel="Remove set"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canRemoveSet(count) }}
+          disabled={!canRemoveSet(count)}
+          onPress={onRemove}
+          style={(state) => [styles.stepperHit, state.pressed && styles.pressed, webFocusRing(pressableFocused(state))]}
+        >
+          <Text style={[styles.stepperGlyph, !canRemoveSet(count) && styles.stepperDisabled]}>-</Text>
+        </Pressable>
+        <Text accessibilityLabel={`${count} sets`} style={styles.stepperValue}>{count}</Text>
+        <Pressable
+          accessibilityLabel="Add set"
+          accessibilityRole="button"
+          accessibilityState={{ disabled: !canAddSet(count) }}
+          disabled={!canAddSet(count)}
+          onPress={onAdd}
+          style={(state) => [styles.stepperHit, state.pressed && styles.pressed, webFocusRing(pressableFocused(state))]}
+        >
+          <Text style={[styles.stepperGlyph, !canAddSet(count) && styles.stepperDisabled]}>+</Text>
+        </Pressable>
+      </View>
+    </View>
+  );
 }
+
+function SwipeableSetRow({
+  accessibilityActions,
+  accessibilityHint,
+  accessibilityLabel,
+  canDelete,
+  children,
+  onAccessibilityAction,
+  onDelete,
+}: {
+  accessibilityActions?: { name: string; label?: string }[];
+  accessibilityHint?: string;
+  accessibilityLabel: string;
+  canDelete: boolean;
+  children: ReactNode;
+  onAccessibilityAction?: (event: AccessibilityActionEvent) => void;
+  onDelete: () => void;
+}) {
+  const translateX = useRef(new Animated.Value(0)).current;
+  const dragX = useRef(0);
+  const rowWidth = useRef(320);
+  const onDeleteRef = useRef(onDelete);
+  onDeleteRef.current = onDelete;
+  const canDeleteRef = useRef(canDelete);
+  canDeleteRef.current = canDelete;
+
+  const close = useCallback(() => {
+    dragX.current = 0;
+    Animated.spring(translateX, { bounciness: 0, toValue: 0, useNativeDriver: true }).start();
+  }, [translateX]);
+
+  const pan = useRef(PanResponder.create({
+    onMoveShouldSetPanResponder: (_, gesture) => {
+      if (!canDeleteRef.current) return false;
+      return Math.abs(gesture.dx) > 8 && Math.abs(gesture.dx) > Math.abs(gesture.dy) * 1.25 && gesture.dx < 0;
+    },
+    onPanResponderMove: (_, gesture) => {
+      const next = clampSetRowTranslate(gesture.dx, rowWidth.current);
+      dragX.current = next;
+      translateX.setValue(next);
+    },
+    onPanResponderRelease: (_, gesture) => {
+      const action = setRowSwipeRelease(dragX.current, gesture.vx);
+      if (action === "delete") {
+        Animated.timing(translateX, {
+          duration: 160,
+          toValue: -Math.max(rowWidth.current, setDeleteRevealWidth),
+          useNativeDriver: true,
+        }).start(() => onDeleteRef.current());
+        return;
+      }
+      if (action === "reveal") {
+        dragX.current = -setDeleteRevealWidth;
+        Animated.spring(translateX, {
+          bounciness: 0,
+          toValue: -setDeleteRevealWidth,
+          useNativeDriver: true,
+        }).start();
+        return;
+      }
+      close();
+    },
+    onPanResponderTerminate: () => close(),
+  })).current;
+
+  return (
+    <View
+      accessibilityActions={accessibilityActions}
+      accessibilityHint={accessibilityHint}
+      accessibilityLabel={accessibilityLabel}
+      onAccessibilityAction={onAccessibilityAction}
+      onLayout={(event) => {
+        rowWidth.current = event.nativeEvent.layout.width;
+      }}
+      style={styles.swipeHost}
+    >
+      <View pointerEvents="box-none" style={styles.deleteLane}>
+        <Pressable
+          accessibilityLabel="Delete set"
+          accessibilityRole="button"
+          onPress={onDelete}
+          style={({ pressed }) => [styles.deleteAction, pressed && styles.deleteActionPressed]}
+        >
+          <Text style={styles.deleteActionLabel}>Delete</Text>
+        </Pressable>
+      </View>
+      <Animated.View {...pan.panHandlers} style={[styles.swipeFront, { transform: [{ translateX }] }]}>
+        {children}
+      </Animated.View>
+    </View>
+  );
+}
+
+const setInputText = {
+  fontFamily: fonts.bold,
+  fontSize: type.section.fontSize,
+  lineHeight: type.section.lineHeight,
+  textAlign: "center" as const,
+};
 
 const styles = StyleSheet.create({
-  exerciseCard: { borderColor: colors.border, borderRadius: radii.md, borderWidth: 1, marginTop: spacing.md, padding: spacing.md },
-  exerciseHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.md },
-  exerciseTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
-  removeText: { color: colors.muted, ...type.label },
-  suggestions: { backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, marginTop: spacing.xs, overflow: "hidden" },
-  suggestion: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth, paddingHorizontal: spacing.md, paddingVertical: spacing.sm },
-  suggestionName: { color: colors.ink, ...type.label },
-  suggestionMeta: { color: colors.muted, ...type.bodySmall },
-  unitRow: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md },
-  unitLabel: { color: colors.muted, ...type.bodySmall },
-  unitSegment: { alignSelf: "center" },
-  setCard: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.md, paddingTop: spacing.md },
-  setHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between" },
-  setTitle: { color: colors.inkSoft, ...type.label },
-  removeSetText: { color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, lineHeight: type.label.lineHeight },
-  setFields: { flexDirection: "row", gap: spacing.md, marginTop: spacing.sm },
-  setInput: { flex: 1 },
-  addSet: { alignItems: "center", alignSelf: "flex-start", justifyContent: "center", marginTop: spacing.sm, minHeight: size.hit, paddingRight: spacing.lg },
-  addExercise: { alignItems: "center", alignSelf: "flex-start", justifyContent: "center", marginTop: spacing.md, minHeight: size.hit, paddingRight: spacing.lg },
-  actionText: { color: colors.brand, ...type.label },
-  pressed: { opacity: 0.7 },
+  unitHit: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: size.hit,
+  },
+  summaryRow: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.md,
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    minHeight: setRowPitch,
+    paddingHorizontal: spacing.md,
+  },
+  summaryPressed: {
+    backgroundColor: colors.selection,
+  },
+  summaryCopy: {
+    flex: 1,
+  },
+  summaryName: {
+    color: colors.ink,
+    fontFamily: fonts.extrabold,
+    fontSize: type.body.fontSize,
+    lineHeight: type.body.lineHeight,
+  },
+  summaryMeta: {
+    color: colors.muted,
+    ...type.label,
+  },
+  exerciseCard: {
+    borderColor: colors.border,
+    borderRadius: radii.lg,
+    borderWidth: 1,
+    marginTop: spacing.md,
+    padding: spacing.md,
+  },
+  exerciseHeader: {
+    alignItems: "flex-start",
+    flexDirection: "row",
+    gap: spacing.sm,
+  },
+  exerciseTitleBlock: {
+    flex: 1,
+  },
+  exerciseName: {
+    color: colors.ink,
+    fontFamily: fonts.extrabold,
+    fontSize: type.section.fontSize,
+    lineHeight: type.section.lineHeight,
+    minHeight: size.hit,
+    padding: 0,
+  },
+  exerciseMeta: {
+    color: colors.muted,
+    ...type.label,
+  },
+  suggestions: {
+    backgroundColor: colors.surface,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    marginTop: spacing.xs,
+    overflow: "hidden",
+  },
+  suggestion: {
+    borderBottomColor: colors.border,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  suggestionName: {
+    color: colors.ink,
+    ...type.label,
+  },
+  suggestionMeta: {
+    color: colors.muted,
+    ...type.bodySmall,
+  },
+  tableHeader: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    minHeight: setTableHeaderHeight,
+  },
+  tableHeading: {
+    color: colors.subtle,
+    fontFamily: fonts.extrabold,
+    fontSize: type.label.fontSize,
+    letterSpacing: setTableHeaderLetterSpacing,
+    lineHeight: type.label.lineHeight,
+    textTransform: "uppercase",
+  },
+  setRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: setRowPitch,
+  },
+  setIndex: {
+    textAlign: "center",
+    width: setIndexWidth,
+  },
+  setIndexLabel: {
+    color: colors.ink,
+    fontFamily: fonts.bold,
+    fontSize: type.section.fontSize,
+    lineHeight: type.section.lineHeight,
+    textAlign: "center",
+    width: setIndexWidth,
+  },
+  repsColumn: {
+    flexGrow: setRepsFlex,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
+  loadColumn: {
+    flexGrow: setLoadFlex,
+    flexShrink: 1,
+    flexBasis: 0,
+  },
+  setInput: setInputText,
+  stepperRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    marginTop: spacing.sm,
+  },
+  stepperLabel: {
+    color: colors.inkSoft,
+    fontFamily: fonts.semibold,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  stepper: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    flexDirection: "row",
+    height: size.hit,
+    width: setsStepperWidth,
+  },
+  stepperHit: {
+    alignItems: "center",
+    height: size.hit,
+    justifyContent: "center",
+    width: size.hit,
+  },
+  stepperValue: {
+    color: colors.ink,
+    flex: 1,
+    fontFamily: fonts.bold,
+    fontSize: type.section.fontSize,
+    lineHeight: type.section.lineHeight,
+    textAlign: "center",
+  },
+  stepperGlyph: {
+    color: colors.ink,
+    fontFamily: fonts.bold,
+    fontSize: type.section.fontSize,
+    lineHeight: type.section.lineHeight,
+  },
+  stepperDisabled: {
+    color: colors.disabledText,
+  },
+  addExercise: {
+    alignItems: "center",
+    backgroundColor: colors.brandTint,
+    borderRadius: radii.md,
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "center",
+    marginTop: spacing.md,
+    minHeight: size.control,
+  },
+  addExercisePressed: {
+    backgroundColor: colors.selection,
+  },
+  addExerciseLabel: {
+    color: colors.brandPressed,
+    fontFamily: fonts.extrabold,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  undoToast: {
+    alignItems: "center",
+    backgroundColor: colors.surfaceMuted,
+    borderColor: colors.border,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    minHeight: size.hit,
+    paddingHorizontal: spacing.md,
+  },
+  undoMessage: {
+    color: colors.ink,
+    flex: 1,
+    ...type.bodySmall,
+  },
+  undoAction: {
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: size.hit,
+    paddingHorizontal: spacing.sm,
+  },
+  undoActionLabel: {
+    color: colors.brandPressed,
+    fontFamily: fonts.extrabold,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  swipeHost: {
+    overflow: "hidden",
+  },
+  deleteLane: {
+    ...StyleSheet.absoluteFill,
+    alignItems: "stretch",
+    flexDirection: "row",
+    justifyContent: "flex-end",
+  },
+  deleteAction: {
+    alignItems: "center",
+    backgroundColor: colors.danger,
+    justifyContent: "center",
+    minHeight: size.hit,
+    width: setDeleteRevealWidth,
+  },
+  deleteActionPressed: {
+    backgroundColor: colors.brandPressed,
+  },
+  deleteActionLabel: {
+    color: colors.surface,
+    fontFamily: fonts.bold,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  swipeFront: {
+    backgroundColor: colors.surface,
+  },
+  pressed: {
+    opacity: 0.7,
+  },
 });

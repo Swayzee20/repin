@@ -1,5 +1,5 @@
 import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
-import { useEffect, useRef, useState, type ComponentRef, type ReactNode, type RefObject } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ComponentRef, type ReactNode, type RefObject } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button, Card } from "./components";
+import { keyboardAccessorySnapshot, subscribeKeyboardAccessory } from "./keyboard-accessory";
 import { fieldChainProps, keyboardScrollProps } from "./keyboard";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import { DateRow, TextField } from "./form-fields";
@@ -69,7 +70,14 @@ export function WorkoutFormScaffold({
     windowWidth,
   });
   const [previewOpen, setPreviewOpen] = useState(false);
-  const contentBottom = twoPane ? Math.max(insets.bottom, spacing.xxl) : spacing.xxl;
+  const accessory = useSyncExternalStore(
+    subscribeKeyboardAccessory,
+    keyboardAccessorySnapshot,
+    keyboardAccessorySnapshot,
+  );
+  const androidAccessory = Platform.OS === "android" && accessory.context ? size.hit : 0;
+  const contentBottom = (twoPane ? Math.max(insets.bottom, spacing.xxl) : spacing.xxl) + androidAccessory;
+  const footerBottom = Math.max(insets.bottom, spacing.lg) + androidAccessory;
 
   useEffect(() => {
     if (twoPane) setPreviewOpen(false);
@@ -148,7 +156,7 @@ export function WorkoutFormScaffold({
                     </View>
                     {preview}
                   </ScrollView>
-                  <View style={[styles.previewFooter, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+                  <View style={[styles.previewFooter, { paddingBottom: footerBottom }]}>
                     {notice}
                     {submit}
                   </View>
@@ -168,7 +176,7 @@ export function WorkoutFormScaffold({
             >
               {body}
             </FieldsScroll>
-            <View style={[styles.compactFooter, { paddingBottom: Math.max(insets.bottom, spacing.lg) }]}>
+            <View style={[styles.compactFooter, { paddingBottom: footerBottom }]}>
               <Pressable
                 accessibilityLabel="Preview. See how your crew sees it"
                 accessibilityRole="button"
@@ -268,8 +276,14 @@ export function FormCard({ children, flush = false }: { children: ReactNode; flu
   return <Card style={flush ? styles.flushCard : styles.formCard}>{children}</Card>;
 }
 
-export function CardHeading({ children }: { children: string }) {
-  return <Text style={styles.cardHeading}>{children}</Text>;
+export function CardHeading({ children, trailing }: { children: string; trailing?: ReactNode }) {
+  if (!trailing) return <Text style={styles.cardHeading}>{children}</Text>;
+  return (
+    <View style={styles.cardHeadingRow}>
+      <Text style={styles.cardHeadingLabel}>{children}</Text>
+      {trailing}
+    </View>
+  );
 }
 
 export function FormError({ message }: { message: string }) {
@@ -412,6 +426,15 @@ const styles = StyleSheet.create({
   formCard: { padding: spacing.xl },
   flushCard: { paddingHorizontal: 0, paddingVertical: 0 },
   cardHeading: { ...type.section, color: colors.ink, marginBottom: spacing.sm },
+  cardHeadingRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    justifyContent: "space-between",
+    marginBottom: spacing.sm,
+    minHeight: size.hit,
+  },
+  cardHeadingLabel: { ...type.section, color: colors.ink, flex: 1 },
   webDateRow: { flexDirection: "row", gap: spacing.md },
   webDateField: { flex: 1 },
   pickerWrap: { alignItems: "flex-start", gap: spacing.sm, paddingBottom: spacing.lg, paddingHorizontal: spacing.xl, paddingTop: spacing.sm },
