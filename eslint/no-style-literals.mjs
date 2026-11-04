@@ -19,7 +19,9 @@ const WRAPPERS = new Set([
 ]);
 
 function isTokensFile(filename) {
-  return filename.replaceAll("\\", "/").endsWith("apps/mobile/ui/theme.ts");
+  const normalized = filename.replaceAll("\\", "/");
+  return normalized.endsWith("apps/mobile/ui/theme.ts")
+    || normalized.endsWith("apps/api/lib/theme.ts");
 }
 
 function propertyName(key) {

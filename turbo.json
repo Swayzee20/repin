@@ -9,6 +9,7 @@
         "DATABASE_URL",
         "SUPABASE_URL",
         "SUPABASE_PUBLISHABLE_KEY",
+        "ADMIN_USER_IDS",
         "SENTRY_DSN",
         "SENTRY_AUTH_TOKEN",
         "SENTRY_ORG",
