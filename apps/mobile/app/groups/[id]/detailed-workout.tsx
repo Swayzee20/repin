@@ -23,12 +23,14 @@ import { FieldLabel, FlameRating, PhotoTile, TextArea, TextField, photoUploadFie
 import {
   buildDetailedMovements,
   DetailedExerciseFields,
+  LastTimeUndoToast,
   hydrateDetailedExercises,
   hydrateWorkoutLoadUnitFromMovements,
   previewStrengthSummary,
   readStoredLoadUnit,
   type DetailedExerciseDraft,
   type LoadUnit,
+  type UseUndoToast,
   validateDetailedExercises,
   writeStoredLoadUnit,
 } from "../../../ui/detailed-workout-exercises";
@@ -106,6 +108,7 @@ export default function DetailedWorkoutScreen() {
   const [ffExercises, setFfExercises] = useState<FfExerciseDraft[]>([]);
   const [ffFormat, setFfFormat] = useState<FunctionalFormatDraft>(emptyFunctionalFormat);
   const [loadUnit, setLoadUnit] = useState<LoadUnit>(() => readStoredLoadUnit());
+  const [useUndo, setUseUndo] = useState<UseUndoToast | null>(null);
   const [effort, setEffort] = useState<number | null>(layoutPreview ? 3 : null);
   const [occurredAt, setOccurredAt] = useState(() => new Date());
   const [webDate, setWebDate] = useState(() => getLocalDateParts(new Date()).date);
@@ -436,11 +439,14 @@ export default function DetailedWorkoutScreen() {
                 exercises={exercises}
                 loadUnit={loadUnit}
                 onAfterLast={() => nameRef.current?.focus()}
-                onChange={setExercises}
+                onChange={(next) => {
+                  setExercises(next);
+                }}
                 onLoadUnitChange={(unit) => {
                   setLoadUnit(unit);
                   writeStoredLoadUnit(unit);
                 }}
+                onUseUndo={setUseUndo}
               />
             </FormCard>
           ) : null}
@@ -528,6 +534,12 @@ export default function DetailedWorkoutScreen() {
       )}
       notice={error && !photoError ? <FormError message={error} /> : null}
       onClose={() => router.back()}
+      toast={(
+        <LastTimeUndoToast
+          onClear={() => setUseUndo(null)}
+          toast={useUndo}
+        />
+      )}
       preview={(
         <WorkoutSummaryCard
           variant="full"

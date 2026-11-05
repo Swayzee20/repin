@@ -57,7 +57,16 @@ export const lastSessionPath = "/api/movements/last-session";
 export const lastTimeUseWidth = 64;
 export const lastTimeUseHeight = size.hit;
 export const lastTimeUseBorder = colors.boardBorder;
-export const lastTimeAppliedMessage = "Last session applied";
+export const lastTimeAppliedMessage = "Previous sets loaded";
+export const setsHintStorageKey = "repin.setsHintDismissed";
+export const setsHintCopy = "+ copies the last set. Each set stays editable.";
+export const setsHintGotIt = "Got it";
+export const setsHintHeight = 64;
+export const replaceSetsTitle = "Replace these sets with last time?";
+export const replaceSetsBody = "Your edited sets will be replaced. You can undo this.";
+export const replaceDialogMaxWidth = 342;
+export const useUndoToastMs = 6_000;
+export const useUndoActionWidth = 60;
 export const lbPerKg = 2.2046226218;
 
 export function parseStoredLoadUnit(value: string | null | undefined): LoadUnit {
@@ -90,6 +99,22 @@ export function writeStoredLoadUnit(
 ) {
   try {
     store?.setItem(loadUnitStorageKey, unit);
+  } catch {
+    // Device storage can be unavailable in private web contexts.
+  }
+}
+
+export function readSetsHintDismissed(store: LoadUnitStore | null | undefined = defaultLoadUnitStore()) {
+  try {
+    return store?.getItem(setsHintStorageKey) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function writeSetsHintDismissed(store: LoadUnitStore | null | undefined = defaultLoadUnitStore()) {
+  try {
+    store?.setItem(setsHintStorageKey, "1");
   } catch {
     // Device storage can be unavailable in private web contexts.
   }
@@ -388,7 +413,7 @@ export function lastSessionSetsToDrafts(
 /**
  * Use copies last session into the set table. Tapping Use is an explicit
  * action, so any values the user already typed are replaced. Callers keep
- * `previous` for the existing 4s Undo toast. No-op when last session has no
+ * `previous` for the 6s Undo toast. No-op when last session has no
  * reps or load.
  */
 export function applyLastSessionSets(
@@ -402,13 +427,50 @@ export function applyLastSessionSets(
   return { next, previous: current };
 }
 
+export function exerciseHasTypedSets(sets: DetailedSetDraft[]) {
+  if (sets.length !== minSets) return true;
+  const only = sets[0];
+  return Boolean(only?.reps.trim() || only?.load.trim());
+}
+
+export function lastSessionSetsAreUniform(sets: DetailedSetDraft[]) {
+  if (!sets.length) return false;
+  const reps = sets.map((set) => set.reps.trim());
+  const loads = sets.map((set) => set.load.trim());
+  const sameReps = Boolean(reps[0]) && reps.every((value) => value === reps[0]);
+  const sameLoad = loads.every((value) => value === loads[0]);
+  return sameReps && sameLoad;
+}
+
+export type LastTimePresentation =
+  | { kind: "uniform"; label: string }
+  | { kind: "mixed"; label: string };
+
+export function lastTimePresentation(
+  sets: MovementLastSessionSet[],
+  loadUnit: LoadUnit,
+): LastTimePresentation | null {
+  const drafts = lastSessionSetsToDrafts(sets, loadUnit, () => "last");
+  if (!drafts.length) return null;
+  if (lastSessionSetsAreUniform(drafts)) {
+    return { kind: "uniform", label: `Last time: ${formatExerciseSummary(drafts, loadUnit)}` };
+  }
+  const count = drafts.length;
+  return { kind: "mixed", label: `${count} ${count === 1 ? "set" : "sets"}` };
+}
+
 export function formatLastTimeLine(
   sets: MovementLastSessionSet[],
   loadUnit: LoadUnit,
 ): string | null {
-  const drafts = lastSessionSetsToDrafts(sets, loadUnit, () => "last");
-  if (!drafts.length) return null;
-  return `Last time: ${formatExerciseSummary(drafts, loadUnit)}`;
+  return lastTimePresentation(sets, loadUnit)?.label ?? null;
+}
+
+export function lastSessionViewRows(
+  sets: MovementLastSessionSet[],
+  loadUnit: LoadUnit,
+): DetailedSetDraft[] {
+  return lastSessionSetsToDrafts(sets, loadUnit, () => "last");
 }
 
 export function strengthNumericFields(exercises: { sets: readonly unknown[] }[]): StrengthFieldRef[] {

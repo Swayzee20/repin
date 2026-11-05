@@ -242,6 +242,7 @@ export function NumberField({
   error,
   hint,
   inputAccessoryViewID,
+  invalid = false,
   kind = "number",
   label,
   onBlur,
@@ -261,6 +262,7 @@ export function NumberField({
     onDown?: () => void;
     onUp?: () => void;
   };
+  invalid?: boolean;
   kind?: NumberKind;
   onChangeText: (value: string) => void;
   suffix?: string;
@@ -274,7 +276,7 @@ export function NumberField({
   const usesAccessory = Platform.OS === "ios" || Boolean(accessory?.context);
   const chrome = fieldChrome(resolveFieldInteraction({
     disabled: isDisabled,
-    error: Boolean(error?.trim()),
+    error: Boolean(error?.trim()) || invalid,
     focused,
   }));
   const keyboard = numberFieldKeyboard(kind);

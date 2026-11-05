@@ -17,6 +17,7 @@ import {
   createDetailedSet,
   deletedSetMessage,
   deleteSetAt,
+  exerciseHasTypedSets,
   exercisesFromPickerSelections,
   formatExerciseSummary,
   formatLastTimeLine,
@@ -25,6 +26,7 @@ import {
   lastSessionPath,
   lastSessionQuery,
   lastTimeAppliedMessage,
+  lastTimePresentation,
   lastTimeUseBorder,
   lastTimeUseHeight,
   lastTimeUseWidth,
@@ -36,8 +38,11 @@ import {
   parseStoredLoadUnit,
   previewStrengthSummary,
   prevStrengthField,
+  readSetsHintDismissed,
   readStoredLoadUnit,
   removeLastSet,
+  replaceSetsBody,
+  replaceSetsTitle,
   restoreSet,
   setDeleteRevealWidth,
   setIndexWidth,
@@ -45,12 +50,19 @@ import {
   setRepsFlex,
   setRowPitch,
   setRowSwipeRelease,
+  setsHintCopy,
+  setsHintGotIt,
+  setsHintHeight,
+  setsHintStorageKey,
   setsStepperWidth,
   showsAndroidKeyboardAccessory,
   strengthAccessoryContext,
   strengthFieldKey,
   strengthNumericFields,
   undoToastMs,
+  useUndoActionWidth,
+  useUndoToastMs,
+  writeSetsHintDismissed,
   writeStoredLoadUnit,
 } from "./strength-form-state";
 import { catalogFromSummary, customFromName } from "./movement-picker-state";
@@ -294,9 +306,23 @@ test("selected and tonal strength labels stay on brandPressed", () => {
   assert.equal(fonts.extrabold, "Nunito_800ExtraBold");
   assert.equal(type.label.fontSize, 13);
   assert.equal(lastTimeUseBorder, colors.boardBorder);
+  assert.equal(colors.boardBorder, "#F6E3D6");
   assert.equal(lastTimeUseWidth, 64);
   assert.equal(lastTimeUseHeight, size.hit);
-  assert.equal(lastTimeAppliedMessage, "Last session applied");
+  assert.equal(lastTimeAppliedMessage, "Previous sets loaded");
+  assert.equal(useUndoToastMs, 6_000);
+  assert.equal(useUndoActionWidth, 60);
+});
+
+test("the first-use Sets hint copy dismisses per device", () => {
+  assert.equal(setsHintCopy, "+ copies the last set. Each set stays editable.");
+  assert.equal(setsHintGotIt, "Got it");
+  assert.equal(setsHintHeight, 64);
+  const store = memoryStore();
+  assert.equal(readSetsHintDismissed(store), false);
+  writeSetsHintDismissed(store);
+  assert.equal(store.getItem(setsHintStorageKey), "1");
+  assert.equal(readSetsHintDismissed(store), true);
 });
 
 test("Last time formats last session sets in the workout unit and Use replaces typed rows", () => {
@@ -345,6 +371,42 @@ test("Last time formats last session sets in the workout unit and Use replaces t
   }], "lb"), null);
 });
 
+test("Use confirms after typed sets, and mixed history is N sets never a fake uniform load", () => {
+  assert.equal(replaceSetsTitle, "Replace these sets with last time?");
+  assert.equal(replaceSetsBody, "Your edited sets will be replaced. You can undo this.");
+  assert.equal(exerciseHasTypedSets([createDetailedSet("empty")]), false);
+  assert.equal(exerciseHasTypedSets([createDetailedSet("t1", { load: "160", reps: "5" })]), true);
+  assert.equal(exerciseHasTypedSets([
+    createDetailedSet("t1"),
+    createDetailedSet("t2"),
+  ]), true);
+
+  const mixed = [
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 135, loadUnit: "lb", reps: 8 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 165, loadUnit: "lb", reps: 3 },
+  ];
+  assert.deepEqual(lastTimePresentation(mixed, "lb"), { kind: "mixed", label: "4 sets" });
+  assert.equal(formatLastTimeLine(mixed, "lb"), "4 sets");
+  assert.equal(formatLastTimeLine(mixed, "lb")?.includes("×"), false);
+  assert.equal(formatLastTimeLine(mixed, "lb")?.includes("@"), false);
+
+  const sameRepsDifferentLoad = [
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 135, loadUnit: "lb", reps: 5 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+  ];
+  assert.deepEqual(lastTimePresentation(sameRepsDifferentLoad, "lb"), { kind: "mixed", label: "3 sets" });
+
+  const uniform = [
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+  ];
+  assert.deepEqual(lastTimePresentation(uniform, "lb"), { kind: "uniform", label: "Last time: 3×5 @ 155 lb" });
+});
+
 test("last-session query prefers movementId, hides missing history, and stays a GET read", () => {
   const byId = lastSessionQuery({
     excludeSessionId: "session-1",
@@ -365,12 +427,21 @@ test("last-session query prefers movementId, hides missing history, and stays a 
   const detailed = readFileSync(new URL("../app/groups/[id]/detailed-workout.tsx", import.meta.url), "utf8");
   assert.equal(lastSessionPath, "/api/movements/last-session");
   assert.match(exercises, /lastSessionPath/);
-  assert.match(exercises, /formatLastTimeLine/);
+  assert.match(exercises, /lastTimePresentation/);
   assert.match(exercises, /applyLastSessionSets/);
   assert.match(exercises, /lastTimeUseWidth/);
   assert.match(exercises, /colors\.brandPressed/);
   assert.match(exercises, /Use last session/);
+  assert.match(exercises, /setsHintCopy/);
+  assert.match(exercises, /setsHintGotIt/);
+  assert.match(exercises, /replaceSetsTitle/);
+  assert.match(exercises, /lastTimeAppliedMessage/);
+  assert.match(exercises, /4 sets · View|kind === "mixed"/);
+  assert.match(exercises, /colors\.boardBorder/);
+  assert.equal(exercises.includes("#F6D9C6"), false);
   assert.match(detailed, /excludeSessionId=\{editSessionId\}/);
+  assert.match(detailed, /LastTimeUndoToast/);
+  assert.match(detailed, /onUseUndo/);
   assert.equal(exercises.includes("repin.app"), false);
   assert.equal(exercises.includes("method: \"POST\""), false);
 });

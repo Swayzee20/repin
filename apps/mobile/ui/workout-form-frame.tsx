@@ -48,6 +48,7 @@ export function WorkoutFormScaffold({
   scrollRef,
   submit,
   title,
+  toast,
 }: {
   anchor?: ScrollAnchorController;
   eyebrow: string;
@@ -58,6 +59,7 @@ export function WorkoutFormScaffold({
   scrollRef?: RefObject<ScrollViewInstance | null>;
   submit: ReactNode;
   title: string;
+  toast?: ReactNode;
 }) {
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
@@ -157,6 +159,7 @@ export function WorkoutFormScaffold({
                     {preview}
                   </ScrollView>
                   <View style={[styles.previewFooter, { paddingBottom: footerBottom }]}>
+                    {toast}
                     {notice}
                     {submit}
                   </View>
@@ -177,6 +180,7 @@ export function WorkoutFormScaffold({
               {body}
             </FieldsScroll>
             <View style={[styles.compactFooter, { paddingBottom: footerBottom }]}>
+              {toast}
               <Pressable
                 accessibilityLabel="Preview. See how your crew sees it"
                 accessibilityRole="button"

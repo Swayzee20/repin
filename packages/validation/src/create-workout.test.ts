@@ -347,6 +347,21 @@ test("AMRAP extra reps default to 0 and reps without rounds are rejected", () =>
   })).success, false);
 });
 
+test("AMRAP 0 rounds plus extra reps is valid", () => {
+  const result = parseWorkout(formatWorkout({
+    type: "amrap",
+    durationSeconds: 720,
+    score: { rounds: 0, reps: 5 },
+  }));
+  assert.equal(result.success, true);
+  if (!result.success) return;
+  assert.deepEqual(result.data.format, {
+    type: "amrap",
+    durationSeconds: 720,
+    score: { rounds: 0, reps: 5 },
+  });
+});
+
 test("AMRAP length is optional at the API", () => {
   const result = parseWorkout(formatWorkout({
     type: "amrap",
@@ -385,6 +400,16 @@ test("For Time finished and capped scores validate the cap", () => {
   assert.equal(capped.success, true);
   if (capped.success) assert.equal(capped.data.durationMinutes, 15);
 
+  assert.equal(parseWorkout(formatWorkout({
+    type: "for_time",
+    timeCapSeconds: 900,
+    score: { finished: true, timeSeconds: 899 },
+  })).success, true);
+  assert.equal(parseWorkout(formatWorkout({
+    type: "for_time",
+    timeCapSeconds: 900,
+    score: { finished: true, timeSeconds: 900 },
+  })).success, false);
   assert.equal(parseWorkout(formatWorkout({
     type: "for_time",
     timeCapSeconds: 900,

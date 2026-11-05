@@ -1,6 +1,7 @@
 import type { MovementLastSession } from "@repin/types";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
+  AccessibilityInfo,
   Animated,
   PanResponder,
   Pressable,
@@ -11,14 +12,15 @@ import {
 } from "react-native";
 
 import { supabase } from "../lib/supabase";
-import { ContentOptionsMenu } from "./components";
+import { Button, ContentOptionsMenu } from "./components";
+import { Dialog } from "./dialog";
 import { NumberField } from "./form-fields";
 import { Chevron, Icon } from "./icons";
 import { fieldChainProps, type ReturnKeyType } from "./keyboard";
 import { useInputRegistry } from "./keyboard-focus";
 import { MovementPicker } from "./movement-picker";
 import { pickerMovementFromDraft, type PickerMovement } from "./movement-picker-state";
-import { SegmentedControl } from "./primitives";
+import { RoundIconButton, SegmentedControl } from "./primitives";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import {
   appendCopiedSet,
@@ -28,20 +30,26 @@ import {
   clampSetRowTranslate,
   deleteSetAt,
   deletedSetMessage,
+  exerciseHasTypedSets,
   exercisesFromPickerSelections,
   formatExerciseSummary,
-  formatLastTimeLine,
   lastSessionFromResponse,
   lastSessionPath,
   lastSessionQuery,
+  lastSessionViewRows,
   lastTimeAppliedMessage,
+  lastTimePresentation,
   lastTimeUseBorder,
   lastTimeUseHeight,
   lastTimeUseWidth,
   moveItem,
   nextStrengthField,
   prevStrengthField,
+  readSetsHintDismissed,
   removeLastSet,
+  replaceDialogMaxWidth,
+  replaceSetsBody,
+  replaceSetsTitle,
   restoreSet,
   setDeleteRevealWidth,
   setIndexWidth,
@@ -51,11 +59,17 @@ import {
   setRowSwipeRelease,
   setTableHeaderHeight,
   setTableHeaderLetterSpacing,
+  setsHintCopy,
+  setsHintGotIt,
+  setsHintHeight,
   setsStepperWidth,
   strengthAccessoryContext,
   strengthFieldKey,
   strengthNumericFields,
   undoToastMs,
+  useUndoActionWidth,
+  useUndoToastMs,
+  writeSetsHintDismissed,
   type DetailedExerciseDraft,
   type DetailedSetDraft,
   type LoadUnit,
@@ -100,6 +114,8 @@ export function WorkoutUnitToggle({
   );
 }
 
+export type UseUndoToast = { message: string; restore: () => void };
+
 export function DetailedExerciseFields({
   excludeSessionId,
   exercises,
@@ -107,6 +123,7 @@ export function DetailedExerciseFields({
   onAfterLast,
   onChange,
   onLoadUnitChange,
+  onUseUndo,
 }: {
   excludeSessionId?: string | null;
   exercises: DetailedExerciseDraft[];
@@ -114,12 +131,15 @@ export function DetailedExerciseFields({
   onAfterLast?: () => void;
   onChange: (exercises: DetailedExerciseDraft[]) => void;
   onLoadUnitChange: (unit: LoadUnit) => void;
+  onUseUndo?: (toast: UseUndoToast | null) => void;
 }) {
   const { focus, ref } = useInputRegistry();
   const [expandedId, setExpandedId] = useState<string | null>(() => exercises.at(-1)?.id ?? null);
   const [undo, setUndo] = useState<{ message: string; restore: () => void } | null>(null);
+  const [hintDismissed, setHintDismissed] = useState(() => readSetsHintDismissed());
   const undoTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingFocusKey = useRef<string | null>(null);
+  const announcedHint = useRef(false);
 
   useEffect(() => {
     if (expandedId && exercises.some((exercise) => exercise.id === expandedId)) return;
@@ -142,6 +162,18 @@ export function DetailedExerciseFields({
     setUndo({ message, restore });
     undoTimer.current = setTimeout(() => setUndo(null), undoToastMs);
   }, []);
+
+  const dismissHint = useCallback(() => {
+    writeSetsHintDismissed();
+    setHintDismissed(true);
+  }, []);
+
+  useEffect(() => {
+    if (hintDismissed || announcedHint.current) return;
+    if (!exercises.some((exercise) => exercise.sets.length > 0)) return;
+    announcedHint.current = true;
+    void AccessibilityInfo.announceForAccessibility(setsHintCopy);
+  }, [exercises, hintDismissed]);
 
   const numericFields = strengthNumericFields(exercises);
   const [picker, setPicker] = useState<{ exerciseId?: string } | null>(null);
@@ -198,6 +230,9 @@ export function DetailedExerciseFields({
           onPickName={() => setPicker({ exerciseId: exercise.id })}
           onRemove={() => onChange(exercises.filter((item) => item.id !== exercise.id))}
           onUndo={showUndo}
+          onUseUndo={onUseUndo}
+          showSetsHint={!hintDismissed && exercise.id === expandedId}
+          onDismissHint={dismissHint}
         />
       ))}
       <AddExerciseButton onPress={() => setPicker({})} />
@@ -258,12 +293,15 @@ function ExerciseCard({
   numericFields,
   onAfterLast,
   onChange,
+  onDismissHint,
   onExpand,
   onFocusField,
   onMove,
   onPickName,
   onRemove,
   onUndo,
+  onUseUndo,
+  showSetsHint,
 }: {
   excludeSessionId?: string | null;
   exercise: DetailedExerciseDraft;
@@ -274,12 +312,15 @@ function ExerciseCard({
   numericFields: StrengthFieldRef[];
   onAfterLast?: () => void;
   onChange: (exercise: DetailedExerciseDraft) => void;
+  onDismissHint: () => void;
   onExpand: () => void;
   onFocusField: (target: StrengthFieldRef | null, fallback?: () => void) => void;
   onMove: (direction: -1 | 1) => void;
   onPickName: () => void;
   onRemove: () => void;
   onUndo: (message: string, restore: () => void) => void;
+  onUseUndo?: (toast: UseUndoToast | null) => void;
+  showSetsHint: boolean;
 }) {
   const name = exercise.movementName.trim() || `Exercise ${index + 1}`;
   const lastSession = useLastMovementSession(
@@ -287,21 +328,48 @@ function ExerciseCard({
     exercise.movementName,
     excludeSessionId,
   );
-  const lastTimeLine = lastSession ? formatLastTimeLine(lastSession.sets, loadUnit) : null;
+  const lastTime = lastSession ? lastTimePresentation(lastSession.sets, loadUnit) : null;
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+  const pendingReplace = useRef<{ next: DetailedSetDraft[]; previous: DetailedSetDraft[] } | null>(null);
 
-  const updateSets = (sets: DetailedSetDraft[]) => onChange({ ...exercise, sets });
+  const updateSets = (sets: DetailedSetDraft[], keepUseUndo = false) => {
+    onChange({ ...exercise, sets });
+    if (!keepUseUndo) onUseUndo?.(null);
+  };
   const applyDelete = (indexToRemove: number) => {
     const snapshot = deleteSetAt(exercise.sets, indexToRemove);
     if (!snapshot) return;
     updateSets(snapshot.sets);
     onUndo(deletedSetMessage(snapshot.index + 1), () => updateSets(restoreSet(snapshot.sets, snapshot.removed, snapshot.index)));
   };
-  const applyLastTime = () => {
+  const commitLastTime = (snapshot: { next: DetailedSetDraft[]; previous: DetailedSetDraft[] }) => {
+    updateSets(snapshot.next, true);
+    onUseUndo?.({
+      message: lastTimeAppliedMessage,
+      restore: () => updateSets(snapshot.previous),
+    });
+  };
+  const requestLastTime = () => {
     if (!lastSession) return;
     const snapshot = applyLastSessionSets(exercise.sets, lastSession.sets, loadUnit);
     if (!snapshot) return;
-    updateSets(snapshot.next);
-    onUndo(lastTimeAppliedMessage, () => updateSets(snapshot.previous));
+    if (exerciseHasTypedSets(exercise.sets)) {
+      pendingReplace.current = snapshot;
+      setReplaceOpen(true);
+      return;
+    }
+    commitLastTime(snapshot);
+  };
+  const confirmReplace = () => {
+    const snapshot = pendingReplace.current;
+    pendingReplace.current = null;
+    setReplaceOpen(false);
+    if (snapshot) commitLastTime(snapshot);
+  };
+  const cancelReplace = () => {
+    pendingReplace.current = null;
+    setReplaceOpen(false);
   };
 
   if (!expanded) {
@@ -353,8 +421,13 @@ function ExerciseCard({
           ]}
         />
       </View>
-      {lastTimeLine ? (
-        <LastTimeRow label={lastTimeLine} onUse={applyLastTime} />
+      {lastTime ? (
+        <LastTimeRow
+          kind={lastTime.kind}
+          label={lastTime.label}
+          onUse={requestLastTime}
+          onView={lastTime.kind === "mixed" ? () => setViewOpen(true) : undefined}
+        />
       ) : null}
       <View style={styles.tableHeader} accessibilityElementsHidden>
         <Text style={[styles.tableHeading, styles.setIndex]} >Set</Text>
@@ -390,6 +463,21 @@ function ExerciseCard({
           onUndo(deletedSetMessage(snapshot.index + 1), () => updateSets(restoreSet(snapshot.sets, snapshot.removed, snapshot.index)));
         }}
       />
+      {showSetsHint ? <SetsHint onDismiss={onDismissHint} /> : null}
+      <ReplaceSetsDialog
+        onCancel={cancelReplace}
+        onReplace={confirmReplace}
+        visible={replaceOpen}
+      />
+      {lastSession && lastTime?.kind === "mixed" ? (
+        <LastSessionViewDialog
+          loadUnit={loadUnit}
+          name={name}
+          onDismiss={() => setViewOpen(false)}
+          sets={lastSession.sets}
+          visible={viewOpen}
+        />
+      ) : null}
     </View>
   );
 }
@@ -663,10 +751,34 @@ function SwipeableSetRow({
   );
 }
 
-function LastTimeRow({ label, onUse }: { label: string; onUse: () => void }) {
+function LastTimeRow({
+  kind,
+  label,
+  onUse,
+  onView,
+}: {
+  kind: "uniform" | "mixed";
+  label: string;
+  onUse: () => void;
+  onView?: () => void;
+}) {
+  const copy = kind === "mixed" ? `${label} · View` : label;
   return (
     <View style={styles.lastTimeRow}>
-      <Text numberOfLines={1} style={styles.lastTimeLabel}>{label}</Text>
+      <Pressable
+        accessibilityHint={onView ? "Shows last session sets" : undefined}
+        accessibilityLabel={copy}
+        accessibilityRole={onView ? "button" : "text"}
+        disabled={!onView}
+        onPress={onView}
+        style={(state) => [
+          styles.lastTimeLabelHit,
+          onView && state.pressed && styles.pressed,
+          onView ? webFocusRing(pressableFocused(state)) : null,
+        ]}
+      >
+        <Text ellipsizeMode="tail" numberOfLines={1} style={styles.lastTimeLabel}>{copy}</Text>
+      </Pressable>
       <Pressable
         accessibilityLabel="Use last session"
         accessibilityRole="button"
@@ -678,6 +790,165 @@ function LastTimeRow({ label, onUse }: { label: string; onUse: () => void }) {
         ]}
       >
         <Text style={styles.usePillLabel}>Use</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function SetsHint({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <View style={styles.setsHint}>
+      <Text style={styles.setsHintCopy}>{setsHintCopy}</Text>
+      <Pressable
+        accessibilityLabel={setsHintGotIt}
+        accessibilityRole="button"
+        onPress={onDismiss}
+        style={(state) => [styles.setsHintGotIt, state.pressed && styles.pressed, webFocusRing(pressableFocused(state))]}
+      >
+        <Text style={styles.setsHintGotItLabel}>{setsHintGotIt}</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function ReplaceSetsDialog({
+  onCancel,
+  onReplace,
+  visible,
+}: {
+  onCancel: () => void;
+  onReplace: () => void;
+  visible: boolean;
+}) {
+  return (
+    <Dialog
+      closeLabel="Cancel"
+      maxWidth={replaceDialogMaxWidth}
+      onDismiss={onCancel}
+      padding={spacing.xl}
+      visible={visible}
+    >
+      <View style={styles.dialogCloseRow}>
+        <RoundIconButton accessibilityLabel="Cancel" kind="close" onPress={onCancel} />
+      </View>
+      <Text style={styles.dialogTitle}>{replaceSetsTitle}</Text>
+      <Text style={styles.dialogBody}>{replaceSetsBody}</Text>
+      <View style={styles.dialogActions}>
+        <View style={styles.dialogAction}>
+          <Button onPress={onCancel} style={styles.dialogButton} variant="tonal">Cancel</Button>
+        </View>
+        <View style={styles.dialogAction}>
+          <Button onPress={onReplace} style={styles.dialogButton}>Replace</Button>
+        </View>
+      </View>
+    </Dialog>
+  );
+}
+
+function LastSessionViewDialog({
+  loadUnit,
+  name,
+  onDismiss,
+  sets,
+  visible,
+}: {
+  loadUnit: LoadUnit;
+  name: string;
+  onDismiss: () => void;
+  sets: MovementLastSession["sets"];
+  visible: boolean;
+}) {
+  const rows = lastSessionViewRows(sets, loadUnit);
+  return (
+    <Dialog
+      closeLabel="Close last session"
+      maxWidth={replaceDialogMaxWidth}
+      onDismiss={onDismiss}
+      padding={spacing.xl}
+      visible={visible}
+    >
+      <View style={styles.dialogCloseRow}>
+        <RoundIconButton accessibilityLabel="Close last session" kind="close" onPress={onDismiss} />
+      </View>
+      <Text style={styles.dialogTitle}>{name}</Text>
+      <View style={styles.tableHeader} accessibilityElementsHidden>
+        <Text style={[styles.tableHeading, styles.setIndex]}>Set</Text>
+        <Text style={[styles.tableHeading, styles.repsColumn]}>Reps</Text>
+        <Text style={[styles.tableHeading, styles.loadColumn]}>Weight ({loadUnit})</Text>
+      </View>
+      {rows.map((set, setIndex) => (
+        <View key={`${set.id}-${setIndex}`} style={styles.viewSetRow}>
+          <Text style={styles.setIndexLabel}>{setIndex + 1}</Text>
+          <Text style={[styles.viewSetValue, styles.repsColumn]}>{set.reps || "–"}</Text>
+          <Text style={[styles.viewSetValue, styles.loadColumn]}>{set.load || "–"}</Text>
+        </View>
+      ))}
+    </Dialog>
+  );
+}
+
+export function LastTimeUndoToast({
+  onClear,
+  toast,
+}: {
+  onClear: () => void;
+  toast: UseUndoToast | null;
+}) {
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const deadline = useRef(0);
+  const toastRef = useRef(toast);
+  toastRef.current = toast;
+
+  const clearTimer = () => {
+    if (timer.current) {
+      clearTimeout(timer.current);
+      timer.current = null;
+    }
+  };
+
+  const arm = useCallback((ms: number) => {
+    clearTimer();
+    if (!toastRef.current || ms <= 0) return;
+    timer.current = setTimeout(() => {
+      timer.current = null;
+      onClear();
+    }, ms);
+  }, [onClear]);
+
+  useEffect(() => {
+    if (!toast) {
+      clearTimer();
+      return;
+    }
+    deadline.current = Date.now() + useUndoToastMs;
+    arm(useUndoToastMs);
+    return clearTimer;
+  }, [arm, toast]);
+
+  if (!toast) return null;
+
+  return (
+    <View
+      accessibilityLiveRegion="polite"
+      onAccessibilityTap={() => {
+        clearTimer();
+      }}
+      style={styles.useUndoToast}
+    >
+      <Text style={styles.useUndoMessage}>{toast.message}</Text>
+      <Pressable
+        accessibilityLabel="Undo"
+        accessibilityRole="button"
+        onBlur={() => arm(Math.max(0, deadline.current - Date.now()))}
+        onFocus={clearTimer}
+        onPress={() => {
+          clearTimer();
+          toast.restore();
+          onClear();
+        }}
+        style={(state) => [styles.useUndoAction, state.pressed && styles.pressed, webFocusRing(pressableFocused(state))]}
+      >
+        <Text style={styles.useUndoActionLabel}>Undo</Text>
       </Pressable>
     </View>
   );
@@ -800,11 +1071,121 @@ const styles = StyleSheet.create({
     marginTop: spacing.sm,
     minHeight: lastTimeUseHeight,
   },
+  lastTimeLabelHit: {
+    flexGrow: 1,
+    flexShrink: 1,
+    justifyContent: "center",
+    minHeight: lastTimeUseHeight,
+  },
   lastTimeLabel: {
     color: colors.muted,
     flexGrow: 1,
     flexShrink: 1,
     fontFamily: fonts.regular,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  setsHint: {
+    alignItems: "center",
+    backgroundColor: colors.brandTint,
+    borderColor: colors.boardBorder,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    flexDirection: "row",
+    height: setsHintHeight,
+    marginTop: spacing.sm,
+    padding: spacing.md,
+  },
+  setsHintCopy: {
+    color: colors.brandPressed,
+    flexGrow: 1,
+    flexShrink: 1,
+    fontFamily: fonts.semibold,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+    paddingRight: spacing.sm,
+  },
+  setsHintGotIt: {
+    alignItems: "center",
+    flexShrink: 0,
+    height: size.hit,
+    justifyContent: "center",
+    width: size.hit,
+  },
+  setsHintGotItLabel: {
+    color: colors.brandPressed,
+    fontFamily: fonts.bold,
+    fontSize: type.micro.fontSize,
+    lineHeight: type.micro.lineHeight,
+  },
+  dialogCloseRow: {
+    marginBottom: spacing.xs,
+    marginLeft: -spacing.sm,
+    marginTop: -spacing.sm,
+  },
+  dialogTitle: {
+    color: colors.ink,
+    ...type.title,
+  },
+  dialogBody: {
+    color: colors.muted,
+    fontFamily: fonts.regular,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  dialogActions: {
+    flexDirection: "row",
+    gap: spacing.md,
+    marginTop: spacing.sm,
+  },
+  dialogAction: {
+    flexBasis: 0,
+    flexGrow: 1,
+    flexShrink: 1,
+  },
+  dialogButton: {
+    height: size.primary,
+    minHeight: size.primary,
+    width: "100%",
+  },
+  viewSetRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    minHeight: setRowPitch,
+  },
+  viewSetValue: {
+    color: colors.ink,
+    fontFamily: fonts.bold,
+    fontSize: type.section.fontSize,
+    lineHeight: type.section.lineHeight,
+    textAlign: "center",
+  },
+  useUndoToast: {
+    alignItems: "center",
+    backgroundColor: colors.ink,
+    borderRadius: radii.lg,
+    flexDirection: "row",
+    gap: spacing.sm,
+    height: size.primary,
+    paddingHorizontal: spacing.md,
+  },
+  useUndoMessage: {
+    color: colors.surface,
+    flex: 1,
+    fontFamily: fonts.semibold,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  useUndoAction: {
+    alignItems: "center",
+    height: size.hit,
+    justifyContent: "center",
+    width: useUndoActionWidth,
+  },
+  useUndoActionLabel: {
+    color: colors.surface,
+    fontFamily: fonts.bold,
     fontSize: type.bodySmall.fontSize,
     lineHeight: type.bodySmall.lineHeight,
   },

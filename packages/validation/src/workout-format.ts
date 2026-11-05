@@ -49,11 +49,11 @@ export const forTimeFormatSchema = z
     if (
       format.score?.finished === true
       && format.timeCapSeconds != null
-      && format.score.timeSeconds > format.timeCapSeconds
+      && !(format.score.timeSeconds > 0 && format.score.timeSeconds < format.timeCapSeconds)
     ) {
       context.addIssue({
         code: "custom",
-        message: "Finish time is over the cap",
+        message: "Finish time must be under the cap",
         path: ["score", "timeSeconds"],
       });
     }

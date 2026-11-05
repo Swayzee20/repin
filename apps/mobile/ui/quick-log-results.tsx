@@ -133,6 +133,7 @@ export function WorkoutMetricFields({
 export function WorkoutTimeInput({
   containerStyle,
   inputRef,
+  invalid = false,
   minutes,
   onMinutesChange,
   onSecondsChange,
@@ -142,6 +143,7 @@ export function WorkoutTimeInput({
 }: {
   containerStyle?: StyleProp<ViewStyle>;
   inputRef?: Ref<ComponentRef<typeof TextInput>>;
+  invalid?: boolean;
   minutes: string;
   onMinutesChange: (value: string) => void;
   onSecondsChange: (value: string) => void;
@@ -184,6 +186,7 @@ export function WorkoutTimeInput({
         accessibilityLabel="Minutes"
         containerStyle={styles.timeField}
         error={minutesError}
+        invalid={invalid}
         kind="number"
         onChangeText={(nextMinutes) => {
           if (showHours) {
@@ -210,6 +213,7 @@ export function WorkoutTimeInput({
         accessibilityLabel="Seconds"
         containerStyle={styles.timeField}
         error={secondsRangeError(seconds)}
+        invalid={invalid}
         kind="number"
         onChangeText={onSecondsChange}
         placeholder="14"
