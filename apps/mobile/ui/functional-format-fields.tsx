@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, Pressable, StyleSheet, Text, View } from "react-native";
 
 import type { WorkoutFormat } from "@repin/types";
 
@@ -13,6 +13,7 @@ import {
   addMovementLabel,
   amrapLengthHelper,
   amrapScoreHelper,
+  amrapZeroNote,
   cappedRepsHelper,
   clearedFormatDraft,
   emomIntervalHelper,
@@ -30,7 +31,7 @@ import {
   ffQtyKind,
   ffQtyUnits,
   ffUnitPickerWidth,
-  finishTimeOverCapMessage,
+  forTimeFinishCapError,
   formatGridFlexBasis,
   formatGridGap,
   formatLabel,
@@ -39,6 +40,8 @@ import {
   functionalFormatOptions,
   hasFilledScore,
   hasTimeCap,
+  liveResultHeight,
+  liveScoreLine,
   nextFfField,
   prevFfField,
   roundsCountHelper,
@@ -90,6 +93,7 @@ export function FunctionalFormatSetup({
   const emomHelper = draft.type === "emom"
     ? emomLengthHelper(draft.lengthMinutes, draft.intervalMinutes)
     : null;
+  const emomLive = draft.type === "emom" ? liveScoreLine(draft) : null;
 
   return (
     <View style={styles.section}>
@@ -157,7 +161,11 @@ export function FunctionalFormatSetup({
                 checkSide="start"
                 key={option.value}
                 label={option.label}
-                onPress={() => update({ intervalMinutes: option.value })}
+                onPress={() => {
+                  const next = { ...draft, intervalMinutes: option.value };
+                  update({ intervalMinutes: option.value });
+                  announceLive(liveScoreLine(next));
+                }}
                 selected={draft.intervalMinutes === option.value}
                 style={styles.intervalTile}
               />
@@ -167,13 +175,14 @@ export function FunctionalFormatSetup({
             containerStyle={[styles.followField, styles.compactField]}
             kind="number"
             label="Workout length"
+            onBlur={() => announceLive(emomLive)}
             onChangeText={(lengthMinutes) => update({ lengthMinutes })}
             placeholder="12"
             suffix="min"
             value={draft.lengthMinutes}
           />
-          {emomHelper ? <Text style={styles.helper}>{emomHelper.text}</Text> : null}
           {emomHelper?.partial ? <Text style={styles.helper}>{emomPartialWarning}</Text> : null}
+          {emomLive ? <LiveResultLine text={emomLive} /> : null}
         </View>
       ) : null}
 
@@ -316,9 +325,8 @@ export function FunctionalScoreFields({
 }) {
   const update = (change: Partial<FunctionalFormatDraft>) => onChange({ ...draft, ...change });
   const cap = hasTimeCap(draft);
-  const finishError = draft.type === "for_time" && cap && draft.finished && (draft.finishMinutes.trim() || draft.finishSeconds.trim())
-    ? finishOverCapError(draft)
-    : null;
+  const finishError = forTimeFinishCapError(draft);
+  const live = liveScoreLine(draft);
 
   if (draft.type === "amrap") {
     return (
@@ -329,6 +337,7 @@ export function FunctionalScoreFields({
             containerStyle={styles.pairField}
             kind="number"
             label="Rounds"
+            onBlur={() => announceLive(liveScoreLine({ ...draft }))}
             onChangeText={(scoreRounds) => update({ scoreRounds })}
             placeholder="7"
             suffix="rounds"
@@ -341,6 +350,7 @@ export function FunctionalScoreFields({
             containerStyle={styles.pairField}
             kind="number"
             label="Extra reps"
+            onBlur={() => announceLive(liveScoreLine({ ...draft }))}
             onChangeText={(scoreReps) => update({ scoreReps })}
             optional
             placeholder="0"
@@ -349,6 +359,8 @@ export function FunctionalScoreFields({
           />
         </View>
         <Text style={styles.helper}>{amrapScoreHelper}</Text>
+        <Text style={styles.helper}>{amrapZeroNote}</Text>
+        {live ? <LiveResultLine text={live} /> : null}
       </View>
     );
   }
@@ -362,7 +374,9 @@ export function FunctionalScoreFields({
             accessibilityLabel="Result"
             onChange={(finished) => {
               if (finished == null) return;
+              const next = { ...draft, finished: finished === "finished" };
               update({ finished: finished === "finished" });
+              announceLive(liveScoreLine(next));
             }}
             options={[
               { label: "Finished", value: "finished" },
@@ -378,6 +392,7 @@ export function FunctionalScoreFields({
             hint={cappedRepsHelper(draft.timeCapMinutes)}
             kind="number"
             label="Reps completed"
+            onBlur={() => announceLive(liveScoreLine({ ...draft }))}
             onChangeText={(cappedReps) => update({ cappedReps })}
             placeholder="142"
             suffix="reps"
@@ -387,18 +402,22 @@ export function FunctionalScoreFields({
           <View style={cap ? styles.followField : undefined}>
             <FieldLabel label="Finish time" />
             <WorkoutTimeInput
+              invalid={Boolean(finishError)}
               minutes={draft.finishMinutes}
               onMinutesChange={(finishMinutes) => update({ finishMinutes })}
               onSecondsChange={(finishSeconds) => update({ finishSeconds })}
               seconds={draft.finishSeconds}
             />
             {finishError ? (
-              <Text accessibilityLiveRegion="polite" accessibilityRole="alert" style={styles.error}>
-                {finishError}
-              </Text>
+              <View accessibilityLiveRegion="polite" style={styles.errorPanel}>
+                <Text accessibilityRole="alert" style={styles.errorPanelText}>
+                  {finishError}
+                </Text>
+              </View>
             ) : null}
           </View>
         )}
+        {!finishError && live ? <LiveResultLine text={live} /> : null}
       </View>
     );
   }
@@ -421,13 +440,16 @@ export function FunctionalScoreFields({
   return null;
 }
 
-function finishOverCapError(draft: FunctionalFormatDraft) {
-  const message = finishTimeOverCapMessage(draft.timeCapMinutes);
-  const capSeconds = Number(draft.timeCapMinutes.trim()) * 60;
-  const finishSeconds = Number(draft.finishMinutes.trim() || 0) * 60 + Number(draft.finishSeconds.trim() || 0);
-  if (!Number.isFinite(capSeconds) || capSeconds <= 0) return null;
-  if (!Number.isFinite(finishSeconds) || finishSeconds <= 0) return null;
-  return finishSeconds > capSeconds ? message : null;
+function announceLive(text: string | null) {
+  if (text) void AccessibilityInfo.announceForAccessibility(text);
+}
+
+function LiveResultLine({ text }: { text: string }) {
+  return (
+    <View importantForAccessibility="no-hide-descendants" style={styles.liveLine}>
+      <Text style={styles.liveLineText}>{text}</Text>
+    </View>
+  );
 }
 
 function pickerSelectionFor(exercises: FfExerciseDraft[], exerciseId: string): PickerMovement[] {
@@ -702,12 +724,35 @@ const styles = StyleSheet.create({
   segment: {
     marginTop: spacing.sm,
   },
-  error: {
+  errorPanel: {
+    backgroundColor: colors.dangerSoft,
+    borderRadius: radii.md,
+    marginTop: formSpacing.helperGap,
+    padding: spacing.md,
+  },
+  errorPanelText: {
     color: colors.danger,
     fontFamily: fonts.semibold,
-    fontSize: type.label.fontSize,
-    lineHeight: type.label.lineHeight,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  liveLine: {
+    alignItems: "center",
+    alignSelf: "stretch",
+    backgroundColor: colors.brandTint,
+    borderColor: colors.boardBorder,
+    borderRadius: radii.md,
+    borderWidth: 1,
+    height: liveResultHeight,
+    justifyContent: "center",
     marginTop: formSpacing.helperGap,
+    paddingHorizontal: spacing.md,
+  },
+  liveLineText: {
+    color: colors.brandPressed,
+    fontFamily: fonts.bold,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
   },
   unitOption: {
     ...type.bodyMedium,

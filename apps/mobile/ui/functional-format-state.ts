@@ -75,7 +75,9 @@ export const maxFormatMinutes = 180;
 
 export const amrapLengthHelper = "How long the AMRAP ran, e.g. 20 min";
 export const amrapScoreHelper = "Full rounds, plus reps into the next round";
+export const amrapZeroNote = "0 rounds is valid. Empty extra reps = 0.";
 export const amrapLengthRequired = "Add the workout length";
+export const amrapRoundsRequired = "Add the rounds you completed.";
 export const forTimeOptionalHelper = "Both optional. Add a cap to log reps if you didn't finish.";
 export const roundsCountHelper = "How many rounds you did";
 export const roundsSameRepsHelper = "Same reps every round";
@@ -85,6 +87,7 @@ export const chooseFormatReason = "Choose a format.";
 export const addExerciseReason = "Add an exercise.";
 export const emptyWeightPlaceholder = "–";
 export const timeCapPlaceholder = "No cap";
+export const liveResultHeight = spacing.huge;
 
 export const emptyFunctionalFormat: FunctionalFormatDraft = {
   cappedReps: "",
@@ -158,9 +161,13 @@ export function secondsToMinutesField(seconds: number | null | undefined) {
 }
 
 export function secondsToClock(totalSeconds: number) {
-  const rounded = Math.round(totalSeconds);
-  const minutes = Math.floor(rounded / 60);
+  const rounded = Math.max(0, Math.round(totalSeconds));
+  const hours = Math.floor(rounded / 3_600);
+  const minutes = Math.floor((rounded % 3_600) / 60);
   const seconds = rounded % 60;
+  if (hours > 0) {
+    return `${hours}:${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
+  }
   return `${minutes}:${String(seconds).padStart(2, "0")}`;
 }
 
@@ -189,7 +196,13 @@ export function formatCapClock(minutes: string) {
 
 export function finishTimeOverCapMessage(minutes: string) {
   const clock = formatCapClock(minutes);
-  return clock ? `Finish time is over the ${clock} cap` : "Finish time is over the cap";
+  return clock
+    ? `Finish time must be under the ${clock} cap. Edit the time or choose Hit the cap.`
+    : "Finish time must be under the cap. Edit the time or choose Hit the cap.";
+}
+
+export function finishTimeViolatesCap(finishSeconds: number, capSeconds: number) {
+  return !(finishSeconds > 0 && finishSeconds < capSeconds);
 }
 
 export function cappedRepsHelper(minutes: string) {
@@ -479,7 +492,22 @@ export function functionalFormatDisabledReason(
   if (draft.type === "emom" && !draft.lengthMinutes.trim()) return amrapLengthRequired;
   if (draft.type === "rounds" && !draft.rounds.trim()) return "Add how many rounds you did";
   if (!exercises.length) return addExerciseReason;
+  if (draft.type === "amrap" && !draft.scoreRounds.trim()) return amrapRoundsRequired;
+  const capError = forTimeFinishCapError(draft);
+  if (capError) return capError;
   return undefined;
+}
+
+export function forTimeFinishCapError(draft: FunctionalFormatDraft) {
+  if (draft.type !== "for_time" || !draft.finished || !hasTimeCap(draft)) return null;
+  if (!draft.finishMinutes.trim() && !draft.finishSeconds.trim()) return null;
+  const timeError = validateTimeParts(draft.finishMinutes, draft.finishSeconds);
+  if (timeError) return timeError;
+  const finish = getDurationSeconds(draft.finishMinutes, draft.finishSeconds);
+  const cap = minutesToSeconds(draft.timeCapMinutes);
+  if (finish == null || cap == null) return null;
+  if (finishTimeViolatesCap(finish, cap)) return finishTimeOverCapMessage(draft.timeCapMinutes);
+  return null;
 }
 
 export function validateFunctionalFormat(draft: FunctionalFormatDraft, exercises: FfExerciseDraft[]) {
@@ -492,7 +520,7 @@ export function validateFunctionalFormat(draft: FunctionalFormatDraft, exercises
 
   if (draft.type === "amrap") {
     const rounds = parseNonNegativeInt(draft.scoreRounds);
-    if (rounds == null) return "Add the rounds you completed.";
+    if (rounds == null) return amrapRoundsRequired;
     if (draft.scoreReps.trim()) {
       const reps = parseNonNegativeInt(draft.scoreReps);
       if (reps == null) return "Extra reps must be a whole number of 0 or more.";
@@ -515,7 +543,7 @@ export function validateFunctionalFormat(draft: FunctionalFormatDraft, exercises
       if (timeError) return timeError;
       const finish = getDurationSeconds(draft.finishMinutes, draft.finishSeconds);
       const cap = minutesToSeconds(draft.timeCapMinutes);
-      if (finish != null && cap != null && finish > cap) {
+      if (finish != null && cap != null && finishTimeViolatesCap(finish, cap)) {
         return finishTimeOverCapMessage(draft.timeCapMinutes);
       }
     }
@@ -695,4 +723,44 @@ export function previewFunctionalFormatSummary(
       ]);
     }
   }
+}
+
+function countLabel(value: number, singular: string, plural: string) {
+  return `${formatNumber(value)} ${value === 1 ? singular : plural}`;
+}
+
+/** Local derived score/summary line. Not stored. Null until required fields are valid. */
+export function liveScoreLine(draft: FunctionalFormatDraft) {
+  if (draft.type === "amrap") {
+    const rounds = parseNonNegativeInt(draft.scoreRounds);
+    if (rounds == null) return null;
+    if (draft.scoreReps.trim() && parseNonNegativeInt(draft.scoreReps) == null) return null;
+    const reps = parseNonNegativeInt(draft.scoreReps) ?? 0;
+    if (reps === 0) return countLabel(rounds, "round", "rounds");
+    return `${countLabel(rounds, "round", "rounds")} + ${countLabel(reps, "rep", "reps")}`;
+  }
+
+  if (draft.type === "for_time") {
+    if (forTimeFinishCapError(draft)) return null;
+    const cap = minutesToSeconds(draft.timeCapMinutes);
+    const capped = cap != null && !draft.finished;
+    if (capped) {
+      const reps = parseNonNegativeInt(draft.cappedReps);
+      if (reps == null) return null;
+      return `Capped · ${countLabel(reps, "rep", "reps")}`;
+    }
+    if (!draft.finishMinutes.trim() && !draft.finishSeconds.trim()) return null;
+    if (validateTimeParts(draft.finishMinutes, draft.finishSeconds)) return null;
+    const time = getDurationSeconds(draft.finishMinutes, draft.finishSeconds);
+    if (time == null || time <= 0) return null;
+    return `Finished · ${secondsToClock(time)}`;
+  }
+
+  if (draft.type === "emom") {
+    const length = parsePositiveInt(draft.lengthMinutes);
+    if (length == null) return null;
+    return `Every ${draft.intervalMinutes} min for ${length} min`;
+  }
+
+  return null;
 }

@@ -8,14 +8,18 @@ export function Dialog({
   children,
   closeLabel = "Close",
   dismissDisabled = false,
+  maxWidth,
   onDismiss,
+  padding = spacing.lg,
   size = "default",
   visible,
 }: {
   children: ReactNode;
   closeLabel?: string;
   dismissDisabled?: boolean;
+  maxWidth?: number;
   onDismiss: () => void;
+  padding?: number;
   /** Wide uses a 32pt card inset so a 7-column grid fits. Default stays 48. */
   size?: "default" | "wide";
   visible: boolean;
@@ -40,7 +44,14 @@ export function Dialog({
           style={[StyleSheet.absoluteFill, styles.backdrop]}
         />
         <CenteredCard cardInset={cardInset}>
-          <View accessibilityViewIsModal style={styles.panel}>
+          <View
+            accessibilityViewIsModal
+            style={[
+              styles.panel,
+              { padding },
+              maxWidth != null ? { maxWidth, width: "100%" } : null,
+            ]}
+          >
             {children}
           </View>
         </CenteredCard>
@@ -57,7 +68,6 @@ const styles = StyleSheet.create({
     borderRadius: radii.lg,
     boxShadow: elevation.e3,
     gap: spacing.sm,
-    padding: spacing.lg,
     width: "100%",
   },
 });

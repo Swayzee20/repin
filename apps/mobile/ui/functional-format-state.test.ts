@@ -10,7 +10,9 @@ import {
   addMovementLabel,
   amrapLengthHelper,
   amrapLengthRequired,
+  amrapRoundsRequired,
   amrapScoreHelper,
+  amrapZeroNote,
   buildFfMovements,
   buildFunctionalFormat,
   cappedRepsHelper,
@@ -29,6 +31,8 @@ import {
   ffQtyUnits,
   ffUnitPickerWidth,
   finishTimeOverCapMessage,
+  finishTimeViolatesCap,
+  forTimeFinishCapError,
   formatCapClock,
   formatGridFlexBasis,
   formatGridGap,
@@ -41,6 +45,8 @@ import {
   hydrateFfExercises,
   hydrateFunctionalFormat,
   intervalMinutesFromSeconds,
+  liveResultHeight,
+  liveScoreLine,
   previewFunctionalFormatSummary,
   roundsCountHelper,
   roundsSameRepsHelper,
@@ -116,6 +122,10 @@ test("new logs require a format; legacy edits may keep no format", () => {
   );
   assert.equal(
     functionalFormatDisabledReason(draft({ type: "amrap", lengthMinutes: "12" }), [pullUp()], false),
+    amrapRoundsRequired,
+  );
+  assert.equal(
+    functionalFormatDisabledReason(draft({ type: "amrap", lengthMinutes: "12", scoreRounds: "0" }), [pullUp()], false),
     undefined,
   );
 });
@@ -149,7 +159,23 @@ test("AMRAP requires workout length, stores duration and separate score rounds/r
   assert.equal(validateFunctionalFormat(draft({ type: "amrap" }), [pullUp()]), amrapLengthRequired);
   assert.equal(
     validateFunctionalFormat(draft({ type: "amrap", lengthMinutes: "12" }), [pullUp()]),
-    "Add the rounds you completed.",
+    amrapRoundsRequired,
+  );
+
+  const zeroRounds = draft({ type: "amrap", lengthMinutes: "12", scoreRounds: "0", scoreReps: "5" });
+  assert.equal(amrapZeroNote, "0 rounds is valid. Empty extra reps = 0.");
+  assert.equal(validateFunctionalFormat(zeroRounds, [pullUp()]), null);
+  assert.deepEqual(buildFunctionalFormat(zeroRounds), {
+    durationSeconds: 720,
+    score: { reps: 5, rounds: 0 },
+    type: "amrap",
+  });
+  assert.equal(liveScoreLine(zeroRounds), "0 rounds + 5 reps");
+  assert.equal(liveScoreLine(cindy), "7 rounds + 5 reps");
+  assert.equal(liveScoreLine(noExtra), "5 rounds");
+  assert.equal(
+    liveScoreLine(draft({ type: "amrap", scoreRounds: "1", scoreReps: "1" })),
+    "1 round + 1 rep",
   );
 });
 
@@ -200,8 +226,44 @@ test("For Time keeps the cap optional and switches result fields when a cap is s
     finished: true,
     timeCapMinutes: "15",
   });
-  assert.equal(validateFunctionalFormat(overCap, [pullUp()]), "Finish time is over the 15:00 cap");
-  assert.equal(finishTimeOverCapMessage("15"), "Finish time is over the 15:00 cap");
+  const atCap = draft({
+    type: "for_time",
+    finishMinutes: "15",
+    finishSeconds: "0",
+    finished: true,
+    timeCapMinutes: "15",
+  });
+  const underCap = draft({
+    type: "for_time",
+    finishMinutes: "14",
+    finishSeconds: "59",
+    finished: true,
+    timeCapMinutes: "15",
+  });
+  const justOver = draft({
+    type: "for_time",
+    finishMinutes: "15",
+    finishSeconds: "1",
+    finished: true,
+    timeCapMinutes: "15",
+  });
+  const capMessage = "Finish time must be under the 15:00 cap. Edit the time or choose Hit the cap.";
+  assert.equal(finishTimeOverCapMessage("15"), capMessage);
+  assert.equal(finishTimeViolatesCap(899, 900), false);
+  assert.equal(finishTimeViolatesCap(900, 900), true);
+  assert.equal(finishTimeViolatesCap(901, 900), true);
+  assert.equal(finishTimeViolatesCap(0, 900), true);
+  assert.equal(validateFunctionalFormat(underCap, [pullUp()]), null);
+  assert.equal(validateFunctionalFormat(atCap, [pullUp()]), capMessage);
+  assert.equal(validateFunctionalFormat(justOver, [pullUp()]), capMessage);
+  assert.equal(validateFunctionalFormat(overCap, [pullUp()]), capMessage);
+  assert.equal(forTimeFinishCapError(atCap), capMessage);
+  assert.equal(functionalFormatDisabledReason(atCap, [pullUp()], false), capMessage);
+  assert.equal(liveScoreLine(underCap), "Finished · 14:59");
+  assert.equal(liveScoreLine(atCap), null);
+  assert.equal(liveScoreLine(justOver), null);
+  assert.equal(liveScoreLine(finished), "Finished · 8:42");
+  assert.equal(liveScoreLine(capped), "Capped · 142 reps");
 });
 
 test("EMOM uses 1/2/3 min tiles, has no score, and labels interval slots", () => {
@@ -250,6 +312,14 @@ test("EMOM uses 1/2/3 min tiles, has no score, and labels interval slots", () =>
     ]),
     "E2MOM 20 · 2 movements",
   );
+  assert.equal(liveScoreLine(emom), "Every 1 min for 12 min");
+  assert.equal(
+    liveScoreLine(draft({ type: "emom", intervalMinutes: 2, lengthMinutes: "20" })),
+    "Every 2 min for 20 min",
+  );
+  assert.equal(liveScoreLine(draft({ type: "emom", intervalMinutes: 1 })), null);
+  assert.equal(liveResultHeight, spacing.huge);
+  assert.equal(liveResultHeight, 40);
 });
 
 test("Rounds keeps the same reps every round and treats total time as optional", () => {
@@ -424,5 +494,10 @@ test("the detailed form sends format fields and reuses MovementPicker", () => {
   assert.match(fields, /MovementPicker/);
   assert.match(fields, /checkSide="start"/);
   assert.match(fields, /addMovementLabel/);
+  assert.match(fields, /liveScoreLine/);
+  assert.match(fields, /amrapZeroNote/);
+  assert.match(fields, /colors\.boardBorder/);
+  assert.match(fields, /forTimeFinishCapError/);
+  assert.equal(fields.includes("#F6D9C6"), false);
   assert.equal(fields.includes("SetTable"), false);
 });
