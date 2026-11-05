@@ -415,6 +415,7 @@ export function Picker({
 export function ChoiceTile({
   accessibilityLabel,
   align = "left",
+  checkSide = "end",
   disabled = false,
   label,
   onPress,
@@ -424,6 +425,7 @@ export function ChoiceTile({
 }: {
   accessibilityLabel?: string;
   align?: "center" | "left";
+  checkSide?: "end" | "start";
   disabled?: boolean;
   label: string;
   onPress: () => void;
@@ -433,6 +435,12 @@ export function ChoiceTile({
 }) {
   const chrome = choiceTileChrome({ disabled, selected });
   const centered = align === "center";
+  const leadingCheck = checkSide === "start" && !centered;
+  const check = chrome.showCheck ? (
+    <View style={centered ? styles.choiceCheckCentered : undefined}>
+      <Icon color={colors.brand} name="checkmark" size={size.icon.sm} />
+    </View>
+  ) : null;
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
@@ -455,12 +463,9 @@ export function ChoiceTile({
         style,
       ]}
     >
+      {leadingCheck ? check : null}
       <Text numberOfLines={1} style={[choiceText, styles.choiceLabel, centered && styles.choiceLabelCentered, { color: chrome.color }]}>{label}</Text>
-      {chrome.showCheck ? (
-        <View style={centered ? styles.choiceCheckCentered : undefined}>
-          <Icon color={colors.brand} name="checkmark" size={size.icon.sm} />
-        </View>
-      ) : null}
+      {leadingCheck ? null : check}
     </Pressable>
   );
 }

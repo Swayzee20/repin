@@ -23,7 +23,6 @@ import { FieldLabel, FlameRating, PhotoTile, TextArea, TextField, photoUploadFie
 import {
   buildDetailedMovements,
   DetailedExerciseFields,
-  FunctionalFitnessExerciseFields,
   hydrateDetailedExercises,
   hydrateWorkoutLoadUnitFromMovements,
   readStoredLoadUnit,
@@ -33,10 +32,27 @@ import {
   writeStoredLoadUnit,
 } from "../../../ui/detailed-workout-exercises";
 import {
+  FunctionalFormatSetup,
+  FunctionalScoreFields,
+  FunctionalWorkoutFields,
+} from "../../../ui/functional-format-fields";
+import {
+  buildFfMovements,
+  buildFunctionalFormat,
+  emptyFunctionalFormat,
+  functionalFormatDisabledReason,
+  hydrateFfExercises,
+  hydrateFunctionalFormat,
+  previewFunctionalFormatSummary,
+  validateFunctionalFormat,
+  type FfExerciseDraft,
+  type FunctionalFormatDraft,
+} from "../../../ui/functional-format-state";
+import {
   RunResultEditor,
   RunSubtypeSelector,
 } from "../../../ui/detailed-run-fields";
-import { attachLogVersion, usesMetricFields, usesMovementPicker } from "../../../ui/logging-form-state";
+import { attachLogVersion, usesMetricFields } from "../../../ui/logging-form-state";
 import {
   buildQuickLogResults,
   emptyQuickLogResults,
@@ -86,6 +102,8 @@ export default function DetailedWorkoutScreen() {
   const runEditorY = useRef(0);
   const [name, setName] = useState(layoutPreview ? "Saturday tempo" : "");
   const [exercises, setExercises] = useState<DetailedExerciseDraft[]>([]);
+  const [ffExercises, setFfExercises] = useState<FfExerciseDraft[]>([]);
+  const [ffFormat, setFfFormat] = useState<FunctionalFormatDraft>(emptyFunctionalFormat);
   const [loadUnit, setLoadUnit] = useState<LoadUnit>(() => readStoredLoadUnit());
   const [effort, setEffort] = useState<number | null>(layoutPreview ? 3 : null);
   const [occurredAt, setOccurredAt] = useState(() => new Date());
@@ -102,6 +120,8 @@ export default function DetailedWorkoutScreen() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const isStrengthWorkout = workoutType === "strength_training" || workoutType === "powerlifting";
+  const isFunctionalFitness = workoutType === "functional_fitness";
+  const ffFormatted = isFunctionalFitness && Boolean(ffFormat.type);
   const photoError = photoUploadFieldError(error);
 
   useEffect(() => {
@@ -123,7 +143,14 @@ export default function DetailedWorkoutScreen() {
         setRunSubtype(workout.workoutSubtype);
         setResults(hydrateQuickLogResults(workout.metrics));
         setIntervals(hydrateIntervalDrafts(workout.segments));
-        setExercises(hydrateDetailedExercises(workout.movements));
+        setFfFormat(hydrateFunctionalFormat(workout.format));
+        if (workout.format) {
+          setFfExercises(hydrateFfExercises(workout.movements));
+          setExercises([]);
+        } else {
+          setFfExercises([]);
+          setExercises(hydrateDetailedExercises(workout.movements));
+        }
         setLoadUnit(hydrateWorkoutLoadUnitFromMovements(workout.movements, readStoredLoadUnit()));
         setName(workout.name ?? "");
         setEffort(workout.effort);
@@ -153,6 +180,9 @@ export default function DetailedWorkoutScreen() {
       setIntervals([createEmptyInterval()]);
       setRunResultsExpanded(true);
       setRunResultError(null);
+    }
+    if (nextWorkoutType !== "functional_fitness") {
+      setFfFormat(emptyFunctionalFormat);
     }
   }, []);
 
@@ -221,7 +251,11 @@ export default function DetailedWorkoutScreen() {
     }
     const resultsIssue = workoutType === "run" && runSubtype === "interval"
       ? validateIntervals(intervals)
-      : validateQuickLogResults(results, workoutType);
+      : ffFormatted
+        ? validateFunctionalFormat(ffFormat, ffExercises)
+        : isFunctionalFitness && !ffFormat.type && !editing
+          ? "Choose a format."
+          : validateQuickLogResults(results, workoutType);
     if (resultsIssue) {
       if (workoutType === "run") {
         setRunResultError(runSubtype === "interval" ? getIntervalValidationIssue(intervals) : { message: resultsIssue });
@@ -261,7 +295,8 @@ export default function DetailedWorkoutScreen() {
       }
 
       const isIntervalRun = workoutType === "run" && runSubtype === "interval";
-      const structuredResults = isIntervalRun
+      const format = ffFormatted ? buildFunctionalFormat(ffFormat) : null;
+      const structuredResults = isIntervalRun || ffFormatted
         ? { durationSeconds: null, metrics: [] }
         : buildQuickLogResults(results, workoutType);
       const segments = isIntervalRun ? buildIntervalSegments(intervals) : [];
@@ -288,8 +323,13 @@ export default function DetailedWorkoutScreen() {
           caption,
           photoPath: nextPhotoPath,
           occurredAt: occurredAt.toISOString(),
+          format,
           metrics: structuredResults.metrics,
-          movements: isStrengthWorkout ? buildDetailedMovements(exercises, loadUnit) : [],
+          movements: isStrengthWorkout
+            ? buildDetailedMovements(exercises, loadUnit)
+            : ffFormatted
+              ? buildFfMovements(ffExercises, loadUnit)
+              : [],
           segments,
           title: name.trim() || workoutTypeLabels[workoutType],
           notes: caption,
@@ -313,7 +353,7 @@ export default function DetailedWorkoutScreen() {
       }
       markWorkoutDataStale();
       clearWorkoutDetailCaches();
-      if (isStrengthWorkout) writeStoredLoadUnit(loadUnit);
+      if (isStrengthWorkout || ffFormatted) writeStoredLoadUnit(loadUnit);
       router.back();
     } catch (submitError) {
       if (uploadedPhotoPath && supabase) {
@@ -322,14 +362,17 @@ export default function DetailedWorkoutScreen() {
       setError(submitError instanceof Error ? submitError.message : "Workout could not be created.");
       setSubmitting(false);
     }
-  }, [caption, editSessionId, editing, effort, exercises, existingPhotoPath, groupId, intervals, isStrengthWorkout, loadUnit, name, occurredAt, photo, photoRemoved, results, router, runSubtype, workoutType]);
+  }, [caption, editSessionId, editing, effort, exercises, existingPhotoPath, ffExercises, ffFormat, ffFormatted, groupId, intervals, isFunctionalFitness, isStrengthWorkout, loadUnit, name, occurredAt, photo, photoRemoved, results, router, runSubtype, workoutType]);
 
-  const showsMetrics = usesMetricFields(workoutType);
+  const showsMetrics = usesMetricFields(workoutType)
+    && (workoutType !== "functional_fitness" || (!ffFormat.type && editing));
   const disabledReason = !workoutType
     ? "Choose a workout type."
     : !editing && workoutType === "run" && !runSubtype
       ? "Choose a run type."
-      : undefined;
+      : isFunctionalFitness
+        ? functionalFormatDisabledReason(ffFormat, ffExercises, editing)
+        : undefined;
   const photoUri = photo?.uri ?? (existingPhotoUrl && !photoRemoved ? existingPhotoUrl : null);
 
   return (
@@ -340,6 +383,9 @@ export default function DetailedWorkoutScreen() {
           <FormCard>
             <CardHeading>What&apos;d you do?</CardHeading>
             <WorkoutTypeSelector onChange={handleWorkoutTypeChange} value={workoutType} />
+            {isFunctionalFitness ? (
+              <FunctionalFormatSetup draft={ffFormat} onChange={setFfFormat} />
+            ) : null}
           </FormCard>
           {workoutType === "run" ? (
             <View onLayout={(event) => { workoutCardY.current = event.nativeEvent.layout.y; }}>
@@ -396,12 +442,25 @@ export default function DetailedWorkoutScreen() {
               />
             </FormCard>
           ) : null}
-          {usesMovementPicker(workoutType) && !isStrengthWorkout ? (
+          {ffFormatted && ffFormat.type ? (
             <FormCard>
-              <FunctionalFitnessExerciseFields
-                exercises={exercises}
-                onChange={setExercises}
+              <FunctionalWorkoutFields
+                exercises={ffExercises}
+                formatType={ffFormat.type}
+                intervalMinutes={ffFormat.intervalMinutes}
+                loadUnit={loadUnit}
+                onAfterLast={() => nameRef.current?.focus()}
+                onChange={setFfExercises}
+                onLoadUnitChange={(unit) => {
+                  setLoadUnit(unit);
+                  writeStoredLoadUnit(unit);
+                }}
               />
+            </FormCard>
+          ) : null}
+          {ffFormatted && ffFormat.type && ffFormat.type !== "emom" ? (
+            <FormCard>
+              <FunctionalScoreFields draft={ffFormat} onChange={setFfFormat} />
             </FormCard>
           ) : null}
           <FormCard>
@@ -478,7 +537,7 @@ export default function DetailedWorkoutScreen() {
             name,
             occurredAt,
             photoUri,
-            resultSummary: previewResultSummary(workoutType, runSubtype, results, intervals),
+            resultSummary: previewResultSummary(workoutType, runSubtype, results, intervals, ffFormat, ffExercises),
             workoutType,
             runSubtype,
           })}
@@ -506,7 +565,12 @@ function previewResultSummary(
   runSubtype: RunWorkoutSubtype | null,
   results: QuickLogResultsDraft,
   intervals: IntervalDraft[],
+  ffFormat: FunctionalFormatDraft,
+  ffExercises: FfExerciseDraft[],
 ) {
+  if (workoutType === "functional_fitness" && ffFormat.type) {
+    return previewFunctionalFormatSummary(ffFormat, ffExercises);
+  }
   if (workoutType === "run" && runSubtype) {
     const lines = buildRunResultSummary(runSubtype, results, intervals)
       .map((line) => line.trim())
