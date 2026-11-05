@@ -14,7 +14,7 @@ import {
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { ActivityIndicator, Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from "react-native";
+import { ActivityIndicator, Animated, Easing, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { commentMenuItems, postMenuItems } from "../lib/content-menu";
@@ -46,6 +46,12 @@ import {
 import { useModeration } from "./moderation";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import { Chevron } from "./icons";
+import {
+  markComposerBlurred,
+  markComposerFocused,
+  scheduleComposerBlur,
+  shouldRestoreComposerFocus,
+} from "./composer-focus";
 import { scheduleKeyboardAccessoryReset, setKeyboardAccessory } from "./keyboard-accessory";
 import { keyboardScrollProps, multilineAccessoryProps } from "./keyboard";
 import { TwoPane, useLayoutMode, WideColumn } from "./layout";
@@ -68,30 +74,7 @@ const commentFieldMaxHeight = size.hit * 2 + spacing.xxxl;
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 const keyboardBehavior = Platform.OS === "ios" ? "padding" : "height";
 
-let focusedComposerSession: string | null = null;
-let ignoreComposerBlur = false;
-let composerBlurTimer: ReturnType<typeof setTimeout> | null = null;
-
-export function holdComposerFocus() {
-  ignoreComposerBlur = true;
-  if (composerBlurTimer) {
-    clearTimeout(composerBlurTimer);
-    composerBlurTimer = null;
-  }
-}
-
-export function releaseComposerFocus() {
-  ignoreComposerBlur = false;
-}
-
-function markComposerFocused(sessionId: string) {
-  focusedComposerSession = sessionId;
-}
-
-function markComposerBlurred(sessionId: string) {
-  if (ignoreComposerBlur) return;
-  if (focusedComposerSession === sessionId) focusedComposerSession = null;
-}
+export { holdComposerFocus, releaseComposerFocus } from "./composer-focus";
 
 export type WorkoutDetailFixture = {
   comments: CommunityPostComment[];
@@ -214,6 +197,10 @@ export function WorkoutDetailView({
   useEffect(() => () => {
     mounted.current = false;
   }, []);
+
+  useEffect(() => () => {
+    markComposerBlurred(sessionId);
+  }, [sessionId]);
 
   const loadWorkout = useCallback(async (force = false) => {
     const cached = readWorkoutDetailCache(groupId, sessionId);
@@ -532,7 +519,6 @@ export function WorkoutDetailView({
           <ContentOptionsMenu
             accessibilityLabel={`Options for ${commentName}'s comment`}
             items={items}
-            visual="comment"
           />
         );
       }
@@ -565,7 +551,11 @@ export function WorkoutDetailView({
   );
 
   const composer = (
-    <View style={[styles.composerDock, { paddingBottom: composerPaddingBottom }]}>
+    <Pressable
+      accessible={false}
+      onPress={() => Keyboard.dismiss()}
+      style={[styles.composerDock, { paddingBottom: composerPaddingBottom }]}
+    >
       <CommentComposer
         commentSubmitting={commentSubmitting}
         commentText={commentText}
@@ -575,7 +565,7 @@ export function WorkoutDetailView({
         sessionId={sessionId}
       />
       {commentError && comments.length ? <Text style={styles.reactionError}>{commentError}</Text> : null}
-    </View>
+    </Pressable>
   );
 
   if (splitSession) {
@@ -628,6 +618,7 @@ export function WorkoutDetailView({
         <ScrollView
           {...keyboardScrollProps(Platform.OS)}
           contentContainerStyle={styles.modalScroll}
+          keyboardDismissMode={Platform.OS === "ios" ? "interactive" : Platform.OS === "web" ? "none" : "on-drag"}
           nestedScrollEnabled
           onContentSizeChange={detailAnchor.onContentSizeChange}
           onLayout={detailAnchor.onViewportLayout}
@@ -1035,7 +1026,7 @@ function CommentComposer({
   }, [commentText]);
 
   useEffect(() => {
-    if (focusedComposerSession !== sessionId) return;
+    if (!shouldRestoreComposerFocus(sessionId)) return;
     const frame = requestAnimationFrame(() => inputRef.current?.focus());
     return () => cancelAnimationFrame(frame);
   }, [sessionId]);
@@ -1050,8 +1041,7 @@ function CommentComposer({
         multiline
         onBlur={() => {
           if (Platform.OS === "ios") scheduleKeyboardAccessoryReset(accessoryGeneration.current);
-          if (composerBlurTimer) clearTimeout(composerBlurTimer);
-          composerBlurTimer = setTimeout(() => markComposerBlurred(sessionId), 200);
+          scheduleComposerBlur(sessionId);
         }}
         onChangeText={onCommentChange}
         onContentSizeChange={(event) => {
@@ -1061,9 +1051,11 @@ function CommentComposer({
         }}
         onFocus={() => {
           if (Platform.OS === "ios") {
-            accessoryGeneration.current = setKeyboardAccessory({ label: "Done", run: () => {} });
+            accessoryGeneration.current = setKeyboardAccessory({
+              label: "Done",
+              run: () => inputRef.current?.blur(),
+            });
           }
-          if (composerBlurTimer) clearTimeout(composerBlurTimer);
           markComposerFocused(sessionId);
         }}
         placeholder="Add a comment..."
@@ -1075,11 +1067,15 @@ function CommentComposer({
         value={commentText}
       />
       <Pressable
+        accessibilityHint="Posts the comment"
         accessibilityLabel="Post comment"
         accessibilityRole="button"
         accessibilityState={{ disabled: commentSubmitting || empty }}
         disabled={commentSubmitting || empty}
-        onPress={onCommentSubmit}
+        onPress={(event) => {
+          event.stopPropagation();
+          onCommentSubmit();
+        }}
         style={(state) => {
           const ready = !empty && !commentSubmitting;
           const backgroundColor = ready || commentSubmitting

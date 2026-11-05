@@ -40,11 +40,52 @@ export const chooserSwipeDistanceFraction = 0.3;
 export const chooserSwipeVelocity = 0.5;
 
 /**
- * The modal covers the native toolbar (+), so the panel draws a stand-in.
- * Set this false if the system strip draws above the modal (QA-C3). The
- * native (+) still toggles through `toggleWorkoutChooser`.
+ * The modal covers the native toolbar (+) on some hosts, so the panel can
+ * draw a stand-in. On the Duo the system strip draws above the modal, so the
+ * real locked (+) stays visible and a stand-in doubles it — especially in
+ * unfolded landscape, where the stand-in uses portrait coordinates.
+ * QA-C3: keep this false while the strip (+) is up. The native (+) still
+ * toggles through `toggleWorkoutChooser`.
  */
-export const chooserShowsPlusAnchor = true;
+export const chooserShowsPlusAnchor = false;
+
+/**
+ * iOS `Modal` defaults to portrait-only. A portrait-locked overFullScreen
+ * chooser is what kept the Duo in portrait (and froze the strip / (+)) after
+ * unfolding with the panel open.
+ */
+export const overlaySupportedOrientations = [
+  "portrait",
+  "portrait-upside-down",
+  "landscape",
+  "landscape-left",
+  "landscape-right",
+] as const;
+
+export type ChooserFrameChange =
+  | { frameKey: string; type: "opened" }
+  | { frameKey: string; type: "relayout" }
+  | { type: "idle" };
+
+/**
+ * Keep the strip chooser open across fold/unfold and Split View. Dismissing
+ * the overFullScreen modal during a size change is what closed the panel and
+ * left iOS stuck until a rotate.
+ */
+export function chooserOnFrameKeyChange({
+  frameKey,
+  openKey,
+  visible,
+}: {
+  frameKey: string;
+  openKey: string | null;
+  visible: boolean;
+}): ChooserFrameChange {
+  if (!visible) return { type: "idle" };
+  if (openKey === null) return { frameKey, type: "opened" };
+  if (openKey === frameKey) return { type: "idle" };
+  return { frameKey, type: "relayout" };
+}
 
 export const chooserMotion = {
   closeMs: 200,

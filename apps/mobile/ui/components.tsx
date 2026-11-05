@@ -690,11 +690,9 @@ function CommunityFeedItem({
 export function ContentOptionsMenu({
   accessibilityLabel,
   items,
-  visual = "post",
 }: {
   accessibilityLabel: string;
   items: ContentMenuItem[];
-  visual?: "comment" | "post";
 }) {
   const anchor = useRef<ViewInstance>(null);
   const insets = useSafeAreaInsets();
@@ -728,7 +726,7 @@ export function ContentOptionsMenu({
             webFocusRing(pressableFocused(state)),
           ]}
         >
-          <Icon color={colors.muted} name="ellipsis" size={visual === "comment" ? size.iconButton : size.icon.md} />
+          <Icon color={colors.muted} name="ellipsis" size={size.icon.md} />
         </Pressable>
       </View>
       <Modal animationType="fade" onRequestClose={() => setVisible(false)} transparent visible={visible}>

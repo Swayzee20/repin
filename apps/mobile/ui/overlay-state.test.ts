@@ -8,15 +8,18 @@ import { paneSplit } from "./layout-math";
 import {
   chooserMeasuredAnchor,
   chooserMotion,
+  chooserOnFrameKeyChange,
   chooserPanel,
   chooserPanelFrame,
   chooserRowMinHeight,
+  chooserShowsPlusAnchor,
   chooserSwipeDistanceFraction,
   chooserSwipeShouldDismiss,
   chooserSwipeVelocity,
   dateActionHeight,
   menuItemColor,
   menuItemMinHeight,
+  overlaySupportedOrientations,
   sheetDismissDistance,
   sheetFrame,
   sheetRowBackground,
@@ -270,4 +273,83 @@ test("log actions say Log a workout", () => {
   assert.match(panel, /Easing\.in\(Easing\.cubic\)/);
   assert.match(panel, /Easing\.in\(Easing\.quad\)/);
   assert.match(panel, /useReducedMotion/);
+});
+
+test("the strip chooser does not paint a plus while the system strip (+) is up", () => {
+  assert.equal(chooserShowsPlusAnchor, false);
+  const panel = source("side-panel.tsx");
+  assert.match(panel, /chooserShowsPlusAnchor \? \(/);
+  assert.match(panel, /<PlusAnchor /);
+  assert.match(panel, /supportedOrientations=\{\[\.\.\.overlaySupportedOrientations\]\}/);
+  const stack = source("tab-root-stack.tsx");
+  assert.match(stack, /variant="prominent"/);
+  assert.match(stack, /icon="plus"/);
+});
+
+test("the strip chooser stays open when the window frame changes", () => {
+  assert.deepEqual(
+    chooserOnFrameKeyChange({ frameKey: "466:folded:trailing", openKey: null, visible: true }),
+    { frameKey: "466:folded:trailing", type: "opened" },
+  );
+  assert.deepEqual(
+    chooserOnFrameKeyChange({
+      frameKey: "951:unfolded:trailing",
+      openKey: "466:folded:trailing",
+      visible: true,
+    }),
+    { frameKey: "951:unfolded:trailing", type: "relayout" },
+  );
+  assert.deepEqual(
+    chooserOnFrameKeyChange({ frameKey: "951:unfolded:trailing", openKey: "951:unfolded:trailing", visible: true }),
+    { type: "idle" },
+  );
+  assert.deepEqual(
+    chooserOnFrameKeyChange({ frameKey: "951:unfolded:trailing", openKey: "466:folded:trailing", visible: false }),
+    { type: "idle" },
+  );
+  assert.deepEqual(overlaySupportedOrientations, [
+    "portrait",
+    "portrait-upside-down",
+    "landscape",
+    "landscape-left",
+    "landscape-right",
+  ]);
+
+  const panel = source("side-panel.tsx");
+  assert.match(panel, /chooserOnFrameKeyChange/);
+  assert.equal(panel.includes("onDismissRef.current()"), true);
+  const frameEffect = panel.slice(panel.lastIndexOf("chooserOnFrameKeyChange({"), panel.indexOf("const pan ="));
+  assert.equal(frameEffect.includes("onDismissRef.current()"), false);
+  assert.match(frameEffect, /type !== "relayout"/);
+});
+
+test("comment overflow menus match the post-header control size", () => {
+  const components = source("components.tsx");
+  const menu = components.slice(
+    components.indexOf("export function ContentOptionsMenu"),
+    components.indexOf("export function formatWorkoutType"),
+  );
+  assert.match(menu, /name="ellipsis"/);
+  assert.match(menu, /size=\{size\.icon\.md\}/);
+  assert.equal(menu.includes("size.iconButton"), false);
+  assert.equal(menu.includes("visual"), false);
+
+  const post = source("workout-detail.tsx");
+  assert.equal(post.includes('visual="comment"'), false);
+  assert.match(post, /accessibilityLabel=\{`Options for \$\{commentName\}'s comment`\}/);
+});
+
+test("dismissing a community post tears down the composer and lifts above the keyboard", () => {
+  const modal = source("workout-detail-modal.tsx");
+  assert.match(modal, /clearComposerFocus\(\)/);
+  assert.match(modal, /Keyboard\.dismiss/);
+  assert.match(modal, /overlayBottomInset/);
+  assert.match(modal, /bottomInset=\{bottomInset\}/);
+  assert.equal(modal.includes("KeyboardAvoidingView"), false);
+  assert.match(modal, /supportedOrientations=\{\[\.\.\.overlaySupportedOrientations\]\}/);
+
+  const detail = source("workout-detail.tsx");
+  assert.match(detail, /onPress=\{\(\) => Keyboard\.dismiss\(\)\}/);
+  assert.match(detail, /label: "Done"/);
+  assert.match(detail, /inputRef\.current\?\.blur\(\)/);
 });

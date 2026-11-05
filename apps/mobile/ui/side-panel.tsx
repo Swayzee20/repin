@@ -16,11 +16,13 @@ import { useLayoutMode } from "./layout";
 import {
   chooserMeasuredAnchor,
   chooserMotion,
+  chooserOnFrameKeyChange,
   chooserPanel,
   chooserPanelFrame,
   chooserShowsPlusAnchor,
   chooserSwipeActivation,
   chooserSwipeShouldDismiss,
+  overlaySupportedOrientations,
   type ChooserPanelEdge,
   type ChooserPanelFrame,
 } from "./overlay-state";
@@ -144,23 +146,26 @@ export function SidePanel({
   }, [panelOpacity, reduceMotion, scrimOpacity, translateX, visible]);
 
   useEffect(() => {
-    if (!visible) {
-      openKey.current = null;
+    const action = chooserOnFrameKeyChange({
+      frameKey,
+      openKey: openKey.current,
+      visible,
+    });
+    if (action.type === "idle") {
+      if (!visible) openKey.current = null;
       return;
     }
-    if (openKey.current === null) {
-      openKey.current = frameKey;
-      return;
-    }
-    if (openKey.current !== frameKey) {
-      openKey.current = null;
-      cancelAnimation(translateX);
-      cancelAnimation(panelOpacity);
-      cancelAnimation(scrimOpacity);
-      panelOpacity.value = 0;
-      scrimOpacity.value = 0;
-      onDismissRef.current();
-    }
+    openKey.current = action.frameKey;
+    if (action.type !== "relayout") return;
+    cancelAnimation(translateX);
+    cancelAnimation(panelOpacity);
+    cancelAnimation(scrimOpacity);
+    closing.current = false;
+    didFinishClose.current = false;
+    pendingAfterClose.current = undefined;
+    translateX.value = 0;
+    panelOpacity.value = 1;
+    scrimOpacity.value = 1;
   }, [frameKey, panelOpacity, scrimOpacity, translateX, visible]);
 
   const pan = useRef(PanResponder.create({
@@ -212,6 +217,7 @@ export function SidePanel({
       onRequestClose={() => close()}
       presentationStyle="overFullScreen"
       statusBarTranslucent
+      supportedOrientations={[...overlaySupportedOrientations]}
       transparent
       visible={visible}
     >
