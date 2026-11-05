@@ -10,7 +10,7 @@
     "dev": "expo start",
     "ios": "expo start --ios",
     "start": "expo start",
-    "test:layout": "tsx --test ui/layout-math.test.ts ui/brand-calendar-math.test.ts ui/reserved-regions-availability.test.ts ui/reserved-region-updates.test.ts ui/vertical-bar-edge-store.test.ts ui/tab-root-header.test.ts ui/primitive-state.test.ts ui/form-field-state.test.ts ui/overlay-state.test.ts ui/keyboard.test.ts ui/strength-form-state.test.ts ui/logging-form-state.test.ts ui/movement-picker-state.test.ts lib/community-selection.test.ts lib/comment-draft.test.ts lib/sentry-config.test.ts lib/terms-acceptance.test.ts ../api/lib/sentry-config.test.ts ../api/lib/admin-auth.test.ts ../api/lib/admin-review.test.ts ../../packages/validation/src/create-workout.test.ts ../../packages/db/test/summary.test.mjs ../../packages/db/test/starter-movements-seed.test.mjs",
+    "test:layout": "tsx --test ui/layout-math.test.ts ui/brand-calendar-math.test.ts ui/reserved-regions-availability.test.ts ui/reserved-region-updates.test.ts ui/vertical-bar-edge-store.test.ts ui/tab-root-header.test.ts ui/primitive-state.test.ts ui/form-field-state.test.ts ui/overlay-state.test.ts ui/keyboard.test.ts ui/composer-focus.test.ts ui/strength-form-state.test.ts ui/logging-form-state.test.ts ui/movement-picker-state.test.ts lib/community-selection.test.ts lib/comment-draft.test.ts lib/sentry-config.test.ts lib/terms-acceptance.test.ts ../api/lib/sentry-config.test.ts ../api/lib/admin-auth.test.ts ../api/lib/admin-review.test.ts ../../packages/validation/src/create-workout.test.ts ../../packages/db/test/summary.test.mjs ../../packages/db/test/starter-movements-seed.test.mjs",
     "typecheck": "tsc --noEmit",
     "web": "expo start --web"
   },

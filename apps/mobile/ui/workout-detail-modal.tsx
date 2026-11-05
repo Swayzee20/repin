@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Easing,
-  KeyboardAvoidingView,
+  Keyboard,
   Modal,
   Platform,
   Pressable,
@@ -14,7 +14,10 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import type { CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
 
+import { clearComposerFocus } from "./composer-focus";
+import { keyboardOverlapFromFrame, overlayBottomInset } from "./keyboard";
 import { CenteredCard } from "./layout";
+import { overlaySupportedOrientations } from "./overlay-state";
 import { RoundIconButton } from "./primitives";
 import { colors, elevation, radii, size, spacing, type } from "./theme";
 import { WorkoutDetailView, type WorkoutDetailFixture } from "./workout-detail";
@@ -46,6 +49,8 @@ export function WorkoutDetailModal({
 }) {
   const { height: viewportHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const keyboardHeight = useKeyboardOverlap();
+  const bottomInset = overlayBottomInset(keyboardHeight, insets.bottom);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const panelOpacity = useRef(new Animated.Value(0)).current;
   const panelScale = useRef(new Animated.Value(0.96)).current;
@@ -54,9 +59,9 @@ export function WorkoutDetailModal({
   const panelMaxHeight = useMemo(
     () => Math.min(
       viewportHeight * 0.8,
-      Math.max(0, viewportHeight - Math.max(insets.top, spacing.lg) - Math.max(insets.bottom, spacing.lg) - spacing.xl),
+      Math.max(0, viewportHeight - Math.max(insets.top, spacing.lg) - Math.max(bottomInset, spacing.lg) - spacing.xl),
     ),
-    [insets.bottom, insets.top, viewportHeight],
+    [bottomInset, insets.top, viewportHeight],
   );
 
   useEffect(() => {
@@ -90,6 +95,8 @@ export function WorkoutDetailModal({
   const close = () => {
     if (closing.current) return;
     closing.current = true;
+    clearComposerFocus();
+    Keyboard.dismiss();
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         duration: 160,
@@ -118,6 +125,7 @@ export function WorkoutDetailModal({
       onRequestClose={close}
       presentationStyle="overFullScreen"
       statusBarTranslucent
+      supportedOrientations={[...overlaySupportedOrientations]}
       transparent
       visible={visible}
     >
@@ -135,11 +143,8 @@ export function WorkoutDetailModal({
           style={styles.backdropPressable}
         />
         <View accessibilityViewIsModal pointerEvents="box-none" style={styles.modalFocus}>
-          <CenteredCard>
-            <KeyboardAvoidingView
-              behavior={Platform.OS === "ios" ? "padding" : "height"}
-              style={[styles.keyboard, { maxHeight: panelMaxHeight }]}
-            >
+          <CenteredCard bottomInset={bottomInset}>
+            <View style={[styles.keyboard, { maxHeight: panelMaxHeight }]}>
               <Animated.View
                 style={[
                   styles.panel,
@@ -178,12 +183,31 @@ export function WorkoutDetailModal({
                   ) : null}
                 </View>
               </Animated.View>
-            </KeyboardAvoidingView>
+            </View>
           </CenteredCard>
         </View>
       </View>
     </Modal>
   );
+}
+
+function useKeyboardOverlap() {
+  const { height: windowHeight } = useWindowDimensions();
+  const [overlap, setOverlap] = useState(0);
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    const showEvent = Platform.OS === "ios" ? "keyboardWillChangeFrame" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const show = Keyboard.addListener(showEvent, (event) => {
+      setOverlap(keyboardOverlapFromFrame(event.endCoordinates, windowHeight));
+    });
+    const hide = Keyboard.addListener(hideEvent, () => setOverlap(0));
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, [windowHeight]);
+  return overlap;
 }
 
 const styles = StyleSheet.create({

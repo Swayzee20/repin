@@ -14,9 +14,11 @@ import {
 import {
   fieldChainProps,
   keyboardDoneAccessoryId,
+  keyboardOverlapFromFrame,
   keyboardScrollProps,
   multilineAccessoryProps,
   numberPadAccessoryProps,
+  overlayBottomInset,
   showsKeyboardDoneBar,
   singleFieldReturn,
 } from "./keyboard";
@@ -161,6 +163,17 @@ test("the bar runs the focused field and ignores a stale blur", async () => {
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(keyboardAccessorySnapshot().label, "Done");
   resetKeyboardAccessoryForTests();
+});
+
+test("a centered overlay uses the keyboard height as its bottom inset", () => {
+  assert.equal(overlayBottomInset(336, 34), 336);
+  assert.equal(overlayBottomInset(0, 34), 34);
+  assert.equal(overlayBottomInset(Number.NaN, 34), 34);
+  assert.equal(overlayBottomInset(300, Number.NaN), 300);
+  assert.equal(keyboardOverlapFromFrame({ height: 336, screenY: 430 }, 800), 336);
+  assert.equal(keyboardOverlapFromFrame({ height: 336, screenY: 800 }, 800), 0);
+  assert.equal(keyboardOverlapFromFrame({ height: 0, screenY: 500 }, 800), 0);
+  assert.equal(keyboardOverlapFromFrame({ height: Number.NaN, screenY: 100 }, 800), 0);
 });
 
 test("an out-of-range index is treated as the last field", () => {
