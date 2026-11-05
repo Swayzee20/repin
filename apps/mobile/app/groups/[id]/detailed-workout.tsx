@@ -24,8 +24,12 @@ import {
   buildDetailedMovements,
   DetailedExerciseFields,
   hydrateDetailedExercises,
+  hydrateWorkoutLoadUnitFromMovements,
+  readStoredLoadUnit,
   type DetailedExerciseDraft,
+  type LoadUnit,
   validateDetailedExercises,
+  writeStoredLoadUnit,
 } from "../../../ui/detailed-workout-exercises";
 import {
   RunResultEditor,
@@ -80,6 +84,7 @@ export default function DetailedWorkoutScreen() {
   const runEditorY = useRef(0);
   const [name, setName] = useState(layoutPreview ? "Saturday tempo" : "");
   const [exercises, setExercises] = useState<DetailedExerciseDraft[]>([]);
+  const [loadUnit, setLoadUnit] = useState<LoadUnit>(() => readStoredLoadUnit());
   const [effort, setEffort] = useState<number | null>(layoutPreview ? 3 : null);
   const [occurredAt, setOccurredAt] = useState(() => new Date());
   const [webDate, setWebDate] = useState(() => getLocalDateParts(new Date()).date);
@@ -117,6 +122,7 @@ export default function DetailedWorkoutScreen() {
         setResults(hydrateQuickLogResults(workout.metrics));
         setIntervals(hydrateIntervalDrafts(workout.segments));
         setExercises(hydrateDetailedExercises(workout.movements));
+        setLoadUnit(hydrateWorkoutLoadUnitFromMovements(workout.movements, readStoredLoadUnit()));
         setName(workout.name ?? "");
         setEffort(workout.effort);
         if (!Number.isNaN(nextOccurredAt.getTime())) {
@@ -281,7 +287,7 @@ export default function DetailedWorkoutScreen() {
           photoPath: nextPhotoPath,
           occurredAt: occurredAt.toISOString(),
           metrics: structuredResults.metrics,
-          movements: isStrengthWorkout ? buildDetailedMovements(exercises) : [],
+          movements: isStrengthWorkout ? buildDetailedMovements(exercises, loadUnit) : [],
           segments,
           title: name.trim() || workoutTypeLabels[workoutType],
           notes: caption,
@@ -305,6 +311,7 @@ export default function DetailedWorkoutScreen() {
       }
       markWorkoutDataStale();
       clearWorkoutDetailCaches();
+      if (isStrengthWorkout) writeStoredLoadUnit(loadUnit);
       router.back();
     } catch (submitError) {
       if (uploadedPhotoPath && supabase) {
@@ -313,7 +320,7 @@ export default function DetailedWorkoutScreen() {
       setError(submitError instanceof Error ? submitError.message : "Workout could not be created.");
       setSubmitting(false);
     }
-  }, [caption, editSessionId, editing, effort, exercises, existingPhotoPath, groupId, intervals, isStrengthWorkout, name, occurredAt, photo, photoRemoved, results, router, runSubtype, workoutType]);
+  }, [caption, editSessionId, editing, effort, exercises, existingPhotoPath, groupId, intervals, isStrengthWorkout, loadUnit, name, occurredAt, photo, photoRemoved, results, router, runSubtype, workoutType]);
 
   const showsMetrics = workoutType === "walk" || workoutType === "hiit" || workoutType === "functional_fitness" || workoutType === "other";
   const disabledReason = !workoutType
@@ -375,11 +382,15 @@ export default function DetailedWorkoutScreen() {
           ) : null}
           {isStrengthWorkout ? (
             <FormCard>
-              <CardHeading>Exercises</CardHeading>
               <DetailedExerciseFields
                 exercises={exercises}
+                loadUnit={loadUnit}
                 onAfterLast={() => nameRef.current?.focus()}
                 onChange={setExercises}
+                onLoadUnitChange={(unit) => {
+                  setLoadUnit(unit);
+                  writeStoredLoadUnit(unit);
+                }}
               />
             </FormCard>
           ) : null}
