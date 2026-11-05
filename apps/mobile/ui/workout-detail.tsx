@@ -22,8 +22,13 @@ import { useCommentDraft } from "../lib/comment-draft";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
 import {
-  formatWorkoutMetric,
+  buildDetailMetricRows,
+  formatEmomIntervalLabel,
+  formatFfMovementLine,
+  formatFfMovementsHeading,
+  formatSetGroupLabel,
   formatWorkoutSet,
+  groupIdenticalConsecutiveSets,
 } from "../lib/workout-detail-format";
 import { formatWorkoutDate } from "../lib/workout-date";
 import {
@@ -728,11 +733,11 @@ export function WorkoutDetailContent({
   const typeLabel = formatWorkoutType(workout.workoutType);
   const title = workout.name?.trim() || workout.title?.trim() || typeLabel;
   const caption = workout.caption?.trim() || workout.notes?.trim();
-  const formattedMetrics = workout.metrics
-    .map(formatWorkoutMetric)
-    .filter((metric): metric is NonNullable<typeof metric> => metric !== null);
+  const formattedMetrics = buildDetailMetricRows(workout);
   const hasResults = formattedMetrics.length > 0 || workout.movements.length > 0 || workout.segments.length > 0;
   const groupedIntervals = groupConsecutiveIntervalSegments(workout.segments);
+  const formatDetail = workout.format ?? null;
+  const ffMovementHeading = formatDetail ? formatFfMovementsHeading(formatDetail) : null;
   const isCommunityModal = presentation === "community-modal";
   const isCommunitySheet = presentation !== "default";
   const [photoViewerVisible, setPhotoViewerVisible] = useState(false);
@@ -779,7 +784,39 @@ export function WorkoutDetailContent({
         </Card>
       ) : null}
 
-      {workout.movements.map((movement, movementIndex) => (
+      {ffMovementHeading && workout.movements.length ? (
+        <Card
+          style={[
+            styles.movementCard,
+            isCommunitySheet && styles.modalMovementCard,
+            isCommunitySheet && (formattedMetrics.length > 0 || workout.segments.length > 0) && styles.modalStackedResultCard,
+          ]}
+        >
+          <Text style={styles.movementName}>{ffMovementHeading}</Text>
+          {workout.movements.map((movement, index) => (
+            formatDetail?.type === "emom" ? (
+              <View
+                key={movement.id}
+                style={[styles.metricRow, index > 0 && styles.dividedRow, isCommunitySheet && index > 0 && styles.modalDividedRow]}
+              >
+                <Text style={[styles.metricLabel, isCommunitySheet && styles.modalResultLabel]}>
+                  {formatEmomIntervalLabel(index, formatDetail.intervalSeconds)}
+                </Text>
+                <Text style={[styles.metricValue, styles.movementLineValue]}>{formatFfMovementLine(movement)}</Text>
+              </View>
+            ) : (
+              <View
+                key={movement.id}
+                style={[styles.ffMovementRow, index > 0 && styles.dividedRow, isCommunitySheet && index > 0 && styles.modalDividedRow]}
+              >
+                <Text style={styles.ffMovementLine}>{formatFfMovementLine(movement)}</Text>
+              </View>
+            )
+          ))}
+        </Card>
+      ) : workout.movements.map((movement, movementIndex) => {
+        const groupedSets = groupIdenticalConsecutiveSets(movement.sets);
+        return (
         <Card
           key={movement.id}
           style={[
@@ -790,17 +827,21 @@ export function WorkoutDetailContent({
         >
           <Text style={styles.movementName}>{movement.movementName}</Text>
           {movement.notes ? <Text style={styles.movementNotes}>{movement.notes}</Text> : null}
-          {movement.sets.map((set, index) => (
-            <View key={set.id} style={[styles.setRow, index > 0 && styles.dividedRow, isCommunitySheet && index > 0 && styles.modalDividedRow]}>
-              <Text style={[styles.setLabel, isCommunitySheet && styles.modalResultLabel]}>Set {set.position + 1}</Text>
+          {groupedSets.map((group, index) => (
+            <View
+              key={`${group.set.id}:${group.startIndex}`}
+              style={[styles.metricRow, index > 0 && styles.dividedRow, isCommunitySheet && index > 0 && styles.modalDividedRow]}
+            >
+              <Text style={[styles.metricLabel, isCommunitySheet && styles.modalResultLabel]}>{formatSetGroupLabel(group)}</Text>
               <View style={styles.setResult}>
-                <Text style={styles.setValue}>{formatWorkoutSet(set)}</Text>
-                {set.notes ? <Text style={styles.setNotes}>{set.notes}</Text> : null}
+                <Text style={styles.metricValue}>{formatWorkoutSet(group.set)}</Text>
+                {group.set.notes ? <Text style={styles.setNotes}>{group.set.notes}</Text> : null}
               </View>
             </View>
           ))}
         </Card>
-      ))}
+        );
+      })}
     </View>
   ) : null;
 
@@ -1419,10 +1460,10 @@ const styles = StyleSheet.create({
   modalStackedResultCard: { marginTop: spacing.md },
   movementName: { color: colors.ink, ...type.heading },
   movementNotes: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  setRow: { alignItems: "flex-start", flexDirection: "row", minHeight: size.control, paddingVertical: spacing.md },
-  setLabel: { color: colors.muted, ...type.label, width: 58 },
-  setResult: { flex: 1 },
-  setValue: { color: colors.inkSoft, ...type.bodyMedium },
+  ffMovementRow: { justifyContent: "center", minHeight: size.primary, paddingVertical: spacing.sm },
+  ffMovementLine: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.section.fontSize, lineHeight: type.section.lineHeight },
+  movementLineValue: { flexShrink: 1, textAlign: "right" },
+  setResult: { flexShrink: 1, alignItems: "flex-end" },
   setNotes: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
   postSection: { marginTop: spacing.xxxl },
   caption: { color: colors.inkSoft, ...type.body, marginTop: spacing.md },

@@ -8,6 +8,7 @@ import {
   type WorkoutType,
 } from "@repin/types";
 
+import { formatDurationSeconds } from "../lib/workout-detail-format";
 import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
 
 export const clientLogVersion = 2 as const;
@@ -166,6 +167,20 @@ export function averageSpeedHelper(value: QuickLogResultsDraft) {
   const durationSeconds = getDurationSeconds(value.timeMinutes, value.timeSeconds);
   if (!Number.isFinite(distance) || durationSeconds == null) return null;
   return formatAverageSpeed(distance, value.distanceUnit, durationSeconds);
+}
+
+export function previewDistanceDurationSummary(value: QuickLogResultsDraft) {
+  const parts: string[] = [];
+  if (value.distance.trim()) {
+    const distance = Number(value.distance);
+    const formatted = Number.isFinite(distance)
+      ? new Intl.NumberFormat("en-US", { maximumFractionDigits: 3, useGrouping: false }).format(distance)
+      : value.distance.trim();
+    parts.push(`${formatted} ${value.distanceUnit}`);
+  }
+  const duration = getDurationSeconds(value.timeMinutes, value.timeSeconds);
+  if (duration != null) parts.push(formatDurationSeconds(duration));
+  return parts.length ? parts.join(" · ") : null;
 }
 
 export function hydrateQuickLogResults(metrics: WorkoutDetailMetric[]): QuickLogResultsDraft {

@@ -16,6 +16,7 @@ import {
   deleteSetAt,
   exercisesFromPickerSelections,
   formatExerciseSummary,
+  previewStrengthSummary,
   hydrateWorkoutLoadUnit,
   loadUnitStorageKey,
   maxSets,
@@ -250,6 +251,30 @@ test("Android shows the custom bar only while a strength field is focused", () =
   assert.equal(showsAndroidKeyboardAccessory("Bench · Set 2 · Weight", true), true);
   assert.equal(showsAndroidKeyboardAccessory("Bench · Set 2 · Weight", false), false);
   assert.equal(showsAndroidKeyboardAccessory(undefined, true), false);
+});
+
+test("multi-exercise strength previews use D-3 NxR, mixed set counts, and +N more", () => {
+  const squat = createDetailedExercise("sq", { movementName: "Back Squat" });
+  squat.sets = Array.from({ length: 5 }, (_, index) => createDetailedSet(`sq${index}`, { load: "225", reps: "5" }));
+  const bench = createDetailedExercise("bp", { movementName: "Bench Press" });
+  bench.sets = [
+    createDetailedSet("bp1", { load: "135", reps: "8" }),
+    createDetailedSet("bp2", { load: "160", reps: "5" }),
+    createDetailedSet("bp3", { load: "160", reps: "5" }),
+    createDetailedSet("bp4", { load: "160", reps: "5" }),
+  ];
+  assert.equal(previewStrengthSummary([squat, bench], "lb"), "Back Squat 5×5 · Bench Press 4 sets");
+
+  const deadlift = createDetailedExercise("dl", { movementName: "Deadlift" });
+  deadlift.sets = [createDetailedSet("dl1", { load: "405", reps: "1" })];
+  assert.equal(
+    previewStrengthSummary([squat, bench, deadlift], "lb"),
+    "Back Squat 5×5 · Bench Press 4 sets · +1 more",
+  );
+
+  const identicalBench = createDetailedExercise("ib", { movementName: "Bench Press" });
+  identicalBench.sets = Array.from({ length: 3 }, (_, index) => createDetailedSet(`ib${index}`, { load: "160", reps: "5" }));
+  assert.equal(previewStrengthSummary([identicalBench], "lb"), "Bench Press · 160 lb × 5 × 3");
 });
 
 test("selected and tonal strength labels stay on brandPressed", () => {

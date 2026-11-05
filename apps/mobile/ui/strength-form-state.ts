@@ -227,6 +227,82 @@ export function canRemoveSet(count: number) {
   return count > minSets;
 }
 
+export function previewStrengthSummary(exercises: DetailedExerciseDraft[], loadUnit: LoadUnit) {
+  const named = exercises
+    .map((exercise) => ({
+      movementName: exercise.movementName.trim(),
+      sets: exercise.sets.flatMap((set) => {
+        const hasReps = Boolean(set.reps.trim());
+        const hasLoad = Boolean(set.load.trim());
+        if (!hasReps && !hasLoad) return [];
+        return [{
+          load: hasLoad ? Number(set.load) : null,
+          loadUnit: hasLoad ? loadUnit : null,
+          reps: hasReps ? Number(set.reps) : null,
+        }];
+      }),
+    }))
+    .filter((movement) => movement.movementName);
+  if (!named.length) return null;
+
+  if (named.length === 1) {
+    const movement = named[0];
+    if (!movement) return null;
+    const identical = identicalStrengthSet(movement.sets);
+    if (identical) {
+      return `${movement.movementName} · ${formatStrengthNumber(identical.load)} ${identical.loadUnit} × ${identical.reps} × ${movement.sets.length}`;
+    }
+    if (movement.sets.length > 0) {
+      return `${movement.movementName} · ${movement.sets.length} ${movement.sets.length === 1 ? "set" : "sets"}`;
+    }
+    return movement.movementName;
+  }
+
+  const shown = named.slice(0, 2).map((movement) => formatMultiExercisePart(movement));
+  const remaining = named.length - shown.length;
+  return [...shown, remaining > 0 ? `+${remaining} more` : null]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function formatMultiExercisePart(movement: {
+  movementName: string;
+  sets: Array<{ load: number | null; loadUnit: string | null; reps: number | null }>;
+}) {
+  const uniformReps = uniformStrengthReps(movement.sets);
+  if (uniformReps != null) {
+    return `${movement.movementName} ${movement.sets.length}×${uniformReps}`;
+  }
+  if (movement.sets.length > 0) {
+    return `${movement.movementName} ${movement.sets.length} ${movement.sets.length === 1 ? "set" : "sets"}`;
+  }
+  return movement.movementName;
+}
+
+function uniformStrengthReps(sets: Array<{ reps: number | null }>) {
+  const first = sets[0];
+  if (!sets.length || first?.reps == null) return null;
+  return sets.every((set) => set.reps === first.reps) ? first.reps : null;
+}
+
+function identicalStrengthSet(sets: Array<{ load: number | null; loadUnit: string | null; reps: number | null }>) {
+  if (sets.length < 2) return null;
+  const first = sets[0];
+  if (!first || first.reps == null || first.load == null || !first.loadUnit) return null;
+  return sets.every(
+    (set) => set.reps === first.reps && set.load === first.load && set.loadUnit === first.loadUnit,
+  )
+    ? { load: first.load, loadUnit: first.loadUnit, reps: first.reps }
+    : null;
+}
+
+function formatStrengthNumber(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    maximumFractionDigits: 3,
+    useGrouping: false,
+  }).format(value);
+}
+
 export function formatExerciseSummary(sets: DetailedSetDraft[], loadUnit: LoadUnit): string {
   const filled = sets.filter((set) => set.reps.trim() || set.load.trim());
   if (!filled.length) return sets.length === 1 ? "1 set" : `${sets.length} sets`;

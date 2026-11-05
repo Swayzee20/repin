@@ -25,6 +25,7 @@ import {
   DetailedExerciseFields,
   hydrateDetailedExercises,
   hydrateWorkoutLoadUnitFromMovements,
+  previewStrengthSummary,
   readStoredLoadUnit,
   type DetailedExerciseDraft,
   type LoadUnit,
@@ -52,7 +53,7 @@ import {
   RunResultEditor,
   RunSubtypeSelector,
 } from "../../../ui/detailed-run-fields";
-import { attachLogVersion, usesMetricFields } from "../../../ui/logging-form-state";
+import { attachLogVersion, previewDistanceDurationSummary, usesMetricFields } from "../../../ui/logging-form-state";
 import {
   buildQuickLogResults,
   emptyQuickLogResults,
@@ -537,7 +538,16 @@ export default function DetailedWorkoutScreen() {
             name,
             occurredAt,
             photoUri,
-            resultSummary: previewResultSummary(workoutType, runSubtype, results, intervals, ffFormat, ffExercises),
+            resultSummary: previewResultSummary(
+              workoutType,
+              runSubtype,
+              results,
+              intervals,
+              ffFormat,
+              ffExercises,
+              exercises,
+              loadUnit,
+            ),
             workoutType,
             runSubtype,
           })}
@@ -567,6 +577,8 @@ function previewResultSummary(
   intervals: IntervalDraft[],
   ffFormat: FunctionalFormatDraft,
   ffExercises: FfExerciseDraft[],
+  exercises: DetailedExerciseDraft[],
+  loadUnit: LoadUnit,
 ) {
   if (workoutType === "functional_fitness" && ffFormat.type) {
     return previewFunctionalFormatSummary(ffFormat, ffExercises);
@@ -577,10 +589,16 @@ function previewResultSummary(
       .filter((line) => line && line !== "No results added");
     return lines.join(" · ") || null;
   }
+  if (workoutType === "strength_training" || workoutType === "powerlifting") {
+    return previewStrengthSummary(exercises, loadUnit);
+  }
+  if (workoutType === "walk" || workoutType === "cycling") {
+    return previewDistanceDurationSummary(results);
+  }
   const parts: string[] = [];
-  if ((workoutType === "walk" || workoutType === "cycling") && results.distance.trim()) parts.push(`${results.distance} ${results.distanceUnit}`);
   if (results.timeMinutes.trim() || results.timeSeconds.trim()) {
-    parts.push([results.timeMinutes.trim() && `${results.timeMinutes.trim()} min`, results.timeSeconds.trim() && `${results.timeSeconds.trim()} sec`].filter(Boolean).join(" "));
+    const duration = previewDistanceDurationSummary({ ...results, distance: "" });
+    if (duration) parts.push(duration);
   }
   if (workoutType === "functional_fitness" && results.functionalResultType === "rounds" && results.rounds.trim()) parts.push(`${results.rounds} rounds`);
   if (workoutType === "functional_fitness" && results.functionalResultType === "score" && results.score.trim()) parts.push(results.score.trim());
