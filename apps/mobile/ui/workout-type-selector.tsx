@@ -1,18 +1,19 @@
-import { workoutTypeLabels, workoutTypes, type WorkoutType } from "@repin/types";
+import { workoutTypeLabels, type WorkoutType } from "@repin/types";
 import { useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 
 import { ChoiceTile, Picker } from "./form-fields";
 import { Icon } from "./icons";
+import {
+  workoutTypeGridAlign,
+  workoutTypeSelectorOptions,
+  workoutTypeSheetAccessibilityLabel,
+  workoutTypeSheetMeta,
+} from "./logging-form-state";
 import { BottomSheet, SheetRow } from "./sheet";
-import { colors, fonts, spacing, type } from "./theme";
+import { colors, fonts, radii, spacing, type } from "./theme";
 
-export { workoutTypeLabels };
-
-export const workoutTypeOptions: { label: string; value: WorkoutType }[] = workoutTypes.map((value) => ({
-  label: workoutTypeLabels[value],
-  value,
-}));
+export { workoutTypeLabels, workoutTypeSelectorOptions as workoutTypeOptions };
 
 export function WorkoutTypeGrid({
   onChange,
@@ -23,8 +24,9 @@ export function WorkoutTypeGrid({
 }) {
   return (
     <View accessibilityLabel="Workout type" accessibilityRole="radiogroup" style={styles.grid}>
-      {workoutTypeOptions.map((option) => (
+      {workoutTypeSelectorOptions.map((option) => (
         <ChoiceTile
+          align={workoutTypeGridAlign}
           key={option.value}
           label={option.label}
           onPress={() => onChange(option.value)}
@@ -59,11 +61,12 @@ export function WorkoutTypeSelector({
       <BottomSheet closeLabel="Close workout type options" onDismiss={dismiss} title="Select workout type" visible={visible}>
         {(close) => (
           <View style={styles.options}>
-            {workoutTypeOptions.map((option) => {
+            {workoutTypeSelectorOptions.map((option) => {
               const selected = value === option.value;
+              const meta = workoutTypeSheetMeta(option.value);
               return (
                 <SheetRow
-                  accessibilityLabel={option.label}
+                  accessibilityLabel={workoutTypeSheetAccessibilityLabel(option.value)}
                   key={option.value}
                   onPress={() => {
                     onChange(option.value);
@@ -71,7 +74,15 @@ export function WorkoutTypeSelector({
                   }}
                   selected={selected}
                 >
-                  <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{option.label}</Text>
+                  <View style={styles.optionCopy}>
+                    <Text style={[styles.optionText, selected && styles.optionTextSelected]}>{option.label}</Text>
+                    {meta.subtitle ? <Text style={styles.optionSubtitle}>{meta.subtitle}</Text> : null}
+                  </View>
+                  {meta.badge ? (
+                    <View style={styles.badge}>
+                      <Text style={styles.badgeText}>{meta.badge}</Text>
+                    </View>
+                  ) : null}
                   {selected ? <Icon color={colors.brand} name="checkmark" /> : null}
                 </SheetRow>
               );
@@ -86,8 +97,24 @@ export function WorkoutTypeSelector({
 const styles = StyleSheet.create({
   selector: { marginTop: spacing.md },
   options: { marginTop: spacing.sm },
-  optionText: { ...type.bodyMedium, color: colors.inkSoft, flex: 1 },
+  optionCopy: { flex: 1, minWidth: 0 },
+  optionText: { ...type.bodyMedium, color: colors.inkSoft },
   optionTextSelected: { color: colors.ink, fontFamily: fonts.semibold },
+  optionSubtitle: { ...type.bodySmall, color: colors.muted, marginTop: spacing.xs },
+  badge: {
+    backgroundColor: colors.brandTint,
+    borderColor: colors.border,
+    borderRadius: radii.sm,
+    borderWidth: 1,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+  },
+  badgeText: {
+    color: colors.brandPressed,
+    fontFamily: fonts.bold,
+    fontSize: type.label.fontSize,
+    lineHeight: type.label.lineHeight,
+  },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.md },
   gridOption: { flexBasis: "46%", flexGrow: 1 },
 });

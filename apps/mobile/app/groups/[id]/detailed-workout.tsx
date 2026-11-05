@@ -35,6 +35,7 @@ import {
   RunResultEditor,
   RunSubtypeSelector,
 } from "../../../ui/detailed-run-fields";
+import { attachLogVersion, usesMetricFields } from "../../../ui/logging-form-state";
 import {
   buildQuickLogResults,
   emptyQuickLogResults,
@@ -277,7 +278,7 @@ export default function DetailedWorkoutScreen() {
           Authorization: `Bearer ${data.session.access_token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
+        body: JSON.stringify(attachLogVersion({
           workoutType,
           workoutSubtype: workoutType === "run" ? runSubtype : null,
           name,
@@ -292,7 +293,7 @@ export default function DetailedWorkoutScreen() {
           title: name.trim() || workoutTypeLabels[workoutType],
           notes: caption,
           completedAt: occurredAt.toISOString(),
-        }),
+        })),
         signal: AbortSignal.timeout(10_000),
       });
       const body = (await response.json()) as {
@@ -322,7 +323,7 @@ export default function DetailedWorkoutScreen() {
     }
   }, [caption, editSessionId, editing, effort, exercises, existingPhotoPath, groupId, intervals, isStrengthWorkout, loadUnit, name, occurredAt, photo, photoRemoved, results, router, runSubtype, workoutType]);
 
-  const showsMetrics = workoutType === "walk" || workoutType === "hiit" || workoutType === "functional_fitness" || workoutType === "other";
+  const showsMetrics = usesMetricFields(workoutType);
   const disabledReason = !workoutType
     ? "Choose a workout type."
     : !editing && workoutType === "run" && !runSubtype
@@ -504,7 +505,7 @@ function previewResultSummary(
     return lines.join(" · ") || null;
   }
   const parts: string[] = [];
-  if (workoutType === "walk" && results.distance.trim()) parts.push(`${results.distance} ${results.distanceUnit}`);
+  if ((workoutType === "walk" || workoutType === "cycling") && results.distance.trim()) parts.push(`${results.distance} ${results.distanceUnit}`);
   if (results.timeMinutes.trim() || results.timeSeconds.trim()) {
     parts.push([results.timeMinutes.trim() && `${results.timeMinutes.trim()} min`, results.timeSeconds.trim() && `${results.timeSeconds.trim()} sec`].filter(Boolean).join(" "));
   }

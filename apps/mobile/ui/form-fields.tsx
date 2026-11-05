@@ -414,6 +414,7 @@ export function Picker({
 
 export function ChoiceTile({
   accessibilityLabel,
+  align = "left",
   disabled = false,
   label,
   onPress,
@@ -422,6 +423,7 @@ export function ChoiceTile({
   style,
 }: {
   accessibilityLabel?: string;
+  align?: "center" | "left";
   disabled?: boolean;
   label: string;
   onPress: () => void;
@@ -430,6 +432,7 @@ export function ChoiceTile({
   style?: StyleProp<ViewStyle>;
 }) {
   const chrome = choiceTileChrome({ disabled, selected });
+  const centered = align === "center";
   return (
     <Pressable
       accessibilityLabel={accessibilityLabel}
@@ -439,6 +442,7 @@ export function ChoiceTile({
       onPress={onPress}
       style={(state) => [
         styles.choice,
+        centered && styles.choiceCentered,
         {
           backgroundColor: !disabled && !selected && state.pressed ? colors.selection : chrome.backgroundColor,
           borderColor: chrome.borderColor,
@@ -451,8 +455,12 @@ export function ChoiceTile({
         style,
       ]}
     >
-      <Text numberOfLines={1} style={[choiceText, styles.choiceLabel, { color: chrome.color }]}>{label}</Text>
-      {chrome.showCheck ? <Icon color={colors.brand} name="checkmark" size={size.icon.sm} /> : null}
+      <Text numberOfLines={1} style={[choiceText, styles.choiceLabel, centered && styles.choiceLabelCentered, { color: chrome.color }]}>{label}</Text>
+      {chrome.showCheck ? (
+        <View style={centered ? styles.choiceCheckCentered : undefined}>
+          <Icon color={colors.brand} name="checkmark" size={size.icon.sm} />
+        </View>
+      ) : null}
     </Pressable>
   );
 }
@@ -695,6 +703,16 @@ const styles = StyleSheet.create({
   choiceLabel: {
     flex: 1,
     textAlign: "left",
+  },
+  choiceCentered: {
+    justifyContent: "center",
+  },
+  choiceLabelCentered: {
+    textAlign: "center",
+  },
+  choiceCheckCentered: {
+    position: "absolute",
+    right: 0,
   },
   flames: {
     flexDirection: "row",
