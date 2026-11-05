@@ -18,7 +18,8 @@ import {
   type IntervalDraft,
   type IntervalValidationIssue,
 } from "../lib/detailed-run-results";
-import { type QuickLogResultsDraft, WorkoutTimeInput } from "./quick-log-results";
+import { runWalkDistanceUnitOptions, type QuickLogResultsDraft } from "./logging-form-state";
+import { WorkoutTimeInput } from "./quick-log-results";
 import { formatDurationSeconds } from "../lib/workout-detail-format";
 import { getDurationSeconds } from "../lib/workout-time";
 import { colors, elevation, fonts, radii, size, spacing, type } from "./theme";
@@ -360,14 +361,14 @@ function InlineError({ field, index, issue }: {
     : null;
 }
 
-function DistanceUnitToggle({ onChange, value }: { onChange: (value: "mi" | "km") => void; value: "mi" | "km" }) {
+function DistanceUnitToggle({ onChange, value }: { onChange: (value: WorkoutDistanceUnit) => void; value: WorkoutDistanceUnit }) {
   return (
     <SegmentedControl
       accessibilityLabel="Distance unit"
       onChange={(unit) => {
         if (unit) onChange(unit);
       }}
-      options={[{ label: "mi", value: "mi" }, { label: "km", value: "km" }]}
+      options={[...runWalkDistanceUnitOptions]}
       size="sm"
       style={styles.unitSegment}
       value={value}

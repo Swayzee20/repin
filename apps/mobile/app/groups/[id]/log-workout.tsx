@@ -12,6 +12,7 @@ import { FieldLabel, FlameRating, PhotoTile, TextArea, photoUploadFieldError } f
 import { useLayoutMode } from "../../../ui/layout";
 import { ScrollAnchor, useScrollAnchor, writeStoredScrollAnchor } from "../../../ui/scroll-anchor";
 import { spacing } from "../../../ui/theme";
+import { attachLogVersion } from "../../../ui/logging-form-state";
 import { WorkoutTypeGrid, workoutTypeLabels } from "../../../ui/workout-type-selector";
 import {
   CardHeading,
@@ -165,7 +166,7 @@ export default function LogWorkoutScreen() {
       const response = await fetch(`${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts`, {
         method: "POST",
         headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
+        body: JSON.stringify(attachLogVersion({
           workoutType: form.workoutType,
           durationMinutes: null,
           effort: form.effort,
@@ -176,7 +177,7 @@ export default function LogWorkoutScreen() {
           movements: [],
           notes: form.caption,
           completedAt: form.occurredAt,
-        }),
+        })),
         signal: AbortSignal.timeout(10_000),
       });
       const body = (await response.json()) as { error?: string; issues?: { message: string; path?: PropertyKey[] }[] };

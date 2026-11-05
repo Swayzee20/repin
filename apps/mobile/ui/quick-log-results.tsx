@@ -1,53 +1,39 @@
-import type { QuickLogMetricInput, WorkoutDetailMetric, WorkoutType } from "@repin/types";
+import type { WorkoutDistanceUnit, WorkoutType } from "@repin/types";
 import { useRef, type ComponentRef, type Ref } from "react";
-import { StyleSheet, View, type StyleProp, type TextInput, type ViewStyle } from "react-native";
+import { StyleSheet, Text, View, type StyleProp, type TextInput, type ViewStyle } from "react-native";
 
 import { TextField } from "./components";
 import { FieldLabel, NumberField, secondsRangeError } from "./form-fields";
+import { formSpacing, helperText } from "./form-field-state";
 import { fieldChainProps } from "./keyboard";
+import {
+  averageSpeedHelper,
+  buildQuickLogResults,
+  distancePlaceholder,
+  distanceUnitOptions,
+  emptyQuickLogResults,
+  hiitExerciseHelper,
+  hoursRangeError,
+  hydrateQuickLogResults,
+  isDistanceWorkout,
+  joinDurationMinutes,
+  splitDurationMinutes,
+  usesHoursTime,
+  validateQuickLogResults,
+  type QuickLogResultsDraft,
+} from "./logging-form-state";
 import { SegmentedControl } from "./primitives";
-import { getDurationSeconds, validateTimeParts } from "../lib/workout-time";
 import { size, spacing } from "./theme";
 
-type DistanceUnit = "mi" | "km";
-type FunctionalResultType = "time" | "rounds" | "score";
-
-export interface QuickLogResultsDraft {
-  distance: string;
-  distanceUnit: DistanceUnit;
-  timeMinutes: string;
-  timeSeconds: string;
-  functionalResultType: FunctionalResultType | null;
-  rounds: string;
-  score: string;
-}
-
-export const emptyQuickLogResults: QuickLogResultsDraft = {
-  distance: "",
-  distanceUnit: "mi",
-  timeMinutes: "",
-  timeSeconds: "",
-  functionalResultType: null,
-  rounds: "",
-  score: "",
+export {
+  buildQuickLogResults,
+  emptyQuickLogResults,
+  hydrateQuickLogResults,
+  validateQuickLogResults,
 };
+export type { QuickLogResultsDraft };
 
-export function hydrateQuickLogResults(metrics: WorkoutDetailMetric[]): QuickLogResultsDraft {
-  const distance = metrics.find((metric) => metric.metricType === "distance");
-  const duration = metrics.find((metric) => metric.metricType === "duration");
-  const rounds = metrics.find((metric) => metric.metricType === "rounds");
-  const score = metrics.find((metric) => metric.metricType === "score");
-  const durationSeconds = duration?.numericValue == null ? null : Math.round(duration.numericValue);
-  return {
-    distance: distance?.numericValue == null ? "" : String(distance.numericValue),
-    distanceUnit: distance?.unit === "km" ? "km" : "mi",
-    timeMinutes: durationSeconds == null ? "" : String(Math.floor(durationSeconds / 60)),
-    timeSeconds: durationSeconds == null ? "" : String(durationSeconds % 60),
-    functionalResultType: duration ? "time" : rounds ? "rounds" : score ? "score" : null,
-    rounds: rounds?.numericValue == null ? "" : String(rounds.numericValue),
-    score: score?.textValue ?? "",
-  };
-}
+type FunctionalResultType = "time" | "rounds" | "score";
 
 export function WorkoutMetricFields({
   onChange,
@@ -58,7 +44,8 @@ export function WorkoutMetricFields({
   value: QuickLogResultsDraft;
   workoutType: WorkoutType | null;
 }) {
-  const isDistance = workoutType === "run" || workoutType === "walk";
+  const isDistance = isDistanceWorkout(workoutType);
+  const showHours = usesHoursTime(workoutType);
   const showTime = isDistance
     || workoutType === "hiit"
     || workoutType === "other"
@@ -70,6 +57,8 @@ export function WorkoutMetricFields({
     index: 0,
     onAdvance: () => timeRef.current?.focus(),
   });
+  const unitOptions = distanceUnitOptions(workoutType, value.distanceUnit);
+  const averageSpeed = workoutType === "cycling" ? averageSpeedHelper(value) : null;
 
   return (
     <>
@@ -77,13 +66,22 @@ export function WorkoutMetricFields({
         <View style={styles.section}>
           <FieldLabel label="Distance" optional />
           <View style={styles.metricRow}>
-            <NumberField accessibilityLabel="Distance" containerStyle={styles.metricField} kind="decimal" onChangeText={(distance) => update({ distance })} placeholder="3.2" suffix={value.distanceUnit} value={value.distance} {...advanceToTime} />
-            <SegmentedControl<DistanceUnit>
+            <NumberField
+              accessibilityLabel="Distance"
+              containerStyle={styles.metricField}
+              kind="decimal"
+              onChangeText={(distance) => update({ distance })}
+              placeholder={distancePlaceholder(workoutType, value.distanceUnit)}
+              suffix={value.distanceUnit}
+              value={value.distance}
+              {...advanceToTime}
+            />
+            <SegmentedControl<WorkoutDistanceUnit>
               accessibilityLabel="Distance unit"
               onChange={(distanceUnit) => {
                 if (distanceUnit) update({ distanceUnit });
               }}
-              options={[{ label: "Mi", value: "mi" }, { label: "Km", value: "km" }]}
+              options={unitOptions}
               size="sm"
               style={styles.inlineSegment}
               value={value.distanceUnit}
@@ -122,7 +120,10 @@ export function WorkoutMetricFields({
             onMinutesChange={(timeMinutes) => update({ timeMinutes })}
             onSecondsChange={(timeSeconds) => update({ timeSeconds })}
             seconds={value.timeSeconds}
+            showHours={showHours}
           />
+          {averageSpeed ? <Text style={styles.helper}>{averageSpeed}</Text> : null}
+          {workoutType === "hiit" ? <Text style={styles.helper}>{hiitExerciseHelper}</Text> : null}
         </View>
       ) : null}
     </>
@@ -137,6 +138,7 @@ export function WorkoutTimeInput({
   onSecondsChange,
   onSubmit,
   seconds,
+  showHours = false,
 }: {
   containerStyle?: StyleProp<ViewStyle>;
   inputRef?: Ref<ComponentRef<typeof TextInput>>;
@@ -146,22 +148,61 @@ export function WorkoutTimeInput({
   /** Return on seconds. Omit to dismiss the keyboard. */
   onSubmit?: () => void;
   seconds: string;
+  showHours?: boolean;
 }) {
+  const minutesRef = useRef<ComponentRef<typeof TextInput>>(null);
   const secondsRef = useRef<ComponentRef<typeof TextInput>>(null);
+  const parts = showHours ? splitDurationMinutes(minutes) : { hours: "", minutes };
+  const fieldCount = showHours ? 3 : 2;
+  const hoursError = showHours ? hoursRangeError(parts.hours) : null;
+  const minutesError = showHours ? secondsRangeError(parts.minutes) : null;
+
   return (
     <View style={[styles.timeRow, containerStyle]}>
+      {showHours ? (
+        <NumberField
+          accessibilityLabel="Hours"
+          containerStyle={styles.timeField}
+          error={hoursError}
+          kind="number"
+          onChangeText={(hours) => {
+            if (hours && !/^\d*$/.test(hours)) return;
+            onMinutesChange(joinDurationMinutes(hours, parts.minutes));
+          }}
+          placeholder="1"
+          ref={inputRef}
+          suffix="h"
+          value={parts.hours}
+          {...fieldChainProps({
+            count: fieldCount,
+            index: 0,
+            onAdvance: () => minutesRef.current?.focus(),
+          })}
+        />
+      ) : null}
       <NumberField
         accessibilityLabel="Minutes"
         containerStyle={styles.timeField}
+        error={minutesError}
         kind="number"
-        onChangeText={onMinutesChange}
+        onChangeText={(nextMinutes) => {
+          if (showHours) {
+            if (nextMinutes && secondsRangeError(nextMinutes)) {
+              if (!/^\d*$/.test(nextMinutes)) return;
+              if (Number(nextMinutes) > 59) return;
+            }
+            onMinutesChange(joinDurationMinutes(parts.hours, nextMinutes));
+            return;
+          }
+          onMinutesChange(nextMinutes);
+        }}
         placeholder="28"
-        ref={inputRef}
+        ref={showHours ? minutesRef : inputRef}
         suffix="min"
-        value={minutes}
+        value={parts.minutes}
         {...fieldChainProps({
-          count: 2,
-          index: 0,
+          count: fieldCount,
+          index: showHours ? 1 : 0,
           onAdvance: () => secondsRef.current?.focus(),
         })}
       />
@@ -176,60 +217,14 @@ export function WorkoutTimeInput({
         suffix="sec"
         value={seconds}
         {...fieldChainProps({
-          count: onSubmit ? 2 : 1,
-          index: 0,
+          count: onSubmit || showHours ? fieldCount : 1,
+          index: showHours ? 2 : 0,
           onAdvance: () => onSubmit?.(),
           onFinish: onSubmit,
         })}
       />
     </View>
   );
-}
-
-export function validateQuickLogResults(value: QuickLogResultsDraft, workoutType: WorkoutType) {
-  if ((workoutType === "run" || workoutType === "walk") && value.distance.trim()) {
-    const distance = Number(value.distance);
-    if (!Number.isFinite(distance) || distance <= 0) return "Distance must be greater than zero.";
-  }
-  const usesTime = workoutType === "run"
-    || workoutType === "walk"
-    || workoutType === "hiit"
-    || workoutType === "other"
-    || (workoutType === "functional_fitness" && value.functionalResultType === "time");
-  if (usesTime) {
-    const timeValidationError = validateTimeParts(value.timeMinutes, value.timeSeconds);
-    if (timeValidationError) return timeValidationError;
-  }
-  if (workoutType === "functional_fitness" && value.functionalResultType === "rounds" && value.rounds.trim()) {
-    const rounds = Number(value.rounds);
-    if (!Number.isInteger(rounds) || rounds <= 0) return "Rounds must be a positive whole number.";
-  }
-  if (workoutType === "functional_fitness" && value.functionalResultType === "score" && !value.score.trim()) {
-    return "Enter a score or clear the Score result type.";
-  }
-  return null;
-}
-
-export function buildQuickLogResults(value: QuickLogResultsDraft, workoutType: WorkoutType) {
-  const metrics: QuickLogMetricInput[] = [];
-  if ((workoutType === "run" || workoutType === "walk") && value.distance.trim()) {
-    metrics.push({ metricType: "distance", numericValue: Number(value.distance), unit: value.distanceUnit });
-  }
-  const usesTime = workoutType === "run"
-    || workoutType === "walk"
-    || workoutType === "hiit"
-    || workoutType === "other"
-    || (workoutType === "functional_fitness" && value.functionalResultType === "time");
-  const durationSeconds = usesTime ? getDurationSeconds(value.timeMinutes, value.timeSeconds) : null;
-  if (durationSeconds != null) metrics.push({ metricType: "duration", numericValue: durationSeconds, unit: "seconds" });
-  if (workoutType === "functional_fitness" && value.functionalResultType === "rounds" && value.rounds.trim()) {
-    metrics.push({ metricType: "rounds", numericValue: Number(value.rounds), unit: "rounds" });
-  }
-  if (workoutType === "functional_fitness" && value.functionalResultType === "score" && value.score.trim()) {
-    metrics.push({ metricType: "score", textValue: value.score.trim() });
-  }
-
-  return { metrics, durationSeconds };
 }
 
 const styles = StyleSheet.create({
@@ -241,4 +236,5 @@ const styles = StyleSheet.create({
   timeField: { flexGrow: 1, flexShrink: 1, minWidth: size.control },
   segment: { marginTop: spacing.sm },
   inlineSegment: { alignSelf: "center" },
+  helper: { ...helperText, marginTop: formSpacing.helperGap },
 });
