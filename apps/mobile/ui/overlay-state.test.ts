@@ -15,6 +15,9 @@ import {
   chooserSwipeShouldDismiss,
   chooserSwipeVelocity,
   dateActionHeight,
+  pickerCheckSize,
+  pickerRowHeight,
+  pickerSheetTopGap,
   menuItemColor,
   menuItemMinHeight,
   sheetDismissDistance,
@@ -32,6 +35,9 @@ test("sheet rows stay at least 48 and the chooser keeps 72", () => {
   assert.equal(chooserRowMinHeight, 72);
   assert.ok(chooserRowMinHeight >= sheetRowMinHeight);
   assert.equal(sheetDismissDistance, spacing.huge + spacing.xxxl);
+  assert.equal(pickerSheetTopGap, 54);
+  assert.equal(pickerRowHeight, 56);
+  assert.equal(pickerCheckSize, 28);
 });
 
 test("menu rows match list rows and danger text uses the danger colour", () => {

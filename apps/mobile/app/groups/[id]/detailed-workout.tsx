@@ -23,6 +23,7 @@ import { FieldLabel, FlameRating, PhotoTile, TextArea, TextField, photoUploadFie
 import {
   buildDetailedMovements,
   DetailedExerciseFields,
+  FunctionalFitnessExerciseFields,
   hydrateDetailedExercises,
   hydrateWorkoutLoadUnitFromMovements,
   readStoredLoadUnit,
@@ -35,7 +36,7 @@ import {
   RunResultEditor,
   RunSubtypeSelector,
 } from "../../../ui/detailed-run-fields";
-import { attachLogVersion, usesMetricFields } from "../../../ui/logging-form-state";
+import { attachLogVersion, usesMetricFields, usesMovementPicker } from "../../../ui/logging-form-state";
 import {
   buildQuickLogResults,
   emptyQuickLogResults,
@@ -392,6 +393,14 @@ export default function DetailedWorkoutScreen() {
                   setLoadUnit(unit);
                   writeStoredLoadUnit(unit);
                 }}
+              />
+            </FormCard>
+          ) : null}
+          {usesMovementPicker(workoutType) && !isStrengthWorkout ? (
+            <FormCard>
+              <FunctionalFitnessExerciseFields
+                exercises={exercises}
+                onChange={setExercises}
               />
             </FormCard>
           ) : null}
