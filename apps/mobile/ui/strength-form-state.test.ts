@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
@@ -6,23 +7,34 @@ import { test } from "node:test";
 import { colors, fonts, size, spacing, type } from "./theme";
 import {
   appendCopiedSet,
+  applyLastSessionSets,
   buildDetailedMovements,
   canAddSet,
   canRemoveSet,
   clampSetRowTranslate,
+  convertLoad,
   createDetailedExercise,
   createDetailedSet,
   deletedSetMessage,
   deleteSetAt,
   exercisesFromPickerSelections,
   formatExerciseSummary,
-  previewStrengthSummary,
+  formatLastTimeLine,
   hydrateWorkoutLoadUnit,
+  lastSessionFromResponse,
+  lastSessionPath,
+  lastSessionQuery,
+  lastTimeAppliedMessage,
+  lastTimeUseBorder,
+  lastTimeUseHeight,
+  lastTimeUseWidth,
+  lbPerKg,
   loadUnitStorageKey,
   maxSets,
   minSets,
   nextStrengthField,
   parseStoredLoadUnit,
+  previewStrengthSummary,
   prevStrengthField,
   readStoredLoadUnit,
   removeLastSet,
@@ -281,6 +293,86 @@ test("selected and tonal strength labels stay on brandPressed", () => {
   assert.equal(colors.brandPressed, "#9E3500");
   assert.equal(fonts.extrabold, "Nunito_800ExtraBold");
   assert.equal(type.label.fontSize, 13);
+  assert.equal(lastTimeUseBorder, colors.boardBorder);
+  assert.equal(lastTimeUseWidth, 64);
+  assert.equal(lastTimeUseHeight, size.hit);
+  assert.equal(lastTimeAppliedMessage, "Last session applied");
+});
+
+test("Last time formats last session sets in the workout unit and Use replaces typed rows", () => {
+  const lastSets = [
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+    { calories: null, distance: null, distanceUnit: null, durationSeconds: null, load: 155, loadUnit: "lb", reps: 5 },
+  ];
+  assert.equal(formatLastTimeLine(lastSets, "lb"), "Last time: 3×5 @ 155 lb");
+  assert.equal(formatLastTimeLine(lastSets, "kg"), "Last time: 3×5 @ 70.3 kg");
+  assert.equal(Math.round(convertLoad(155, "lb", "kg") * 10) / 10, 70.3);
+  assert.equal(Math.round(convertLoad(70, "kg", "lb") * 10) / 10, Math.round(70 * lbPerKg * 10) / 10);
+
+  const typed = [
+    createDetailedSet("t1", { load: "225", reps: "3" }),
+    createDetailedSet("t2", { load: "245", reps: "1" }),
+  ];
+  let n = 0;
+  const applied = applyLastSessionSets(typed, lastSets, "lb", () => `u${++n}`);
+  assert.ok(applied);
+  assert.equal(applied.next.length, 3);
+  assert.deepEqual(applied.next.map((set) => ({ load: set.load, reps: set.reps })), [
+    { load: "155", reps: "5" },
+    { load: "155", reps: "5" },
+    { load: "155", reps: "5" },
+  ]);
+  assert.equal(applied.previous, typed);
+
+  assert.equal(formatLastTimeLine([{
+    calories: 40,
+    distance: null,
+    distanceUnit: null,
+    durationSeconds: null,
+    load: null,
+    loadUnit: null,
+    reps: null,
+  }], "lb"), null);
+  assert.equal(applyLastSessionSets(typed, [{
+    calories: 40,
+    distance: null,
+    distanceUnit: null,
+    durationSeconds: null,
+    load: null,
+    loadUnit: null,
+    reps: null,
+  }], "lb"), null);
+});
+
+test("last-session query prefers movementId, hides missing history, and stays a GET read", () => {
+  const byId = lastSessionQuery({
+    excludeSessionId: "session-1",
+    movementId: "11111111-1111-4111-8111-111111111111",
+    movementName: "landmine",
+  });
+  assert.equal(byId?.get("movementId"), "11111111-1111-4111-8111-111111111111");
+  assert.equal(byId?.get("movementName"), null);
+  assert.equal(byId?.get("excludeSessionId"), "session-1");
+
+  const byName = lastSessionQuery({ movementName: "  landmine  " });
+  assert.equal(byName?.get("movementName"), "landmine");
+  assert.equal(lastSessionQuery({}), null);
+  assert.equal(lastSessionFromResponse({ lastSession: null }), null);
+  assert.equal(lastSessionFromResponse({}), null);
+
+  const exercises = readFileSync(new URL("./detailed-workout-exercises.tsx", import.meta.url), "utf8");
+  const detailed = readFileSync(new URL("../app/groups/[id]/detailed-workout.tsx", import.meta.url), "utf8");
+  assert.equal(lastSessionPath, "/api/movements/last-session");
+  assert.match(exercises, /lastSessionPath/);
+  assert.match(exercises, /formatLastTimeLine/);
+  assert.match(exercises, /applyLastSessionSets/);
+  assert.match(exercises, /lastTimeUseWidth/);
+  assert.match(exercises, /colors\.brandPressed/);
+  assert.match(exercises, /Use last session/);
+  assert.match(detailed, /excludeSessionId=\{editSessionId\}/);
+  assert.equal(exercises.includes("repin.app"), false);
+  assert.equal(exercises.includes("method: \"POST\""), false);
 });
 
 test("a new exercise starts with one empty editable row", () => {

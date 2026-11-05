@@ -422,6 +422,7 @@ export const movementSearchQuerySchema = z.object({
 export const movementLastSessionQuerySchema = z.object({
   movementId: z.uuid().optional(),
   movementName: movementNameSchema.optional(),
+  excludeSessionId: z.uuid().optional(),
 }).superRefine((query, context) => {
   const hasId = Boolean(query.movementId);
   const hasName = Boolean(query.movementName);

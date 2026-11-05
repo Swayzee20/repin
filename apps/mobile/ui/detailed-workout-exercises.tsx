@@ -1,3 +1,4 @@
+import type { MovementLastSession } from "@repin/types";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
@@ -9,6 +10,7 @@ import {
   type AccessibilityActionEvent,
 } from "react-native";
 
+import { supabase } from "../lib/supabase";
 import { ContentOptionsMenu } from "./components";
 import { NumberField } from "./form-fields";
 import { Chevron, Icon } from "./icons";
@@ -20,6 +22,7 @@ import { SegmentedControl } from "./primitives";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import {
   appendCopiedSet,
+  applyLastSessionSets,
   canAddSet,
   canRemoveSet,
   clampSetRowTranslate,
@@ -27,6 +30,14 @@ import {
   deletedSetMessage,
   exercisesFromPickerSelections,
   formatExerciseSummary,
+  formatLastTimeLine,
+  lastSessionFromResponse,
+  lastSessionPath,
+  lastSessionQuery,
+  lastTimeAppliedMessage,
+  lastTimeUseBorder,
+  lastTimeUseHeight,
+  lastTimeUseWidth,
   moveItem,
   nextStrengthField,
   prevStrengthField,
@@ -65,6 +76,8 @@ export {
   writeStoredLoadUnit,
 } from "./strength-form-state";
 
+const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
+
 export function WorkoutUnitToggle({
   onChange,
   value,
@@ -88,12 +101,14 @@ export function WorkoutUnitToggle({
 }
 
 export function DetailedExerciseFields({
+  excludeSessionId,
   exercises,
   loadUnit,
   onAfterLast,
   onChange,
   onLoadUnitChange,
 }: {
+  excludeSessionId?: string | null;
   exercises: DetailedExerciseDraft[];
   loadUnit: LoadUnit;
   onAfterLast?: () => void;
@@ -165,6 +180,7 @@ export function DetailedExerciseFields({
       </CardHeading>
       {exercises.map((exercise, index) => (
         <ExerciseCard
+          excludeSessionId={excludeSessionId}
           exercise={exercise}
           expanded={exercise.id === expandedId}
           index={index}
@@ -233,6 +249,7 @@ function pickerSelectionFor(exercises: DetailedExerciseDraft[], exerciseId: stri
 }
 
 function ExerciseCard({
+  excludeSessionId,
   exercise,
   expanded,
   index,
@@ -248,6 +265,7 @@ function ExerciseCard({
   onRemove,
   onUndo,
 }: {
+  excludeSessionId?: string | null;
   exercise: DetailedExerciseDraft;
   expanded: boolean;
   index: number;
@@ -264,6 +282,27 @@ function ExerciseCard({
   onUndo: (message: string, restore: () => void) => void;
 }) {
   const name = exercise.movementName.trim() || `Exercise ${index + 1}`;
+  const lastSession = useLastMovementSession(
+    exercise.movementId,
+    exercise.movementName,
+    excludeSessionId,
+  );
+  const lastTimeLine = lastSession ? formatLastTimeLine(lastSession.sets, loadUnit) : null;
+
+  const updateSets = (sets: DetailedSetDraft[]) => onChange({ ...exercise, sets });
+  const applyDelete = (indexToRemove: number) => {
+    const snapshot = deleteSetAt(exercise.sets, indexToRemove);
+    if (!snapshot) return;
+    updateSets(snapshot.sets);
+    onUndo(deletedSetMessage(snapshot.index + 1), () => updateSets(restoreSet(snapshot.sets, snapshot.removed, snapshot.index)));
+  };
+  const applyLastTime = () => {
+    if (!lastSession) return;
+    const snapshot = applyLastSessionSets(exercise.sets, lastSession.sets, loadUnit);
+    if (!snapshot) return;
+    updateSets(snapshot.next);
+    onUndo(lastTimeAppliedMessage, () => updateSets(snapshot.previous));
+  };
 
   if (!expanded) {
     return (
@@ -282,14 +321,6 @@ function ExerciseCard({
       </Pressable>
     );
   }
-
-  const updateSets = (sets: DetailedSetDraft[]) => onChange({ ...exercise, sets });
-  const applyDelete = (indexToRemove: number) => {
-    const snapshot = deleteSetAt(exercise.sets, indexToRemove);
-    if (!snapshot) return;
-    updateSets(snapshot.sets);
-    onUndo(deletedSetMessage(snapshot.index + 1), () => updateSets(restoreSet(snapshot.sets, snapshot.removed, snapshot.index)));
-  };
 
   const meta = exercise.equipment
     ? `${exercise.equipment} · tap name to change`
@@ -322,6 +353,9 @@ function ExerciseCard({
           ]}
         />
       </View>
+      {lastTimeLine ? (
+        <LastTimeRow label={lastTimeLine} onUse={applyLastTime} />
+      ) : null}
       <View style={styles.tableHeader} accessibilityElementsHidden>
         <Text style={[styles.tableHeading, styles.setIndex]} >Set</Text>
         <Text style={[styles.tableHeading, styles.repsColumn]}>Reps</Text>
@@ -629,6 +663,68 @@ function SwipeableSetRow({
   );
 }
 
+function LastTimeRow({ label, onUse }: { label: string; onUse: () => void }) {
+  return (
+    <View style={styles.lastTimeRow}>
+      <Text numberOfLines={1} style={styles.lastTimeLabel}>{label}</Text>
+      <Pressable
+        accessibilityLabel="Use last session"
+        accessibilityRole="button"
+        onPress={onUse}
+        style={(state) => [
+          styles.usePill,
+          state.pressed && styles.usePillPressed,
+          webFocusRing(pressableFocused(state)),
+        ]}
+      >
+        <Text style={styles.usePillLabel}>Use</Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function useLastMovementSession(
+  movementId: string | null,
+  movementName: string,
+  excludeSessionId?: string | null,
+) {
+  const [lastSession, setLastSession] = useState<MovementLastSession | null>(null);
+
+  useEffect(() => {
+    const query = lastSessionQuery({ excludeSessionId, movementId, movementName });
+    if (!query) {
+      setLastSession(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    let cancelled = false;
+    setLastSession(null);
+    void loadLastMovementSession(query, controller.signal).then((session) => {
+      if (!cancelled) setLastSession(session);
+    });
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [excludeSessionId, movementId, movementName]);
+
+  return lastSession;
+}
+
+async function loadLastMovementSession(query: URLSearchParams, signal: AbortSignal) {
+  if (!supabase) return null;
+  const { data } = await supabase.auth.getSession();
+  if (!data.session) return null;
+  const response = await fetch(`${apiUrl}${lastSessionPath}?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${data.session.access_token}` },
+    signal,
+  }).catch(() => null);
+  if (!response?.ok) return null;
+  const body = await response.json().catch(() => null) as { lastSession?: MovementLastSession | null } | null;
+  return lastSessionFromResponse(body);
+}
+
 const setInputText = {
   fontFamily: fonts.bold,
   fontSize: type.section.fontSize,
@@ -696,6 +792,41 @@ const styles = StyleSheet.create({
   exerciseMeta: {
     color: colors.muted,
     ...type.label,
+  },
+  lastTimeRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.sm,
+    minHeight: lastTimeUseHeight,
+  },
+  lastTimeLabel: {
+    color: colors.muted,
+    flexGrow: 1,
+    flexShrink: 1,
+    fontFamily: fonts.regular,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
+  },
+  usePill: {
+    alignItems: "center",
+    backgroundColor: colors.brandTint,
+    borderColor: lastTimeUseBorder,
+    borderRadius: radii.pill,
+    borderWidth: 1,
+    flexShrink: 0,
+    height: lastTimeUseHeight,
+    justifyContent: "center",
+    width: lastTimeUseWidth,
+  },
+  usePillPressed: {
+    backgroundColor: colors.selection,
+  },
+  usePillLabel: {
+    color: colors.brandPressed,
+    fontFamily: fonts.extrabold,
+    fontSize: type.bodySmall.fontSize,
+    lineHeight: type.bodySmall.lineHeight,
   },
   tableHeader: {
     alignItems: "center",

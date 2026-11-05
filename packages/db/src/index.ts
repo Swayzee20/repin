@@ -682,9 +682,19 @@ export async function getLastMovementSessionForUser(input: {
   userId: string;
   movementId?: string;
   movementName?: string;
+  excludeSessionId?: string;
 }) {
   const database = getDatabase();
   const normalizedName = input.movementName ? normalizeMovementName(input.movementName) : "";
+  if (!input.movementId && !normalizedName) return null;
+
+  const movementMatch = input.movementId
+    ? eq(schema.sessionMovementResults.movementId, input.movementId)
+    : and(
+        isNull(schema.sessionMovementResults.movementId),
+        sql`lower(regexp_replace(btrim(${schema.sessionMovementResults.movementName}), '\\s+', ' ', 'g')) = ${normalizedName}`,
+      );
+
   const [match] = await database
     .select({
       movementResultId: schema.sessionMovementResults.id,
@@ -699,12 +709,10 @@ export async function getLastMovementSessionForUser(input: {
     )
     .where(and(
       eq(schema.workoutSessions.userId, input.userId),
-      input.movementId
-        ? eq(schema.sessionMovementResults.movementId, input.movementId)
-        : and(
-            isNull(schema.sessionMovementResults.movementId),
-            sql`lower(regexp_replace(btrim(${schema.sessionMovementResults.movementName}), '\\s+', ' ', 'g')) = ${normalizedName}`,
-          ),
+      movementMatch,
+      input.excludeSessionId
+        ? ne(schema.workoutSessions.id, input.excludeSessionId)
+        : undefined,
     ))
     .orderBy(
       desc(schema.workoutSessions.occurredAt),
@@ -732,8 +740,25 @@ export async function getLastMovementSessionForUser(input: {
     occurredAt: match.occurredAt.toISOString(),
     movementId: match.movementId,
     movementName: match.movementName,
-    sets,
+    sets: sets.map((set) => ({
+      reps: set.reps ?? null,
+      load: finiteNumber(set.load),
+      loadUnit: set.loadUnit,
+      durationSeconds: set.durationSeconds ?? null,
+      distance: finiteNumber(set.distance),
+      distanceUnit: set.distanceUnit,
+      calories: set.calories ?? null,
+    })),
   };
+}
+
+function finiteNumber(value: unknown): number | null {
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (typeof value === "string" && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
 }
 
 export async function createGroup(input: { ownerId: string; name: string }) {

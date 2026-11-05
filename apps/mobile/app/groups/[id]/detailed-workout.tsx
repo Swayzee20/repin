@@ -432,6 +432,7 @@ export default function DetailedWorkoutScreen() {
           {isStrengthWorkout ? (
             <FormCard>
               <DetailedExerciseFields
+                excludeSessionId={editSessionId}
                 exercises={exercises}
                 loadUnit={loadUnit}
                 onAfterLast={() => nameRef.current?.focus()}

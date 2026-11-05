@@ -490,6 +490,7 @@ test("legacy functional fitness still rejects movements and stays metrics-only",
 
 test("last-session query requires movementId or movementName", () => {
   const movementId = "11111111-1111-4111-8111-111111111111";
+  const excludeSessionId = "22222222-2222-4222-8222-222222222222";
   const byId = movementLastSessionQuerySchema.safeParse({ movementId });
   assert.equal(byId.success, true);
 
@@ -497,9 +498,17 @@ test("last-session query requires movementId or movementName", () => {
   assert.equal(byName.success, true);
   if (byName.success) assert.equal(byName.data.movementName, "landmine");
 
+  const withExclude = movementLastSessionQuerySchema.safeParse({ movementId, excludeSessionId });
+  assert.equal(withExclude.success, true);
+  if (withExclude.success) assert.equal(withExclude.data.excludeSessionId, excludeSessionId);
+
   assert.equal(movementLastSessionQuerySchema.safeParse({}).success, false);
   assert.equal(movementLastSessionQuerySchema.safeParse({
     movementId,
     movementName: "landmine",
+  }).success, false);
+  assert.equal(movementLastSessionQuerySchema.safeParse({
+    movementId,
+    excludeSessionId: "not-a-uuid",
   }).success, false);
 });
