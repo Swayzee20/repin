@@ -19,6 +19,7 @@ import {
   functionalFitnessFormatsLabel,
   hiitExerciseHelper,
   hoursRangeError,
+  previewDistanceDurationSummary,
   hydrateDistanceUnit,
   hydrateQuickLogResults,
   isDistanceWorkout,
@@ -152,6 +153,16 @@ test("Cycling builds distance + duration and shows a derived average speed", () 
   assert.equal(formatAverageSpeed(30, "km", 3_600), "Avg 30.0 km/h");
   assert.equal(formatAverageSpeed(18.2, "mi", 0), null);
   assert.equal(formatAverageSpeed(400, "m", 72), null);
+  assert.equal(
+    previewDistanceDurationSummary({
+      ...emptyQuickLogResults,
+      distance: "18.2",
+      distanceUnit: "mi",
+      timeMinutes: "65",
+      timeSeconds: "30",
+    }),
+    "18.2 mi · 1:05:30",
+  );
   assert.equal(validateQuickLogResults({ ...draft, distance: "0" }, "cycling"), "Distance must be greater than zero.");
 });
 
@@ -173,6 +184,7 @@ test("Run and Walk send an m distance, and HIIT stays time-only", () => {
     numericValue: 400,
     unit: "m",
   });
+  assert.equal(previewDistanceDurationSummary(run), "400 m · 1:12");
 
   const hiit = { ...emptyQuickLogResults, timeMinutes: "20", timeSeconds: "0" };
   assert.equal(validateQuickLogResults(hiit, "hiit"), null);

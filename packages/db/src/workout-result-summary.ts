@@ -280,6 +280,7 @@ function formatMovementSummary(movements: WorkoutResultMovement[]) {
   const namedMovements = movements.filter((movement) => movement.movementName.trim());
   if (!namedMovements.length) return null;
 
+  // D-3: uniform sets → N×R, mixed → "N sets", then "+N more".
   const shown = namedMovements.slice(0, 2).map(formatMultiExercisePart);
   const remainingCount = namedMovements.length - shown.length;
   return truncateSummary(

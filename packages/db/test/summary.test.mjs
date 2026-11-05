@@ -307,6 +307,113 @@ test("single-exercise mixed sets stay as a set count", () => {
   );
 });
 
+test("SPEC §5 feed mockups match D-3 and format summaries", () => {
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "strength_training",
+      metrics: [],
+      movements: [
+        {
+          movementName: "Back Squat",
+          sets: Array.from({ length: 5 }, () => ({ reps: 5, load: 225, loadUnit: "lb" })),
+        },
+        {
+          movementName: "Bench Press",
+          sets: [
+            { reps: 8, load: 135, loadUnit: "lb" },
+            { reps: 5, load: 160, loadUnit: "lb" },
+            { reps: 5, load: 160, loadUnit: "lb" },
+            { reps: 5, load: 160, loadUnit: "lb" },
+          ],
+        },
+      ],
+    }),
+    "Back Squat 5×5 · Bench Press 4 sets",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "amrap",
+      formatDurationSeconds: 720,
+      scoreRounds: 7,
+      scoreReps: 5,
+      metrics: [],
+      movements: [],
+    }),
+    "AMRAP 12 · 7 rounds + 5 reps",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "for_time",
+      scoreFinished: true,
+      scoreTimeSeconds: 522,
+      metrics: [],
+      movements: [],
+    }),
+    "For Time · 8:42",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "for_time",
+      timeCapSeconds: 900,
+      scoreFinished: false,
+      scoreReps: 142,
+      metrics: [],
+      movements: [],
+    }),
+    "For Time · 142 reps (capped at 15:00)",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "emom",
+      formatDurationSeconds: 720,
+      formatIntervalSeconds: 60,
+      metrics: [],
+      movements: [
+        { movementName: "Kettlebell Swing", sets: [{ reps: 15, load: 24, loadUnit: "kg" }] },
+        { movementName: "Burpee", sets: [{ reps: 10, load: null, loadUnit: null }] },
+      ],
+    }),
+    "EMOM 12 · 2 movements",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "rounds",
+      formatRounds: 5,
+      scoreTimeSeconds: 1_100,
+      metrics: [],
+      movements: [],
+    }),
+    "5 rounds · 18:20",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "cycling",
+      metrics: [
+        { metricType: "distance", numericValue: 18.2, textValue: null, unit: "mi" },
+        { metricType: "duration", numericValue: 3_930, textValue: null, unit: "seconds" },
+      ],
+      movements: [],
+    }),
+    "18.2 mi · 1:05:30",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "run",
+      metrics: [
+        { metricType: "distance", numericValue: 400, textValue: null, unit: "m" },
+        { metricType: "duration", numericValue: 72, textValue: null, unit: "seconds" },
+      ],
+      movements: [],
+    }),
+    "400 m · 1:12",
+  );
+});
+
 test("multi-exercise strength uses NxR, mixed set counts, and +N more", () => {
   assert.equal(
     formatWorkoutResultSummary({

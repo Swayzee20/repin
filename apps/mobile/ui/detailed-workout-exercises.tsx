@@ -59,6 +59,7 @@ export {
   buildDetailedMovements,
   hydrateDetailedExercises,
   hydrateWorkoutLoadUnitFromMovements,
+  previewStrengthSummary,
   readStoredLoadUnit,
   validateDetailedExercises,
   writeStoredLoadUnit,
