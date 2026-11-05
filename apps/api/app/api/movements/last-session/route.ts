@@ -16,8 +16,9 @@ export async function GET(request: Request) {
     const user = await requireApplicationUser(request);
     const url = new URL(request.url);
     const query = movementLastSessionQuerySchema.safeParse({
-      movementId: url.searchParams.get("movementId") ?? undefined,
-      movementName: url.searchParams.get("movementName") ?? undefined,
+      movementId: url.searchParams.get("movementId") || undefined,
+      movementName: url.searchParams.get("movementName") || undefined,
+      excludeSessionId: url.searchParams.get("excludeSessionId") || undefined,
     });
 
     if (!query.success) {
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
       userId: user.id,
       movementId: query.data.movementId,
       movementName: query.data.movementName,
+      excludeSessionId: query.data.excludeSessionId,
     });
 
     return NextResponse.json(

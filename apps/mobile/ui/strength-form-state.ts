@@ -1,11 +1,16 @@
-import type { QuickLogMovementInput, WorkoutDetailMovement } from "@repin/types";
+import type {
+  MovementLastSession,
+  MovementLastSessionSet,
+  QuickLogMovementInput,
+  WorkoutDetailMovement,
+} from "@repin/types";
 
 import {
   defaultMeasureForMovement,
   type MovementMeasure,
   type PickerMovement,
 } from "./movement-picker-state";
-import { size, spacing, type } from "./theme";
+import { colors, size, spacing, type } from "./theme";
 
 export type LoadUnit = "lb" | "kg";
 
@@ -48,6 +53,12 @@ export const setTableHeaderLetterSpacing = 0.4;
 export const setRepsFlex = 44;
 export const setLoadFlex = 56;
 export const setTableHeaderHeight = type.label.lineHeight + spacing.xs;
+export const lastSessionPath = "/api/movements/last-session";
+export const lastTimeUseWidth = 64;
+export const lastTimeUseHeight = size.hit;
+export const lastTimeUseBorder = colors.boardBorder;
+export const lastTimeAppliedMessage = "Last session applied";
+export const lbPerKg = 2.2046226218;
 
 export function parseStoredLoadUnit(value: string | null | undefined): LoadUnit {
   return value === "kg" ? "kg" : "lb";
@@ -314,6 +325,90 @@ export function formatExerciseSummary(sets: DetailedSetDraft[], loadUnit: LoadUn
   if (sameReps && sameLoad) return `${filled.length}×${reps[0]} @ ${loads[0]} ${loadUnit}`;
   if (sameReps) return `${filled.length}×${reps[0]}`;
   return `${filled.length} sets`;
+}
+
+export function lastSessionQuery(input: {
+  excludeSessionId?: string | null;
+  movementId?: string | null;
+  movementName?: string | null;
+}): URLSearchParams | null {
+  const params = new URLSearchParams();
+  const movementId = input.movementId?.trim() ?? "";
+  const movementName = input.movementName?.trim() ?? "";
+  if (movementId) params.set("movementId", movementId);
+  else if (movementName) params.set("movementName", movementName);
+  else return null;
+  const excludeSessionId = input.excludeSessionId?.trim() ?? "";
+  if (excludeSessionId) params.set("excludeSessionId", excludeSessionId);
+  return params;
+}
+
+export function lastSessionFromResponse(body: {
+  lastSession?: MovementLastSession | null;
+} | null | undefined): MovementLastSession | null {
+  const last = body?.lastSession;
+  if (!last || !Array.isArray(last.sets)) return null;
+  return last;
+}
+
+export function convertLoad(
+  load: number,
+  from: string | null | undefined,
+  to: LoadUnit,
+): number {
+  const source = from === "kg" || from === "lb" ? from : to;
+  if (source === to) return load;
+  return source === "kg" ? load * lbPerKg : load / lbPerKg;
+}
+
+function copiedLoadText(
+  load: number,
+  from: string | null | undefined,
+  to: LoadUnit,
+): string {
+  return formatStrengthNumber(Math.round(convertLoad(load, from, to) * 10) / 10);
+}
+
+export function lastSessionSetsToDrafts(
+  sets: MovementLastSessionSet[],
+  loadUnit: LoadUnit,
+  idFor: () => string = draftId,
+): DetailedSetDraft[] {
+  return sets.flatMap((set) => {
+    const hasReps = set.reps != null;
+    const hasLoad = set.load != null;
+    if (!hasReps && !hasLoad) return [];
+    return [createDetailedSet(idFor(), {
+      load: hasLoad ? copiedLoadText(Number(set.load), set.loadUnit, loadUnit) : "",
+      reps: hasReps ? String(set.reps) : "",
+    })];
+  }).slice(0, maxSets);
+}
+
+/**
+ * Use copies last session into the set table. Tapping Use is an explicit
+ * action, so any values the user already typed are replaced. Callers keep
+ * `previous` for the existing 4s Undo toast. No-op when last session has no
+ * reps or load.
+ */
+export function applyLastSessionSets(
+  current: DetailedSetDraft[],
+  lastSets: MovementLastSessionSet[],
+  loadUnit: LoadUnit,
+  idFor: () => string = draftId,
+): { next: DetailedSetDraft[]; previous: DetailedSetDraft[] } | null {
+  const next = lastSessionSetsToDrafts(lastSets, loadUnit, idFor);
+  if (!next.length) return null;
+  return { next, previous: current };
+}
+
+export function formatLastTimeLine(
+  sets: MovementLastSessionSet[],
+  loadUnit: LoadUnit,
+): string | null {
+  const drafts = lastSessionSetsToDrafts(sets, loadUnit, () => "last");
+  if (!drafts.length) return null;
+  return `Last time: ${formatExerciseSummary(drafts, loadUnit)}`;
 }
 
 export function strengthNumericFields(exercises: { sets: readonly unknown[] }[]): StrengthFieldRef[] {
