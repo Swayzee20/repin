@@ -1,4 +1,3 @@
-import type { MovementSummary } from "@repin/types";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import {
   Animated,
@@ -6,7 +5,6 @@ import {
   Pressable,
   StyleSheet,
   Text,
-  TextInput,
   View,
   type AccessibilityActionEvent,
 } from "react-native";
@@ -16,17 +14,19 @@ import { NumberField } from "./form-fields";
 import { Chevron, Icon } from "./icons";
 import { fieldChainProps, type ReturnKeyType } from "./keyboard";
 import { useInputRegistry } from "./keyboard-focus";
+import { MovementPicker } from "./movement-picker";
+import { formatPickerMeta, pickerChipType, pickerMovementFromDraft, type PickerMovement } from "./movement-picker-state";
+import { pickerRowHeight } from "./overlay-state";
 import { SegmentedControl } from "./primitives";
 import { pressableFocused, webFocusRing } from "./focus-ring";
-import { supabase } from "../lib/supabase";
 import {
   appendCopiedSet,
   canAddSet,
   canRemoveSet,
   clampSetRowTranslate,
-  createDetailedExercise,
   deleteSetAt,
   deletedSetMessage,
+  exercisesFromPickerSelections,
   formatExerciseSummary,
   moveItem,
   nextStrengthField,
@@ -54,8 +54,6 @@ import {
 } from "./strength-form-state";
 import { colors, fonts, radii, size, spacing, type } from "./theme";
 import { CardHeading } from "./workout-form-frame";
-
-const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export type { DetailedExerciseDraft, LoadUnit } from "./strength-form-state";
 export {
@@ -131,6 +129,14 @@ export function DetailedExerciseFields({
   }, []);
 
   const numericFields = strengthNumericFields(exercises);
+  const [picker, setPicker] = useState<{ exerciseId?: string } | null>(null);
+
+  const confirmPicker = useCallback((selections: PickerMovement[]) => {
+    const applied = exercisesFromPickerSelections(exercises, selections, picker?.exerciseId);
+    onChange(applied.exercises);
+    if (applied.expandedId) setExpandedId(applied.expandedId);
+    setPicker(null);
+  }, [exercises, onChange, picker]);
 
   const focusField = useCallback((target: StrengthFieldRef | null, fallback?: () => void) => {
     if (!target) {
@@ -161,7 +167,6 @@ export function DetailedExerciseFields({
         <ExerciseCard
           exercise={exercise}
           expanded={exercise.id === expandedId}
-          focus={focus}
           index={index}
           inputRef={ref}
           key={exercise.id}
@@ -174,22 +179,20 @@ export function DetailedExerciseFields({
           onExpand={() => setExpandedId(exercise.id)}
           onFocusField={focusField}
           onMove={(direction) => onChange(moveItem(exercises, index, direction))}
+          onPickName={() => setPicker({ exerciseId: exercise.id })}
           onRemove={() => onChange(exercises.filter((item) => item.id !== exercise.id))}
           onUndo={showUndo}
         />
       ))}
-      <Pressable
-        accessibilityRole="button"
-        onPress={() => {
-          const next = createDetailedExercise();
-          onChange([...exercises, next]);
-          setExpandedId(next.id);
-        }}
-        style={(state) => [styles.addExercise, state.pressed && styles.addExercisePressed, webFocusRing(pressableFocused(state))]}
-      >
-        <Icon color={colors.brandPressed} name="plus" size={size.icon.sm} />
-        <Text style={styles.addExerciseLabel}>Add exercise</Text>
-      </Pressable>
+      <AddExerciseButton onPress={() => setPicker({})} />
+      <MovementPicker
+        initialSelection={picker?.exerciseId
+          ? pickerSelectionFor(exercises, picker.exerciseId)
+          : []}
+        onConfirm={confirmPicker}
+        onDismiss={() => setPicker(null)}
+        visible={picker !== null}
+      />
       {undo ? (
         <View accessibilityLiveRegion="polite" style={styles.undoToast}>
           <Text style={styles.undoMessage}>{undo.message}</Text>
@@ -210,10 +213,88 @@ export function DetailedExerciseFields({
   );
 }
 
+export function FunctionalFitnessExerciseFields({
+  exercises,
+  onChange,
+}: {
+  exercises: DetailedExerciseDraft[];
+  onChange: (exercises: DetailedExerciseDraft[]) => void;
+}) {
+  const [picker, setPicker] = useState<{ exerciseId?: string } | null>(null);
+
+  return (
+    <View>
+      <CardHeading>Exercises</CardHeading>
+      {exercises.map((exercise, index) => {
+        const name = exercise.movementName.trim() || `Exercise ${index + 1}`;
+        const row = pickerMovementFromDraft(exercise);
+        const meta = formatPickerMeta(row, row.custom ? "recent" : "catalog");
+        return (
+          <View key={exercise.id} style={styles.ffRow}>
+            <Pressable
+              accessibilityHint="Opens the movement picker"
+              accessibilityLabel={`${name}, change exercise`}
+              accessibilityRole="button"
+              onPress={() => setPicker({ exerciseId: exercise.id })}
+              style={(state) => [styles.ffRowHit, state.pressed && styles.summaryPressed, webFocusRing(pressableFocused(state))]}
+            >
+              <View style={styles.summaryCopy}>
+                <View style={styles.ffNameRow}>
+                  <Text numberOfLines={1} style={styles.summaryName}>{name}</Text>
+                  {row.custom ? (
+                    <View style={styles.ffChip}>
+                      <Text style={styles.ffChipLabel}>Custom</Text>
+                    </View>
+                  ) : null}
+                </View>
+                {meta ? <Text numberOfLines={1} style={styles.summaryMeta}>{meta}</Text> : null}
+              </View>
+            </Pressable>
+            <ContentOptionsMenu
+              accessibilityLabel={`${name} options`}
+              items={[{ danger: true, icon: "trash" as const, label: "Delete exercise", onPress: () => onChange(exercises.filter((item) => item.id !== exercise.id)) }]}
+            />
+          </View>
+        );
+      })}
+      <AddExerciseButton onPress={() => setPicker({})} />
+      <MovementPicker
+        initialSelection={picker?.exerciseId
+          ? pickerSelectionFor(exercises, picker.exerciseId)
+          : []}
+        onConfirm={(selections) => {
+          onChange(exercisesFromPickerSelections(exercises, selections, picker?.exerciseId).exercises);
+          setPicker(null);
+        }}
+        onDismiss={() => setPicker(null)}
+        visible={picker !== null}
+      />
+    </View>
+  );
+}
+
+function AddExerciseButton({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      onPress={onPress}
+      style={(state) => [styles.addExercise, state.pressed && styles.addExercisePressed, webFocusRing(pressableFocused(state))]}
+    >
+      <Icon color={colors.brandPressed} name="plus" size={size.icon.sm} />
+      <Text style={styles.addExerciseLabel}>Add exercise</Text>
+    </Pressable>
+  );
+}
+
+function pickerSelectionFor(exercises: DetailedExerciseDraft[], exerciseId: string): PickerMovement[] {
+  const exercise = exercises.find((item) => item.id === exerciseId);
+  if (!exercise?.movementName.trim()) return [];
+  return [pickerMovementFromDraft(exercise)];
+}
+
 function ExerciseCard({
   exercise,
   expanded,
-  focus,
   index,
   inputRef,
   loadUnit,
@@ -223,12 +304,12 @@ function ExerciseCard({
   onExpand,
   onFocusField,
   onMove,
+  onPickName,
   onRemove,
   onUndo,
 }: {
   exercise: DetailedExerciseDraft;
   expanded: boolean;
-  focus: (key: string) => void;
   index: number;
   inputRef: ReturnType<typeof useInputRegistry>["ref"];
   loadUnit: LoadUnit;
@@ -238,35 +319,11 @@ function ExerciseCard({
   onExpand: () => void;
   onFocusField: (target: StrengthFieldRef | null, fallback?: () => void) => void;
   onMove: (direction: -1 | 1) => void;
+  onPickName: () => void;
   onRemove: () => void;
   onUndo: (message: string, restore: () => void) => void;
 }) {
-  const [suggestions, setSuggestions] = useState<MovementSummary[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
   const name = exercise.movementName.trim() || `Exercise ${index + 1}`;
-  const firstSet = exercise.sets[0];
-
-  useEffect(() => {
-    const query = exercise.movementName.trim();
-    if (query.length < 2 || exercise.movementId || !supabase) {
-      setSuggestions([]);
-      return;
-    }
-    const supabaseClient = supabase;
-    const timer = setTimeout(() => {
-      void supabaseClient.auth.getSession().then(async ({ data }) => {
-        if (!data.session) return;
-        const response = await fetch(`${apiUrl}/api/movements?q=${encodeURIComponent(query)}`, {
-          headers: { Authorization: `Bearer ${data.session.access_token}` },
-        }).catch(() => null);
-        if (!response?.ok) return;
-        const body = (await response.json()) as { movements?: MovementSummary[] };
-        setSuggestions(body.movements ?? []);
-        setShowSuggestions(Boolean(body.movements?.length));
-      });
-    }, 250);
-    return () => clearTimeout(timer);
-  }, [exercise.movementId, exercise.movementName]);
 
   if (!expanded) {
     return (
@@ -302,29 +359,15 @@ function ExerciseCard({
     <View style={styles.exerciseCard}>
       <View style={styles.exerciseHeader}>
         <View style={styles.exerciseTitleBlock}>
-          <TextInput
-            accessibilityLabel="Exercise name"
-            onChangeText={(movementName) => {
-              onChange({ ...exercise, equipment: null, movementId: null, movementName });
-              setShowSuggestions(true);
-            }}
-            placeholder="Barbell Bench Press"
-            placeholderTextColor={colors.subtle}
-            ref={inputRef(exercise.id)}
-            selectionColor={colors.brand}
-            style={styles.exerciseName}
-            value={exercise.movementName}
-            {...fieldChainProps({
-              count: firstSet ? 2 : 1,
-              index: 0,
-              last: "next",
-              onAdvance: () => {
-                if (firstSet) focus(strengthFieldKey(firstSet.id, "reps"));
-                else onAfterLast?.();
-              },
-              onFinish: onAfterLast,
-            })}
-          />
+          <Pressable
+            accessibilityHint="Opens the movement picker"
+            accessibilityLabel={`${name}, change exercise`}
+            accessibilityRole="button"
+            onPress={onPickName}
+            style={(state) => [styles.exerciseNameHit, state.pressed && styles.pressed, webFocusRing(pressableFocused(state))]}
+          >
+            <Text numberOfLines={1} style={styles.exerciseName}>{name}</Text>
+          </Pressable>
           <Text style={styles.exerciseMeta}>{meta}</Text>
         </View>
         <ContentOptionsMenu
@@ -339,30 +382,6 @@ function ExerciseCard({
           ]}
         />
       </View>
-      {showSuggestions ? (
-        <View style={styles.suggestions}>
-          {suggestions.map((movement) => (
-            <Pressable
-              accessibilityRole="button"
-              key={movement.id}
-              onPress={() => {
-                onChange({
-                  ...exercise,
-                  equipment: movement.equipment,
-                  movementId: movement.id,
-                  movementName: movement.name,
-                });
-                setShowSuggestions(false);
-              }}
-              style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}
-            >
-              <Text style={styles.suggestionName}>{movement.name}</Text>
-              {movement.equipment ? <Text style={styles.suggestionMeta}>{movement.equipment}</Text> : null}
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-
       <View style={styles.tableHeader} accessibilityElementsHidden>
         <Text style={[styles.tableHeading, styles.setIndex]} >Set</Text>
         <Text style={[styles.tableHeading, styles.repsColumn]}>Reps</Text>
@@ -724,39 +743,47 @@ const styles = StyleSheet.create({
   exerciseTitleBlock: {
     flex: 1,
   },
+  exerciseNameHit: {
+    justifyContent: "center",
+    minHeight: size.hit,
+  },
   exerciseName: {
     color: colors.ink,
     fontFamily: fonts.extrabold,
     fontSize: type.section.fontSize,
     lineHeight: type.section.lineHeight,
-    minHeight: size.hit,
-    padding: 0,
   },
   exerciseMeta: {
     color: colors.muted,
     ...type.label,
   },
-  suggestions: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
+  ffRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.sm,
+    marginTop: spacing.md,
+    minHeight: pickerRowHeight,
+  },
+  ffRowHit: {
+    flex: 1,
+    justifyContent: "center",
+    minHeight: pickerRowHeight,
+  },
+  ffNameRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: spacing.sm,
+  },
+  ffChip: {
+    backgroundColor: colors.brandTint,
     borderRadius: radii.sm,
-    borderWidth: 1,
-    marginTop: spacing.xs,
-    overflow: "hidden",
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
   },
-  suggestion: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-  suggestionName: {
-    color: colors.ink,
-    ...type.label,
-  },
-  suggestionMeta: {
-    color: colors.muted,
-    ...type.bodySmall,
+  ffChipLabel: {
+    color: colors.brandPressed,
+    ...pickerChipType,
   },
   tableHeader: {
     alignItems: "center",

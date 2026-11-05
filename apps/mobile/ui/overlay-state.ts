@@ -155,6 +155,11 @@ export function chooserSwipeShouldDismiss({
 /** Drag past this distance to dismiss a sheet. 72, from the spacing scale. */
 export const sheetDismissDistance = spacing.huge + spacing.xxxl;
 
+/** MovementPicker is a full sheet. Spec §3.5 leaves 54pt above the grabber. */
+export const pickerSheetTopGap = 54;
+export const pickerRowHeight = size.control + spacing.sm;
+export const pickerCheckSize = size.icon.md + spacing.sm;
+
 /** Menu rows match ListRow. */
 export const menuItemMinHeight = size.primary;
 
@@ -184,11 +189,13 @@ export function sheetFrame({
   height,
   insets,
   split,
+  topGap,
   width,
 }: {
   height: number;
   insets: { bottom: number; left: number; right: number; top: number };
   split: LayoutSplit;
+  topGap?: number;
   width: number;
 }) {
   const safeWidth = Math.max(0, Number.isFinite(width) ? width : 0);
@@ -205,10 +212,11 @@ export function sheetFrame({
     left = leftInset;
     sheetWidth = Math.max(0, safeWidth - leftInset - rightInset);
   }
+  const gap = topGap == null ? topInset + spacing.xl : Math.max(0, Number.isFinite(topGap) ? topGap : 0);
   return {
     bottomInset,
     left,
-    maxHeight: Math.max(0, safeHeight - topInset - spacing.xl),
+    maxHeight: Math.max(0, safeHeight - gap),
     width: sheetWidth,
   };
 }

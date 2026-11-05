@@ -90,6 +90,12 @@ export function usesMetricFields(workoutType: WorkoutType | null) {
     || workoutType === "other";
 }
 
+export function usesMovementPicker(workoutType: WorkoutType | null) {
+  return workoutType === "strength_training"
+    || workoutType === "powerlifting"
+    || workoutType === "functional_fitness";
+}
+
 export function distanceUnitOptions(workoutType: WorkoutType | null, current?: WorkoutDistanceUnit) {
   if (workoutType === "cycling") {
     if (current === "m") {

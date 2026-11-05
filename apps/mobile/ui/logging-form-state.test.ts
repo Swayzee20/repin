@@ -27,6 +27,7 @@ import {
   splitDurationMinutes,
   usesHoursTime,
   usesMetricFields,
+  usesMovementPicker,
   validateQuickLogResults,
   workoutTypeGridAlign,
   workoutTypeSelectorOptions,
@@ -108,6 +109,11 @@ test("Cycling and HIIT use hours; Cycling and Run/Walk send distance", () => {
   assert.equal(usesMetricFields("walk"), true);
   assert.equal(usesMetricFields("run"), false);
   assert.equal(usesMetricFields("strength_training"), false);
+  assert.equal(usesMovementPicker("strength_training"), true);
+  assert.equal(usesMovementPicker("powerlifting"), true);
+  assert.equal(usesMovementPicker("functional_fitness"), true);
+  assert.equal(usesMovementPicker("hiit"), false);
+  assert.equal(usesMovementPicker("cycling"), false);
 });
 
 test("hours stay stored as total minutes so a Run/Walk field can show 65 min", () => {

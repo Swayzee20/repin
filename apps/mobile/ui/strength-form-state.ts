@@ -1,5 +1,10 @@
 import type { QuickLogMovementInput, WorkoutDetailMovement } from "@repin/types";
 
+import {
+  defaultMeasureForMovement,
+  type MovementMeasure,
+  type PickerMovement,
+} from "./movement-picker-state";
 import { size, spacing, type } from "./theme";
 
 export type LoadUnit = "lb" | "kg";
@@ -7,6 +12,7 @@ export type LoadUnit = "lb" | "kg";
 export type DetailedSetDraft = { id: string; reps: string; load: string };
 
 export type DetailedExerciseDraft = {
+  defaultMeasure: MovementMeasure;
   equipment: string | null;
   id: string;
   movementId: string | null;
@@ -109,18 +115,25 @@ export function createDetailedSet(
   return { id, load: source?.load ?? "", reps: source?.reps ?? "" };
 }
 
-export function createDetailedExercise(id = draftId()): DetailedExerciseDraft {
+export function createDetailedExercise(
+  id = draftId(),
+  source?: Partial<Pick<DetailedExerciseDraft, "defaultMeasure" | "equipment" | "movementId" | "movementName">>,
+): DetailedExerciseDraft {
+  const movementName = source?.movementName ?? "";
+  const movementId = source?.movementId ?? null;
   return {
-    equipment: null,
+    defaultMeasure: source?.defaultMeasure ?? defaultMeasureForMovement(movementName, !movementId),
+    equipment: source?.equipment ?? null,
     id,
-    movementId: null,
-    movementName: "",
+    movementId,
+    movementName,
     sets: [createDetailedSet()],
   };
 }
 
 export function hydrateDetailedExercises(movements: WorkoutDetailMovement[]): DetailedExerciseDraft[] {
   return movements.map((movement) => ({
+    defaultMeasure: defaultMeasureForMovement(movement.movementName, !movement.movementId),
     equipment: null,
     id: movement.id,
     movementId: movement.movementId,
@@ -133,6 +146,38 @@ export function hydrateDetailedExercises(movements: WorkoutDetailMovement[]): De
         }))
       : [createDetailedSet()],
   }));
+}
+
+export function exercisesFromPickerSelections(
+  exercises: DetailedExerciseDraft[],
+  selections: PickerMovement[],
+  replaceId?: string | null,
+) {
+  if (!selections.length) return { exercises, expandedId: replaceId ?? exercises.at(-1)?.id ?? null };
+  const drafts = selections.map((selection, index) => {
+    const keep = replaceId && index === 0
+      ? exercises.find((exercise) => exercise.id === replaceId)
+      : undefined;
+    return {
+      defaultMeasure: selection.defaultMeasure,
+      equipment: selection.equipment,
+      id: keep?.id ?? draftId(),
+      movementId: selection.movementId,
+      movementName: selection.movementName,
+      sets: keep?.sets ?? [createDetailedSet()],
+    } satisfies DetailedExerciseDraft;
+  });
+  if (!replaceId) {
+    const next = [...exercises, ...drafts];
+    return { exercises: next, expandedId: drafts.at(-1)?.id ?? null };
+  }
+  const index = exercises.findIndex((exercise) => exercise.id === replaceId);
+  if (index < 0) {
+    const next = [...exercises, ...drafts];
+    return { exercises: next, expandedId: drafts.at(-1)?.id ?? null };
+  }
+  const next = [...exercises.slice(0, index), ...drafts, ...exercises.slice(index + 1)];
+  return { exercises: next, expandedId: drafts[0]?.id ?? replaceId };
 }
 
 export function appendCopiedSet(sets: DetailedSetDraft[], id = draftId()): DetailedSetDraft[] {
