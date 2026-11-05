@@ -116,6 +116,27 @@ test("the iOS bar says Next only when Return would move to another field", () =>
   assert.equal(accessoryLabelFor(undefined), "Done");
 });
 
+test("a strength field can put context and arrows on the accessory", () => {
+  resetKeyboardAccessoryForTests();
+  const moved: string[] = [];
+  setKeyboardAccessory({
+    context: "Bench · Set 2 · Weight",
+    label: "Next",
+    onDown: () => moved.push("down"),
+    onUp: () => moved.push("up"),
+    run: () => moved.push("next"),
+  });
+  const snapshot = keyboardAccessorySnapshot();
+  assert.equal(snapshot.context, "Bench · Set 2 · Weight");
+  assert.equal(snapshot.label, "Next");
+  snapshot.onUp?.();
+  snapshot.onDown?.();
+  runKeyboardAccessory();
+  assert.deepEqual(moved, ["up", "down", "next"]);
+  resetKeyboardAccessoryForTests();
+  assert.equal(keyboardAccessorySnapshot().context, undefined);
+});
+
 test("the bar runs the focused field and ignores a stale blur", async () => {
   resetKeyboardAccessoryForTests();
   let ran = false;

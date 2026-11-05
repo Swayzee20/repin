@@ -236,6 +236,7 @@ export function TextArea(props: Omit<TextFieldProps, "multiline">) {
 
 export function NumberField({
   accessibilityLabel,
+  accessory,
   containerStyle,
   disabled = false,
   error,
@@ -250,10 +251,16 @@ export function NumberField({
   placeholder,
   ref,
   returnKeyType = "done",
+  style,
   suffix,
   value,
   ...props
 }: Omit<TextFieldProps, "keyboardType" | "inputMode" | "value" | "onChangeText" | "multiline"> & {
+  accessory?: {
+    context?: string;
+    onDown?: () => void;
+    onUp?: () => void;
+  };
   kind?: NumberKind;
   onChangeText: (value: string) => void;
   suffix?: string;
@@ -264,6 +271,7 @@ export function NumberField({
   const submitRef = useRef(props.onSubmitEditing);
   submitRef.current = props.onSubmitEditing;
   const isDisabled = disabled || props.editable === false;
+  const usesAccessory = Platform.OS === "ios" || Boolean(accessory?.context);
   const chrome = fieldChrome(resolveFieldInteraction({
     disabled: isDisabled,
     error: Boolean(error?.trim()),
@@ -298,15 +306,18 @@ export function NumberField({
           keyboardType={keyboard.keyboardType}
           onBlur={(event) => {
             setFocused(false);
-            if (Platform.OS === "ios") scheduleKeyboardAccessoryReset(accessoryGeneration.current);
+            if (usesAccessory) scheduleKeyboardAccessoryReset(accessoryGeneration.current);
             onBlur?.(event);
           }}
           onChangeText={onChangeText}
           onFocus={(event) => {
             setFocused(true);
-            if (Platform.OS === "ios") {
+            if (usesAccessory) {
               accessoryGeneration.current = setKeyboardAccessory({
+                context: accessory?.context,
                 label: accessoryLabelFor(returnKeyType),
+                onDown: accessory?.onDown,
+                onUp: accessory?.onUp,
                 run: () => {
                   if (returnKeyType === "next") submitRef.current?.(event as never);
                 },
@@ -319,7 +330,7 @@ export function NumberField({
           ref={ref}
           returnKeyType={returnKeyType}
           selectionColor={colors.brand}
-          style={[styles.numberInput, { color: chrome.color }, webInputOutline]}
+          style={[styles.numberInput, { color: chrome.color }, style, webInputOutline]}
           value={value}
         />
         {suffix ? (
