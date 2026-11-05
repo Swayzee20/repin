@@ -63,6 +63,7 @@ test("the current TestFlight quick-log body still parses", () => {
   assert.equal(result.data.workoutType, "run");
   assert.equal(result.data.caption, "Easy miles");
   assert.equal(result.data.logVersion, null);
+  assert.equal(result.data.format, null);
   assert.deepEqual(result.data.metrics, []);
   assert.deepEqual(result.data.movements, []);
 });
@@ -293,6 +294,198 @@ test("movement search accepts recent=true", () => {
   const withoutRecent = movementSearchQuerySchema.safeParse({ q: "" });
   assert.equal(withoutRecent.success, true);
   if (withoutRecent.success) assert.equal(withoutRecent.data.recent, false);
+});
+
+function formatWorkout(format: Record<string, unknown>, overrides: Record<string, unknown> = {}) {
+  return validWorkout({
+    workoutType: "functional_fitness",
+    logVersion: 2,
+    format,
+    movements: [
+      { movementName: "Pull-Up", sets: [{ reps: 5 }] },
+      { movementName: "Push-Up", sets: [{ reps: 10 }] },
+    ],
+    ...overrides,
+  });
+}
+
+test("AMRAP accepts a score and optional length", () => {
+  const result = parseWorkout(formatWorkout({
+    type: "amrap",
+    durationSeconds: 1200,
+    score: { rounds: 5, reps: 12 },
+  }));
+  assert.equal(result.success, true);
+  if (!result.success) return;
+  assert.deepEqual(result.data.format, {
+    type: "amrap",
+    durationSeconds: 1200,
+    score: { rounds: 5, reps: 12 },
+  });
+  assert.equal(result.data.durationMinutes, 20);
+});
+
+test("AMRAP extra reps default to 0 and reps without rounds are rejected", () => {
+  const withoutReps = parseWorkout(formatWorkout({
+    type: "amrap",
+    durationSeconds: 1200,
+    score: { rounds: 7 },
+  }));
+  assert.equal(withoutReps.success, true);
+  if (withoutReps.success) {
+    assert.deepEqual(withoutReps.data.format, {
+      type: "amrap",
+      durationSeconds: 1200,
+      score: { rounds: 7, reps: 0 },
+    });
+  }
+
+  assert.equal(parseWorkout(formatWorkout({
+    type: "amrap",
+    durationSeconds: 1200,
+    score: { reps: 12 },
+  })).success, false);
+});
+
+test("AMRAP length is optional at the API", () => {
+  const result = parseWorkout(formatWorkout({
+    type: "amrap",
+    score: { rounds: 1, reps: 3 },
+  }));
+  assert.equal(result.success, true);
+  if (!result.success) return;
+  assert.equal(result.data.format?.type, "amrap");
+  if (result.data.format?.type === "amrap") {
+    assert.equal(result.data.format.durationSeconds, null);
+  }
+  assert.equal(result.data.durationMinutes, null);
+});
+
+test("For Time finished and capped scores validate the cap", () => {
+  const finished = parseWorkout(formatWorkout({
+    type: "for_time",
+    timeCapSeconds: 900,
+    rounds: 3,
+    score: { finished: true, timeSeconds: 754 },
+  }));
+  assert.equal(finished.success, true);
+  if (finished.success) assert.equal(finished.data.durationMinutes, 13);
+
+  const noCap = parseWorkout(formatWorkout({
+    type: "for_time",
+    score: { finished: true, timeSeconds: 754 },
+  }));
+  assert.equal(noCap.success, true);
+
+  const capped = parseWorkout(formatWorkout({
+    type: "for_time",
+    timeCapSeconds: 900,
+    score: { finished: false, reps: 187 },
+  }));
+  assert.equal(capped.success, true);
+  if (capped.success) assert.equal(capped.data.durationMinutes, 15);
+
+  assert.equal(parseWorkout(formatWorkout({
+    type: "for_time",
+    timeCapSeconds: 900,
+    score: { finished: true, timeSeconds: 901 },
+  })).success, false);
+  assert.equal(parseWorkout(formatWorkout({
+    type: "for_time",
+    score: { finished: false, reps: 187 },
+  })).success, false);
+});
+
+test("EMOM and Rounds use their own schemas", () => {
+  const emom = parseWorkout(formatWorkout({
+    type: "emom",
+    durationSeconds: 720,
+    intervalSeconds: 60,
+    score: null,
+  }));
+  assert.equal(emom.success, true);
+  if (emom.success) {
+    assert.deepEqual(emom.data.format, {
+      type: "emom",
+      durationSeconds: 720,
+      intervalSeconds: 60,
+      score: null,
+    });
+    assert.equal(emom.data.durationMinutes, 12);
+  }
+
+  const rounds = parseWorkout(formatWorkout({
+    type: "rounds",
+    rounds: 5,
+    score: { timeSeconds: 1100 },
+  }));
+  assert.equal(rounds.success, true);
+  if (rounds.success) assert.equal(rounds.data.durationMinutes, 19);
+
+  const roundsNoTime = parseWorkout(formatWorkout({
+    type: "rounds",
+    rounds: 5,
+  }));
+  assert.equal(roundsNoTime.success, true);
+});
+
+test("format is rejected on a non-FF type and with metrics", () => {
+  assert.equal(parseWorkout(validWorkout({
+    workoutType: "run",
+    format: { type: "amrap", score: { rounds: 5, reps: 0 } },
+    movements: [{ movementName: "Pull-Up", sets: [{ reps: 5 }] }],
+  })).success, false);
+
+  assert.equal(parseWorkout(formatWorkout({
+    type: "amrap",
+    score: { rounds: 5, reps: 0 },
+  }, {
+    metrics: [{ metricType: "duration", numericValue: 600, unit: "seconds" }],
+  })).success, false);
+});
+
+test("format workouts require 1-20 movements and accept set distance calories and duration", () => {
+  assert.equal(parseWorkout(validWorkout({
+    workoutType: "functional_fitness",
+    format: { type: "amrap", score: { rounds: 5, reps: 0 } },
+    movements: [],
+  })).success, false);
+
+  const withDistance = parseWorkout(formatWorkout({
+    type: "amrap",
+    score: { rounds: 5, reps: 0 },
+  }, {
+    movements: [{
+      movementName: "Run",
+      sets: [{ distance: 400, distanceUnit: "m" }],
+    }],
+  }));
+  assert.equal(withDistance.success, true);
+
+  assert.equal(parseWorkout(formatWorkout({
+    type: "amrap",
+    score: { rounds: 5, reps: 0 },
+  }, {
+    movements: [{
+      movementName: "Run",
+      sets: [{ distance: 400 }],
+    }],
+  })).success, false);
+});
+
+test("legacy functional fitness still rejects movements and stays metrics-only", () => {
+  assert.equal(parseWorkout(validWorkout({
+    workoutType: "functional_fitness",
+    metrics: [{ metricType: "score", textValue: "5 rounds + 12 reps" }],
+    movements: [{ movementName: "Pull-Up", sets: [{ reps: 5 }] }],
+  })).success, false);
+
+  const legacy = parseWorkout(validWorkout({
+    workoutType: "functional_fitness",
+    metrics: [{ metricType: "score", textValue: "5 rounds + 12 reps" }],
+  }));
+  assert.equal(legacy.success, true);
+  if (legacy.success) assert.equal(legacy.data.format, null);
 });
 
 test("last-session query requires movementId or movementName", () => {

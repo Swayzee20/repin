@@ -95,6 +95,156 @@ test("hiit and other stay duration-only", () => {
   );
 });
 
+test("AMRAP summaries use length and score", () => {
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "amrap",
+      formatDurationSeconds: 1200,
+      scoreRounds: 5,
+      scoreReps: 12,
+      metrics: [],
+      movements: [],
+    }),
+    "AMRAP 20 · 5 rounds + 12 reps",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "amrap",
+      formatDurationSeconds: 1200,
+      scoreRounds: 7,
+      scoreReps: 0,
+      metrics: [],
+      movements: [],
+    }),
+    "AMRAP 20 · 7 rounds",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "amrap",
+      scoreRounds: 1,
+      scoreReps: 3,
+      metrics: [],
+      movements: [],
+    }),
+    "AMRAP · 1 round + 3 reps",
+  );
+});
+
+test("For Time summaries cover finished, capped, and no score", () => {
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "for_time",
+      timeCapSeconds: 900,
+      scoreFinished: true,
+      scoreTimeSeconds: 754,
+      metrics: [],
+      movements: [],
+    }),
+    "For Time · 12:34",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "for_time",
+      timeCapSeconds: 900,
+      scoreFinished: false,
+      scoreReps: 187,
+      metrics: [],
+      movements: [],
+    }),
+    "For Time · 187 reps (capped at 15:00)",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "for_time",
+      metrics: [],
+      movements: [
+        { movementName: "Pull-Up", sets: [] },
+        { movementName: "Push-Up", sets: [] },
+        { movementName: "Sit-Up", sets: [] },
+        { movementName: "Squat", sets: [] },
+      ],
+    }),
+    "For Time · 4 movements",
+  );
+});
+
+test("EMOM summaries use interval labels and movement counts", () => {
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "emom",
+      formatDurationSeconds: 720,
+      formatIntervalSeconds: 60,
+      metrics: [],
+      movements: [{ movementName: "Wall Ball", sets: [{ reps: 10, load: null, loadUnit: null }] }],
+    }),
+    "EMOM 12 · 10 Wall Ball",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "emom",
+      formatDurationSeconds: 960,
+      formatIntervalSeconds: 60,
+      metrics: [],
+      movements: [
+        { movementName: "Wall Ball", sets: [{ reps: 10, load: null, loadUnit: null }] },
+        { movementName: "Row", sets: [{ reps: null, load: null, loadUnit: null }] },
+        { movementName: "Burpee", sets: [{ reps: 5, load: null, loadUnit: null }] },
+      ],
+    }),
+    "EMOM 16 · 3 movements",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "emom",
+      formatDurationSeconds: 1200,
+      formatIntervalSeconds: 120,
+      metrics: [],
+      movements: [
+        { movementName: "Clean", sets: [] },
+        { movementName: "Jerk", sets: [] },
+      ],
+    }),
+    "E2MOM 20 · 2 movements",
+  );
+});
+
+test("Rounds summaries use time or movement names", () => {
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "rounds",
+      formatRounds: 5,
+      scoreTimeSeconds: 1100,
+      metrics: [],
+      movements: [],
+    }),
+    "5 rounds · 18:20",
+  );
+  assert.equal(
+    formatWorkoutResultSummary({
+      workoutType: "functional_fitness",
+      workoutFormat: "rounds",
+      formatRounds: 5,
+      metrics: [],
+      movements: [
+        { movementName: "Pull-Up", sets: [] },
+        { movementName: "Push-Up", sets: [] },
+        { movementName: "Sit-Up", sets: [] },
+      ],
+    }),
+    "5 rounds · Pull-Up · Push-Up · +1 more",
+  );
+});
+
 test("legacy functional fitness summaries stay unchanged", () => {
   assert.equal(
     formatWorkoutResultSummary({

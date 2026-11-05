@@ -1,13 +1,16 @@
 import {
   deleteCommunityPostForOwner,
   getCommunityWorkoutDetailForMember,
+  getWorkoutEditStateForOwner,
   updateWorkoutForOwner,
   WorkoutRequestError,
 } from "@repin/db";
 import {
   createWorkoutSchema,
   groupIdSchema,
+  requiresUpdatedClient,
   workoutSessionIdSchema,
+  workoutWriteFields,
 } from "@repin/validation";
 import { NextResponse } from "next/server";
 
@@ -113,11 +116,24 @@ export async function PATCH(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Workout photo path is invalid" }, { status: 400 });
     }
 
+    const stored = await getWorkoutEditStateForOwner({
+      userId: user.id,
+      groupId: identifiers.groupId,
+      workoutSessionId: identifiers.sessionId,
+    });
+    if (!stored) return NextResponse.json({ error: "Workout not found" }, { status: 404 });
+    if (requiresUpdatedClient(stored, input.data)) {
+      return NextResponse.json(
+        { error: "Update repin to edit this workout.", code: "client_update_required" },
+        { status: 409 },
+      );
+    }
+
     const updated = await updateWorkoutForOwner({
       userId: user.id,
       groupId: identifiers.groupId,
       workoutSessionId: identifiers.sessionId,
-      ...input.data,
+      ...workoutWriteFields(input.data),
       occurredAt: new Date(input.data.occurredAt),
     });
     if (!updated) return NextResponse.json({ error: "Workout not found" }, { status: 404 });
