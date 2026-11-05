@@ -14,6 +14,7 @@ import {
   createDetailedSet,
   deletedSetMessage,
   deleteSetAt,
+  exercisesFromPickerSelections,
   formatExerciseSummary,
   hydrateWorkoutLoadUnit,
   loadUnitStorageKey,
@@ -39,6 +40,7 @@ import {
   undoToastMs,
   writeStoredLoadUnit,
 } from "./strength-form-state";
+import { catalogFromSummary, customFromName } from "./movement-picker-state";
 
 function memoryStore(initial: Record<string, string> = {}) {
   const data = new Map(Object.entries(initial));
@@ -197,6 +199,7 @@ test("the accessory names the exercise, set, and cell", () => {
 test("the request writes the workout unit on every loaded set and never a warm-up flag", () => {
   const movements = buildDetailedMovements([
     {
+      defaultMeasure: "reps",
       equipment: "Barbell",
       id: "ex1",
       movementId: null,
@@ -261,4 +264,32 @@ test("a new exercise starts with one empty editable row", () => {
   assert.equal(exercise.sets[0]?.reps, "");
   assert.equal(exercise.sets[0]?.load, "");
   assert.equal(exercise.movementName, "");
+  assert.equal(exercise.defaultMeasure, "reps");
+});
+
+test("picker selections append exercises and keep sets when replacing a name", () => {
+  const start = [createDetailedExercise("ex1", {
+    equipment: "Barbell",
+    movementId: "b",
+    movementName: "Barbell Bench Press",
+  })];
+  start[0]!.sets[0]!.reps = "5";
+  const added = exercisesFromPickerSelections(start, [
+    catalogFromSummary({ category: null, equipment: "Barbell", id: "s", name: "Back Squat" }),
+    customFromName("landmine")!,
+  ]);
+  assert.equal(added.exercises.length, 3);
+  assert.equal(added.exercises[1]?.movementName, "Back Squat");
+  assert.equal(added.exercises[1]?.movementId, "s");
+  assert.equal(added.exercises[2]?.movementId, null);
+  assert.equal(added.exercises[2]?.defaultMeasure, "reps");
+
+  const replaced = exercisesFromPickerSelections(start, [
+    catalogFromSummary({ category: null, equipment: "Machine", id: "a", name: "Air Bike" }),
+  ], "ex1");
+  assert.equal(replaced.exercises.length, 1);
+  assert.equal(replaced.exercises[0]?.id, "ex1");
+  assert.equal(replaced.exercises[0]?.movementName, "Air Bike");
+  assert.equal(replaced.exercises[0]?.defaultMeasure, "cal");
+  assert.equal(replaced.exercises[0]?.sets[0]?.reps, "5");
 });

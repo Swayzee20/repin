@@ -21,6 +21,7 @@ const vectorIcons = {
   "exclamationmark.circle": "alert-circle",
   "exclamationmark.triangle": "alert-triangle",
   house: "home",
+  magnifyingglass: "search",
   nosign: "slash",
   pencil: "edit-2",
   "person.2": "users",

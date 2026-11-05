@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import { useLayoutMode } from "./layout";
-import { sheetDismissDistance, sheetFrame, sheetRowBackground, sheetRowMinHeight } from "./overlay-state";
+import { pickerSheetTopGap, sheetDismissDistance, sheetFrame, sheetRowBackground, sheetRowMinHeight } from "./overlay-state";
 import { RoundIconButton } from "./primitives";
 import { colors, elevation, radii, size, spacing, type } from "./theme";
 
@@ -51,22 +51,32 @@ export function useRegisterSheetClose(
 export function BottomSheet({
   children,
   closeLabel = "Close",
+  full = false,
   onDismiss,
   onRegisterClose,
   title,
+  topGap,
   visible,
 }: {
   children: ReactNode | ((close: SheetClose) => ReactNode);
   closeLabel?: string;
+  full?: boolean;
   onDismiss: () => void;
   onRegisterClose?: (close: SheetClose | null) => void;
   title: string;
+  topGap?: number;
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
   const { height, width } = useWindowDimensions();
   const { split } = useLayoutMode();
-  const frame = sheetFrame({ height, insets, split, width });
+  const frame = sheetFrame({
+    height,
+    insets,
+    split,
+    topGap: full ? topGap ?? pickerSheetTopGap : topGap,
+    width,
+  });
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(height)).current;
   const closing = useRef(false);
@@ -161,6 +171,7 @@ export function BottomSheet({
           style={[
             styles.sheet,
             {
+              height: full ? frame.maxHeight : undefined,
               left: frame.left,
               maxHeight: frame.maxHeight,
               paddingBottom: Math.max(frame.bottomInset, spacing.lg),
@@ -173,7 +184,7 @@ export function BottomSheet({
             <View style={styles.grabber} />
             <SheetHeader closeLabel={closeLabel} onClose={() => close()} title={title} />
           </View>
-          {content}
+          {full ? <View style={styles.fullBody}>{content}</View> : content}
         </Animated.View>
       </View>
     </Modal>
@@ -247,6 +258,7 @@ const styles = StyleSheet.create({
   },
   title: { ...type.title, color: colors.ink, flex: 1 },
   close: { alignSelf: "center" },
+  fullBody: { flex: 1 },
   row: {
     alignItems: "center",
     borderBottomColor: colors.border,
