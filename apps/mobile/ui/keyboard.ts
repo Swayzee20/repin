@@ -12,6 +12,30 @@
  *   field submits or dismisses, depending on the caller.
  */
 
+/**
+ * Bottom inset for a centered overlay while the keyboard is up. The keyboard
+ * already covers the home indicator, so take the larger of the two instead of
+ * adding them.
+ */
+export function overlayBottomInset(keyboardHeight: number, safeBottom: number) {
+  const keyboard = Number.isFinite(keyboardHeight) ? Math.max(0, keyboardHeight) : 0;
+  const safe = Number.isFinite(safeBottom) ? Math.max(0, safeBottom) : 0;
+  return Math.max(safe, keyboard);
+}
+
+/** Keyboard frame overlap for a full-screen overlay. Hidden frames report 0. */
+export function keyboardOverlapFromFrame(
+  endCoordinates: { height: number; screenY: number },
+  windowHeight: number,
+) {
+  const height = Number.isFinite(endCoordinates.height) ? endCoordinates.height : 0;
+  const screenY = Number.isFinite(endCoordinates.screenY) ? endCoordinates.screenY : Number.NaN;
+  const window = Number.isFinite(windowHeight) ? windowHeight : 0;
+  if (height <= 0) return 0;
+  if (Number.isFinite(screenY) && screenY >= window - 1) return 0;
+  return Math.max(0, height);
+}
+
 export const keyboardDoneAccessoryId = "repin-keyboard-done";
 
 export const returnKeyTypes = ["done", "go", "join", "next", "search", "send"] as const;

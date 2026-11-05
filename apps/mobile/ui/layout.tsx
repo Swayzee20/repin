@@ -39,7 +39,7 @@ export function useLayoutMode(): LayoutSnapshot {
   });
 }
 
-export function useCenteredCardFrame(cardInset?: number) {
+export function useCenteredCardFrame(cardInset?: number, bottomInset?: number) {
   const { height, width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const division = useActiveDivision();
@@ -47,7 +47,12 @@ export function useCenteredCardFrame(cardInset?: number) {
     cardInset,
     division,
     height,
-    insets,
+    insets: {
+      bottom: bottomInset ?? insets.bottom,
+      left: insets.left,
+      right: insets.right,
+      top: insets.top,
+    },
     width,
   });
 }
@@ -74,15 +79,17 @@ export function WideColumn({
 }
 
 export function CenteredCard({
+  bottomInset,
   cardInset,
   children,
   style,
 }: {
+  bottomInset?: number;
   cardInset?: number;
   children: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
-  const frame = useCenteredCardFrame(cardInset);
+  const frame = useCenteredCardFrame(cardInset, bottomInset);
   return (
     <View pointerEvents="box-none" style={StyleSheet.absoluteFill}>
       <View
