@@ -237,10 +237,11 @@ test("the picker is a GET-only sheet wired into Strength, Powerlifting, and Func
   assert.equal(picker.includes("/api/movements"), true);
   assert.match(picker, /search\.set\("recent", "true"\)/);
   assert.match(picker, /movementSearchDebounceMs/);
+  const ffFields = source("functional-format-fields.tsx");
   assert.match(exercises, /MovementPicker/);
-  assert.match(exercises, /FunctionalFitnessExerciseFields/);
-  assert.match(detailed, /FunctionalFitnessExerciseFields/);
-  assert.match(detailed, /usesMovementPicker/);
+  assert.match(ffFields, /MovementPicker/);
+  assert.match(detailed, /FunctionalWorkoutFields/);
+  assert.match(detailed, /functional_fitness/);
   assert.equal(detailed.includes("workoutType === \"hiit\" ? ("), false);
   assert.match(sheet, /full \? topGap \?\? pickerSheetTopGap/);
   assert.ok(filterMovementsByQuery([customFromName("Landmine Twist")!], "LAND").length === 1);

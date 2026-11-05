@@ -15,8 +15,7 @@ import { Chevron, Icon } from "./icons";
 import { fieldChainProps, type ReturnKeyType } from "./keyboard";
 import { useInputRegistry } from "./keyboard-focus";
 import { MovementPicker } from "./movement-picker";
-import { formatPickerMeta, pickerChipType, pickerMovementFromDraft, type PickerMovement } from "./movement-picker-state";
-import { pickerRowHeight } from "./overlay-state";
+import { pickerMovementFromDraft, type PickerMovement } from "./movement-picker-state";
 import { SegmentedControl } from "./primitives";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import {
@@ -209,66 +208,6 @@ export function DetailedExerciseFields({
           </Pressable>
         </View>
       ) : null}
-    </View>
-  );
-}
-
-export function FunctionalFitnessExerciseFields({
-  exercises,
-  onChange,
-}: {
-  exercises: DetailedExerciseDraft[];
-  onChange: (exercises: DetailedExerciseDraft[]) => void;
-}) {
-  const [picker, setPicker] = useState<{ exerciseId?: string } | null>(null);
-
-  return (
-    <View>
-      <CardHeading>Exercises</CardHeading>
-      {exercises.map((exercise, index) => {
-        const name = exercise.movementName.trim() || `Exercise ${index + 1}`;
-        const row = pickerMovementFromDraft(exercise);
-        const meta = formatPickerMeta(row, row.custom ? "recent" : "catalog");
-        return (
-          <View key={exercise.id} style={styles.ffRow}>
-            <Pressable
-              accessibilityHint="Opens the movement picker"
-              accessibilityLabel={`${name}, change exercise`}
-              accessibilityRole="button"
-              onPress={() => setPicker({ exerciseId: exercise.id })}
-              style={(state) => [styles.ffRowHit, state.pressed && styles.summaryPressed, webFocusRing(pressableFocused(state))]}
-            >
-              <View style={styles.summaryCopy}>
-                <View style={styles.ffNameRow}>
-                  <Text numberOfLines={1} style={styles.summaryName}>{name}</Text>
-                  {row.custom ? (
-                    <View style={styles.ffChip}>
-                      <Text style={styles.ffChipLabel}>Custom</Text>
-                    </View>
-                  ) : null}
-                </View>
-                {meta ? <Text numberOfLines={1} style={styles.summaryMeta}>{meta}</Text> : null}
-              </View>
-            </Pressable>
-            <ContentOptionsMenu
-              accessibilityLabel={`${name} options`}
-              items={[{ danger: true, icon: "trash" as const, label: "Delete exercise", onPress: () => onChange(exercises.filter((item) => item.id !== exercise.id)) }]}
-            />
-          </View>
-        );
-      })}
-      <AddExerciseButton onPress={() => setPicker({})} />
-      <MovementPicker
-        initialSelection={picker?.exerciseId
-          ? pickerSelectionFor(exercises, picker.exerciseId)
-          : []}
-        onConfirm={(selections) => {
-          onChange(exercisesFromPickerSelections(exercises, selections, picker?.exerciseId).exercises);
-          setPicker(null);
-        }}
-        onDismiss={() => setPicker(null)}
-        visible={picker !== null}
-      />
     </View>
   );
 }
@@ -756,34 +695,6 @@ const styles = StyleSheet.create({
   exerciseMeta: {
     color: colors.muted,
     ...type.label,
-  },
-  ffRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    gap: spacing.sm,
-    marginTop: spacing.md,
-    minHeight: pickerRowHeight,
-  },
-  ffRowHit: {
-    flex: 1,
-    justifyContent: "center",
-    minHeight: pickerRowHeight,
-  },
-  ffNameRow: {
-    alignItems: "center",
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: spacing.sm,
-  },
-  ffChip: {
-    backgroundColor: colors.brandTint,
-    borderRadius: radii.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  ffChipLabel: {
-    color: colors.brandPressed,
-    ...pickerChipType,
   },
   tableHeader: {
     alignItems: "center",
