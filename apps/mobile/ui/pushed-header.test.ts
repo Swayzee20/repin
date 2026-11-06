@@ -85,7 +85,7 @@ test("Settings keeps the labeled Sign out button and adds no strip action", () =
   assert.equal(code.includes('variant="prominent"'), false);
 });
 
-test("group detail shares from the strip and keeps ambiguous actions in the page", () => {
+test("crew page keeps the pushed back control and page-local invite actions", () => {
   const code = sourceOf("../app/groups/[id].tsx");
 
   assert.equal(code.includes("getVerticalBarEdge("), false);
@@ -95,14 +95,11 @@ test("group detail shares from the strip and keeps ambiguous actions in the page
   assert.equal(code.includes("pushedShowsRoundBack"), true);
   assert.equal(code.includes("pushedHeaderClearance"), true);
   assert.equal(code.includes("pushedHeaderScreenOptions"), true);
-  assert.equal(code.includes("nativeHeader && group?.inviteCode"), true);
-  assert.equal(code.split('<Stack.Toolbar placement="right">').length - 1, 1);
-  assert.equal(code.includes('icon="square.and.arrow.up"'), true);
-  assert.equal(code.includes('accessibilityLabel="Share"'), true);
-  assert.equal(code.split("onPress={onShareInvite}").length - 1, 2);
-  assert.equal(code.includes("void shareInvite(group.name, inviteCode)"), true);
-  assert.equal(code.includes("Copy code"), true);
-  assert.equal(code.includes("Log workout"), true);
+  assert.equal(code.includes("<Stack.Toolbar"), false);
+  assert.equal(code.includes("Copy"), true);
+  assert.equal(code.includes("Share"), true);
+  assert.equal(code.includes("Leave crew"), true);
+  assert.equal(code.includes("Delete crew"), false);
   assert.equal(code.includes('variant="prominent"'), false);
   assert.equal(code.includes("roundBack ?"), true);
 });

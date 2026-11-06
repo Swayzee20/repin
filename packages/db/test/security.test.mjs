@@ -19,6 +19,7 @@ const appTables = [
   "community_post_reactions",
   "community_posts",
   "content_reports",
+  "crew_notification_prefs",
   "group_members",
   "groups",
   "movements",
@@ -1514,6 +1515,201 @@ test("moderation reports, blocks, removal, and blocked feeds", async () => {
   }
 });
 
+test("crew owner tools, leave, and hidden content after remove", async () => {
+  const testUrl = await recreateDatabase();
+  process.env.DATABASE_URL = testUrl;
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+
+    const db = await import("../src/index.ts");
+    const ada = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Ada Owner" });
+    const sam = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Sam R." });
+    const maya = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Maya T." });
+    const crew = await db.createGroup({ ownerId: ada.id, name: "Morning Crew" });
+    const joined = await db.joinGroupByInviteCode({ userId: sam.id, inviteCode: crew.inviteCode });
+    assert.equal(joined?.alreadyMember, false);
+    await db.joinGroupByInviteCode({ userId: maya.id, inviteCode: crew.inviteCode });
+
+    const samPost = await loggedWorkout(db, sam, crew.id, "Sam run");
+    await db.createCommunityPostCommentForMember({
+      userId: sam.id,
+      displayName: sam.displayName,
+      groupId: crew.id,
+      workoutSessionId: samPost.id,
+      text: "Sam comment",
+    });
+    await db.setCommunityPostReactionForMember({
+      userId: sam.id,
+      groupId: crew.id,
+      workoutSessionId: samPost.id,
+      reactionType: "fire",
+    });
+
+    await assert.rejects(
+      () => db.updateCrewForOwner({ userId: sam.id, groupId: crew.id, name: "Hacked" }),
+      (error) => error.name === "CrewRequestError" && error.statusCode === 403,
+    );
+    await assert.rejects(
+      () => db.resetCrewInviteCodeForOwner({ userId: sam.id, groupId: crew.id }),
+      (error) => error.name === "CrewRequestError" && error.statusCode === 403,
+    );
+    await assert.rejects(
+      () => db.transferCrewOwnership({ userId: sam.id, groupId: crew.id, newOwnerId: maya.id }),
+      (error) => error.name === "CrewRequestError" && error.statusCode === 403,
+    );
+    await assert.rejects(
+      () => db.removeCrewMember({ userId: sam.id, groupId: crew.id, memberId: maya.id }),
+      (error) => error.name === "CrewRequestError" && error.statusCode === 403,
+    );
+
+    const removed = await db.removeCrewMember({
+      userId: ada.id,
+      groupId: crew.id,
+      memberId: sam.id,
+    });
+    assert.equal(removed.displayName, "Sam R.");
+    assert.equal(await db.getGroupForMember({ groupId: crew.id, userId: sam.id }), null);
+    assert.equal(
+      await db.listRecentWorkoutsForMember({ userId: sam.id, groupId: crew.id }),
+      null,
+    );
+
+    const remainingFeed = await db.listRecentWorkoutsForMember({
+      userId: ada.id,
+      groupId: crew.id,
+    });
+    assert.equal(remainingFeed?.some((item) => item.userId === sam.id), false);
+
+    const adaPost = await loggedWorkout(db, ada, crew.id, "Ada run");
+    await db.createCommunityPostCommentForMember({
+      userId: sam.id,
+      displayName: sam.displayName,
+      groupId: crew.id,
+      workoutSessionId: adaPost.id,
+      text: "Should not post",
+    }).then((result) => assert.equal(result, null));
+    const comments = await db.listCommunityPostCommentsForMember({
+      userId: ada.id,
+      groupId: crew.id,
+      workoutSessionId: adaPost.id,
+    });
+    assert.equal(comments?.some((comment) => comment.userId === sam.id), false);
+
+    assert.deepEqual(
+      await idsAs(client, "authenticated", sam.id, "select id from groups"),
+      [],
+    );
+    assert.deepEqual(
+      await idsAs(
+        client,
+        "authenticated",
+        ada.id,
+        "select id from community_posts where user_id = $1",
+        [sam.id],
+      ),
+      [],
+    );
+    assert.deepEqual(
+      await idsAs(
+        client,
+        "authenticated",
+        ada.id,
+        "select id from community_post_comments where user_id = $1",
+        [sam.id],
+      ),
+      [],
+    );
+    assert.deepEqual(
+      await idsAs(
+        client,
+        "authenticated",
+        ada.id,
+        "select id from community_post_reactions where user_id = $1",
+        [sam.id],
+      ),
+      [],
+    );
+
+    const rejoined = await db.joinGroupByInviteCode({
+      userId: sam.id,
+      inviteCode: crew.inviteCode,
+    });
+    assert.equal(rejoined?.alreadyMember, false);
+    const afterRejoin = await db.listRecentWorkoutsForMember({
+      userId: ada.id,
+      groupId: crew.id,
+    });
+    assert.equal(afterRejoin?.some((item) => item.userId === sam.id), false);
+    const fresh = await loggedWorkout(db, sam, crew.id, "Fresh start");
+    const feedAfterFresh = await db.listRecentWorkoutsForMember({
+      userId: ada.id,
+      groupId: crew.id,
+    });
+    assert.equal(feedAfterFresh?.some((item) => item.id === fresh.id), true);
+    assert.equal(feedAfterFresh?.some((item) => item.id === samPost.id), false);
+
+    const weekStart = new Date("2026-11-09T00:00:00.000Z");
+    const weekEnd = new Date("2026-11-16T00:00:00.000Z");
+    const members = await db.listCrewMembers({
+      groupId: crew.id,
+      weekStart,
+      weekEnd,
+    });
+    assert.equal(members[0].role, "owner");
+    assert.ok(members.every((member) => typeof member.workoutsThisWeek === "number"));
+
+    await db.setCrewNotificationPrefs({
+      userId: sam.id,
+      groupId: crew.id,
+      prefs: {
+        muteAll: true,
+        crewWorkout: false,
+        crewComment: false,
+        crewReaction: false,
+      },
+    });
+    assert.equal(
+      await db.crewAlertEnabledForUser({
+        userId: sam.id,
+        groupId: crew.id,
+        alertType: "crew_workout",
+      }),
+      false,
+    );
+
+    await assert.rejects(
+      () => db.leaveCrew({ userId: ada.id, groupId: crew.id }),
+      (error) => error.name === "CrewRequestError" && error.statusCode === 409,
+    );
+    await db.transferCrewOwnership({
+      userId: ada.id,
+      groupId: crew.id,
+      newOwnerId: maya.id,
+    });
+    const left = await db.leaveCrew({ userId: ada.id, groupId: crew.id });
+    assert.equal(left.closed, false);
+    assert.equal(await db.getGroupForMember({ groupId: crew.id, userId: ada.id }), null);
+
+    const solo = await db.createGroup({ ownerId: maya.id, name: "Solo Crew" });
+    const closed = await db.leaveCrew({ userId: maya.id, groupId: solo.id });
+    assert.equal(closed.closed, true);
+    assert.equal(await db.getGroupForMember({ groupId: solo.id, userId: maya.id }), null);
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
 async function loggedWorkout(db, user, groupId, title) {
   return db.createWorkoutForMember({
     userId: user.id,
@@ -1633,6 +1829,7 @@ async function applySupabaseMigrations(client) {
     "20260822000000_workout_photos.sql",
     "20261030140000_enable_row_level_security.sql",
     "20261102160000_moderation.sql",
+    "20261106000000_crew_page.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");
@@ -1737,6 +1934,10 @@ async function assertStorageBlockToleratesNonOwner(client) {
     drop policy if exists "Workout photo owners can upload" on storage.objects;
     drop policy if exists "Workout photo owners can update" on storage.objects;
     drop policy if exists "Workout photo owners can delete" on storage.objects;
+    drop policy if exists "Crew photo owners can read" on storage.objects;
+    drop policy if exists "Crew photo owners can upload" on storage.objects;
+    drop policy if exists "Crew photo owners can update" on storage.objects;
+    drop policy if exists "Crew photo owners can delete" on storage.objects;
     update storage.buckets set public = true where id = 'workout-photos';
     alter table storage.objects owner to storage_table_owner;
     alter table storage.buckets owner to storage_table_owner;

@@ -10,6 +10,10 @@ import {
   type Database,
   type DatabaseTransaction,
 } from "./connection";
+import {
+  commentAuthorVisibleSql,
+  reactionAuthorVisibleSql,
+} from "./membership";
 import * as schema from "./schema";
 
 type Queryable = Database | DatabaseTransaction;
@@ -60,6 +64,7 @@ export function visibleReactionCountSql(
     from ${schema.communityPostReactions}
     where ${schema.communityPostReactions.communityPostId} = ${schema.communityPosts.id}
       and ${schema.communityPostReactions.reactionType} = ${reactionType}
+      and ${reactionAuthorVisibleSql(schema.communityPosts.groupId)}
       ${hidden}
   )`.mapWith(Number);
 }
@@ -69,7 +74,9 @@ export function visibleCommentCountSql(viewerId: string | undefined) {
     ? sql` and ${notBlockedAuthor(viewerId, schema.communityPostComments.userId)}
            and ${notReportedContent(viewerId, "comment", schema.communityPostComments.id)}`
     : sql``;
-  const visible = sql` and ${schema.communityPostComments.removedAt} is null ${hidden}`;
+  const visible = sql` and ${schema.communityPostComments.removedAt} is null
+    and ${commentAuthorVisibleSql(schema.communityPosts.groupId)}
+    ${hidden}`;
   return sql<number>`(
     select count(*)::int
     from ${schema.communityPostComments}

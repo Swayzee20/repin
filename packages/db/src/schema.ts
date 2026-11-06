@@ -52,6 +52,13 @@ export const workoutDistanceUnits = ["m", "km", "mi"] as const;
 
 export const communityPostReactionTypes = ["fire", "strong", "clap"] as const;
 
+export const crewNotificationAlertTypes = [
+  "crew_workout",
+  "crew_comment",
+  "crew_reaction",
+  "mute_all",
+] as const;
+
 export const users = pgTable("users", {
   id: uuid().primaryKey(),
   displayName: text("display_name").notNull(),
@@ -76,6 +83,8 @@ export const groups = pgTable(
     ownerId: uuid("owner_id")
       .notNull()
       .references(() => users.id, { onDelete: "restrict" }),
+    photoPath: text("photo_path"),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -96,10 +105,37 @@ export const groupMembers = pgTable(
     joinedAt: timestamp("joined_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
+    leftAt: timestamp("left_at", { withTimezone: true }),
+    contentVisibleAfter: timestamp("content_visible_after", { withTimezone: true })
+      .default(sql`'-infinity'`)
+      .notNull(),
   },
   (table) => [
     primaryKey({ columns: [table.groupId, table.userId] }),
     index("group_members_user_id_idx").on(table.userId),
+    index("group_members_group_active_idx").on(table.groupId),
+  ],
+);
+
+export const crewNotificationPrefs = pgTable(
+  "crew_notification_prefs",
+  {
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    alertType: text("alert_type").notNull(),
+    enabled: boolean().notNull().default(true),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.groupId, table.alertType] }),
+    index("crew_notification_prefs_group_id_idx").on(table.groupId),
+    check(
+      "crew_notification_prefs_alert_type_check",
+      sql`${table.alertType} in ('crew_workout', 'crew_comment', 'crew_reaction', 'mute_all')`,
+    ),
   ],
 );
 
@@ -906,3 +942,5 @@ export type ContentReport = typeof contentReports.$inferSelect;
 export type NewContentReport = typeof contentReports.$inferInsert;
 export type UserBlock = typeof userBlocks.$inferSelect;
 export type NewUserBlock = typeof userBlocks.$inferInsert;
+export type CrewNotificationPref = typeof crewNotificationPrefs.$inferSelect;
+export type NewCrewNotificationPref = typeof crewNotificationPrefs.$inferInsert;
