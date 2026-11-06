@@ -30,6 +30,7 @@ import {
 } from "./overlay-state";
 import { SheetHeader, useRegisterSheetClose, type SheetClose } from "./sheet";
 import { colors, elevation, radii, size, spacing } from "./theme";
+import { useOverlayOccupancy } from "./use-overlay-occupancy";
 
 const panelBorderWidth = 1;
 
@@ -59,6 +60,7 @@ export function SidePanel({
   const panelOpacity = useSharedValue(0);
   const scrimOpacity = useSharedValue(0);
   const closing = useRef(false);
+  const { onNativeDismiss } = useOverlayOccupancy(visible);
   const didFinishClose = useRef(false);
   const closeRef = useRef<SheetClose>(() => {});
   const frameRef = useRef(frame);
@@ -218,6 +220,7 @@ export function SidePanel({
   return (
     <Modal
       animationType="none"
+      onDismiss={onNativeDismiss}
       onRequestClose={() => {
         if (chooserOnNativeRequestClose({ os: Platform.OS, visible: visibleRef.current }).type !== "dismiss") return;
         close();

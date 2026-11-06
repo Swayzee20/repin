@@ -19,6 +19,7 @@ import { keyboardOverlapFromFrame, overlayBottomInset } from "./keyboard";
 import { CenteredCard } from "./layout";
 import { overlaySupportedOrientations } from "./overlay-state";
 import { RoundIconButton } from "./primitives";
+import { useOverlayOccupancy } from "./use-overlay-occupancy";
 import { colors, elevation, radii, size, spacing, type } from "./theme";
 import { WorkoutDetailView, type WorkoutDetailFixture } from "./workout-detail";
 
@@ -49,6 +50,7 @@ export function WorkoutDetailModal({
 }) {
   const { height: viewportHeight } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { onNativeDismiss } = useOverlayOccupancy(visible);
   const keyboardHeight = useKeyboardOverlap();
   const bottomInset = overlayBottomInset(keyboardHeight, insets.bottom);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
@@ -122,6 +124,7 @@ export function WorkoutDetailModal({
   return (
     <Modal
       animationType="none"
+      onDismiss={onNativeDismiss}
       onRequestClose={close}
       presentationStyle="overFullScreen"
       statusBarTranslucent

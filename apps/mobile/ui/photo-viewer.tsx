@@ -15,6 +15,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { RoundIconButton } from "./primitives";
 import { colors, radii, spacing } from "./theme";
+import { useOverlayOccupancy } from "./use-overlay-occupancy";
 
 type NaturalSize = { height: number; width: number };
 
@@ -36,6 +37,7 @@ export function PhotoViewer({
 }) {
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  const { onNativeDismiss } = useOverlayOccupancy(visible);
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const imageOpacity = useRef(new Animated.Value(0)).current;
   const imageScale = useRef(new Animated.Value(0.97)).current;
@@ -120,6 +122,7 @@ export function PhotoViewer({
   return (
     <Modal
       animationType="none"
+      onDismiss={onNativeDismiss}
       onRequestClose={close}
       presentationStyle="overFullScreen"
       statusBarTranslucent

@@ -1,25 +1,43 @@
 import AsyncStorage from "expo-sqlite/kv-store";
 
-const dismissedKey = "push-preprompt-dismissed";
+import {
+  dismissedStorageKey,
+  isDismissedFromStoredValues,
+  legacyDismissedStorageKey,
+} from "./push-prompt-policy";
 
-let memoryDismissed = false;
+const memoryDismissed = new Map<string, boolean>();
 
-export async function wasPushPrepromptDismissed() {
-  if (memoryDismissed) return true;
+function memoryKey(userId?: string | null) {
+  return userId ?? "";
+}
+
+export async function wasPushPrepromptDismissed(userId?: string | null) {
+  const key = memoryKey(userId);
+  if (memoryDismissed.get(key)) return true;
   try {
-    const value = await AsyncStorage.getItemAsync(dismissedKey);
-    memoryDismissed = value === "1";
-    return memoryDismissed;
+    const perUser = userId
+      ? await AsyncStorage.getItemAsync(dismissedStorageKey(userId))
+      : null;
+    const legacy = await AsyncStorage.getItemAsync(legacyDismissedStorageKey);
+    const dismissed = isDismissedFromStoredValues(perUser, legacy);
+    memoryDismissed.set(key, dismissed);
+    return dismissed;
   } catch {
-    return memoryDismissed;
+    return memoryDismissed.get(key) === true;
   }
 }
 
-export async function markPushPrepromptDismissed() {
-  memoryDismissed = true;
+export async function markPushPrepromptDismissed(userId?: string | null) {
+  const key = memoryKey(userId);
+  memoryDismissed.set(key, true);
   try {
-    await AsyncStorage.setItemAsync(dismissedKey, "1");
+    await AsyncStorage.setItemAsync(dismissedStorageKey(userId), "1");
   } catch {
     // Keep the in-memory flag so this session still does not nag.
   }
+}
+
+export function clearPushPrepromptMemoryForTests() {
+  memoryDismissed.clear();
 }

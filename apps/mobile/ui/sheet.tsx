@@ -1,11 +1,19 @@
-import { useCallback, useEffect, useRef, type ReactNode, type RefObject } from "react";
-import { Animated, Easing, Modal, PanResponder, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
+import { useCallback, useEffect, useLayoutEffect, useRef, type ReactNode, type RefObject } from "react";
+import { Animated, Easing, Modal, PanResponder, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, type StyleProp, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import { useLayoutMode } from "./layout";
+import { acquireOverlay, releaseOverlay } from "./overlay-occupancy";
 import { pickerSheetTopGap, sheetDismissDistance, sheetFrame, sheetRowBackground, sheetRowMinHeight } from "./overlay-state";
 import { RoundIconButton } from "./primitives";
+import {
+  initialSheetHideState,
+  reduceSheetHide,
+  type OverlayPlatform,
+  type SheetHideEvent,
+  type SheetHideState,
+} from "./sheet-hide";
 import { colors, elevation, radii, size, spacing, type } from "./theme";
 
 export type SheetClose = (afterClose?: () => void) => void;
@@ -79,12 +87,44 @@ export function BottomSheet({
   });
   const backdropOpacity = useRef(new Animated.Value(0)).current;
   const sheetTranslateY = useRef(new Animated.Value(height)).current;
-  const closing = useRef(false);
   const closeRef = useRef<SheetClose>(() => {});
+  const overlayId = useRef(`sheet:${Math.random().toString(36).slice(2)}`).current;
+  const hideState = useRef<SheetHideState>(initialSheetHideState);
+  const pendingAfterClose = useRef<(() => void) | undefined>(undefined);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  const hidePlatform: OverlayPlatform = Platform.OS === "ios"
+    ? "ios"
+    : Platform.OS === "android"
+      ? "android"
+      : "web";
+
+  const applyHide = useCallback((event: SheetHideEvent) => {
+    const result = reduceSheetHide(hideState.current, event);
+    hideState.current = result.state;
+    if (event.type === "presented" || event.type === "unmounted") {
+      pendingAfterClose.current = undefined;
+    }
+    for (const effect of result.effects) {
+      if (effect === "acquireOverlay") acquireOverlay(overlayId);
+      if (effect === "releaseOverlay") releaseOverlay(overlayId);
+      if (effect === "requestVisibleFalse") onDismissRef.current();
+      if (effect === "runAfterClose") {
+        const afterClose = pendingAfterClose.current;
+        pendingAfterClose.current = undefined;
+        afterClose?.();
+      }
+    }
+    return result;
+  }, [overlayId]);
 
   const close = useCallback<SheetClose>((afterClose) => {
-    if (closing.current) return;
-    closing.current = true;
+    const result = applyHide({
+      hasAfterClose: typeof afterClose === "function",
+      type: "closeRequested",
+    });
+    if (result.ignored) return;
+    pendingAfterClose.current = afterClose;
     Animated.parallel([
       Animated.timing(backdropOpacity, {
         duration: 160,
@@ -99,18 +139,18 @@ export function BottomSheet({
         useNativeDriver: false,
       }),
     ]).start(({ finished }) => {
-      if (!finished) return;
-      if (afterClose) afterClose();
-      else onDismiss();
+      applyHide({ finished, type: "animationEnded" });
     });
-  }, [backdropOpacity, height, onDismiss, sheetTranslateY]);
+  }, [applyHide, backdropOpacity, height, sheetTranslateY]);
 
   closeRef.current = close;
   useRegisterSheetClose(closeRef, onRegisterClose, visible);
 
+  const wasVisible = useRef(false);
   useEffect(() => {
+    if (visible && !wasVisible.current) applyHide({ type: "presented" });
+    wasVisible.current = visible;
     if (!visible) return;
-    closing.current = false;
     backdropOpacity.setValue(0);
     sheetTranslateY.setValue(height);
     Animated.parallel([
@@ -127,7 +167,16 @@ export function BottomSheet({
         useNativeDriver: false,
       }),
     ]).start();
-  }, [backdropOpacity, height, sheetTranslateY, visible]);
+  }, [applyHide, backdropOpacity, height, sheetTranslateY, visible]);
+
+  useLayoutEffect(() => {
+    if (visible) return;
+    applyHide({ platform: hidePlatform, type: "visibleFalseCommitted" });
+  }, [applyHide, hidePlatform, visible]);
+
+  useEffect(() => () => {
+    applyHide({ type: "unmounted" });
+  }, [applyHide]);
 
   const dragOrigin = useRef(0);
   const pan = useRef(PanResponder.create({
@@ -157,6 +206,9 @@ export function BottomSheet({
   return (
     <Modal
       animationType="none"
+      onDismiss={() => {
+        applyHide({ platform: hidePlatform, type: "nativeDismissed" });
+      }}
       onRequestClose={() => close()}
       presentationStyle="overFullScreen"
       statusBarTranslucent
