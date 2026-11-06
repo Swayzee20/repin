@@ -53,6 +53,9 @@ export const chooserShowsPlusAnchor = false;
  * iOS `Modal` defaults to portrait-only. A portrait-locked overFullScreen
  * chooser is what kept the Duo in portrait (and froze the strip / (+)) after
  * unfolding with the panel open.
+ *
+ * Pass this module-level array (do not spread a new one each render). A new
+ * array identity is extra native churn on the same presented controller.
  */
 export const overlaySupportedOrientations = [
   "portrait",
@@ -62,15 +65,30 @@ export const overlaySupportedOrientations = [
   "landscape-right",
 ] as const;
 
+export type OverlaySupportedOrientation = (typeof overlaySupportedOrientations)[number];
+export const overlaySupportedOrientationsProp: OverlaySupportedOrientation[] = [...overlaySupportedOrientations];
+
+export type ChooserPanelEdge = "leading" | "trailing";
+
+export type ChooserOverlayKind = "panel" | "sheet";
+
+export type ChooserOverlayState = {
+  edge: ChooserPanelEdge;
+  holdsPanel: boolean;
+  kind: ChooserOverlayKind;
+};
+
+export type ChooserRequestClose = { type: "dismiss" } | { type: "ignore" };
+
 export type ChooserFrameChange =
   | { frameKey: string; type: "opened" }
   | { frameKey: string; type: "relayout" }
   | { type: "idle" };
 
 /**
- * Keep the strip chooser open across fold/unfold and Split View. Dismissing
- * the overFullScreen modal during a size change is what closed the panel and
- * left iOS stuck until a rotate.
+ * Keep the strip chooser open across fold/unfold and Split View. A JS
+ * dismiss of the presented Modal during a size change is one way the panel
+ * can close; native teardown is not assumed.
  */
 export function chooserOnFrameKeyChange({
   frameKey,
@@ -85,6 +103,83 @@ export function chooserOnFrameKeyChange({
   if (openKey === null) return { frameKey, type: "opened" };
   if (openKey === frameKey) return { type: "idle" };
   return { frameKey, type: "relayout" };
+}
+
+export function chooserResolvedEdge(
+  edge: ChooserPanelEdge | null | undefined,
+  held: ChooserPanelEdge,
+): ChooserPanelEdge {
+  return edge === "leading" || edge === "trailing" ? edge : held;
+}
+
+/**
+ * Folded Duo still has the side strip, so the open host is the side panel.
+ * Hold that host while visible so a later `stripPresent: false` does not
+ * swap in BottomSheet. A closed-Home two-pane unfold does not prove that a
+ * presented Modal is free of the app.json portrait Info.plist restriction.
+ */
+export function nextChooserOverlayState(
+  previous: ChooserOverlayState | null,
+  input: {
+    ios: boolean;
+    stripEdge: ChooserPanelEdge | null;
+    stripPresent: boolean;
+    visible: boolean;
+  },
+): ChooserOverlayState {
+  const holdsPanel = Boolean(input.ios && input.visible && (input.stripPresent || previous?.holdsPanel));
+  const edge = chooserResolvedEdge(input.stripEdge, previous?.edge ?? "trailing");
+  return {
+    edge,
+    holdsPanel,
+    kind: input.ios && (holdsPanel || input.stripPresent) ? "panel" : "sheet",
+  };
+}
+
+/** Model-only: whether the chosen overlay *kind* changed, not a measured React/Modal mount. */
+export function chooserOverlayKindChanged(
+  previous: ChooserOverlayKind | null,
+  next: ChooserOverlayKind,
+) {
+  return previous !== null && previous !== next;
+}
+
+export function chooserOverlayStateEquals(left: ChooserOverlayState, right: ChooserOverlayState) {
+  return left.kind === right.kind && left.edge === right.edge && left.holdsPanel === right.holdsPanel;
+}
+
+export function chooserFrameKey({
+  edge,
+  foldActive,
+  width,
+}: {
+  edge: ChooserPanelEdge;
+  foldActive: boolean;
+  width: number;
+}) {
+  return `${width}:${foldActive ? "unfolded" : "folded"}:${edge}`;
+}
+
+/**
+ * RN 0.88.1 iOS Fabric emits `onRequestClose` from
+ * `presentationControllerDidAttemptToDismiss` and from
+ * `presentationControllerDidDismiss` only when `allowSwipeDismissal` is set.
+ * Transparent modals use `UIModalPresentationOverFullScreen`. This chooser
+ * does not set `allowSwipeDismissal`. A size-class / fold emit is not in
+ * that implementation; ignoring iOS here is defensive, not a proven unfold
+ * path. X, backdrop, swipe, and accessibility escape still call `close()`.
+ * Android back still dismisses.
+ */
+export function chooserOnNativeRequestClose({
+  os,
+  visible,
+}: {
+  os: string;
+  visible: boolean;
+}): ChooserRequestClose {
+  if (!visible) return { type: "ignore" };
+  if (os === "ios") return { type: "ignore" };
+  return { type: "dismiss" };
 }
 
 export const chooserMotion = {
@@ -104,8 +199,6 @@ export function chooserMeasuredAnchor(foldActive: boolean) {
   }
   return { pillTop: chooserPillTop.folded, py: chooserPlusCentreY.folded };
 }
-
-export type ChooserPanelEdge = "leading" | "trailing";
 
 export type ChooserPanelFrame = {
   bottomLimit: number;
