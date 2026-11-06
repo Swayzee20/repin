@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, type ReactNode } from "react";
-import { Modal, PanResponder, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
+import { Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SymbolView } from "expo-symbols";
 import Animated, {
   cancelAnimation,
@@ -14,15 +14,17 @@ import Animated, {
 
 import { useLayoutMode } from "./layout";
 import {
+  chooserFrameKey,
   chooserMeasuredAnchor,
   chooserMotion,
   chooserOnFrameKeyChange,
+  chooserOnNativeRequestClose,
   chooserPanel,
   chooserPanelFrame,
   chooserShowsPlusAnchor,
   chooserSwipeActivation,
   chooserSwipeShouldDismiss,
-  overlaySupportedOrientations,
+  overlaySupportedOrientationsProp,
   type ChooserPanelEdge,
   type ChooserPanelFrame,
 } from "./overlay-state";
@@ -67,11 +69,13 @@ export function SidePanel({
   const pendingAfterClose = useRef<(() => void) | undefined>(undefined);
   const wasVisible = useRef(false);
   const openKey = useRef<string | null>(null);
+  const visibleRef = useRef(visible);
   frameRef.current = frame;
   reduceMotionRef.current = reduceMotion === true;
   onDismissRef.current = onDismiss;
+  visibleRef.current = visible;
 
-  const frameKey = `${width}:${split.foldActive ? "unfolded" : "folded"}:${edge}`;
+  const frameKey = chooserFrameKey({ edge, foldActive: split.foldActive, width });
   const rowsMaxHeight = Math.max(
     0,
     frame.maxHeight - panelBorderWidth * 2 - chooserPanel.padding.top - chooserPanel.padding.bottom - size.hit - spacing.sm,
@@ -217,10 +221,13 @@ export function SidePanel({
     <Modal
       animationType="none"
       onDismiss={onNativeDismiss}
-      onRequestClose={() => close()}
+      onRequestClose={() => {
+        if (chooserOnNativeRequestClose({ os: Platform.OS, visible: visibleRef.current }).type !== "dismiss") return;
+        close();
+      }}
       presentationStyle="overFullScreen"
       statusBarTranslucent
-      supportedOrientations={[...overlaySupportedOrientations]}
+      supportedOrientations={overlaySupportedOrientationsProp}
       transparent
       visible={visible}
     >
