@@ -22,6 +22,7 @@ import { useAuthSession } from "../lib/use-auth-session";
 import { KeyboardDoneAccessory } from "../ui/keyboard-done";
 import { useLayoutMode } from "../ui/layout";
 import { formPresentation } from "../ui/layout-math";
+import { PushNotificationsHost } from "../ui/push-notifications-host";
 import { colors } from "../ui/theme";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -56,10 +57,12 @@ function RootLayout() {
   return (
     <RootErrorBoundary>
       <ReservedRegionsProvider style={styles.root}>
-        <RootStack />
-        <SignedOutRedirect />
-        <KeyboardDoneAccessory />
-        <StatusBar style="dark" />
+        <PushNotificationsHost>
+          <RootStack />
+          <SignedOutRedirect />
+          <KeyboardDoneAccessory />
+          <StatusBar style="dark" />
+        </PushNotificationsHost>
       </ReservedRegionsProvider>
     </RootErrorBoundary>
   );

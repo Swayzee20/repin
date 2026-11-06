@@ -8,6 +8,10 @@ import {
   workoutSessionIdSchema,
 } from "@repin/validation";
 
+import {
+  notifyCrewComment,
+  scheduleCrewPush,
+} from "../../../../../../../lib/crew-push";
 import { reportUnexpectedRouteError } from "../../../../../../../lib/sentry";
 import {
   AuthenticationError,
@@ -86,16 +90,24 @@ export async function POST(request: Request, context: RouteContext) {
         text: input.data.text,
       }));
 
-    return comment
-      ? timedJson(
-          timing,
-          {
-            comment: timing.measureSync("enrichment", () =>
-              withResolvedDisplayName(comment)),
-          },
-          { status: 201, headers: { "Cache-Control": "no-store" } },
-        )
-      : notFound(timing);
+    if (!comment) return notFound(timing);
+
+    scheduleCrewPush(() => notifyCrewComment({
+      actorUserId: user.id,
+      actorDisplayName: user.displayName,
+      groupId: target.groupId,
+      sessionId: target.workoutSessionId,
+      createdAt: comment.createdAt,
+    }));
+
+    return timedJson(
+      timing,
+      {
+        comment: timing.measureSync("enrichment", () =>
+          withResolvedDisplayName(comment)),
+      },
+      { status: 201, headers: { "Cache-Control": "no-store" } },
+    );
   } catch (error) {
     return handleRouteError(
       timing,

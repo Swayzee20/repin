@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { promptAfterJoiningCrew } from "../../lib/push-controller";
 import { supabase } from "../../lib/supabase";
 import { Button, Card, LoadingState, StateCard, TextField } from "../../ui/components";
 import { singleFieldReturn } from "../../ui/keyboard";
@@ -82,6 +83,7 @@ export default function JoinFirstGroupScreen() {
         return;
       }
 
+      promptAfterJoiningCrew();
       router.replace("/");
     } catch (joinError) {
       setError(

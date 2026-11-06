@@ -2580,12 +2580,25 @@ export {
 } from "./crew";
 
 export {
+  claimReactionPushSlot,
+  countVisibleReactors,
+  disableDevicePushTokens,
+  listActivePushTokensForUsers,
+  listCrewWorkoutPushRecipients,
+  listPostAuthorPushRecipient,
+  removeDevicePushToken,
+  upsertDevicePushToken,
+  type CrewPushRecipient,
+} from "./push";
+
+export {
   blockMovements,
   communityPostComments,
   communityPostReactions,
   communityPosts,
   contentReports,
   crewNotificationPrefs,
+  devicePushTokens,
   groupMembers,
   groups,
   movements,

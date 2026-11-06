@@ -7,6 +7,10 @@ import { workoutTypeLabels } from "@repin/types";
 import { createWorkoutSchema, groupIdSchema, workoutWriteFields } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import {
+  notifyCrewWorkoutPosted,
+  scheduleCrewPush,
+} from "../../../../../lib/crew-push";
 import { reportUnexpectedRouteError } from "../../../../../lib/sentry";
 import {
   AuthenticationError,
@@ -102,6 +106,14 @@ export async function POST(request: Request, context: RouteContext) {
     if (!workout) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
+
+    scheduleCrewPush(() => notifyCrewWorkoutPosted({
+      actorUserId: user.id,
+      actorDisplayName: user.displayName,
+      groupId,
+      sessionId: workout.id,
+      createdAt: workout.createdAt,
+    }));
 
     return NextResponse.json(
       { workout: withResolvedDisplayName(workout) },

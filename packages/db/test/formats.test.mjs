@@ -61,6 +61,9 @@ test("functional fitness format constraints, RLS, and write path", async () => {
     );
 
     await applySqlFile(client, path.join(dbPackageRoot, "drizzle", "0015_functional_fitness_formats.sql"));
+    for (const file of drizzleFiles.filter((name) => name >= "0016")) {
+      await applySqlFile(client, path.join(dbPackageRoot, "drizzle", file));
+    }
     assert.equal(
       await scalar(client, "select count(*)::int from workout_sessions where id = $1", [sessionId]),
       1,

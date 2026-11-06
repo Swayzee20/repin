@@ -95,6 +95,7 @@ export function WorkoutDetailView({
   onCommentCountChange,
   onPostHidden,
   onReactionSummaryChange,
+  onUnavailable,
   onUserBlocked,
   paneHeader = null,
   presentation = "default",
@@ -110,6 +111,7 @@ export function WorkoutDetailView({
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onPostHidden?: (sessionId: string) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
+  onUnavailable?: () => void;
   onUserBlocked?: (userId: string) => void;
   paneHeader?: ReactNode;
   presentation?: "community-modal" | "community-pane" | "default" | "session";
@@ -242,6 +244,7 @@ export function WorkoutDetailView({
           };
           if (!response.ok || !body.workout) {
             if (response.status === 404) {
+              onUnavailable?.();
               throw new Error("This post isn't available");
             }
             throw new Error(body.error ?? "Workout details could not be loaded.");
@@ -271,7 +274,7 @@ export function WorkoutDetailView({
     } finally {
       if (mounted.current) setLoading(false);
     }
-  }, [groupId, onReactionSummaryChange, sessionId]);
+  }, [groupId, onReactionSummaryChange, onUnavailable, sessionId]);
 
   const loadComments = useCallback(async (force = false) => {
     const cached = readWorkoutCommentsCache(groupId, sessionId);

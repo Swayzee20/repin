@@ -10,7 +10,7 @@
     }
   },
   "scripts": {
-    "test": "pnpm --dir ../../apps/mobile exec tsx --test ../../packages/validation/src/create-workout.test.ts ../../packages/validation/src/format-mappers.test.ts ../../packages/validation/src/edit-gate.test.ts ../../packages/validation/src/crew.test.ts",
+    "test": "pnpm --dir ../../apps/mobile exec tsx --test ../../packages/validation/src/create-workout.test.ts ../../packages/validation/src/format-mappers.test.ts ../../packages/validation/src/edit-gate.test.ts ../../packages/validation/src/crew.test.ts ../../packages/validation/src/push.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

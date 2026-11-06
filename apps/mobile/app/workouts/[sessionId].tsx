@@ -10,11 +10,13 @@ import { WorkoutDetailView } from "../../ui/workout-detail";
 export default function WorkoutDetailScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
+    fromPush?: string | string[];
     groupId?: string | string[];
     sessionId?: string | string[];
   }>();
   const groupId = firstParam(params.groupId);
   const sessionId = firstParam(params.sessionId);
+  const fromPush = firstParam(params.fromPush) === "1";
   const back = (
     <RoundIconButton
       accessibilityLabel="Community"
@@ -41,6 +43,9 @@ export default function WorkoutDetailScreen() {
       <WorkoutDetailView
         groupId={groupId}
         leading={back}
+        onUnavailable={fromPush && groupId
+          ? () => router.replace(`/groups/${groupId}`)
+          : undefined}
         presentation="session"
         refreshOnFocus
         sessionId={sessionId}

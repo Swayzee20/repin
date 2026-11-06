@@ -719,6 +719,9 @@ export const communityPosts = pgTable(
     photoPath: text("photo_path"),
     removedAt: timestamp("removed_at", { withTimezone: true }),
     removedBy: uuid("removed_by").references(() => users.id, { onDelete: "set null" }),
+    reactionPushLastSentAt: timestamp("reaction_push_last_sent_at", {
+      withTimezone: true,
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -944,3 +947,35 @@ export type UserBlock = typeof userBlocks.$inferSelect;
 export type NewUserBlock = typeof userBlocks.$inferInsert;
 export type CrewNotificationPref = typeof crewNotificationPrefs.$inferSelect;
 export type NewCrewNotificationPref = typeof crewNotificationPrefs.$inferInsert;
+
+export const devicePushTokens = pgTable(
+  "device_push_tokens",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    expoPushToken: text("expo_push_token").notNull(),
+    platform: text().notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    disabledAt: timestamp("disabled_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("device_push_tokens_expo_push_token_unique").on(
+      table.expoPushToken,
+    ),
+    index("device_push_tokens_user_id_idx").on(table.userId),
+    check(
+      "device_push_tokens_platform_check",
+      sql`${table.platform} in ('ios', 'android', 'web')`,
+    ),
+  ],
+);
+
+export type DevicePushToken = typeof devicePushTokens.$inferSelect;
+export type NewDevicePushToken = typeof devicePushTokens.$inferInsert;

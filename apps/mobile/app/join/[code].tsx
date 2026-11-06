@@ -6,6 +6,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { invitePath, normalizeInviteCode } from "../../lib/invite-route";
+import { promptAfterJoiningCrew } from "../../lib/push-controller";
 import { supabase } from "../../lib/supabase";
 import { Button, Card, LoadingState, StateCard } from "../../ui/components";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
@@ -127,6 +128,7 @@ export default function GroupInviteScreen() {
       if (body.alreadyMember) {
         setPreview(body.group);
       } else {
+        promptAfterJoiningCrew();
         router.replace(`/groups/${body.group.id}`);
       }
     } catch (joinError) {
