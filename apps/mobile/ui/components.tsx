@@ -16,19 +16,14 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import Animated, {
-  Extrapolation,
-  interpolate,
-  runOnJS,
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useDerivedValue,
-  useReducedMotion,
-  useSharedValue,
-  type SharedValue,
-} from "react-native-reanimated";
-
 import { useVerticalBarEdge } from "./vertical-bar-edge";
+import {
+  communityFeedCardLayout,
+  isOwnPost,
+  ownPostMarkerStyle,
+  ownPostVoiceOverLabel,
+  workoutFeedCardLabel,
+} from "./community-feed-layout";
 import { anchoredScrollOffset, topVisibleAnchor } from "./layout-math";
 import { readStoredScrollAnchor, writeStoredScrollAnchor } from "./scroll-anchor";
 
@@ -297,93 +292,8 @@ export function LoadingState({ message }: { message: string }) {
   );
 }
 
-export function WorkoutCard({
-  focalY,
-  layoutY,
-  menuItems,
-  onPress,
-  scrollY,
-  showReactionSummary = false,
-  showCommentCount = false,
-  side = "left",
-  viewportHeight,
-  workout,
-}: {
-  focalY: number;
-  layoutY: SharedValue<number>;
-  menuItems?: ContentMenuItem[];
-  onPress?: () => void;
-  scrollY: SharedValue<number>;
-  showReactionSummary?: boolean;
-  showCommentCount?: boolean;
-  side?: "left" | "right";
-  viewportHeight: number;
-  workout: WorkoutFeedItem;
-}) {
-  const cardHeight = useSharedValue(160);
-  const reduceMotion = useReducedMotion();
-  const direction = side === "left" ? 1 : -1;
-  const animatedStyle = useAnimatedStyle(() => {
-    const cardCenter = layoutY.value - scrollY.value + cardHeight.value / 2;
-    const focusDelta = cardCenter - focalY;
-    const focusPlateau = 22;
-    const distanceBeyondFocus = Math.max(0, Math.abs(focusDelta) - focusPlateau);
-    const proximity = interpolate(
-      distanceBeyondFocus,
-      [0, 300 - focusPlateau],
-      [1, 0],
-      Extrapolation.CLAMP,
-    );
-    const scale = reduceMotion ? 1 : interpolate(proximity, [0, 1], [0.9, 1.03]);
-    const angleFactor = reduceMotion ? 1 : interpolate(proximity, [0, 1], [1, 0.34]);
-    const translateX = reduceMotion
-      ? 0
-      : interpolate(proximity, [0, 1], [-direction * 18, 0]);
-    const opacity = reduceMotion
-      ? 1
-      : interpolate(
-          focusDelta,
-          [-focalY, -focusPlateau, focusPlateau, viewportHeight - focalY],
-          [0.8, 1, 1, 0.84],
-          Extrapolation.CLAMP,
-        );
-
-    return {
-      opacity,
-      transform: [
-        { perspective: 900 },
-        { translateX },
-        { scale },
-        { rotateY: `${direction * 2.2 * angleFactor}deg` },
-        { rotateZ: `${direction * -0.35 * angleFactor}deg` },
-      ],
-    };
-  });
-
-  return (
-    <Animated.View
-      onLayout={(event) => {
-        cardHeight.value = event.nativeEvent.layout.height;
-      }}
-      style={[styles.feedCardShell, side === "left" ? styles.floatingLeft : styles.floatingRight, animatedStyle]}
-    >
-      {onPress ? (
-        <Pressable
-          accessibilityLabel={`Open ${workout.title} workout details`}
-          accessibilityRole="button"
-          onPress={onPress}
-          style={({ pressed }) => pressed && styles.workoutCardPressed}
-        >
-          <WorkoutSummaryCard menuItems={menuItems} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} style={styles.feedCardFlat} variant="full" workout={workout} />
-        </Pressable>
-      ) : (
-        <WorkoutSummaryCard menuItems={menuItems} showCommentCount={showCommentCount} showReactionSummary={showReactionSummary} style={styles.feedCardFlat} variant="full" workout={workout} />
-      )}
-    </Animated.View>
-  );
-}
-
 export function WorkoutSummaryCard({
+  isOwn = false,
   menuItems,
   onDelete,
   onEdit,
@@ -394,6 +304,7 @@ export function WorkoutSummaryCard({
   variant = "full",
   workout,
 }: {
+  isOwn?: boolean;
   menuItems?: ContentMenuItem[];
   onDelete?: () => void;
   onEdit?: () => void;
@@ -437,39 +348,51 @@ export function WorkoutSummaryCard({
   ];
 
   return (
-    <Card selected={selected} style={[variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard, style]}>
-      <View style={styles.workoutTopline}>
-        <View style={styles.avatar}><Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text></View>
-        <View style={styles.workoutAuthor}>
-          <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
-          <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
+    <View
+      accessibilityLabel={isOwn ? ownPostVoiceOverLabel : undefined}
+      style={styles.workoutCardWrap}
+    >
+      <Card selected={selected} style={[variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard, style]}>
+        <View style={styles.workoutTopline}>
+          <View style={styles.avatar}><Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text></View>
+          <View style={styles.workoutAuthor}>
+            <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
+            <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
+          </View>
+          {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
+          {resolvedMenuItems.length ? (
+            <ContentOptionsMenu
+              accessibilityLabel={`Options for ${displayName}'s post`}
+              items={resolvedMenuItems}
+            />
+          ) : null}
         </View>
-        {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
-        {resolvedMenuItems.length ? (
-          <ContentOptionsMenu
-            accessibilityLabel={`Options for ${displayName}'s post`}
-            items={resolvedMenuItems}
-          />
+        <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
+        {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
+        {resultSummary ? <Text numberOfLines={1} style={styles.workoutResultSummary}>{resultSummary}</Text> : null}
+        {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
+        {workout.photoUrl && variant === "full" ? <WorkoutPhoto onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} uri={workout.photoUrl} variant="feed" /> : null}
+        {socialSummary.length ? (
+          <Text accessibilityLabel={socialSummary.map((item) => item.accessibility).join(", ")} numberOfLines={1} style={styles.reactionSummary}>
+            {socialSummary.map((item) => item.text).join("   ")}
+          </Text>
         ) : null}
-      </View>
-      <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
-      {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
-      {resultSummary ? <Text numberOfLines={1} style={styles.workoutResultSummary}>{resultSummary}</Text> : null}
-      {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
-      {workout.photoUrl && variant === "full" ? <WorkoutPhoto onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} uri={workout.photoUrl} variant="feed" /> : null}
-      {socialSummary.length ? (
-        <Text accessibilityLabel={socialSummary.map((item) => item.accessibility).join(", ")} numberOfLines={1} style={styles.reactionSummary}>
-          {socialSummary.map((item) => item.text).join("   ")}
-        </Text>
+      </Card>
+      {isOwn ? (
+        <View
+          accessibilityElementsHidden
+          importantForAccessibility="no"
+          pointerEvents="none"
+          style={styles.ownPostEdge}
+        />
       ) : null}
-    </Card>
+    </View>
   );
 }
 
 export function CommunityFeed({
   anchorKey,
   edgeToEdge = false,
-  focusOffsetY = 0,
   mode = "full",
   onWorkoutPress,
   onWorkoutBlock,
@@ -484,7 +407,6 @@ export function CommunityFeed({
 }: {
   anchorKey?: string;
   edgeToEdge?: boolean;
-  focusOffsetY?: number;
   mode?: "preview" | "full";
   onWorkoutPress?: (workout: WorkoutFeedItem) => void;
   onWorkoutBlock?: (workout: WorkoutFeedItem) => void;
@@ -502,9 +424,6 @@ export function CommunityFeed({
   const feedBottomPadding = verticalBarEdge !== null ? insets.bottom + spacing.xxl : 132;
   const resolvedViewportHeight = viewportHeight ?? (mode === "preview" ? 320 : 340);
   const visibleWorkouts = mode === "preview" ? workouts.slice(0, 4) : workouts;
-  const scrollY = useSharedValue(0);
-  const itemHeights = useSharedValue<Record<string, number>>({});
-  const orderedWorkoutIds = visibleWorkouts.map((workout) => workout.id);
   const scrollRef = useRef<ScrollViewInstance>(null);
   const setScrollRef = useCallback((node: ScrollViewInstance | null) => {
     scrollRef.current = node;
@@ -536,16 +455,10 @@ export function CommunityFeed({
     });
     restored.current = true;
   }, [anchorKey, resolvedViewportHeight, visibleWorkouts.length]);
-  const scrollHandler = useAnimatedScrollHandler({
-    onScroll: (event) => {
-      scrollY.value = event.contentOffset.y;
-      if (anchorKey) runOnJS(publishAnchor)(event.contentOffset.y);
-    },
-  }, [anchorKey, publishAnchor]);
 
   return (
     <View style={[styles.feedViewport, edgeToEdge && styles.edgeToEdgeFeedViewport, { height: resolvedViewportHeight }]}>
-      <Animated.ScrollView
+      <ScrollView
         {...keyboardScrollProps(Platform.OS)}
         contentContainerStyle={[styles.feedContent, { paddingBottom: feedBottomPadding }]}
         directionalLockEnabled
@@ -554,7 +467,9 @@ export function CommunityFeed({
           contentHeight.current = height;
           tryRestore();
         }}
-        onScroll={scrollHandler}
+        onScroll={(event) => {
+          if (anchorKey) publishAnchor(event.nativeEvent.contentOffset.y);
+        }}
         overScrollMode="never"
         ref={setScrollRef}
         removeClippedSubviews={false}
@@ -562,10 +477,8 @@ export function CommunityFeed({
         showsVerticalScrollIndicator={mode === "full"}
         style={[styles.feedScroller, webFeedScrollerStyle]}
       >
-        {visibleWorkouts.map((workout, index) => (
+        {visibleWorkouts.map((workout) => (
           <CommunityFeedItem
-            focalY={resolvedViewportHeight * 0.38 - focusOffsetY}
-            itemHeights={itemHeights}
             key={workout.id}
             onItemFrame={(frame) => {
               positions.current.set(workout.id, frame);
@@ -580,16 +493,13 @@ export function CommunityFeed({
               workout,
             })}
             onPress={onWorkoutPress ? () => onWorkoutPress(workout) : undefined}
-            orderedWorkoutIds={orderedWorkoutIds}
-            scrollY={scrollY}
             showCommentCount={showCommentCount}
             showReactionSummary={showReactionSummary}
-            side={index % 2 === 0 ? "left" : "right"}
-            viewportHeight={resolvedViewportHeight}
+            viewerUserId={viewerUserId}
             workout={workout}
           />
         ))}
-      </Animated.ScrollView>
+      </ScrollView>
       <LinearGradient
         colors={[
           colors.surfaceMuted,
@@ -615,74 +525,56 @@ export function CommunityFeed({
 }
 
 function CommunityFeedItem({
-  focalY,
-  itemHeights,
   menuItems,
   onItemFrame,
   onPress,
-  orderedWorkoutIds,
-  scrollY,
   showCommentCount,
   showReactionSummary,
-  side,
-  viewportHeight,
+  viewerUserId,
   workout,
 }: {
-  focalY: number;
-  itemHeights: SharedValue<Record<string, number>>;
   menuItems?: ContentMenuItem[];
   onItemFrame?: (frame: { height: number; y: number }) => void;
   onPress?: () => void;
-  orderedWorkoutIds: string[];
-  scrollY: SharedValue<number>;
   showCommentCount: boolean;
   showReactionSummary: boolean;
-  side: "left" | "right";
-  viewportHeight: number;
+  viewerUserId?: string | null;
   workout: WorkoutFeedItem;
 }) {
-  const measuredLayoutY = useSharedValue(0);
-  const workoutIndex = orderedWorkoutIds.indexOf(workout.id);
-  const layoutY = useDerivedValue(() => {
-    let cumulativeY = spacing.xxl;
-
-    for (let index = 0; index < workoutIndex; index += 1) {
-      const precedingId = orderedWorkoutIds[index];
-      if (!precedingId) return measuredLayoutY.value;
-      const precedingHeight = itemHeights.value[precedingId];
-      if (precedingHeight === undefined) return measuredLayoutY.value;
-      cumulativeY += precedingHeight;
-    }
-
-    return cumulativeY;
-  });
+  const isOwn = isOwnPost(workout.userId, viewerUserId);
+  const title = workout.name?.trim() || workout.title;
+  const summary = (
+    <WorkoutSummaryCard
+      isOwn={isOwn}
+      menuItems={menuItems}
+      showCommentCount={showCommentCount}
+      showReactionSummary={showReactionSummary}
+      variant="full"
+      workout={workout}
+    />
+  );
 
   return (
     <View
       collapsable={false}
       onLayout={(event) => {
         const { height, y } = event.nativeEvent.layout;
-        measuredLayoutY.value = y;
         onItemFrame?.({ height, y });
-        if (itemHeights.value[workout.id] !== height) {
-          itemHeights.value = { ...itemHeights.value, [workout.id]: height };
-        }
       }}
-      renderToHardwareTextureAndroid
       style={styles.feedSlot}
     >
-      <WorkoutCard
-        focalY={focalY}
-        layoutY={layoutY}
-        menuItems={menuItems}
-        onPress={onPress}
-        scrollY={scrollY}
-        showCommentCount={showCommentCount}
-        showReactionSummary={showReactionSummary}
-        side={side}
-        viewportHeight={viewportHeight}
-        workout={workout}
-      />
+      {onPress ? (
+        <Pressable
+          accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
+          accessibilityRole="button"
+          onPress={onPress}
+          style={({ pressed }) => pressed && styles.workoutCardPressed}
+        >
+          {summary}
+        </Pressable>
+      ) : (
+        summary
+      )}
     </View>
   );
 }
@@ -808,18 +700,14 @@ const styles = StyleSheet.create({
   reactionSummary: { alignSelf: "flex-end", color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, lineHeight: type.label.lineHeight, marginTop: spacing.sm },
   workoutCardPressed: { opacity: 0.94 },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
-  feedCardShell: {
-    backgroundColor: colors.surface,
-    borderRadius: radii.lg,
-    boxShadow: elevation.e1,
-    width: "94%",
-  },
-  feedCardFlat: { boxShadow: "none" },
-  floatingLeft: {
-    alignSelf: "flex-start",
-  },
-  floatingRight: {
-    alignSelf: "flex-end",
+  workoutCardWrap: communityFeedCardLayout(),
+  ownPostEdge: {
+    ...ownPostMarkerStyle(),
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    top: 0,
+    zIndex: 1,
   },
   feedViewport: {
     alignSelf: "stretch",
@@ -830,9 +718,9 @@ const styles = StyleSheet.create({
   // eslint-disable-next-line repin/no-style-literals -- square edge for the edge-to-edge feed; spec §2.3 keeps borderRadius 0
   edgeToEdgeFeedViewport: { backgroundColor: colors.surfaceMuted, borderRadius: 0 },
   feedScroller: { overflow: "visible" },
-  // 12pt bleed plus the feed's previous 16pt inset, so staggered cards stay put.
+  // 12pt bleed plus the board's 16pt inset. Cards fill the remaining column.
   feedContent: { paddingHorizontal: spacing.md + spacing.lg, paddingTop: spacing.xxl },
-  feedSlot: { minWidth: 0, overflow: "visible", paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },
+  feedSlot: { minWidth: 0, paddingBottom: spacing.md, paddingTop: spacing.sm, width: "100%" },
   edgeFade: { height: 20, left: 0, position: "absolute", right: 0, zIndex: 10 },
   topFade: { top: 0 },
   bottomFade: { bottom: 0 },
