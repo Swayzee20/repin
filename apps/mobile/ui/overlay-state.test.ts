@@ -6,9 +6,12 @@ import { test } from "node:test";
 
 import { paneSplit } from "./layout-math";
 import {
+  chooserFrameKey,
+  chooserHostRemounts,
   chooserMeasuredAnchor,
   chooserMotion,
   chooserOnFrameKeyChange,
+  chooserOnNativeRequestClose,
   chooserPanel,
   chooserPanelFrame,
   chooserRowMinHeight,
@@ -22,13 +25,16 @@ import {
   pickerSheetTopGap,
   menuItemColor,
   menuItemMinHeight,
+  nextChooserOverlayState,
   overlaySupportedOrientations,
+  overlaySupportedOrientationsProp,
   sheetDismissDistance,
   sheetFrame,
   sheetRowBackground,
   sheetRowMinHeight,
   stateActionHeight,
   stateIconSize,
+  type ChooserOverlayState,
 } from "./overlay-state";
 import { colors, size, spacing } from "./theme";
 
@@ -258,7 +264,9 @@ test("log actions say Log a workout", () => {
   for (const code of [chooser, stack, empty, panel]) assert.equal(code.includes("Rep in"), false);
   assert.match(chooser, /title="Log a workout"/);
   assert.match(chooser, /Log fast, add details if you want/);
-  assert.match(chooser, /Platform\.OS === "ios" && stripPresent\(strip\)/);
+  assert.match(chooser, /nextChooserOverlayState/);
+  assert.match(chooser, /stripPresent\(strip\)/);
+  assert.match(chooser, /overlay\.kind === "panel"/);
   assert.match(chooser, /SidePanel/);
   assert.match(chooser, /BottomSheet/);
   assert.match(stack, /accessibilityLabel="Log a workout"/);
@@ -286,7 +294,8 @@ test("the strip chooser does not paint a plus while the system strip (+) is up",
   const panel = source("side-panel.tsx");
   assert.match(panel, /chooserShowsPlusAnchor \? \(/);
   assert.match(panel, /<PlusAnchor /);
-  assert.match(panel, /supportedOrientations=\{\[\.\.\.overlaySupportedOrientations\]\}/);
+  assert.match(panel, /supportedOrientations=\{overlaySupportedOrientationsProp\}/);
+  assert.equal(panel.includes("[...overlaySupportedOrientations]"), false);
   const stack = source("tab-root-stack.tsx");
   assert.match(stack, /variant="prominent"/);
   assert.match(stack, /icon="plus"/);
@@ -323,10 +332,124 @@ test("the strip chooser stays open when the window frame changes", () => {
 
   const panel = source("side-panel.tsx");
   assert.match(panel, /chooserOnFrameKeyChange/);
+  assert.match(panel, /chooserFrameKey/);
+  assert.match(panel, /chooserOnNativeRequestClose/);
   assert.equal(panel.includes("onDismissRef.current()"), true);
   const frameEffect = panel.slice(panel.lastIndexOf("chooserOnFrameKeyChange({"), panel.indexOf("const pan ="));
   assert.equal(frameEffect.includes("onDismissRef.current()"), false);
   assert.match(frameEffect, /type !== "relayout"/);
+});
+
+function playChooser(
+  frames: readonly {
+    ios?: boolean;
+    stripEdge: "leading" | "trailing" | null;
+    stripPresent: boolean;
+    visible: boolean;
+  }[],
+) {
+  let state: ChooserOverlayState | null = null;
+  const kinds: ChooserOverlayState["kind"][] = [];
+  const remounts: boolean[] = [];
+  for (const frame of frames) {
+    const next = nextChooserOverlayState(state, {
+      ios: frame.ios ?? true,
+      stripEdge: frame.stripEdge,
+      stripPresent: frame.stripPresent,
+      visible: frame.visible,
+    });
+    remounts.push(chooserHostRemounts(state?.kind ?? null, next.kind));
+    kinds.push(next.kind);
+    state = next;
+  }
+  return { kinds, remounts, state };
+}
+
+test("folded strip chooser keeps one panel host through unfold, transient rail loss, and fold-back", () => {
+  const foldedOpen = {
+    stripEdge: "trailing" as const,
+    stripPresent: true,
+    visible: true,
+  };
+  const unfold = playChooser([
+    foldedOpen,
+    { stripEdge: null, stripPresent: false, visible: true },
+    { stripEdge: "leading", stripPresent: true, visible: true },
+    { stripEdge: "leading", stripPresent: true, visible: true },
+    { stripEdge: "trailing", stripPresent: true, visible: true },
+    foldedOpen,
+    foldedOpen,
+  ]);
+  assert.deepEqual(unfold.kinds, ["panel", "panel", "panel", "panel", "panel", "panel", "panel"]);
+  assert.deepEqual(unfold.remounts, [false, false, false, false, false, false, false]);
+  assert.equal(unfold.state?.holdsPanel, true);
+  assert.equal(unfold.state?.edge, "trailing");
+
+  const closedUnfold = playChooser([
+    { stripEdge: "trailing", stripPresent: true, visible: false },
+    { stripEdge: "leading", stripPresent: true, visible: false },
+  ]);
+  assert.deepEqual(closedUnfold.kinds, ["panel", "panel"]);
+  assert.deepEqual(closedUnfold.remounts, [false, false]);
+  assert.equal(closedUnfold.state?.holdsPanel, false);
+
+  const phone = playChooser([
+    { ios: false, stripEdge: null, stripPresent: false, visible: true },
+    { ios: false, stripEdge: null, stripPresent: false, visible: true },
+  ]);
+  assert.deepEqual(phone.kinds, ["sheet", "sheet"]);
+  assert.deepEqual(phone.remounts, [false, false]);
+
+  const iosPhone = playChooser([
+    { stripEdge: null, stripPresent: false, visible: true },
+    { stripEdge: null, stripPresent: false, visible: true },
+  ]);
+  assert.deepEqual(iosPhone.kinds, ["sheet", "sheet"]);
+
+  const reopen = playChooser([
+    foldedOpen,
+    { stripEdge: "trailing", stripPresent: true, visible: false },
+    foldedOpen,
+  ]);
+  assert.deepEqual(reopen.kinds, ["panel", "panel", "panel"]);
+  assert.deepEqual(reopen.remounts, [false, false, false]);
+});
+
+test("unfolding an open strip chooser relayouts instead of opening a second host", () => {
+  const folded = chooserFrameKey({ edge: "trailing", foldActive: false, width: 466 });
+  const unfolded = chooserFrameKey({ edge: "trailing", foldActive: true, width: 951 });
+  const splitView = chooserFrameKey({ edge: "leading", foldActive: true, width: 469 });
+  assert.equal(folded, "466:folded:trailing");
+  assert.equal(unfolded, "951:unfolded:trailing");
+
+  let openKey: string | null = null;
+  const actions = [folded, unfolded, unfolded, splitView, folded].map((frameKey) => {
+    const action = chooserOnFrameKeyChange({ frameKey, openKey, visible: true });
+    if (action.type !== "idle") openKey = action.frameKey;
+    return action.type;
+  });
+  assert.deepEqual(actions, ["opened", "relayout", "idle", "relayout", "relayout"]);
+  assert.equal(openKey, folded);
+
+  const closed = chooserOnFrameKeyChange({ frameKey: unfolded, openKey: folded, visible: false });
+  assert.equal(closed.type, "idle");
+});
+
+test("iOS native request-close is ignored while the chooser is open; X and backdrop still use close()", () => {
+  assert.deepEqual(chooserOnNativeRequestClose({ os: "ios", visible: true }), { type: "ignore" });
+  assert.deepEqual(chooserOnNativeRequestClose({ os: "ios", visible: false }), { type: "ignore" });
+  assert.deepEqual(chooserOnNativeRequestClose({ os: "android", visible: true }), { type: "dismiss" });
+  assert.deepEqual(chooserOnNativeRequestClose({ os: "android", visible: false }), { type: "ignore" });
+  assert.notEqual(overlaySupportedOrientationsProp, overlaySupportedOrientations);
+  assert.deepEqual(overlaySupportedOrientationsProp, [...overlaySupportedOrientations]);
+
+  const panel = source("side-panel.tsx");
+  const requestClose = panel.slice(panel.indexOf("onRequestClose="), panel.indexOf("presentationStyle"));
+  assert.match(requestClose, /chooserOnNativeRequestClose/);
+  assert.equal(requestClose.includes("close()"), true);
+  assert.match(panel, /onPress=\{\(\) => close\(\)\}/);
+  assert.match(panel, /onAccessibilityEscape=\{\(\) => close\(\)\}/);
+  assert.match(panel, /onClose=\{\(\) => close\(\)\}/);
 });
 
 test("comment overflow menus match the post-header control size", () => {

@@ -1,8 +1,13 @@
+import { useRef } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { Chevron, Icon, type IconName } from "./icons";
 import { useMainTabs } from "./main-tabs-context";
-import { chooserRowMinHeight } from "./overlay-state";
+import {
+  chooserRowMinHeight,
+  nextChooserOverlayState,
+  type ChooserOverlayState,
+} from "./overlay-state";
 import { BottomSheet, SheetRow, type SheetClose } from "./sheet";
 import { SidePanel } from "./side-panel";
 import { colors, spacing, type } from "./theme";
@@ -41,22 +46,28 @@ export function LogWorkoutChooser({
 }) {
   const strip = useStripState();
   const { registerWorkoutChooserClose } = useMainTabs();
-  const sidePanel = Platform.OS === "ios" && stripPresent(strip);
-  const edge = strip.edge === "leading" ? "leading" : "trailing";
+  const overlayRef = useRef<ChooserOverlayState | null>(null);
+  const overlay = nextChooserOverlayState(overlayRef.current, {
+    ios: Platform.OS === "ios",
+    stripEdge: strip.edge,
+    stripPresent: stripPresent(strip),
+    visible,
+  });
+  overlayRef.current = overlay;
   const options = (close: SheetClose) => (
     <ChooserOptions
       close={close}
-      omitLastDivider={sidePanel}
+      omitLastDivider={overlay.kind === "panel"}
       onDetailedWorkout={onDetailedWorkout}
       onQuickLog={onQuickLog}
     />
   );
 
-  if (sidePanel) {
+  if (overlay.kind === "panel") {
     return (
       <SidePanel
         closeLabel="Close workout options"
-        edge={edge}
+        edge={overlay.edge}
         onDismiss={onDismiss}
         onRegisterClose={registerWorkoutChooserClose}
         title="Log a workout"
