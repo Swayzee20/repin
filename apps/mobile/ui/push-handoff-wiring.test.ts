@@ -60,6 +60,7 @@ test("host does not request OS permission until the pre-prompt primary, and skip
   assert.ok(show.indexOf("action === \"openSettings\"") < show.indexOf("setSheetVisible(true)"));
   assert.match(show, /isStaleGeneration/);
   assert.match(show, /aliveRef\.current/);
+  assert.match(show, /if \(force && aliveRef\.current\) await Linking\.openSettings\(\)/);
   assert.equal(host.includes("Platform.OS === \"web\" ? showPreprompt"), false);
 });
 
@@ -99,7 +100,8 @@ test("afterClose callers keep onDismiss hide-only so both-run is not double navi
   assert.match(ff, /ffExercisesFromPicker\(exercises, selections, picker\?\.exerciseId\)/);
 
   const sheet = source("sheet.tsx");
-  assert.match(sheet, /if \(event\.type === "presented"\) pendingAfterClose\.current = undefined/);
+  assert.match(sheet, /event\.type === "presented" \|\| event\.type === "unmounted"/);
+  assert.match(sheet, /pendingAfterClose\.current = undefined/);
 });
 
 test("occupancy hooks only observe Modal hide; they do not dismiss the overlay", () => {

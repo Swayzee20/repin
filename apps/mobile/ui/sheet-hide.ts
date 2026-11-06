@@ -76,9 +76,8 @@ export function reduceSheetHide(
       }
       return hideComplete(state);
     case "unmounted":
-      if (state.phase === "awaitingNativeHide") {
-        return hideComplete(state);
-      }
+      // React unmount / StrictMode cleanup is not native hide. Drop afterClose
+      // so a dying sheet cannot open Settings or another Modal.
       if (state.phase === "idle") {
         return { effects: [], ignored: false, state };
       }
@@ -92,6 +91,7 @@ export function reduceSheetHide(
   }
 }
 
+/** iOS `nativeDismissed` or Android/web `visibleFalseCommitted` only. Never unmount. */
 function hideComplete(state: SheetHideState) {
   const effects: SheetHideEffect[] = ["releaseOverlay"];
   if (state.hasAfterClose) effects.push("runAfterClose");

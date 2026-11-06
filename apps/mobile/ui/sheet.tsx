@@ -102,7 +102,9 @@ export function BottomSheet({
   const applyHide = useCallback((event: SheetHideEvent) => {
     const result = reduceSheetHide(hideState.current, event);
     hideState.current = result.state;
-    if (event.type === "presented") pendingAfterClose.current = undefined;
+    if (event.type === "presented" || event.type === "unmounted") {
+      pendingAfterClose.current = undefined;
+    }
     for (const effect of result.effects) {
       if (effect === "acquireOverlay") acquireOverlay(overlayId);
       if (effect === "releaseOverlay") releaseOverlay(overlayId);

@@ -121,13 +121,14 @@ export function PushNotificationsHost({
       const status = await refreshStatus();
       if (isStaleGeneration(generationRef.current, generation)) return;
       if ((sessionRef.current?.user.id ?? null) !== userId) return;
+      if (!aliveRef.current) return;
       const action = nextPushHandoffAction(status);
       if (action === "syncToken") {
         void syncPushTokenForSession();
         return;
       }
       if (action === "openSettings") {
-        if (force) await Linking.openSettings();
+        if (force && aliveRef.current) await Linking.openSettings();
         return;
       }
       if (!force && await wasPushPrepromptDismissed(userId)) return;

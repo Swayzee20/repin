@@ -143,13 +143,25 @@ test("reopen while awaiting native hide cancels afterClose; stale onDismiss is i
   assert.equal(staleDismiss.effects.includes("runAfterClose"), false);
 });
 
-test("unmount after visible=false still runs afterClose when iOS onDismiss never arrives", () => {
+test("unmount after visible=false cancels afterClose; React cleanup is not native hide", () => {
   let state = reduceSheetHide(initialSheetHideState, { type: "presented" }).state;
   state = reduceSheetHide(state, { type: "closeRequested", hasAfterClose: true }).state;
   state = reduceSheetHide(state, { type: "animationEnded", finished: true }).state;
   const unmounted = reduceSheetHide(state, { type: "unmounted" });
-  assert.deepEqual(unmounted.effects, ["releaseOverlay", "runAfterClose"]);
+  assert.deepEqual(unmounted.effects, ["releaseOverlay"]);
+  assert.equal(unmounted.effects.includes("runAfterClose"), false);
   assert.equal(unmounted.state.phase, "idle");
+  assert.equal(unmounted.state.hasAfterClose, false);
+});
+
+test("StrictMode-style unmount while open cancels handoff and does not present", () => {
+  const open = reduceSheetHide(initialSheetHideState, { type: "presented" });
+  const unmounted = reduceSheetHide(open.state, { type: "unmounted" });
+  assert.deepEqual(unmounted.effects, ["releaseOverlay"]);
+  assert.equal(unmounted.effects.includes("runAfterClose"), false);
+  const remounted = reduceSheetHide(unmounted.state, { type: "presented" });
+  assert.equal(remounted.state.phase, "open");
+  assert.equal(remounted.state.hasAfterClose, false);
 });
 
 test("unmount during close animation releases occupancy without running afterClose", () => {
