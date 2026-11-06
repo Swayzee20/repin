@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef } from "react";
 import { Platform } from "react-native";
 
-import { acquireOverlay, releaseOverlay } from "./overlay-occupancy";
+import {
+  acquireOverlay,
+  occupancyForIosNativeDismiss,
+  occupancyForVisible,
+  releaseOverlay,
+} from "./overlay-occupancy";
 
 export function useOverlayOccupancy(visible: boolean) {
   const reactId = useId();
@@ -15,17 +20,15 @@ export function useOverlayOccupancy(visible: boolean) {
   }, [id]);
 
   useLayoutEffect(() => {
-    if (visible) {
-      acquireOverlay(id);
-      presented.current = true;
-      return;
-    }
-    if (platform === "ios") return;
-    release();
-  }, [id, platform, release, visible]);
+    const next = occupancyForVisible(visible, platform);
+    presented.current = next.presented;
+    if (next.acquire) acquireOverlay(id);
+    if (next.release) releaseOverlay(id);
+  }, [id, platform, visible]);
 
   const onNativeDismiss = useCallback(() => {
     if (platform !== "ios") return;
+    if (!occupancyForIosNativeDismiss(presented.current).release) return;
     release();
   }, [platform, release]);
 

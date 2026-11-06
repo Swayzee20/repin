@@ -5,6 +5,8 @@ import { test } from "node:test";
 
 import {
   acquireOverlay,
+  occupancyForIosNativeDismiss,
+  occupancyForVisible,
   overlayCount,
   releaseOverlay,
   resetOverlayOccupancyForTests,
@@ -31,4 +33,32 @@ test("overlay occupancy serializes presentation and is idempotent", () => {
   assert.ok(ticks >= 3);
   stop();
   resetOverlayOccupancyForTests();
+});
+
+test("occupancy is acquired when already visible and iOS does not release until native hide", () => {
+  assert.deepEqual(occupancyForVisible(true, "ios"), {
+    acquire: true,
+    presented: true,
+    release: false,
+  });
+  assert.deepEqual(occupancyForVisible(false, "ios"), {
+    acquire: false,
+    presented: false,
+    release: false,
+  });
+  assert.deepEqual(occupancyForVisible(false, "android"), {
+    acquire: false,
+    presented: false,
+    release: true,
+  });
+  assert.deepEqual(occupancyForVisible(false, "web"), {
+    acquire: false,
+    presented: false,
+    release: true,
+  });
+});
+
+test("iOS native dismiss after reopen does not release a still-visible overlay", () => {
+  assert.equal(occupancyForIosNativeDismiss(false).release, true);
+  assert.equal(occupancyForIosNativeDismiss(true).release, false);
 });

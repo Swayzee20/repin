@@ -80,6 +80,41 @@ test("existing-member launch, join/create, and account switch share one lock", (
   assert.match(launch, /sessionRef\.current\?\.user\.id/);
 });
 
+test("afterClose callers keep onDismiss hide-only so both-run is not double navigation", () => {
+  const gate = source("main-tabs-gate.tsx");
+  const chooser = gate.slice(gate.indexOf("<LogWorkoutChooser"), gate.indexOf("visible={workoutChooserVisible}"));
+  assert.match(chooser, /onDismiss=\{\(\) => setWorkoutChooserVisible\(false\)\}/);
+  assert.match(chooser, /onQuickLog=\{\(\) => \{[\s\S]*setWorkoutChooserVisible\(false\);[\s\S]*router\.push\(`\/groups\/\$\{selectedGroupId\}\/log-workout`\)/);
+  assert.match(chooser, /onDetailedWorkout=\{\(\) => \{[\s\S]*setWorkoutChooserVisible\(false\);[\s\S]*router\.push\(`\/groups\/\$\{selectedGroupId\}\/detailed-workout`\)/);
+  assert.equal(chooser.includes("router.push") && chooser.includes("onDismiss={() => setWorkoutChooserVisible(false)}"), true);
+  assert.equal((chooser.match(/router\.push/g) ?? []).length, 2);
+
+  const picker = source("movement-picker.tsx");
+  assert.match(picker, /onPress=\{\(\) => close\(\(\) => onConfirm\(selected\)\)\}/);
+  const strength = source("detailed-workout-exercises.tsx");
+  assert.match(strength, /onDismiss=\{\(\) => setPicker\(null\)\}/);
+  assert.match(strength, /exercisesFromPickerSelections\(exercises, selections, picker\?\.exerciseId\)/);
+  const ff = source("functional-format-fields.tsx");
+  assert.match(ff, /onDismiss=\{\(\) => setPicker\(null\)\}/);
+  assert.match(ff, /ffExercisesFromPicker\(exercises, selections, picker\?\.exerciseId\)/);
+
+  const sheet = source("sheet.tsx");
+  assert.match(sheet, /if \(event\.type === "presented"\) pendingAfterClose\.current = undefined/);
+});
+
+test("occupancy hooks only observe Modal hide; they do not dismiss the overlay", () => {
+  const hook = source("use-overlay-occupancy.ts");
+  assert.match(hook, /occupancyForVisible/);
+  assert.match(hook, /occupancyForIosNativeDismiss/);
+  assert.equal(hook.includes("onRequestClose"), false);
+  assert.equal(hook.includes("setVisible"), false);
+  const host = source("push-notifications-host.tsx");
+  const switchUser = fn(host, "if (userIdRef.current !== nextUserId)", "if (session)");
+  assert.match(switchUser, /setSheetVisible\(false\)/);
+  assert.match(switchUser, /unlockPrompt/);
+  assert.equal(switchUser.includes("markPushPrepromptDismissed"), false);
+});
+
 test("native overlays report occupancy so launch cannot stack on another sheet", () => {
   for (const name of [
     "dialog.tsx",

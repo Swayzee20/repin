@@ -128,6 +128,38 @@ test("android nativeDismissed does not complete hide; visible=false does", () =>
   assert.deepEqual(hidden.effects, ["releaseOverlay", "runAfterClose"]);
 });
 
+test("reopen while awaiting native hide cancels afterClose; stale onDismiss is ignored", () => {
+  let state = reduceSheetHide(initialSheetHideState, { type: "presented" }).state;
+  state = reduceSheetHide(state, { type: "closeRequested", hasAfterClose: true }).state;
+  state = reduceSheetHide(state, { type: "animationEnded", finished: true }).state;
+  const reopened = reduceSheetHide(state, { type: "presented" });
+  assert.equal(reopened.state.phase, "open");
+  assert.equal(reopened.state.hasAfterClose, false);
+  const staleDismiss = reduceSheetHide(reopened.state, {
+    type: "nativeDismissed",
+    platform: "ios",
+  });
+  assert.equal(staleDismiss.ignored, true);
+  assert.equal(staleDismiss.effects.includes("runAfterClose"), false);
+});
+
+test("unmount after visible=false still runs afterClose when iOS onDismiss never arrives", () => {
+  let state = reduceSheetHide(initialSheetHideState, { type: "presented" }).state;
+  state = reduceSheetHide(state, { type: "closeRequested", hasAfterClose: true }).state;
+  state = reduceSheetHide(state, { type: "animationEnded", finished: true }).state;
+  const unmounted = reduceSheetHide(state, { type: "unmounted" });
+  assert.deepEqual(unmounted.effects, ["releaseOverlay", "runAfterClose"]);
+  assert.equal(unmounted.state.phase, "idle");
+});
+
+test("unmount during close animation releases occupancy without running afterClose", () => {
+  let state = reduceSheetHide(initialSheetHideState, { type: "presented" }).state;
+  state = reduceSheetHide(state, { type: "closeRequested", hasAfterClose: true }).state;
+  const unmounted = reduceSheetHide(state, { type: "unmounted" });
+  assert.deepEqual(unmounted.effects, ["releaseOverlay"]);
+  assert.equal(unmounted.effects.includes("runAfterClose"), false);
+});
+
 test("close without afterClose still hides and does not run a handoff", () => {
   let state = reduceSheetHide(initialSheetHideState, { type: "presented" }).state;
   state = reduceSheetHide(state, { type: "closeRequested", hasAfterClose: false }).state;

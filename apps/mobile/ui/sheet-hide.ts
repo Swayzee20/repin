@@ -76,6 +76,9 @@ export function reduceSheetHide(
       }
       return hideComplete(state);
     case "unmounted":
+      if (state.phase === "awaitingNativeHide") {
+        return hideComplete(state);
+      }
       if (state.phase === "idle") {
         return { effects: [], ignored: false, state };
       }
