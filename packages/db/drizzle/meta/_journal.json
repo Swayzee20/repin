@@ -120,6 +120,13 @@
       "when": 1793936747965,
       "tag": "0016_modern_layla_miller",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1793939235266,
+      "tag": "0017_gifted_calypso",
+      "breakpoints": true
     }
   ]
 }

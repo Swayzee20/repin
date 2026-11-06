@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { promptAfterJoiningCrew } from "../../lib/push-controller";
 import { supabase } from "../../lib/supabase";
 import { Button, Card, TextField } from "../../ui/components";
 import { singleFieldReturn } from "../../ui/keyboard";
@@ -37,6 +38,7 @@ export default function CreateFirstGroupScreen() {
       });
       const body = (await response.json()) as { error?: string; group?: { id: string } };
       if (!response.ok || !body.group) throw new Error(body.error ?? "Group could not be created.");
+      promptAfterJoiningCrew();
       router.replace("/");
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Group could not be created.");

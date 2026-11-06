@@ -20,6 +20,7 @@ const appTables = [
   "community_posts",
   "content_reports",
   "crew_notification_prefs",
+  "device_push_tokens",
   "group_members",
   "groups",
   "movements",
@@ -1830,6 +1831,7 @@ async function applySupabaseMigrations(client) {
     "20261030140000_enable_row_level_security.sql",
     "20261102160000_moderation.sql",
     "20261106000000_crew_page.sql",
+    "20261106120000_push_notifications.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");

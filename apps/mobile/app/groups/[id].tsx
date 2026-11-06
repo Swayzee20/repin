@@ -36,6 +36,7 @@ import {
 import { Icon } from "../../ui/icons";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { ListRow, RoundIconButton } from "../../ui/primitives";
+import { usePushPermission } from "../../ui/push-notifications-host";
 import {
   pushedHeaderClearance,
   pushedHeaderScreenOptions,
@@ -64,6 +65,7 @@ type Sheet =
 export default function CrewPageScreen() {
   const router = useRouter();
   const { mode } = useLayoutMode();
+  const { osStatus, promptFromSettings } = usePushPermission();
   const strip = useStripState();
   const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
   const roundBack = pushedShowsRoundBack(Platform.OS);
@@ -396,7 +398,9 @@ export default function CrewPageScreen() {
           visible={sheet === "edit"}
         />
         <NotificationsSheet
+          deviceAlertsOn={osStatus === "granted"}
           onDismiss={() => setSheet(null)}
+          onEnableDeviceAlerts={promptFromSettings}
           onSave={(prefs) => {
             void (async () => {
               if (!page) return;

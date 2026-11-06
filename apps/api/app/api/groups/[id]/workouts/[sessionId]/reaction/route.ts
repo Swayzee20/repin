@@ -8,9 +8,14 @@ import {
   workoutSessionIdSchema,
 } from "@repin/validation";
 
+import {
+  notifyCrewReaction,
+  scheduleCrewPush,
+} from "../../../../../../../lib/crew-push";
 import { reportUnexpectedRouteError } from "../../../../../../../lib/sentry";
 import {
   AuthenticationError,
+  ensureApplicationUser,
   requireAuthenticatedUser,
 } from "../../../../../../../lib/supabase-auth";
 import {
@@ -29,7 +34,8 @@ export async function PUT(request: Request, context: RouteContext) {
   const timing = new ServerTiming();
 
   try {
-    const user = await requireAuthenticatedUser(request, timing);
+    const identity = await requireAuthenticatedUser(request, timing);
+    const user = await ensureApplicationUser(identity, timing);
     const target = await readTarget(context);
     if (!target) return notFound(timing);
 
@@ -50,9 +56,17 @@ export async function PUT(request: Request, context: RouteContext) {
         reactionType: input.data.reactionType,
       }));
 
-    return reactions
-      ? timedJson(timing, { reactions }, { headers: { "Cache-Control": "no-store" } })
-      : notFound(timing);
+    if (!reactions) return notFound(timing);
+
+    scheduleCrewPush(() => notifyCrewReaction({
+      actorUserId: user.id,
+      actorDisplayName: user.displayName,
+      groupId: target.groupId,
+      sessionId: target.workoutSessionId,
+      createdAt: new Date(),
+    }));
+
+    return timedJson(timing, { reactions }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     return handleRouteError(timing, error);
   }

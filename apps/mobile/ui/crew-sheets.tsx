@@ -4,6 +4,7 @@ import { Pressable, ScrollView, StyleSheet, Switch, Text, View } from "react-nat
 import {
   crewCopy,
   crewMarkTiles,
+  pushCopy,
   type CrewNotificationPrefs,
 } from "@repin/validation";
 
@@ -137,13 +138,17 @@ export function EditCrewSheet({
 }
 
 export function NotificationsSheet({
+  deviceAlertsOn,
   onDismiss,
+  onEnableDeviceAlerts,
   onSave,
   pending,
   prefs,
   visible,
 }: {
+  deviceAlertsOn: boolean;
   onDismiss: () => void;
+  onEnableDeviceAlerts: () => void;
   onSave: (prefs: CrewNotificationPrefs) => void;
   pending: boolean;
   prefs: CrewNotificationPrefs;
@@ -162,6 +167,11 @@ export function NotificationsSheet({
   return (
     <BottomSheet onDismiss={onDismiss} title="Notifications" visible={visible}>
       <Text style={styles.body}>{crewCopy.notificationsIntro}</Text>
+      {deviceAlertsOn ? null : (
+        <View style={styles.devicePrompt}>
+          <Button onPress={onEnableDeviceAlerts}>{pushCopy.prePrompt.primary}</Button>
+        </View>
+      )}
       <View style={styles.muteRow}>
         <Text style={styles.muteLabel}>Mute all from this crew</Text>
         <CrewSwitch
@@ -320,6 +330,7 @@ export function MemberMenu({
 
 const styles = StyleSheet.create({
   body: { color: colors.inkSoft, ...type.body, marginBottom: spacing.xl },
+  devicePrompt: { marginBottom: spacing.xl },
   actions: { flexDirection: "row", gap: spacing.sm },
   action: { flex: 1 },
   stack: { gap: spacing.sm },
