@@ -29,6 +29,7 @@ import {
   readCommunityPostParam,
   resolveCommunitySelection,
 } from "../../../lib/community-selection";
+import { isOwnPost, workoutFeedCardLabel } from "../../../ui/community-feed-layout";
 import { BrandHeader, Button, CommunityFeed, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
 import { Dialog } from "../../../ui/dialog";
 import { Chevron } from "../../../ui/icons";
@@ -46,6 +47,7 @@ import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 const communityFeedAnchorKey = "community-feed";
+const layoutPreviewViewerUserId = "user-jordan";
 
 export default function CommunityTabScreen() {
   const router = useRouter();
@@ -429,6 +431,7 @@ export default function CommunityTabScreen() {
 
   const previewFixture = layoutPreview && selection.kind !== "none" ? layoutPreviewDetail(selection.sessionId) : null;
   const openSessionId = selection.kind === "none" ? null : selection.sessionId;
+  const viewerUserId = layoutPreview ? layoutPreviewViewerUserId : loadedUserId.current;
 
   if (mode === "twoPane" && selectedGroup) {
     return (
@@ -476,16 +479,19 @@ export default function CommunityTabScreen() {
                 <Text style={styles.boardTitle}>Community Board</Text>
                 {workouts.length ? workouts.map((workout) => {
                   const selected = workout.id === openSessionId;
+                  const isOwn = isOwnPost(workout.userId, viewerUserId);
+                  const title = workout.name?.trim() || workout.title;
                   return (
                     <ScrollAnchor id={workout.id} key={workout.id}>
                       <Pressable
-                        accessibilityLabel={`Open ${workout.title} workout details`}
+                        accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                         onPress={() => openWorkoutDetail(workout)}
                         style={styles.paneCardPress}
                       >
                         <WorkoutSummaryCard
+                          isOwn={isOwn}
                           menuItems={feedMenu(workout)}
                           selected={selected}
                           showCommentCount
@@ -647,7 +653,7 @@ export default function CommunityTabScreen() {
               ) : error ? (
                 <View style={styles.feedState}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Activity unavailable" /></View>
               ) : (board?.communityWorkouts.length ?? 0) > 0 ? (
-                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge focusOffsetY={Math.min(boardHeight * 0.05, spacing.xxl)} mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={loadedUserId.current} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
+                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={viewerUserId} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
               ) : isSameLocalDay(selectedDate, currentDay) ? (
                 <View style={styles.todayEmpty}>
                   <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
