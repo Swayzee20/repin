@@ -33,6 +33,14 @@ import {
   visibleCommentCountSql,
   visibleReactionCountSql,
 } from "./moderation";
+import {
+  activeMembership,
+  crewAuthorVisibleSql,
+  commentAuthorVisibleSql,
+  openGroup,
+  reactionAuthorVisibleSql,
+  viewerActiveMembership,
+} from "./membership";
 import * as schema from "./schema";
 import {
   deriveLogVersion,
@@ -830,6 +838,11 @@ function groupPreviewSelection(userId: string) {
   };
 }
 
+const activeMemberJoin = and(
+  eq(schema.groupMembers.groupId, schema.groups.id),
+  activeMembership,
+);
+
 export function searchGroupsForUser(input: {
   userId: string;
   query: string;
@@ -840,18 +853,17 @@ export function searchGroupsForUser(input: {
   return getDatabase()
     .select(groupPreviewSelection(input.userId))
     .from(schema.groups)
-    .leftJoin(
-      schema.groupMembers,
-      eq(schema.groupMembers.groupId, schema.groups.id),
-    )
+    .leftJoin(schema.groupMembers, activeMemberJoin)
     .where(
       and(
+        openGroup,
         ilike(schema.groups.name, `%${escapedQuery}%`),
         sql`exists (
           select 1
           from ${schema.groupMembers} as member_self
           where member_self.group_id = ${schema.groups.id}
             and member_self.user_id = ${input.userId}
+            and member_self.left_at is null
         )`,
       ),
     )
@@ -867,11 +879,13 @@ export async function getGroupPreviewByInviteCode(input: {
   const [group] = await getDatabase()
     .select(groupPreviewSelection(input.userId))
     .from(schema.groups)
-    .leftJoin(
-      schema.groupMembers,
-      eq(schema.groupMembers.groupId, schema.groups.id),
+    .leftJoin(schema.groupMembers, activeMemberJoin)
+    .where(
+      and(
+        openGroup,
+        eq(schema.groups.inviteCode, input.inviteCode.toUpperCase()),
+      ),
     )
-    .where(eq(schema.groups.inviteCode, input.inviteCode.toUpperCase()))
     .groupBy(schema.groups.id)
     .limit(1);
 
@@ -885,7 +899,12 @@ export async function getPublicGroupInviteByCode(inviteCode: string) {
       inviteCode: schema.groups.inviteCode,
     })
     .from(schema.groups)
-    .where(eq(schema.groups.inviteCode, inviteCode.toUpperCase()))
+    .where(
+      and(
+        openGroup,
+        eq(schema.groups.inviteCode, inviteCode.toUpperCase()),
+      ),
+    )
     .limit(1);
 
   return group ?? null;
@@ -919,17 +938,69 @@ export async function joinGroup(input: {
         and(
           eq(schema.groups.id, input.groupId),
           eq(schema.groups.inviteCode, inviteCode),
+          openGroup,
         ),
       )
       .limit(1);
 
     if (!group) return null;
 
-    const inserted = await transaction
-      .insert(schema.groupMembers)
-      .values({ groupId: input.groupId, userId: input.userId, role: "member" })
-      .onConflictDoNothing()
-      .returning({ role: schema.groupMembers.role });
+    const [existing] = await transaction
+      .select({
+        role: schema.groupMembers.role,
+        leftAt: schema.groupMembers.leftAt,
+      })
+      .from(schema.groupMembers)
+      .where(
+        and(
+          eq(schema.groupMembers.groupId, input.groupId),
+          eq(schema.groupMembers.userId, input.userId),
+        ),
+      )
+      .limit(1);
+
+    if (existing && existing.leftAt == null) {
+      const [memberTotal] = await transaction
+        .select({ value: count() })
+        .from(schema.groupMembers)
+        .where(
+          and(eq(schema.groupMembers.groupId, input.groupId), activeMembership),
+        );
+
+      return {
+        group: {
+          ...group,
+          memberCount: memberTotal?.value ?? 0,
+          isMember: true,
+        },
+        membership: { role: existing.role },
+        alreadyMember: true,
+      };
+    }
+
+    const now = new Date();
+    if (existing) {
+      await transaction
+        .update(schema.groupMembers)
+        .set({
+          leftAt: null,
+          joinedAt: now,
+          contentVisibleAfter: now,
+          role: "member",
+        })
+        .where(
+          and(
+            eq(schema.groupMembers.groupId, input.groupId),
+            eq(schema.groupMembers.userId, input.userId),
+          ),
+        );
+    } else {
+      await transaction.insert(schema.groupMembers).values({
+        groupId: input.groupId,
+        userId: input.userId,
+        role: "member",
+      });
+    }
 
     const [membership, memberTotal] = await Promise.all([
       transaction
@@ -939,13 +1010,16 @@ export async function joinGroup(input: {
           and(
             eq(schema.groupMembers.groupId, input.groupId),
             eq(schema.groupMembers.userId, input.userId),
+            activeMembership,
           ),
         )
         .limit(1),
       transaction
         .select({ value: count() })
         .from(schema.groupMembers)
-        .where(eq(schema.groupMembers.groupId, input.groupId)),
+        .where(
+          and(eq(schema.groupMembers.groupId, input.groupId), activeMembership),
+        ),
     ]);
 
     if (!membership[0]) throw new Error("Group membership could not be loaded");
@@ -957,7 +1031,7 @@ export async function joinGroup(input: {
         isMember: true,
       },
       membership: membership[0],
-      alreadyMember: inserted.length === 0,
+      alreadyMember: false,
     };
   });
 }
@@ -970,10 +1044,11 @@ export function listGroupsForUser(userId: string) {
       ownerId: schema.groups.ownerId,
       createdAt: schema.groups.createdAt,
       role: schema.groupMembers.role,
+      photoPath: schema.groups.photoPath,
     })
     .from(schema.groupMembers)
     .innerJoin(schema.groups, eq(schema.groupMembers.groupId, schema.groups.id))
-    .where(eq(schema.groupMembers.userId, userId))
+    .where(and(viewerActiveMembership(userId), openGroup))
     .orderBy(desc(schema.groups.createdAt));
 }
 
@@ -989,13 +1064,15 @@ export async function getGroupForMember(input: {
       ownerId: schema.groups.ownerId,
       createdAt: schema.groups.createdAt,
       role: schema.groupMembers.role,
+      photoPath: schema.groups.photoPath,
     })
     .from(schema.groupMembers)
     .innerJoin(schema.groups, eq(schema.groupMembers.groupId, schema.groups.id))
     .where(
       and(
         eq(schema.groupMembers.groupId, input.groupId),
-        eq(schema.groupMembers.userId, input.userId),
+        viewerActiveMembership(input.userId),
+        openGroup,
       ),
     )
     .limit(1);
@@ -1028,10 +1105,12 @@ export async function createWorkoutForMember(input: {
     const [membership] = await transaction
       .select({ userId: schema.groupMembers.userId })
       .from(schema.groupMembers)
+      .innerJoin(schema.groups, eq(schema.groupMembers.groupId, schema.groups.id))
       .where(
         and(
           eq(schema.groupMembers.groupId, input.groupId),
-          eq(schema.groupMembers.userId, input.userId),
+          viewerActiveMembership(input.userId),
+          openGroup,
         ),
       )
       .limit(1);
@@ -1393,6 +1472,7 @@ async function releaseOwnedGroups(
       .where(and(
         eq(schema.groupMembers.groupId, group.id),
         ne(schema.groupMembers.userId, userId),
+        activeMembership,
       ))
       .orderBy(asc(schema.groupMembers.joinedAt), asc(schema.groupMembers.userId))
       .limit(1);
@@ -1521,10 +1601,12 @@ async function listRecentWorkouts(input: {
     const [membership] = await database
       .select({ userId: schema.groupMembers.userId })
       .from(schema.groupMembers)
+      .innerJoin(schema.groups, eq(schema.groupMembers.groupId, schema.groups.id))
       .where(
         and(
           eq(schema.groupMembers.groupId, input.groupId),
-          eq(schema.groupMembers.userId, input.userId),
+          viewerActiveMembership(input.userId),
+          openGroup,
         ),
       )
       .limit(1);
@@ -1588,6 +1670,11 @@ async function listRecentWorkouts(input: {
     .where(and(
       eq(schema.communityPosts.groupId, input.groupId),
       isNull(schema.communityPosts.removedAt),
+      crewAuthorVisibleSql(
+        schema.communityPosts.groupId,
+        schema.communityPosts.userId,
+        schema.communityPosts.createdAt,
+      ),
       input.userId ? notBlockedAuthor(input.userId, schema.communityPosts.userId) : undefined,
       input.userId ? notReportedContent(input.userId, "post", schema.communityPosts.id) : undefined,
       input.occurredAtStart ? gte(schema.workoutSessions.occurredAt, input.occurredAtStart) : undefined,
@@ -1843,7 +1930,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
       schema.groupMembers,
       and(
         eq(schema.groupMembers.groupId, schema.communityPosts.groupId),
-        eq(schema.groupMembers.userId, input.userId),
+        viewerActiveMembership(input.userId),
       ),
     )
     .where(
@@ -1851,6 +1938,11 @@ export async function getCommunityWorkoutDetailForMember(input: {
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
         isNull(schema.communityPosts.removedAt),
+        crewAuthorVisibleSql(
+          schema.communityPosts.groupId,
+          schema.communityPosts.userId,
+          schema.communityPosts.createdAt,
+        ),
         notBlockedAuthor(input.userId, schema.communityPosts.userId),
         notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
@@ -1943,6 +2035,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
       .from(schema.communityPostReactions)
       .where(and(
         eq(schema.communityPostReactions.communityPostId, post.communityPostId),
+        reactionAuthorVisibleSql(input.groupId),
         notBlockedAuthor(input.userId, schema.communityPostReactions.userId),
       ))
       .groupBy(schema.communityPostReactions.reactionType),
@@ -2216,7 +2309,7 @@ export async function listCommunityPostCommentsForMember(input: {
       schema.groupMembers,
       and(
         eq(schema.groupMembers.groupId, schema.communityPosts.groupId),
-        eq(schema.groupMembers.userId, input.userId),
+        viewerActiveMembership(input.userId),
       ),
     )
     .where(
@@ -2224,6 +2317,11 @@ export async function listCommunityPostCommentsForMember(input: {
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
         isNull(schema.communityPosts.removedAt),
+        crewAuthorVisibleSql(
+          schema.communityPosts.groupId,
+          schema.communityPosts.userId,
+          schema.communityPosts.createdAt,
+        ),
         notBlockedAuthor(input.userId, schema.communityPosts.userId),
         notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
@@ -2249,6 +2347,7 @@ export async function listCommunityPostCommentsForMember(input: {
     .where(and(
       eq(schema.communityPostComments.communityPostId, post.id),
       isNull(schema.communityPostComments.removedAt),
+      commentAuthorVisibleSql(input.groupId),
       notBlockedAuthor(input.userId, schema.communityPostComments.userId),
       notReportedContent(input.userId, "comment", schema.communityPostComments.id),
     ))
@@ -2304,7 +2403,7 @@ async function getAuthorizedCommunityPost(
       schema.groupMembers,
       and(
         eq(schema.groupMembers.groupId, schema.communityPosts.groupId),
-        eq(schema.groupMembers.userId, input.userId),
+        viewerActiveMembership(input.userId),
       ),
     )
     .where(
@@ -2312,6 +2411,11 @@ async function getAuthorizedCommunityPost(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
         isNull(schema.communityPosts.removedAt),
+        crewAuthorVisibleSql(
+          schema.communityPosts.groupId,
+          schema.communityPosts.userId,
+          schema.communityPosts.createdAt,
+        ),
         notBlockedAuthor(input.userId, schema.communityPosts.userId),
         notReportedContent(input.userId, "post", schema.communityPosts.id),
       ),
@@ -2332,8 +2436,13 @@ async function getReactionCounts(
       value: count(),
     })
     .from(schema.communityPostReactions)
+    .innerJoin(
+      schema.communityPosts,
+      eq(schema.communityPosts.id, schema.communityPostReactions.communityPostId),
+    )
     .where(and(
       eq(schema.communityPostReactions.communityPostId, communityPostId),
+      reactionAuthorVisibleSql(schema.communityPosts.groupId),
       notBlockedAuthor(viewerId, schema.communityPostReactions.userId),
     ))
     .groupBy(schema.communityPostReactions.reactionType);
@@ -2454,11 +2563,29 @@ export type {
 } from "./moderation";
 
 export {
+  crewAlertAllowed,
+  crewAlertEnabledForUser,
+  CrewRequestError,
+  getCrewNotificationPrefs,
+  leaveCrew,
+  listCrewMembers,
+  removeCrewMember,
+  resetCrewInviteCodeForOwner,
+  resolveCrewNotificationPrefs,
+  setCrewNotificationPrefs,
+  transferCrewOwnership,
+  updateCrewForOwner,
+  type CrewAlertType,
+  type CrewNotificationPrefs,
+} from "./crew";
+
+export {
   blockMovements,
   communityPostComments,
   communityPostReactions,
   communityPosts,
   contentReports,
+  crewNotificationPrefs,
   groupMembers,
   groups,
   movements,

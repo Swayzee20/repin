@@ -73,6 +73,35 @@ export interface GroupSummary {
   createdAt: string;
   role: GroupRole;
   inviteCode?: string;
+  photoPath?: string | null;
+  photoUrl?: string | null;
+  memberCount?: number;
+}
+
+export interface CrewMemberSummary {
+  userId: string;
+  displayName: string;
+  role: GroupRole;
+  isYou: boolean;
+  workoutsThisWeek: number;
+}
+
+export interface CrewNotificationState {
+  muteAll: boolean;
+  crewWorkout: boolean;
+  crewComment: boolean;
+  crewReaction: boolean;
+  summary: string;
+}
+
+export interface CrewPage {
+  group: GroupSummary & {
+    photoPath: string | null;
+    photoUrl: string | null;
+    memberCount: number;
+  };
+  members: CrewMemberSummary[];
+  notifications: CrewNotificationState;
 }
 
 export interface GroupPreview {
