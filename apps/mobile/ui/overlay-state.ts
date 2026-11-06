@@ -86,9 +86,9 @@ export type ChooserFrameChange =
   | { type: "idle" };
 
 /**
- * Keep the strip chooser open across fold/unfold and Split View. Dismissing
- * the overFullScreen modal during a size change is what closed the panel and
- * left iOS stuck until a rotate.
+ * Keep the strip chooser open across fold/unfold and Split View. A JS
+ * dismiss of the presented Modal during a size change is one way the panel
+ * can close; native teardown is not assumed.
  */
 export function chooserOnFrameKeyChange({
   frameKey,
@@ -114,9 +114,9 @@ export function chooserResolvedEdge(
 
 /**
  * Folded Duo still has the side strip, so the open host is the side panel.
- * A closed unfold already becomes two-pane; do not replace that panel Modal
- * when the rail edge is briefly null, and do not treat iOS `onRequestClose`
- * as a user dismiss.
+ * Hold that host while visible so a later `stripPresent: false` does not
+ * swap in BottomSheet. A closed-Home two-pane unfold does not prove that a
+ * presented Modal is free of the app.json portrait Info.plist restriction.
  */
 export function nextChooserOverlayState(
   previous: ChooserOverlayState | null,
@@ -136,11 +136,16 @@ export function nextChooserOverlayState(
   };
 }
 
-export function chooserHostRemounts(
+/** Model-only: whether the chosen overlay *kind* changed, not a measured React/Modal mount. */
+export function chooserOverlayKindChanged(
   previous: ChooserOverlayKind | null,
   next: ChooserOverlayKind,
 ) {
   return previous !== null && previous !== next;
+}
+
+export function chooserOverlayStateEquals(left: ChooserOverlayState, right: ChooserOverlayState) {
+  return left.kind === right.kind && left.edge === right.edge && left.holdsPanel === right.holdsPanel;
 }
 
 export function chooserFrameKey({
@@ -156,9 +161,14 @@ export function chooserFrameKey({
 }
 
 /**
- * iOS can invoke `onRequestClose` when an overFullScreen modal is torn down
- * during a size-class change. X, backdrop, swipe, and accessibility escape
- * still call `close()` directly. Android back still dismisses.
+ * RN 0.88.1 iOS Fabric emits `onRequestClose` from
+ * `presentationControllerDidAttemptToDismiss` and from
+ * `presentationControllerDidDismiss` only when `allowSwipeDismissal` is set.
+ * Transparent modals use `UIModalPresentationOverFullScreen`. This chooser
+ * does not set `allowSwipeDismissal`. A size-class / fold emit is not in
+ * that implementation; ignoring iOS here is defensive, not a proven unfold
+ * path. X, backdrop, swipe, and accessibility escape still call `close()`.
+ * Android back still dismisses.
  */
 export function chooserOnNativeRequestClose({
   os,

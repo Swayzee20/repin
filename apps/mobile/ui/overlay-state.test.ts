@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join } from "node:path";
 import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
@@ -7,11 +8,12 @@ import { test } from "node:test";
 import { paneSplit } from "./layout-math";
 import {
   chooserFrameKey,
-  chooserHostRemounts,
   chooserMeasuredAnchor,
   chooserMotion,
   chooserOnFrameKeyChange,
   chooserOnNativeRequestClose,
+  chooserOverlayKindChanged,
+  chooserOverlayStateEquals,
   chooserPanel,
   chooserPanelFrame,
   chooserRowMinHeight,
@@ -265,8 +267,11 @@ test("log actions say Log a workout", () => {
   assert.match(chooser, /title="Log a workout"/);
   assert.match(chooser, /Log fast, add details if you want/);
   assert.match(chooser, /nextChooserOverlayState/);
+  assert.match(chooser, /chooserOverlayStateEquals/);
+  assert.match(chooser, /useState/);
+  assert.equal(chooser.includes("overlayRef"), false);
   assert.match(chooser, /stripPresent\(strip\)/);
-  assert.match(chooser, /overlay\.kind === "panel"/);
+  assert.match(chooser, /nextOverlay\.kind === "panel"/);
   assert.match(chooser, /SidePanel/);
   assert.match(chooser, /BottomSheet/);
   assert.match(stack, /accessibilityLabel="Log a workout"/);
@@ -350,7 +355,7 @@ function playChooser(
 ) {
   let state: ChooserOverlayState | null = null;
   const kinds: ChooserOverlayState["kind"][] = [];
-  const remounts: boolean[] = [];
+  const kindChanges: boolean[] = [];
   for (const frame of frames) {
     const next = nextChooserOverlayState(state, {
       ios: frame.ios ?? true,
@@ -358,14 +363,14 @@ function playChooser(
       stripPresent: frame.stripPresent,
       visible: frame.visible,
     });
-    remounts.push(chooserHostRemounts(state?.kind ?? null, next.kind));
+    kindChanges.push(chooserOverlayKindChanged(state?.kind ?? null, next.kind));
     kinds.push(next.kind);
     state = next;
   }
-  return { kinds, remounts, state };
+  return { kinds, kindChanges, state };
 }
 
-test("folded strip chooser keeps one panel host through unfold, transient rail loss, and fold-back", () => {
+test("model-only: overlay kind stays panel through unfold, transient no-strip, and fold-back", () => {
   const foldedOpen = {
     stripEdge: "trailing" as const,
     stripPresent: true,
@@ -381,7 +386,7 @@ test("folded strip chooser keeps one panel host through unfold, transient rail l
     foldedOpen,
   ]);
   assert.deepEqual(unfold.kinds, ["panel", "panel", "panel", "panel", "panel", "panel", "panel"]);
-  assert.deepEqual(unfold.remounts, [false, false, false, false, false, false, false]);
+  assert.deepEqual(unfold.kindChanges, [false, false, false, false, false, false, false]);
   assert.equal(unfold.state?.holdsPanel, true);
   assert.equal(unfold.state?.edge, "trailing");
 
@@ -390,7 +395,7 @@ test("folded strip chooser keeps one panel host through unfold, transient rail l
     { stripEdge: "leading", stripPresent: true, visible: false },
   ]);
   assert.deepEqual(closedUnfold.kinds, ["panel", "panel"]);
-  assert.deepEqual(closedUnfold.remounts, [false, false]);
+  assert.deepEqual(closedUnfold.kindChanges, [false, false]);
   assert.equal(closedUnfold.state?.holdsPanel, false);
 
   const phone = playChooser([
@@ -398,7 +403,7 @@ test("folded strip chooser keeps one panel host through unfold, transient rail l
     { ios: false, stripEdge: null, stripPresent: false, visible: true },
   ]);
   assert.deepEqual(phone.kinds, ["sheet", "sheet"]);
-  assert.deepEqual(phone.remounts, [false, false]);
+  assert.deepEqual(phone.kindChanges, [false, false]);
 
   const iosPhone = playChooser([
     { stripEdge: null, stripPresent: false, visible: true },
@@ -412,7 +417,38 @@ test("folded strip chooser keeps one panel host through unfold, transient rail l
     foldedOpen,
   ]);
   assert.deepEqual(reopen.kinds, ["panel", "panel", "panel"]);
-  assert.deepEqual(reopen.remounts, [false, false, false]);
+  assert.deepEqual(reopen.kindChanges, [false, false, false]);
+});
+
+test("model-only: an aborted overlay compute does not become the next committed previous", () => {
+  const committed = nextChooserOverlayState(null, {
+    ios: true,
+    stripEdge: null,
+    stripPresent: false,
+    visible: true,
+  });
+  assert.equal(committed.kind, "sheet");
+  const aborted = nextChooserOverlayState(committed, {
+    ios: true,
+    stripEdge: "trailing",
+    stripPresent: true,
+    visible: true,
+  });
+  assert.equal(aborted.kind, "panel");
+  const nextCommitted = nextChooserOverlayState(committed, {
+    ios: true,
+    stripEdge: null,
+    stripPresent: false,
+    visible: true,
+  });
+  assert.equal(nextCommitted.kind, "sheet");
+  assert.equal(chooserOverlayStateEquals(committed, nextCommitted), true);
+  assert.equal(chooserOverlayStateEquals(aborted, nextCommitted), false);
+
+  const chooser = source("log-workout-chooser.tsx");
+  assert.match(chooser, /useState/);
+  assert.match(chooser, /setOverlay\(nextOverlay\)/);
+  assert.equal(chooser.includes("useRef"), false);
 });
 
 test("unfolding an open strip chooser relayouts instead of opening a second host", () => {
@@ -435,7 +471,31 @@ test("unfolding an open strip chooser relayouts instead of opening a second host
   assert.equal(closed.type, "idle");
 });
 
-test("iOS native request-close is ignored while the chooser is open; X and backdrop still use close()", () => {
+test("SidePanel is only imported by the workout chooser", () => {
+  const files: string[] = [];
+  const skip = new Set(["node_modules", "dist", ".expo"]);
+  const visit = (dir: string) => {
+    for (const entry of readdirSync(dir)) {
+      if (skip.has(entry)) continue;
+      const path = join(dir, entry);
+      const info = statSync(path);
+      if (info.isDirectory()) visit(path);
+      else if ((entry.endsWith(".ts") || entry.endsWith(".tsx")) && !entry.endsWith(".test.ts")) files.push(path);
+    }
+  };
+  const mobileRoot = new URL("..", import.meta.url);
+  visit(join(mobileRoot.pathname, "app"));
+  visit(join(mobileRoot.pathname, "ui"));
+  visit(join(mobileRoot.pathname, "lib"));
+  const importers = files.filter((file) => {
+    if (file.endsWith("/side-panel.tsx")) return false;
+    const code = readFileSync(file, "utf8");
+    return /from ["'](?:\.\.\/|\.\/)*side-panel["']/.test(code);
+  });
+  assert.deepEqual(importers.map((file) => file.slice(file.lastIndexOf("/") + 1)), ["log-workout-chooser.tsx"]);
+});
+
+test("iOS native request-close is ignored on this chooser; X and backdrop still use close()", () => {
   assert.deepEqual(chooserOnNativeRequestClose({ os: "ios", visible: true }), { type: "ignore" });
   assert.deepEqual(chooserOnNativeRequestClose({ os: "ios", visible: false }), { type: "ignore" });
   assert.deepEqual(chooserOnNativeRequestClose({ os: "android", visible: true }), { type: "dismiss" });
