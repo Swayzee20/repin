@@ -14,6 +14,7 @@ import {
 import {
   canStartPrompt,
   isStaleGeneration,
+  mayRequestOsPermission,
   nextPushHandoffAction,
   shouldLaunchExistingMemberPrompt,
   shouldRefreshPermissionOnAppState,
@@ -64,6 +65,7 @@ export function PushNotificationsHost({
   const generationRef = useRef(0);
   const userIdRef = useRef<string | null>(null);
   const sheetVisibleRef = useRef(false);
+  const aliveRef = useRef(true);
   const [osStatus, setOsStatus] = useState<PushOsStatus>("undetermined");
   const [sheetVisible, setSheetVisible] = useState(false);
   const [pending, setPending] = useState(false);
@@ -112,9 +114,13 @@ export function PushNotificationsHost({
     if (force) promptLocked.current = true;
     else if (!lockPrompt()) return;
 
+    const generation = generationRef.current;
+    const userId = sessionRef.current?.user.id ?? null;
     let presented = false;
     try {
       const status = await refreshStatus();
+      if (isStaleGeneration(generationRef.current, generation)) return;
+      if ((sessionRef.current?.user.id ?? null) !== userId) return;
       const action = nextPushHandoffAction(status);
       if (action === "syncToken") {
         void syncPushTokenForSession();
@@ -124,8 +130,10 @@ export function PushNotificationsHost({
         if (force) await Linking.openSettings();
         return;
       }
-      const userId = sessionRef.current?.user.id ?? null;
       if (!force && await wasPushPrepromptDismissed(userId)) return;
+      if (isStaleGeneration(generationRef.current, generation)) return;
+      if ((sessionRef.current?.user.id ?? null) !== userId) return;
+      if (!aliveRef.current) return;
       setForcePrompt(force);
       setSheetVisible(true);
       presented = true;
@@ -133,6 +141,49 @@ export function PushNotificationsHost({
       if (!presented) unlockPrompt();
     }
   }, [lockPrompt, refreshStatus, unlockPrompt]);
+
+  const dismissSheet = useCallback(() => {
+    setSheetVisible(false);
+    unlockPrompt();
+    if (!forcePrompt) {
+      void markPushPrepromptDismissed(sessionRef.current?.user.id ?? null);
+    }
+  }, [forcePrompt, unlockPrompt]);
+
+  const allowNotifications = useCallback(async () => {
+    setPending(true);
+    const generation = generationRef.current;
+    const userId = sessionRef.current?.user.id ?? null;
+    try {
+      if (!mayRequestOsPermission({
+        explicitPrimary: true,
+        platform: overlayPlatform(),
+      })) {
+        setSheetVisible(false);
+        unlockPrompt();
+        return;
+      }
+      const status = await requestPushPermission();
+      setOsStatus(status);
+      setSheetVisible(false);
+      unlockPrompt();
+      if (isStaleGeneration(generationRef.current, generation)) return;
+      if ((sessionRef.current?.user.id ?? null) !== userId) return;
+      if (status === "granted") await syncPushTokenForSession();
+      else if (!forcePrompt) {
+        await markPushPrepromptDismissed(userId);
+      }
+    } finally {
+      setPending(false);
+    }
+  }, [forcePrompt, unlockPrompt]);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     void refreshStatus();
@@ -186,6 +237,8 @@ export function PushNotificationsHost({
       if (isStaleGeneration(generationRef.current, generation)) return;
       const membership = await fetchHasCrewMembership(accessToken);
       if (isStaleGeneration(generationRef.current, generation)) return;
+      if ((sessionRef.current?.user.id ?? null) !== userId) return;
+      if (!aliveRef.current) return;
       if (!shouldLaunchExistingMemberPrompt({
         dismissed,
         generation: generationRef.current,
@@ -255,30 +308,6 @@ export function PushNotificationsHost({
       void showPreprompt(true);
     },
   }), [showPreprompt]);
-
-  const dismissSheet = useCallback(() => {
-    setSheetVisible(false);
-    unlockPrompt();
-    if (!forcePrompt) {
-      void markPushPrepromptDismissed(sessionRef.current?.user.id ?? null);
-    }
-  }, [forcePrompt, unlockPrompt]);
-
-  const allowNotifications = useCallback(async () => {
-    setPending(true);
-    try {
-      const status = await requestPushPermission();
-      setOsStatus(status);
-      setSheetVisible(false);
-      unlockPrompt();
-      if (status === "granted") await syncPushTokenForSession();
-      else if (!forcePrompt) {
-        await markPushPrepromptDismissed(sessionRef.current?.user.id ?? null);
-      }
-    } finally {
-      setPending(false);
-    }
-  }, [forcePrompt, unlockPrompt]);
 
   return (
     <PushPermissionContext.Provider

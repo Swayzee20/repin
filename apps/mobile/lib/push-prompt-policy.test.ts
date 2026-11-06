@@ -103,6 +103,9 @@ test("join, create, and startup cannot duplicate a prompt that is already locked
   assert.equal(launchPromptAllowedOnPath("/groups/join"), false);
   assert.equal(launchPromptAllowedOnPath("/join/ABCDEFGH"), false);
   assert.equal(launchPromptAllowedOnPath("/groups/cccccccc-cccc-4ccc-8ccc-cccccccccccc"), true);
+  assert.equal(launchPromptAllowedOnPath("/sign-in"), false);
+  assert.equal(launchPromptAllowedOnPath("/signup"), false);
+  assert.equal(launchPromptAllowedOnPath("/"), true);
 });
 
 test("stale membership or permission work from another account does not present", () => {

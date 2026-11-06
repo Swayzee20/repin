@@ -43,6 +43,7 @@ import {
 import { Icon, type IconName } from "./icons";
 import { Menu, MenuItem } from "./menu";
 import { menuPopoverWidth, stateActionHeight, stateIconSize } from "./overlay-state";
+import { useOverlayOccupancy } from "./use-overlay-occupancy";
 import { keyboardScrollProps } from "./keyboard";
 import { colors, elevation, fonts, radii, size, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
@@ -591,6 +592,7 @@ export function ContentOptionsMenu({
   const { width: viewportWidth } = useWindowDimensions();
   const [position, setPosition] = useState<{ left: number; top: number }>({ left: spacing.md, top: 0 });
   const [visible, setVisible] = useState(false);
+  const { onNativeDismiss } = useOverlayOccupancy(visible);
   const open = () => {
     anchor.current?.measureInWindow((x, y, width, height) => {
       setPosition({
@@ -621,7 +623,7 @@ export function ContentOptionsMenu({
           <Icon color={colors.muted} name="ellipsis" size={size.icon.md} />
         </Pressable>
       </View>
-      <Modal animationType="fade" onRequestClose={() => setVisible(false)} transparent visible={visible}>
+      <Modal animationType="fade" onDismiss={onNativeDismiss} onRequestClose={() => setVisible(false)} transparent visible={visible}>
         <Pressable accessibilityLabel="Close post options" onPress={() => setVisible(false)} style={styles.postMenuBackdrop}>
           <Menu style={[styles.postMenu, position]}>
             {items.map((item) => (

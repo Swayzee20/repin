@@ -111,6 +111,23 @@ test("parent hiding the sheet without close() still releases occupancy after nat
   assert.deepEqual(dismissed.effects, ["releaseOverlay"]);
 });
 
+test("android nativeDismissed does not complete hide; visible=false does", () => {
+  let state = reduceSheetHide(initialSheetHideState, { type: "presented" }).state;
+  state = reduceSheetHide(state, { type: "closeRequested", hasAfterClose: true }).state;
+  state = reduceSheetHide(state, { type: "animationEnded", finished: true }).state;
+  const native = reduceSheetHide(state, {
+    type: "nativeDismissed",
+    platform: "android",
+  });
+  assert.equal(native.ignored, true);
+  assert.equal(native.state.phase, "awaitingNativeHide");
+  const hidden = reduceSheetHide(native.state, {
+    type: "visibleFalseCommitted",
+    platform: "android",
+  });
+  assert.deepEqual(hidden.effects, ["releaseOverlay", "runAfterClose"]);
+});
+
 test("close without afterClose still hides and does not run a handoff", () => {
   let state = reduceSheetHide(initialSheetHideState, { type: "presented" }).state;
   state = reduceSheetHide(state, { type: "closeRequested", hasAfterClose: false }).state;
