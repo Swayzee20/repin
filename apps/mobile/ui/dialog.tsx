@@ -3,6 +3,7 @@ import { Modal, Pressable, StyleSheet, View } from "react-native";
 
 import { CenteredCard } from "./layout";
 import { colors, elevation, radii, spacing } from "./theme";
+import { useOverlayOccupancy } from "./use-overlay-occupancy";
 
 export function Dialog({
   children,
@@ -25,9 +26,11 @@ export function Dialog({
   visible: boolean;
 }) {
   const cardInset = size === "wide" ? spacing.lg * 2 : undefined;
+  const { onNativeDismiss } = useOverlayOccupancy(visible);
   return (
     <Modal
       animationType="fade"
+      onDismiss={onNativeDismiss}
       onRequestClose={() => {
         if (!dismissDisabled) onDismiss();
       }}

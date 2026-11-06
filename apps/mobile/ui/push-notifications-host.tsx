@@ -1,8 +1,9 @@
 import { crewPushHref, parseCrewPushPayload } from "@repin/validation";
-import { useRouter } from "expo-router";
+import { usePathname, useRouter } from "expo-router";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { Linking, Platform } from "react-native";
+import { AppState, Linking, Platform } from "react-native";
 
+import { fetchHasCrewMembership } from "../lib/push-api";
 import { registerPushHost } from "../lib/push-controller";
 import {
   getPushPermissionStatus,
@@ -11,14 +12,24 @@ import {
   syncPushTokenForSession,
 } from "../lib/push-notifications";
 import {
+  canStartPrompt,
+  isStaleGeneration,
+  nextPushHandoffAction,
+  shouldLaunchExistingMemberPrompt,
+  shouldRefreshPermissionOnAppState,
+  type OverlayPlatform,
+  type PushOsStatus,
+} from "../lib/push-prompt-policy";
+import {
   markPushPrepromptDismissed,
   wasPushPrepromptDismissed,
 } from "../lib/push-prompt-store";
 import { useAuthSession } from "../lib/use-auth-session";
+import { overlayCount, subscribeOverlayCount } from "./overlay-occupancy";
 import { PushPermissionSheet } from "./push-permission-sheet";
 
 type PushPermissionValue = {
-  osStatus: "undetermined" | "granted" | "denied";
+  osStatus: PushOsStatus;
   promptFromSettings: () => void;
 };
 
@@ -31,23 +42,36 @@ export function usePushPermission() {
   return useContext(PushPermissionContext);
 }
 
+function overlayPlatform(): OverlayPlatform {
+  if (Platform.OS === "ios") return "ios";
+  if (Platform.OS === "android") return "android";
+  return "web";
+}
+
 export function PushNotificationsHost({
   children,
 }: {
   children: ReactNode;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const { ready, session } = useAuthSession();
   const sessionRef = useRef(session);
   const accessTokenRef = useRef<string | null>(session?.access_token ?? null);
   const handledResponse = useRef<string | null>(null);
   const pendingHref = useRef<string | null>(null);
-  const [osStatus, setOsStatus] = useState<PushPermissionValue["osStatus"]>("undetermined");
+  const promptLocked = useRef(false);
+  const generationRef = useRef(0);
+  const userIdRef = useRef<string | null>(null);
+  const sheetVisibleRef = useRef(false);
+  const [osStatus, setOsStatus] = useState<PushOsStatus>("undetermined");
   const [sheetVisible, setSheetVisible] = useState(false);
   const [pending, setPending] = useState(false);
   const [forcePrompt, setForcePrompt] = useState(false);
+  const [overlayTick, setOverlayTick] = useState(0);
 
   sessionRef.current = session;
+  sheetVisibleRef.current = sheetVisible;
   if (session?.access_token) accessTokenRef.current = session.access_token;
 
   const refreshStatus = useCallback(async () => {
@@ -69,12 +93,76 @@ export function PushNotificationsHost({
     router.push(href);
   }, [router]);
 
+  const lockPrompt = useCallback(() => {
+    if (!canStartPrompt({
+      promptLocked: promptLocked.current,
+      sheetVisible: sheetVisibleRef.current,
+    })) {
+      return false;
+    }
+    promptLocked.current = true;
+    return true;
+  }, []);
+
+  const unlockPrompt = useCallback(() => {
+    promptLocked.current = false;
+  }, []);
+
+  const showPreprompt = useCallback(async (force: boolean) => {
+    if (force) promptLocked.current = true;
+    else if (!lockPrompt()) return;
+
+    let presented = false;
+    try {
+      const status = await refreshStatus();
+      const action = nextPushHandoffAction(status);
+      if (action === "syncToken") {
+        void syncPushTokenForSession();
+        return;
+      }
+      if (action === "openSettings") {
+        if (force) await Linking.openSettings();
+        return;
+      }
+      const userId = sessionRef.current?.user.id ?? null;
+      if (!force && await wasPushPrepromptDismissed(userId)) return;
+      setForcePrompt(force);
+      setSheetVisible(true);
+      presented = true;
+    } finally {
+      if (!presented) unlockPrompt();
+    }
+  }, [lockPrompt, refreshStatus, unlockPrompt]);
+
   useEffect(() => {
     void refreshStatus();
   }, [refreshStatus]);
 
+  useEffect(() => subscribeOverlayCount(() => {
+    setOverlayTick((current) => current + 1);
+  }), []);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (next) => {
+      if (!shouldRefreshPermissionOnAppState(next)) return;
+      void (async () => {
+        const status = await refreshStatus();
+        if (status === "granted") void syncPushTokenForSession();
+      })();
+    });
+    return () => subscription.remove();
+  }, [refreshStatus]);
+
   useEffect(() => {
     if (!ready) return;
+    const nextUserId = session?.user.id ?? null;
+    if (userIdRef.current !== nextUserId) {
+      generationRef.current += 1;
+      userIdRef.current = nextUserId;
+      setSheetVisible(false);
+      setForcePrompt(false);
+      unlockPrompt();
+    }
     if (session) {
       void syncPushTokenForSession();
       flushPendingHref();
@@ -83,7 +171,39 @@ export function PushNotificationsHost({
       accessTokenRef.current = null;
       void removePushTokenForSession(accessToken);
     }
-  }, [flushPendingHref, ready, session]);
+  }, [flushPendingHref, ready, session, unlockPrompt]);
+
+  useEffect(() => {
+    if (!ready || !session) return;
+    const generation = generationRef.current;
+    const userId = session.user.id;
+    const accessToken = session.access_token;
+
+    void (async () => {
+      const status = await refreshStatus();
+      if (isStaleGeneration(generationRef.current, generation)) return;
+      const dismissed = await wasPushPrepromptDismissed(userId);
+      if (isStaleGeneration(generationRef.current, generation)) return;
+      const membership = await fetchHasCrewMembership(accessToken);
+      if (isStaleGeneration(generationRef.current, generation)) return;
+      if (!shouldLaunchExistingMemberPrompt({
+        dismissed,
+        generation: generationRef.current,
+        membership,
+        overlayCount: overlayCount(),
+        osStatus: status,
+        pathname,
+        platform: overlayPlatform(),
+        promptLocked: promptLocked.current,
+        responseGeneration: generation,
+        sessionUserId: userId,
+        sheetVisible: sheetVisibleRef.current,
+      })) {
+        return;
+      }
+      await showPreprompt(false);
+    })();
+  }, [overlayTick, pathname, ready, refreshStatus, session, showPreprompt]);
 
   useEffect(() => {
     if (Platform.OS === "web") return undefined;
@@ -127,23 +247,6 @@ export function PushNotificationsHost({
     };
   }, [flushPendingHref, openPayload]);
 
-  const showPreprompt = useCallback(async (force: boolean) => {
-    const status = await refreshStatus();
-    if (status === "granted") {
-      void syncPushTokenForSession();
-      return;
-    }
-    if (status === "denied") {
-      if (force) {
-        await Linking.openSettings();
-      }
-      return;
-    }
-    if (!force && await wasPushPrepromptDismissed()) return;
-    setForcePrompt(force);
-    setSheetVisible(true);
-  }, [refreshStatus]);
-
   useEffect(() => registerPushHost({
     promptAfterJoin: () => {
       void showPreprompt(false);
@@ -155,8 +258,11 @@ export function PushNotificationsHost({
 
   const dismissSheet = useCallback(() => {
     setSheetVisible(false);
-    if (!forcePrompt) void markPushPrepromptDismissed();
-  }, [forcePrompt]);
+    unlockPrompt();
+    if (!forcePrompt) {
+      void markPushPrepromptDismissed(sessionRef.current?.user.id ?? null);
+    }
+  }, [forcePrompt, unlockPrompt]);
 
   const allowNotifications = useCallback(async () => {
     setPending(true);
@@ -164,12 +270,15 @@ export function PushNotificationsHost({
       const status = await requestPushPermission();
       setOsStatus(status);
       setSheetVisible(false);
+      unlockPrompt();
       if (status === "granted") await syncPushTokenForSession();
-      else if (!forcePrompt) await markPushPrepromptDismissed();
+      else if (!forcePrompt) {
+        await markPushPrepromptDismissed(sessionRef.current?.user.id ?? null);
+      }
     } finally {
       setPending(false);
     }
-  }, [forcePrompt]);
+  }, [forcePrompt, unlockPrompt]);
 
   return (
     <PushPermissionContext.Provider

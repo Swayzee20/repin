@@ -166,10 +166,14 @@ export function NotificationsSheet({
 
   return (
     <BottomSheet onDismiss={onDismiss} title="Notifications" visible={visible}>
+      {(close) => (
+        <>
       <Text style={styles.body}>{crewCopy.notificationsIntro}</Text>
       {deviceAlertsOn ? null : (
         <View style={styles.devicePrompt}>
-          <Button onPress={onEnableDeviceAlerts}>{pushCopy.prePrompt.primary}</Button>
+          <Button onPress={() => close(() => onEnableDeviceAlerts())}>
+            {pushCopy.prePrompt.primary}
+          </Button>
         </View>
       )}
       <View style={styles.muteRow}>
@@ -209,6 +213,8 @@ export function NotificationsSheet({
         />
       </View>
       <Button loading={pending} loadingLabel="Saving" onPress={() => onSave(draft)}>Done</Button>
+        </>
+      )}
     </BottomSheet>
   );
 }

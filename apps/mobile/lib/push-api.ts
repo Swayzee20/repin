@@ -28,6 +28,20 @@ export async function registerDevicePushToken(input: {
   }
 }
 
+export async function fetchHasCrewMembership(accessToken: string) {
+  try {
+    const response = await fetch(`${apiUrl}/api/groups`, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      signal: AbortSignal.timeout(7_500),
+    });
+    const body = (await response.json().catch(() => null)) as { groups?: unknown } | null;
+    if (!response.ok || !Array.isArray(body?.groups)) return null;
+    return body.groups.length > 0;
+  } catch {
+    return null;
+  }
+}
+
 export async function unregisterDevicePushToken(input: {
   accessToken: string;
   expoPushToken: string;
