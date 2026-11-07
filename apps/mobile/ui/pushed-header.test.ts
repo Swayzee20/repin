@@ -5,6 +5,7 @@ import { test } from "node:test";
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
 import {
+  crewPushedHeaderInset,
   pushedHeaderClearance,
   pushedHeaderScreenOptions,
   pushedNativeHeaderEnabled,
@@ -12,7 +13,7 @@ import {
   pushedShowsRoundBack,
 } from "./pushed-header";
 import { colors, size } from "./theme";
-import type { StripState } from "./vertical-bar-edge-store";
+import { stripPresent, type StripState } from "./vertical-bar-edge-store";
 
 const strips: StripState[] = [
   { status: "pending", edge: null },
@@ -50,6 +51,21 @@ test("a transparent bar clears content only when it sits on top", () => {
     assert.equal(pushedHeaderClearance("ios", strip), expected);
     assert.equal(pushedHeaderClearance("android", strip), 0);
     assert.equal(pushedHeaderClearance("web", strip), 0);
+  }
+});
+
+test("crew inset clears the native bar on a strip without doubling phone padding", () => {
+  for (const strip of strips) {
+    const clearance = pushedHeaderClearance("ios", strip);
+    const inset = crewPushedHeaderInset("ios", strip);
+    assert.equal(inset, size.hit);
+    if (stripPresent(strip)) {
+      assert.equal(clearance, 0);
+    } else {
+      assert.equal(inset, clearance);
+    }
+    assert.equal(crewPushedHeaderInset("android", strip), 0);
+    assert.equal(crewPushedHeaderInset("web", strip), 0);
   }
 });
 
@@ -93,8 +109,10 @@ test("crew page keeps the pushed back control and page-local invite actions", ()
   assert.equal(code.includes("useStripState"), true);
   assert.equal(code.includes("pushedNativeHeaderEnabled"), true);
   assert.equal(code.includes("pushedShowsRoundBack"), true);
-  assert.equal(code.includes("pushedHeaderClearance"), true);
+  assert.equal(code.includes("crewPushedHeaderInset"), true);
+  assert.equal(code.includes("pushedHeaderClearance"), false);
   assert.equal(code.includes("pushedHeaderScreenOptions"), true);
+  assert.equal(code.includes('headerTitle: "Crew"'), true);
   assert.equal(code.includes("<Stack.Toolbar"), false);
   assert.equal(code.includes("Copy"), true);
   assert.equal(code.includes("Share"), true);

@@ -34,6 +34,19 @@ export function pushedHeaderClearance(platform: string, strip: StripState): numb
   return pushedNavigationBarHeight;
 }
 
+/**
+ * Crew page only. Duo still paints the translucent native "Crew" title over
+ * the content when the strip is present, so this screen needs `size.hit`
+ * there. Other pushed screens keep using `pushedHeaderClearance` (0 on a
+ * strip). Do not add this on top of clearance: that double-pads phones.
+ */
+export function crewPushedHeaderInset(platform: string, strip: StripState): number {
+  if (pushedNativeHeaderEnabled(platform) && stripPresent(strip)) {
+    return pushedNavigationBarHeight;
+  }
+  return pushedHeaderClearance(platform, strip);
+}
+
 export function pushedHeaderScreenOptions() {
   return {
     headerBackButtonDisplayMode: "minimal" as const,
