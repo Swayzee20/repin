@@ -59,9 +59,11 @@ export const crewMeasuredHeaderClearanceMax = pushedNavigationBarHeight * 4;
  * header height into a view that also has a top safe-area inset: that
  * double-counts the status bar.
  *
- * Missing, non-finite, or non-positive header height falls back to
- * `crewPushedHeaderInset`. A short measurement never goes below that
- * floor. The cap stops a bad native event from exploding the layout.
+ * Missing, non-finite, or non-positive header height, and missing,
+ * non-finite, or negative safeTop, fall back to `crewPushedHeaderInset`
+ * (44 on iOS, 0 on Android/web). A measured safeTop of 0 is valid and is
+ * not a fallback. A short measurement never goes below that floor. The
+ * cap stops a bad native event from exploding the layout.
  */
 export function crewMeasuredHeaderClearance({
   headerHeight,
@@ -74,12 +76,11 @@ export function crewMeasuredHeaderClearance({
   safeTop: number;
   strip: StripState;
 }): number {
-  if (!pushedNativeHeaderEnabled(platform)) return 0;
   const fallback = crewPushedHeaderInset(platform, strip);
-  const height = Number.isFinite(headerHeight) ? headerHeight : 0;
-  const top = Number.isFinite(safeTop) ? Math.max(0, safeTop) : 0;
-  if (height <= 0) return fallback;
-  const extra = Math.max(0, height - top);
+  if (!pushedNativeHeaderEnabled(platform)) return fallback;
+  if (!Number.isFinite(headerHeight) || headerHeight <= 0) return fallback;
+  if (!Number.isFinite(safeTop) || safeTop < 0) return fallback;
+  const extra = Math.max(0, headerHeight - safeTop);
   return Math.max(fallback, Math.min(extra, crewMeasuredHeaderClearanceMax));
 }
 

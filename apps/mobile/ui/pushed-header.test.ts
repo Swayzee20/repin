@@ -133,10 +133,13 @@ test("crew measured extra falls back when header height or safeTop is not a usab
       assert.equal(measure("ios", strip, headerHeight, 0), fallback);
       assert.equal(measure("ios", strip, headerHeight, 59), fallback);
     }
-    assert.equal(measure("ios", strip, 96, Number.NaN), 96);
-    assert.equal(measure("ios", strip, 96, Number.POSITIVE_INFINITY), 96);
-    assert.equal(measure("ios", strip, 96, Number.NEGATIVE_INFINITY), 96);
-    assert.equal(measure("ios", strip, 96, -12), 96);
+    for (const safeTop of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, -1, -12, -44]) {
+      assert.equal(measure("ios", strip, 96, safeTop), fallback);
+      assert.notEqual(measure("ios", strip, 96, safeTop), 96);
+      assert.equal(measure("android", strip, 96, safeTop), 0);
+      assert.equal(measure("web", strip, 96, safeTop), 0);
+    }
+    assert.equal(measure("ios", strip, 96, 0), 96);
     assert.equal(measure("android", strip, Number.NaN, 0), 0);
     assert.equal(measure("web", strip, Number.POSITIVE_INFINITY, 0), 0);
   }
@@ -146,7 +149,8 @@ test("crew measured extra clamps extremes and never exceeds the token cap", () =
   for (const strip of strips) {
     assert.equal(measure("ios", strip, 400, 0), crewMeasuredHeaderClearanceMax);
     assert.equal(measure("ios", strip, 400, 59), crewMeasuredHeaderClearanceMax);
-    assert.equal(measure("ios", strip, 1_000, -50), crewMeasuredHeaderClearanceMax);
+    assert.equal(measure("ios", strip, 1_000, 0), crewMeasuredHeaderClearanceMax);
+    assert.equal(measure("ios", strip, 1_000, -50), size.hit);
     assert.ok(measure("ios", strip, 400, 0) <= crewMeasuredHeaderClearanceMax);
     assert.ok(measure("ios", strip, 400, 0) >= size.hit);
   }
