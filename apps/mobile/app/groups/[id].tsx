@@ -10,9 +10,10 @@ import {
 import * as Clipboard from "expo-clipboard";
 import * as ImagePicker from "expo-image-picker";
 import { Stack, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useHeaderHeight } from "expo-router/react-navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Image, Platform, Pressable, Share, StyleSheet, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   fetchCrewPage,
@@ -38,7 +39,7 @@ import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { ListRow, RoundIconButton } from "../../ui/primitives";
 import { usePushPermission } from "../../ui/push-notifications-host";
 import {
-  crewPushedHeaderInset,
+  crewMeasuredHeaderClearance,
   pushedHeaderScreenOptions,
   pushedNativeHeaderEnabled,
   pushedShowsRoundBack,
@@ -67,9 +68,16 @@ export default function CrewPageScreen() {
   const { mode } = useLayoutMode();
   const { osStatus, promptFromSettings } = usePushPermission();
   const strip = useStripState();
+  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
   const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
   const roundBack = pushedShowsRoundBack(Platform.OS);
-  const headerClearance = crewPushedHeaderInset(Platform.OS, strip);
+  const headerClearance = crewMeasuredHeaderClearance({
+    headerHeight,
+    platform: Platform.OS,
+    safeTop: insets.top,
+    strip,
+  });
   const twoPane = mode === "twoPane";
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;

@@ -5,6 +5,8 @@ import { test } from "node:test";
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
 import {
+  crewMeasuredHeaderClearance,
+  crewMeasuredHeaderClearanceMax,
   crewPushedHeaderInset,
   pushedHeaderClearance,
   pushedHeaderScreenOptions,
@@ -69,6 +71,87 @@ test("crew inset clears the native bar on a strip without doubling phone padding
   }
 });
 
+const noStrip: StripState = { status: "known", edge: null };
+const trailingStrip: StripState = { status: "known", edge: "trailing" };
+const leadingStrip: StripState = { status: "known", edge: "leading" };
+
+function measure(
+  platform: string,
+  strip: StripState,
+  headerHeight: number,
+  safeTop: number,
+) {
+  return crewMeasuredHeaderClearance({ headerHeight, platform, safeTop, strip });
+}
+
+test("crew measured extra subtracts SafeArea top instead of stacking it", () => {
+  const headerHeight = 103;
+  const safeTop = 59;
+  for (const strip of strips) {
+    const extra = measure("ios", strip, headerHeight, safeTop);
+    assert.equal(extra, size.hit);
+    assert.equal(safeTop + extra, headerHeight);
+    assert.notEqual(extra, headerHeight);
+    assert.notEqual(extra, headerHeight + safeTop);
+  }
+});
+
+test("crew measured extra follows header height across rotation inputs", () => {
+  const portrait = measure("ios", trailingStrip, 96, 0);
+  const landscape = measure("ios", trailingStrip, 78, 0);
+  assert.equal(portrait, 96);
+  assert.equal(landscape, 78);
+  assert.notEqual(portrait, landscape);
+
+  const phonePortrait = measure("ios", noStrip, 103, 59);
+  const phoneLandscape = measure("ios", noStrip, 76, 0);
+  assert.equal(phonePortrait, size.hit);
+  assert.equal(phoneLandscape, 76);
+
+  const foldedThenOpen = measure("ios", leadingStrip, 64, 0);
+  const unfoldedPortrait = measure("ios", noStrip, 103, 59);
+  assert.equal(foldedThenOpen, 64);
+  assert.equal(unfoldedPortrait, size.hit);
+});
+
+test("crew measured extra keeps the 44 floor on every strip state and platform", () => {
+  assert.equal(crewMeasuredHeaderClearanceMax, size.hit * 4);
+  for (const strip of strips) {
+    assert.equal(measure("ios", strip, size.hit, 0), size.hit);
+    assert.equal(measure("ios", strip, 20, 0), size.hit);
+    assert.equal(measure("ios", strip, 96, 0) >= size.hit, true);
+    assert.equal(measure("android", strip, 96, 0), 0);
+    assert.equal(measure("web", strip, 96, 24), 0);
+  }
+});
+
+test("crew measured extra falls back when header height or safeTop is not a usable number", () => {
+  for (const strip of strips) {
+    const fallback = crewPushedHeaderInset("ios", strip);
+    assert.equal(fallback, size.hit);
+    for (const headerHeight of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1, -44]) {
+      assert.equal(measure("ios", strip, headerHeight, 0), fallback);
+      assert.equal(measure("ios", strip, headerHeight, 59), fallback);
+    }
+    assert.equal(measure("ios", strip, 96, Number.NaN), 96);
+    assert.equal(measure("ios", strip, 96, Number.POSITIVE_INFINITY), 96);
+    assert.equal(measure("ios", strip, 96, Number.NEGATIVE_INFINITY), 96);
+    assert.equal(measure("ios", strip, 96, -12), 96);
+    assert.equal(measure("android", strip, Number.NaN, 0), 0);
+    assert.equal(measure("web", strip, Number.POSITIVE_INFINITY, 0), 0);
+  }
+});
+
+test("crew measured extra clamps extremes and never exceeds the token cap", () => {
+  for (const strip of strips) {
+    assert.equal(measure("ios", strip, 400, 0), crewMeasuredHeaderClearanceMax);
+    assert.equal(measure("ios", strip, 400, 59), crewMeasuredHeaderClearanceMax);
+    assert.equal(measure("ios", strip, 1_000, -50), crewMeasuredHeaderClearanceMax);
+    assert.ok(measure("ios", strip, 400, 0) <= crewMeasuredHeaderClearanceMax);
+    assert.ok(measure("ios", strip, 400, 0) >= size.hit);
+  }
+});
+
 test("the iOS header is transparent, untitled, and keeps the back button", () => {
   const options = pushedHeaderScreenOptions();
   assert.equal(options.headerShown, true);
@@ -109,7 +192,8 @@ test("crew page keeps the pushed back control and page-local invite actions", ()
   assert.equal(code.includes("useStripState"), true);
   assert.equal(code.includes("pushedNativeHeaderEnabled"), true);
   assert.equal(code.includes("pushedShowsRoundBack"), true);
-  assert.equal(code.includes("crewPushedHeaderInset"), true);
+  assert.equal(code.includes("crewMeasuredHeaderClearance"), true);
+  assert.equal(code.includes("crewPushedHeaderInset"), false);
   assert.equal(code.includes("pushedHeaderClearance"), false);
   assert.equal(code.includes("pushedHeaderScreenOptions"), true);
   assert.equal(code.includes('headerTitle: "Crew"'), true);
@@ -120,6 +204,45 @@ test("crew page keeps the pushed back control and page-local invite actions", ()
   assert.equal(code.includes("Delete crew"), false);
   assert.equal(code.includes('variant="prominent"'), false);
   assert.equal(code.includes("roundBack ?"), true);
+});
+
+test("crew page wires measured clearance on one outer wrapper and does not change TwoPane", () => {
+  const crew = sourceOf("../app/groups/[id].tsx");
+  const layout = sourceOf("./layout.tsx");
+  const settings = sourceOf("../app/settings.tsx");
+  const join = sourceOf("../app/groups/join.tsx");
+  const blocked = sourceOf("../app/blocked-accounts.tsx");
+
+  assert.match(crew, /from "expo-router\/react-navigation"/);
+  assert.match(crew, /const insets = useSafeAreaInsets\(\);/);
+  assert.match(crew, /const headerHeight = useHeaderHeight\(\);/);
+  assert.equal((crew.match(/useHeaderHeight\(/g) ?? []).length, 1);
+  assert.equal((crew.match(/useSafeAreaInsets\(/g) ?? []).length, 1);
+  assert.match(
+    crew,
+    /const headerClearance = crewMeasuredHeaderClearance\(\{\s+headerHeight,\s+platform: Platform\.OS,\s+safeTop: insets\.top,\s+strip,\s+\}\);/,
+  );
+  assert.equal((crew.match(/paddingTop: headerClearance/g) ?? []).length, 1);
+  assert.match(
+    crew,
+    /style=\{headerClearance > 0 \? \[styles\.flex, \{ paddingTop: headerClearance \}\] : styles\.flex\}/,
+  );
+  assert.match(crew, /<TwoPane[\s\S]*fallback="stack"/);
+  assert.equal(crew.includes("contentInsetAdjustmentBehavior"), false);
+  assert.equal(crew.includes("automaticallyAdjustContentInsets"), false);
+  assert.equal(crew.includes("automaticallyAdjustsScrollIndicatorInsets"), false);
+  assert.equal(crew.includes("paddingTop: headerHeight"), false);
+  assert.equal(crew.includes("headerClearance +"), false);
+
+  assert.equal(layout.includes("crewMeasuredHeaderClearance"), false);
+  assert.equal(layout.includes("useHeaderHeight"), false);
+  assert.equal(layout.includes("contentInsetAdjustmentBehavior"), false);
+
+  for (const other of [settings, join, blocked]) {
+    assert.equal(other.includes("crewMeasuredHeaderClearance"), false);
+    assert.equal(other.includes("useHeaderHeight"), false);
+    assert.equal(other.includes("pushedHeaderClearance"), true);
+  }
 });
 
 test("join by code uses the native back button and no strip action", () => {
