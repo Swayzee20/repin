@@ -38,7 +38,7 @@ import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { ListRow, RoundIconButton } from "../../ui/primitives";
 import { usePushPermission } from "../../ui/push-notifications-host";
 import {
-  pushedHeaderClearance,
+  crewPushedHeaderInset,
   pushedHeaderScreenOptions,
   pushedNativeHeaderEnabled,
   pushedShowsRoundBack,
@@ -69,7 +69,7 @@ export default function CrewPageScreen() {
   const strip = useStripState();
   const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
   const roundBack = pushedShowsRoundBack(Platform.OS);
-  const headerClearance = pushedHeaderClearance(Platform.OS, strip);
+  const headerClearance = crewPushedHeaderInset(Platform.OS, strip);
   const twoPane = mode === "twoPane";
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;

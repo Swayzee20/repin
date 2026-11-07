@@ -728,6 +728,22 @@ test("invite-only groups and row level security", async () => {
       false,
     );
 
+    const dana = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Dana" });
+    await db.joinGroup({ userId: dana.id, groupId: alpha.id, inviteCode: alpha.inviteCode });
+    const left = await db.leaveCrew({ userId: dana.id, groupId: alpha.id });
+    assert.equal(left?.closed, false);
+
+    await assertCrewPhotoMigrationSql();
+    await assertCrewPhotoPolicies(client);
+    await assertCrewPhotoAccess(client, {
+      ownerId: ada.id,
+      memberId: byron.id,
+      outsiderId: cyrus.id,
+      formerId: dana.id,
+      groupId: alpha.id,
+      suffix: "before-drop",
+    });
+
     const visibleToBypass = await scalar(
       client,
       "repin_api",
@@ -802,6 +818,30 @@ test("invite-only groups and row level security", async () => {
     assert.equal(privileges.rows[0].user_helper, true);
 
     await assertStorageBlockToleratesNonOwner(client);
+    await assertCrewPhotoPolicies(client);
+    await assertCrewPhotoAccess(client, {
+      ownerId: ada.id,
+      memberId: byron.id,
+      outsiderId: cyrus.id,
+      formerId: dana.id,
+      groupId: alpha.id,
+      suffix: "after-drop",
+    });
+    await queryAs(
+      client,
+      "authenticated",
+      ada.id,
+      "insert into storage.objects (bucket_id, name) values ('workout-photos', $1)",
+      [`${ada.id}/after-drop.jpg`],
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      byron.id,
+      "insert into storage.objects (bucket_id, name) values ('workout-photos', $1)",
+      [`${ada.id}/stolen-after-drop.jpg`],
+      /row-level security/i,
+    );
   } finally {
     await client.end();
     if (globalThis.repinPool) {
@@ -1832,6 +1872,7 @@ async function applySupabaseMigrations(client) {
     "20261102160000_moderation.sql",
     "20261106000000_crew_page.sql",
     "20261106120000_push_notifications.sql",
+    "20261107000000_crew_photos_foldername.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");
@@ -1927,6 +1968,27 @@ const storagePolicyNames = [
   "Workout photo owners can delete",
 ];
 
+const crewPhotoPolicyNames = [
+  "Crew photo owners can read",
+  "Crew photo owners can upload",
+  "Crew photo owners can update",
+  "Crew photo owners can delete",
+];
+
+const crewPhotoPolicyPredicate = `
+  bucket_id = 'crew-photos'
+  and (storage.foldername(name))[1] in (
+    select groups.id::text
+    from public.groups
+    where groups.owner_id = auth.uid()
+  )
+`;
+
+const crewPhotosFoldernameMigration = path.join(
+  repoRoot,
+  "supabase/migrations/20261107000000_crew_photos_foldername.sql",
+);
+
 async function assertStorageBlockToleratesNonOwner(client) {
   await createRole(client, "storage_table_owner");
   await createRole(client, "hosted_sql_editor");
@@ -1989,6 +2051,11 @@ async function assertStorageBlockToleratesNonOwner(client) {
     order by policyname
   `);
   assert.deepEqual(policies.rows, []);
+  const rewriteSql = await readFile(crewPhotosFoldernameMigration, "utf8");
+  await assert.rejects(
+    () => client.query(rewriteSql),
+    /Expected four crew-photos policies on storage.objects/,
+  );
   assert.equal(
     await scalar(
       client,
@@ -2006,6 +2073,7 @@ async function assertStorageBlockToleratesNonOwner(client) {
   `);
   const ownerNotices = await queryNotices(client, block);
   assert.deepEqual(ownerNotices, []);
+  await restoreCrewPhotoPolicies(client);
   const restored = await client.query(`
     select policyname
     from pg_policies
@@ -2014,7 +2082,7 @@ async function assertStorageBlockToleratesNonOwner(client) {
   `);
   assert.deepEqual(
     restored.rows.map((row) => row.policyname),
-    [...storagePolicyNames].sort(),
+    [...storagePolicyNames, ...crewPhotoPolicyNames].sort(),
   );
   assert.equal(
     await scalar(
@@ -2059,4 +2127,224 @@ function normalizeRoles(roles) {
     ? roles
     : String(roles).replace(/[{}]/g, "").split(",").filter(Boolean);
   return [...values].sort();
+}
+
+async function restoreCrewPhotoPolicies(client) {
+  await client.query(`
+    create policy "Crew photo owners can read"
+      on storage.objects for select to authenticated
+      using (${crewPhotoPolicyPredicate});
+    create policy "Crew photo owners can upload"
+      on storage.objects for insert to authenticated
+      with check (${crewPhotoPolicyPredicate});
+    create policy "Crew photo owners can update"
+      on storage.objects for update to authenticated
+      using (${crewPhotoPolicyPredicate})
+      with check (${crewPhotoPolicyPredicate});
+    create policy "Crew photo owners can delete"
+      on storage.objects for delete to authenticated
+      using (${crewPhotoPolicyPredicate});
+  `);
+}
+
+async function assertCrewPhotoMigrationSql() {
+  const sql = await readFile(crewPhotosFoldernameMigration, "utf8");
+  const statements = sql.replace(/--[^\n]*/g, "");
+  assert.doesNotMatch(statements, /security definer/i);
+  assert.doesNotMatch(statements, /bypassrls/i);
+  assert.doesNotMatch(statements, /raise notice/i);
+  assert.doesNotMatch(statements, /disable row level security/i);
+  assert.doesNotMatch(statements, /grant /i);
+  assert.doesNotMatch(statements, /storage\.buckets/);
+  assert.match(statements, /alter policy "Crew photo owners can read"/);
+  assert.match(statements, /alter policy "Crew photo owners can upload"/);
+  assert.match(statements, /alter policy "Crew photo owners can update"/);
+  assert.match(statements, /alter policy "Crew photo owners can delete"/);
+  assert.match(statements, /foldername\(name\)\)\[1\] in \(/);
+  assert.doesNotMatch(statements, /foldername\(groups\.name\)/);
+}
+
+async function assertCrewPhotoPolicies(client) {
+  const catalog = await client.query(`
+    select policyname, cmd, roles, qual, with_check
+    from pg_policies
+    where schemaname = 'storage'
+      and tablename = 'objects'
+      and policyname like 'Crew photo%'
+    order by policyname
+  `);
+  assert.deepEqual(
+    catalog.rows.map((row) => row.policyname),
+    [...crewPhotoPolicyNames].sort(),
+  );
+
+  const byName = new Map(catalog.rows.map((row) => [row.policyname, row]));
+  const read = byName.get("Crew photo owners can read");
+  const upload = byName.get("Crew photo owners can upload");
+  const update = byName.get("Crew photo owners can update");
+  const remove = byName.get("Crew photo owners can delete");
+  assert.equal(read.cmd, "SELECT");
+  assert.ok(read.qual);
+  assert.equal(read.with_check, null);
+  assert.equal(upload.cmd, "INSERT");
+  assert.equal(upload.qual, null);
+  assert.ok(upload.with_check);
+  assert.equal(update.cmd, "UPDATE");
+  assert.ok(update.qual);
+  assert.ok(update.with_check);
+  assert.equal(remove.cmd, "DELETE");
+  assert.ok(remove.qual);
+  assert.equal(remove.with_check, null);
+
+  for (const row of catalog.rows) {
+    assert.deepEqual(normalizeRoles(row.roles), ["authenticated"]);
+    for (const expr of [row.qual, row.with_check]) {
+      if (!expr) continue;
+      assert.doesNotMatch(expr, /foldername\(groups\.name\)/);
+      assert.match(expr, /foldername\(name\)/);
+      assert.match(expr, /IN \( SELECT/);
+      assert.doesNotMatch(expr, /\bEXISTS\b/);
+    }
+  }
+
+  assert.equal(
+    await scalar(
+      client,
+      "postgres",
+      null,
+      "select public from storage.buckets where id = 'crew-photos'",
+      [],
+    ),
+    false,
+  );
+  const rls = await client.query(`
+    select c.relrowsecurity
+    from pg_class as c
+    join pg_namespace as n on n.oid = c.relnamespace
+    where n.nspname = 'storage' and c.relname = 'objects'
+  `);
+  assert.equal(rls.rows[0].relrowsecurity, true);
+}
+
+async function assertCrewPhotoAccess(client, actors) {
+  const objectPath = `${actors.groupId}/${actors.suffix}-ok.jpg`;
+  const insertReturning =
+    "insert into storage.objects (bucket_id, name) values ('crew-photos', $1) returning name";
+
+  const inserted = await queryAs(
+    client,
+    "authenticated",
+    actors.ownerId,
+    insertReturning,
+    [objectPath],
+  );
+  assert.equal(inserted.rowCount, 1);
+  assert.equal(inserted.rows[0].name, objectPath);
+
+  await expectDenied(
+    client,
+    "authenticated",
+    actors.memberId,
+    insertReturning,
+    [`${actors.groupId}/${actors.suffix}-member.jpg`],
+    /row-level security/i,
+  );
+  await expectDenied(
+    client,
+    "authenticated",
+    actors.outsiderId,
+    insertReturning,
+    [`${actors.groupId}/${actors.suffix}-outsider.jpg`],
+    /row-level security/i,
+  );
+  await expectDenied(
+    client,
+    "authenticated",
+    actors.formerId,
+    insertReturning,
+    [`${actors.groupId}/${actors.suffix}-former.jpg`],
+    /row-level security/i,
+  );
+  await expectDenied(
+    client,
+    "authenticated",
+    null,
+    insertReturning,
+    [`${actors.groupId}/${actors.suffix}-nojwt.jpg`],
+    /row-level security/i,
+  );
+  await expectDenied(
+    client,
+    "authenticated",
+    actors.ownerId,
+    insertReturning,
+    [`${actors.memberId}/${actors.suffix}-wrong.jpg`],
+    /row-level security/i,
+  );
+
+  const selectSql =
+    "select name from storage.objects where bucket_id = 'crew-photos' and name = $1";
+  assert.deepEqual(
+    await columnAs(client, "authenticated", actors.ownerId, selectSql, [objectPath], "name"),
+    [objectPath],
+  );
+  assert.deepEqual(
+    await columnAs(client, "authenticated", actors.memberId, selectSql, [objectPath], "name"),
+    [],
+  );
+  assert.deepEqual(
+    await columnAs(client, "authenticated", actors.outsiderId, selectSql, [objectPath], "name"),
+    [],
+  );
+  assert.deepEqual(
+    await columnAs(client, "authenticated", actors.formerId, selectSql, [objectPath], "name"),
+    [],
+  );
+  assert.deepEqual(
+    await columnAs(client, "authenticated", null, selectSql, [objectPath], "name"),
+    [],
+  );
+
+  await expectDenied(
+    client,
+    "authenticated",
+    actors.ownerId,
+    "update storage.objects set name = $2 where bucket_id = 'crew-photos' and name = $1",
+    [objectPath, `${actors.memberId}/${actors.suffix}-moved.jpg`],
+    /row-level security/i,
+  );
+
+  const ownerUpdate = await queryAs(
+    client,
+    "authenticated",
+    actors.ownerId,
+    "update storage.objects set owner = $2 where bucket_id = 'crew-photos' and name = $1",
+    [objectPath, actors.ownerId],
+  );
+  assert.equal(ownerUpdate.rowCount, 1);
+  const memberUpdate = await queryAs(
+    client,
+    "authenticated",
+    actors.memberId,
+    "update storage.objects set owner = $2 where bucket_id = 'crew-photos' and name = $1",
+    [objectPath, actors.memberId],
+  );
+  assert.equal(memberUpdate.rowCount, 0);
+
+  const memberDelete = await queryAs(
+    client,
+    "authenticated",
+    actors.memberId,
+    "delete from storage.objects where bucket_id = 'crew-photos' and name = $1",
+    [objectPath],
+  );
+  assert.equal(memberDelete.rowCount, 0);
+  const ownerDelete = await queryAs(
+    client,
+    "authenticated",
+    actors.ownerId,
+    "delete from storage.objects where bucket_id = 'crew-photos' and name = $1",
+    [objectPath],
+  );
+  assert.equal(ownerDelete.rowCount, 1);
 }
