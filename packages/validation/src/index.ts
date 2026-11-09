@@ -59,6 +59,14 @@ export {
 } from "./crew";
 
 export {
+  answerPrPromptsSchema,
+  personalRecordKindSchema,
+  prKeySchema,
+  restorePrBadgesSchema,
+  shareSessionPrsSchema,
+} from "./pr";
+
+export {
   commentPushBody,
   crewPushAlertTypes,
   crewPushBody,

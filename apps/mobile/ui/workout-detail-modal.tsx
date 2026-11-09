@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CommunityReactionSummary, WorkoutFeedItem } from "@repin/types";
+import type { CommunityReactionSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
 
 import { clearComposerFocus } from "./composer-focus";
 import { keyboardOverlapFromFrame, overlayBottomInset } from "./keyboard";
@@ -30,7 +30,9 @@ export function WorkoutDetailModal({
   initialWorkout,
   onCommentCountChange,
   onDismiss,
+  onEditWorkout,
   onPostHidden,
+  onPrBadgesChange,
   onReactionSummaryChange,
   onUserBlocked,
   sessionId,
@@ -42,7 +44,9 @@ export function WorkoutDetailModal({
   initialWorkout?: WorkoutFeedItem | null;
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onDismiss: () => void;
+  onEditWorkout?: (workout: WorkoutFeedItem) => void;
   onPostHidden?: (sessionId: string) => void;
+  onPrBadgesChange?: (sessionId: string, badges: PrBadge[]) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUserBlocked?: (userId: string) => void;
   sessionId: string | null;
@@ -177,7 +181,9 @@ export function WorkoutDetailModal({
                       groupId={groupId}
                       seedWorkout={initialWorkout ?? undefined}
                       onCommentCountChange={onCommentCountChange}
+                      onEditWorkout={onEditWorkout}
                       onPostHidden={onPostHidden}
+                      onPrBadgesChange={onPrBadgesChange}
                       onReactionSummaryChange={onReactionSummaryChange}
                       onUserBlocked={onUserBlocked}
                       presentation="community-modal"

@@ -50,6 +50,13 @@ import {
   formatWorkoutResultSummary,
   type WorkoutResultMovement,
 } from "./workout-result-summary";
+import {
+  collectSessionPrKeys,
+  detectPersonalRecordsForSession,
+  listPrBadgesForPosts,
+  recomputePersonalRecordsAfterDelete,
+  recomputePersonalRecordsForSession,
+} from "./personal-records";
 
 export { checkDatabaseConnection, getDatabase };
 
@@ -1176,8 +1183,16 @@ export async function createWorkoutForMember(input: {
       throw new Error("Community post could not be created");
     }
 
+    const pr = await detectPersonalRecordsForSession({
+      groupId: input.groupId,
+      sessionId: session.id,
+      transaction,
+      userId: input.userId,
+    });
+
     return {
       id: session.id,
+      communityPostId: post.id,
       userId: session.userId,
       groupId: post.groupId,
       workoutType: session.workoutType,
@@ -1194,6 +1209,7 @@ export async function createWorkoutForMember(input: {
       createdAt: post.createdAt,
       updatedAt: post.updatedAt,
       displayName: input.displayName,
+      pr,
     };
   });
 }
@@ -1238,6 +1254,7 @@ export async function updateWorkoutForOwner(input: {
       .limit(1);
 
     if (!owned) return null;
+    const previousKeys = await collectSessionPrKeys(owned.sessionId, transaction);
 
     const now = new Date();
     await transaction
@@ -1345,7 +1362,15 @@ export async function updateWorkoutForOwner(input: {
       }
     }
 
-    return { postId: owned.postId, sessionId: owned.sessionId };
+    const pr = await recomputePersonalRecordsForSession({
+      groupId: input.groupId,
+      previousKeys,
+      sessionId: owned.sessionId,
+      transaction,
+      userId: input.userId,
+    });
+
+    return { postId: owned.postId, sessionId: owned.sessionId, pr };
   });
 }
 
@@ -1376,6 +1401,9 @@ export async function deleteCommunityPostForOwner(input: {
       .limit(1);
 
     if (!owned) return null;
+    const keys = input.deleteWorkout
+      ? await collectSessionPrKeys(owned.sessionId, transaction)
+      : [];
     const photoPaths = input.deleteWorkout
       ? (await transaction
           .select({ photoPath: schema.communityPosts.photoPath })
@@ -1406,6 +1434,11 @@ export async function deleteCommunityPostForOwner(input: {
           eq(schema.workoutSessions.userId, input.userId),
         ),
       );
+      await recomputePersonalRecordsAfterDelete({
+        keys,
+        transaction,
+        userId: input.userId,
+      });
     } else {
       await dismissOpenReportsForCommunityPost(transaction, owned.postId);
       await transaction.delete(schema.communityPosts).where(
@@ -1831,7 +1864,7 @@ async function listRecentWorkouts(input: {
     }
   }
 
-  return posts.map(({
+  const mapped = posts.map(({
     fireReactionCount,
     strongReactionCount,
     clapReactionCount,
@@ -1880,6 +1913,14 @@ async function listRecentWorkouts(input: {
     ...(input.includeCommentCounts
       ? { commentCount }
       : {}),
+  }));
+
+  const badgeMap = await listPrBadgesForPosts(
+    mapped.flatMap((post) => post.communityPostId ? [post.communityPostId] : []),
+  );
+  return mapped.map((post) => ({
+    ...post,
+    prBadges: post.communityPostId ? badgeMap.get(post.communityPostId) ?? [] : [],
   }));
 }
 
@@ -2171,6 +2212,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
       reactionCountRows,
       viewerReactionRows[0]?.reactionType ?? null,
     ),
+    prBadges: (await listPrBadgesForPosts([post.communityPostId])).get(post.communityPostId) ?? [],
   };
 }
 
@@ -2592,8 +2634,17 @@ export {
 } from "./push";
 
 export {
+  answerPersonalRecordPrompts,
+  detectPersonalRecordsForSession,
+  restoreCommunityPostPrBadges,
+  removeCommunityPostPrBadges,
+  shareSessionPersonalRecords,
+} from "./personal-records";
+
+export {
   blockMovements,
   communityPostComments,
+  communityPostPrs,
   communityPostReactions,
   communityPosts,
   contentReports,
@@ -2602,6 +2653,7 @@ export {
   groupMembers,
   groups,
   movements,
+  personalRecords,
   sessionMovementResults,
   setResults,
   userBlocks,

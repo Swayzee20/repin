@@ -421,6 +421,52 @@ export interface MovementLastSession {
   sets: MovementLastSessionSet[];
 }
 
+export const personalRecordKinds = [
+  "heaviest_single",
+  "distance_time",
+  "amrap",
+  "for_time",
+] as const;
+export type PersonalRecordKind = (typeof personalRecordKinds)[number];
+
+export const personalRecordSources = ["logged", "backfill"] as const;
+export type PersonalRecordSource = (typeof personalRecordSources)[number];
+
+export const distancePrLanes = ["1mi", "5k", "10k", "half", "marathon"] as const;
+export type DistancePrLane = (typeof distancePrLanes)[number];
+
+export interface PrBadge {
+  id: string;
+  kind: PersonalRecordKind;
+  key: string;
+  label: string;
+  value: string;
+}
+
+export interface PrPrompt {
+  kind: PersonalRecordKind;
+  key: string;
+  title: string;
+  resultLine: string;
+  intro: "one_rep" | "for_time";
+}
+
+export interface DetectedPr {
+  kind: PersonalRecordKind;
+  key: string;
+  label: string;
+  value: string;
+  delta: string | null;
+  autoDetected: boolean;
+}
+
+export interface PrDetectionResult {
+  prompts: PrPrompt[];
+  detected: DetectedPr[];
+  communityPostId: string | null;
+  crewName: string | null;
+}
+
 export interface WorkoutFeedItem {
   id: string;
   communityPostId?: string;
@@ -444,6 +490,7 @@ export interface WorkoutFeedItem {
   displayName: string;
   reactionCounts?: CommunityReactionCounts;
   commentCount?: number;
+  prBadges?: PrBadge[];
 }
 
 export interface WorkoutDetailMetric {

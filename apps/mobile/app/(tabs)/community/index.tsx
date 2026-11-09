@@ -1,4 +1,4 @@
-import type { CommunityData, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GroupSummary, WorkoutFeedItem } from "@repin/types";
+import type { CommunityData, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GroupSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +22,7 @@ import {
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
 import { workoutMenuItems } from "../../../lib/content-menu";
+import { usePrBadgeUndo } from "../../../lib/pr-badge-actions";
 import { isLayoutPreview } from "../../../lib/layout-preview";
 import {
   communityFoldTransition,
@@ -31,6 +32,7 @@ import {
 } from "../../../lib/community-selection";
 import { isOwnPost, workoutFeedCardLabel } from "../../../ui/community-feed-layout";
 import { BrandHeader, Button, CommunityFeed, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { Dialog } from "../../../ui/dialog";
 import { Chevron } from "../../../ui/icons";
 import { TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
@@ -361,6 +363,29 @@ export default function CommunityTabScreen() {
     });
   }, []);
 
+  const updateFeedPrBadges = useCallback((sessionId: string, prBadges: PrBadge[]) => {
+    setData((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        communityWorkouts: current.communityWorkouts.map((workout) =>
+          workout.id === sessionId ? { ...workout, prBadges } : workout,
+        ),
+      };
+      dataRef.current = next;
+      return next;
+    });
+    setDetailTarget((current) => current?.workout.id === sessionId
+      ? { ...current, workout: { ...current.workout, prBadges } }
+      : current);
+  }, []);
+  const {
+    clear: clearPrToast,
+    remove: removePrBadge,
+    undo: undoPrBadge,
+    visible: prToastVisible,
+  } = usePrBadgeUndo(updateFeedPrBadges);
+
   const editWorkout = useCallback((workout: WorkoutFeedItem) => {
     if (!selectedGroup) return;
     router.push(`/groups/${encodeURIComponent(selectedGroup.id)}/workouts/${encodeURIComponent(workout.id)}/edit`);
@@ -380,10 +405,11 @@ export default function CommunityTabScreen() {
       setDeleteTarget(item);
     },
     onEdit: editWorkout,
+    onRemovePrBadge: (item) => void removePrBadge(item),
     onReport: (item) => moderation.askReportPost(item),
     viewerUserId: loadedUserId.current,
     workout,
-  }), [editWorkout, moderation]);
+  }), [editWorkout, moderation, removePrBadge]);
 
   const deleteWorkout = useCallback(async (scope: "post" | "workout") => {
     if (!deleteTarget || !selectedGroup || !supabase) return;
@@ -530,6 +556,8 @@ export default function CommunityTabScreen() {
                 seedWorkout={workouts.find((workout) => workout.id === openSessionId)}
                 sessionId={openSessionId}
                 onCommentCountChange={updateFeedCommentCount}
+                onEditWorkout={editWorkout}
+                onPrBadgesChange={updateFeedPrBadges}
                 onReactionSummaryChange={updateFeedReactionSummary}
               />
             )}
@@ -543,6 +571,9 @@ export default function CommunityTabScreen() {
           visible={datePickerOpen}
         />
         {moderation.ui}
+        <View pointerEvents="box-none" style={styles.prToastDock}>
+          <PrUndoToast onClear={clearPrToast} onUndo={() => void undoPrBadge()} visible={prToastVisible} />
+        </View>
         <DeleteWorkoutModal
           error={deleteError}
           onDeletePost={() => void deleteWorkout("post")}
@@ -653,7 +684,7 @@ export default function CommunityTabScreen() {
               ) : error ? (
                 <View style={styles.feedState}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Activity unavailable" /></View>
               ) : (board?.communityWorkouts.length ?? 0) > 0 ? (
-                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={viewerUserId} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
+                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutRemovePrBadge={(workout) => void removePrBadge(workout)} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={viewerUserId} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
               ) : isSameLocalDay(selectedDate, currentDay) ? (
                 <View style={styles.todayEmpty}>
                   <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
@@ -683,7 +714,9 @@ export default function CommunityTabScreen() {
         groupName={selectedGroup?.name ?? null}
         initialWorkout={detailTarget?.workout ?? null}
         onCommentCountChange={updateFeedCommentCount}
+        onEditWorkout={editWorkout}
         onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}
+        onPrBadgesChange={updateFeedPrBadges}
         onUserBlocked={(userId) => hideWorkouts((workout) => workout.userId === userId)}
         onDismiss={() => {
           setDetailTarget(null);
@@ -694,6 +727,9 @@ export default function CommunityTabScreen() {
         sessionId={detailTarget?.workout.id ?? null}
         visible={detailTarget !== null}
       />
+      <View pointerEvents="box-none" style={styles.prToastDock}>
+        <PrUndoToast onClear={clearPrToast} onUndo={() => void undoPrBadge()} visible={prToastVisible} />
+      </View>
       <DeleteWorkoutModal
         error={deleteError}
         onDeletePost={() => void deleteWorkout("post")}
@@ -884,6 +920,7 @@ function DeleteWorkoutModal({
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1, overflow: "hidden" },
+  prToastDock: { bottom: spacing.xxl, left: spacing.xxl, position: "absolute", right: spacing.xxl, zIndex: 30 },
   flex: { flex: 1 },
   content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },

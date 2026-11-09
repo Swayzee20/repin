@@ -94,7 +94,7 @@ export async function POST(request: Request, context: RouteContext) {
       );
     }
 
-    const workout = await createWorkoutForMember({
+    const created = await createWorkoutForMember({
       userId: user.id,
       displayName: user.displayName,
       groupId,
@@ -103,9 +103,11 @@ export async function POST(request: Request, context: RouteContext) {
       occurredAt: new Date(input.data.occurredAt),
     });
 
-    if (!workout) {
+    if (!created) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
+
+    const { pr, ...workout } = created;
 
     scheduleCrewPush(() => notifyCrewWorkoutPosted({
       actorUserId: user.id,
@@ -116,7 +118,7 @@ export async function POST(request: Request, context: RouteContext) {
     }));
 
     return NextResponse.json(
-      { workout: withResolvedDisplayName(workout) },
+      { pr, workout: withResolvedDisplayName(workout) },
       { status: 201, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

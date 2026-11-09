@@ -1,4 +1,4 @@
-import { getUserInitials, resolveUserDisplayName, type HomeData, type WorkoutFeedItem } from "@repin/types";
+import { getUserInitials, resolveUserDisplayName, type HomeData, type PrBadge, type WorkoutFeedItem } from "@repin/types";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useVerticalBarEdge } from "../../../ui/vertical-bar-edge";
@@ -17,7 +17,9 @@ import {
 } from "../../../lib/data-freshness";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { workoutMenuItems } from "../../../lib/content-menu";
+import { usePrBadgeUndo } from "../../../lib/pr-badge-actions";
 import { BrandHeader, Card, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { useModeration } from "../../../ui/moderation";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { Icon } from "../../../ui/icons";
@@ -144,6 +146,20 @@ export default function HomeScreen() {
       return next;
     });
   }, []);
+  const applyHomePrBadges = useCallback((sessionId: string, prBadges: PrBadge[]) => {
+    setHomeData((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        communityWorkouts: current.communityWorkouts.map((workout) =>
+          workout.id === sessionId ? { ...workout, prBadges } : workout,
+        ),
+      };
+      homeDataRef.current = next;
+      return next;
+    });
+  }, []);
+  const prUndo = usePrBadgeUndo(applyHomePrBadges);
   const moderation = useModeration({
     onPostHidden: (sessionId) => hideHomeWorkouts((workout) => workout.id === sessionId),
     onUserBlocked: (userId) => hideHomeWorkouts((workout) => workout.userId === userId),
@@ -192,6 +208,7 @@ export default function HomeScreen() {
                   targetId: item.communityPostId ?? item.id,
                   userId: item.userId,
                 }),
+                onRemovePrBadge: (item) => void prUndo.remove(item),
                 onReport: (item) => moderation.askReportPost(item),
                 viewerUserId: session?.user.id ?? dashboardData.user.id,
                 workout,
@@ -207,6 +224,9 @@ export default function HomeScreen() {
         />
       </SafeAreaView>
       {moderation.ui}
+      <View pointerEvents="box-none" style={styles.prToastDock}>
+        <PrUndoToast onClear={prUndo.clear} onUndo={() => void prUndo.undo()} visible={prUndo.visible} />
+      </View>
     </View>
   );
 }
@@ -557,6 +577,7 @@ function isStandaloneIosWebApp() {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
+  prToastDock: { bottom: spacing.xxl, left: spacing.xxl, position: "absolute", right: spacing.xxl, zIndex: 30 },
   flex: { flex: 1 },
   homeSafeArea: { backgroundColor: colors.background, ...Platform.select({ web: { paddingBottom: 0 } }) },
   personalZone: { backgroundColor: colors.background, paddingBottom: spacing.xxl, paddingTop: spacing.lg },

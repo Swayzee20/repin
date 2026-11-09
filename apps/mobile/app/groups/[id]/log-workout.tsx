@@ -1,13 +1,14 @@
-import type { WorkoutFeedItem, WorkoutType } from "@repin/types";
+import type { PrDetectionResult, WorkoutFeedItem, WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useReducer, useRef, type ComponentRef } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState, type ComponentRef } from "react";
 import { View, type TextInput } from "react-native";
 
 import { supabase } from "../../../lib/supabase";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { isLayoutPreview } from "../../../lib/layout-preview";
 import { Button, WorkoutSummaryCard } from "../../../ui/components";
+import { PrLogOverlay } from "../../../ui/pr-flow";
 import { FieldLabel, FlameRating, PhotoTile, TextArea, photoUploadFieldError } from "../../../ui/form-fields";
 import { useLayoutMode } from "../../../ui/layout";
 import { ScrollAnchor, useScrollAnchor, writeStoredScrollAnchor } from "../../../ui/scroll-anchor";
@@ -52,6 +53,7 @@ type LogFormAction =
   | { photoStatus: PhotoStatus; type: "photo-status" }
   | { pickerMode?: "date" | "time"; showPicker: boolean; type: "picker" }
   | { error: string; type: "submit-error" }
+  | { type: "submit-done" }
   | { type: "submit-start" }
   | { type: "type"; workoutType: WorkoutType }
   | { type: "web-date"; webDate: string }
@@ -64,6 +66,7 @@ export default function LogWorkoutScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [form, dispatch] = useReducer(logFormReducer, layoutPreview, createLogFormState);
+  const [prFlow, setPrFlow] = useState<{ detection: PrDetectionResult; sessionId: string } | null>(null);
   const postAnchor = useScrollAnchor(mode, postAnchorKey);
   const captionRef = useRef<ComponentRef<typeof TextInput>>(null);
   const focusedField = useRef<"caption" | null>(null);
@@ -180,13 +183,23 @@ export default function LogWorkoutScreen() {
         })),
         signal: AbortSignal.timeout(10_000),
       });
-      const body = (await response.json()) as { error?: string; issues?: { message: string; path?: PropertyKey[] }[] };
+      const body = (await response.json()) as {
+        error?: string;
+        issues?: { message: string; path?: PropertyKey[] }[];
+        pr?: PrDetectionResult;
+        workout?: WorkoutFeedItem;
+      };
       if (!response.ok) {
         const validationMessage = body.issues?.map((issue) => `${issue.path?.join(".") || "workout"}: ${issue.message}`).join("; ");
         if (__DEV__ && body.issues?.length) console.warn("Workout validation failed", body.issues);
         throw new Error(validationMessage || body.error || "Workout could not be created.");
       }
       markWorkoutDataStale();
+      if (body.pr && body.workout && (body.pr.prompts.length || body.pr.detected.length)) {
+        setPrFlow({ detection: body.pr, sessionId: body.workout.id });
+        dispatch({ type: "submit-done" });
+        return;
+      }
       router.back();
     } catch (submitError) {
       if (uploadedPhotoPath && supabase) await supabase.storage.from("workout-photos").remove([uploadedPhotoPath]);
@@ -198,6 +211,7 @@ export default function LogWorkoutScreen() {
   }, [form.caption, form.effort, form.occurredAt, form.photo, form.workoutType, groupId, router]);
 
   return (
+    <>
     <WorkoutFormScaffold
       anchor={postAnchor}
       eyebrow="QUICK CHECK-IN"
@@ -288,6 +302,18 @@ export default function LogWorkoutScreen() {
       )}
       title="Log a workout"
     />
+    {groupId && prFlow ? (
+      <PrLogOverlay
+        detection={prFlow.detection}
+        groupId={groupId}
+        onFinished={() => {
+          setPrFlow(null);
+          router.back();
+        }}
+        sessionId={prFlow.sessionId}
+      />
+    ) : null}
+    </>
   );
 }
 
@@ -330,6 +356,8 @@ function logFormReducer(state: LogFormState, action: LogFormAction): LogFormStat
       return { ...state, pickerMode: action.pickerMode ?? state.pickerMode, showPicker: action.showPicker };
     case "submit-error":
       return { ...state, error: action.error, photoStatus: "idle", submitting: false };
+    case "submit-done":
+      return { ...state, photoStatus: "idle", submitting: false };
     case "submit-start":
       return { ...state, error: null, photoStatus: state.photo ? "uploading" : state.photoStatus, submitting: true };
     case "type":

@@ -16,6 +16,7 @@ const sourceUrl = process.env.DATABASE_URL
 const appTables = [
   "block_movements",
   "community_post_comments",
+  "community_post_prs",
   "community_post_reactions",
   "community_posts",
   "content_reports",
@@ -24,6 +25,7 @@ const appTables = [
   "group_members",
   "groups",
   "movements",
+  "personal_records",
   "session_movement_results",
   "set_results",
   "user_blocks",
@@ -1751,6 +1753,146 @@ test("crew owner tools, leave, and hidden content after remove", async () => {
   }
 });
 
+test("personal record badges stay private unless shared on a visible post", async () => {
+  const testUrl = await recreateDatabase();
+  process.env.DATABASE_URL = testUrl;
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+
+    const db = await import("../src/index.ts");
+    const ada = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Ada" });
+    const byron = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Byron" });
+    const cyrus = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Cyrus" });
+    const dana = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Dana" });
+    const crew = await db.createGroup({ ownerId: ada.id, name: "Morning Crew" });
+    await db.joinGroup({ userId: byron.id, groupId: crew.id, inviteCode: crew.inviteCode });
+    await db.joinGroup({ userId: dana.id, groupId: crew.id, inviteCode: crew.inviteCode });
+
+    const posted = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "strength_training",
+      title: "Back Squat",
+      name: "Back Squat",
+      durationMinutes: null,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date("2026-11-09T12:00:00.000Z"),
+      movements: [{
+        movementName: "Back Squat",
+        notes: null,
+        sets: [{ reps: 1, load: 325, loadUnit: "lb" }],
+      }],
+    });
+    assert.ok(posted);
+    assert.equal(posted.pr.prompts.length, 1);
+    const prompt = posted.pr.prompts[0];
+    const answered = await db.answerPersonalRecordPrompts({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+      answers: [{ kind: prompt.kind, key: prompt.key, confirmed: true }],
+    });
+    assert.equal(answered.detected.length, 1);
+    const badges = await db.shareSessionPersonalRecords({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+    });
+    assert.equal(badges.length, 1);
+
+    const adaRecords = await idsAs(
+      client,
+      "authenticated",
+      ada.id,
+      "select id from personal_records",
+    );
+    assert.equal(adaRecords.length, 1);
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from personal_records"),
+      [],
+    );
+    assert.deepEqual(
+      await idsAs(client, "authenticated", cyrus.id, "select id from personal_records"),
+      [],
+    );
+
+    const memberBadges = await idsAs(
+      client,
+      "authenticated",
+      byron.id,
+      "select id from community_post_prs",
+    );
+    assert.deepEqual(memberBadges, [badges[0].id]);
+    assert.deepEqual(
+      await idsAs(client, "authenticated", cyrus.id, "select id from community_post_prs"),
+      [],
+    );
+
+    await db.leaveCrew({ userId: dana.id, groupId: crew.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", dana.id, "select id from community_post_prs"),
+      [],
+    );
+
+    await db.blockUserForMember({ blockerId: byron.id, blockedId: ada.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_prs"),
+      [],
+    );
+
+    const outsiderShare = await db.shareSessionPersonalRecords({
+      userId: byron.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+    });
+    assert.deepEqual(outsiderShare, []);
+    const outsiderAnswer = await db.answerPersonalRecordPrompts({
+      userId: byron.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+      answers: [{ kind: prompt.kind, key: prompt.key, confirmed: true }],
+    });
+    assert.deepEqual(outsiderAnswer.detected, []);
+    assert.equal(
+      await countRows(client, "personal_records", "user_id = $1", [byron.id]),
+      0,
+    );
+
+    await expectDenied(
+      client,
+      "authenticated",
+      byron.id,
+      "insert into community_post_prs (post_id, user_id, kind, key, display_label, display_value) values ($1, $2, 'heaviest_single', 'hs:stolen', 'Stolen', '1')",
+      [posted.communityPostId, byron.id],
+      /row-level security/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      cyrus.id,
+      "insert into personal_records (user_id, kind, key, display_label, display_value, source, baseline_only, celebrated) values ($1, 'heaviest_single', 'hs:nope', 'Nope', '1', 'logged', true, false)",
+      [ada.id],
+      /row-level security/i,
+    );
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
 async function loggedWorkout(db, user, groupId, title) {
   return db.createWorkoutForMember({
     userId: user.id,
@@ -1873,6 +2015,7 @@ async function applySupabaseMigrations(client) {
     "20261106000000_crew_page.sql",
     "20261106120000_push_notifications.sql",
     "20261107000000_crew_photos_foldername.sql",
+    "20261109000000_personal_records.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");
