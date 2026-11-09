@@ -43,6 +43,8 @@ const readOnlyTables = new Set([
   "groups",
   "group_members",
   "movements",
+  "personal_records",
+  "community_post_prs",
 ]);
 
 test("invite-only groups and row level security", async () => {
@@ -1848,6 +1850,59 @@ test("personal record badges stay private unless shared on a visible post", asyn
       await idsAs(client, "authenticated", byron.id, "select id from community_post_prs"),
       [],
     );
+    await db.unblockUserForMember({ blockerId: byron.id, blockedId: ada.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_prs"),
+      [badges[0].id],
+    );
+    await db.blockUserForMember({ blockerId: ada.id, blockedId: byron.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_prs"),
+      [],
+    );
+
+    const helpers = await client.query(`
+      select p.proname, p.prosecdef, p.provolatile, p.proconfig
+      from pg_proc as p
+      join pg_namespace as n on n.oid = p.pronamespace
+      where n.nspname = 'private'
+        and p.proname in ('can_access_community_post', 'is_blocked_between')
+      order by p.proname
+    `);
+    assert.deepEqual(
+      helpers.rows.map((row) => row.proname),
+      ["can_access_community_post", "is_blocked_between"],
+    );
+    const accessHelper = helpers.rows.find((row) => row.proname === "can_access_community_post");
+    for (const helper of helpers.rows) {
+      assert.equal(helper.prosecdef, true, helper.proname);
+      assert.equal(helper.provolatile, "s", helper.proname);
+      assert.deepEqual(helper.proconfig, accessHelper.proconfig, helper.proname);
+      assert.match(helper.proconfig?.[0] ?? "", /^search_path=/);
+    }
+    const helperGrants = await client.query(`
+      select
+        has_function_privilege('anon', 'private.is_blocked_between(uuid, uuid)', 'execute') as anon_block,
+        has_function_privilege('authenticated', 'private.is_blocked_between(uuid, uuid)', 'execute') as user_block,
+        has_table_privilege('authenticated', 'public.personal_records', 'select') as pr_select,
+        has_table_privilege('authenticated', 'public.personal_records', 'insert') as pr_insert,
+        has_table_privilege('authenticated', 'public.personal_records', 'update') as pr_update,
+        has_table_privilege('authenticated', 'public.personal_records', 'delete') as pr_delete,
+        has_table_privilege('authenticated', 'public.community_post_prs', 'select') as badge_select,
+        has_table_privilege('authenticated', 'public.community_post_prs', 'insert') as badge_insert,
+        has_table_privilege('authenticated', 'public.community_post_prs', 'update') as badge_update,
+        has_table_privilege('authenticated', 'public.community_post_prs', 'delete') as badge_delete
+    `);
+    assert.equal(helperGrants.rows[0].anon_block, false);
+    assert.equal(helperGrants.rows[0].user_block, true);
+    assert.equal(helperGrants.rows[0].pr_select, true);
+    assert.equal(helperGrants.rows[0].pr_insert, false);
+    assert.equal(helperGrants.rows[0].pr_update, false);
+    assert.equal(helperGrants.rows[0].pr_delete, false);
+    assert.equal(helperGrants.rows[0].badge_select, true);
+    assert.equal(helperGrants.rows[0].badge_insert, false);
+    assert.equal(helperGrants.rows[0].badge_update, false);
+    assert.equal(helperGrants.rows[0].badge_delete, false);
 
     const outsiderShare = await db.shareSessionPersonalRecords({
       userId: byron.id,
@@ -1870,18 +1925,50 @@ test("personal record badges stay private unless shared on a visible post", asyn
     await expectDenied(
       client,
       "authenticated",
-      byron.id,
-      "insert into community_post_prs (post_id, user_id, kind, key, display_label, display_value) values ($1, $2, 'heaviest_single', 'hs:stolen', 'Stolen', '1')",
-      [posted.communityPostId, byron.id],
-      /row-level security/i,
+      ada.id,
+      "insert into personal_records (user_id, kind, key, display_label, display_value, source, baseline_only, celebrated) values ($1, 'heaviest_single', 'hs:forged', 'Forged', '1', 'logged', true, false)",
+      [ada.id],
+      /permission denied/i,
     );
     await expectDenied(
       client,
       "authenticated",
-      cyrus.id,
-      "insert into personal_records (user_id, kind, key, display_label, display_value, source, baseline_only, celebrated) values ($1, 'heaviest_single', 'hs:nope', 'Nope', '1', 'logged', true, false)",
+      ada.id,
+      "update personal_records set display_label = 'hack' where user_id = $1",
       [ada.id],
-      /row-level security/i,
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "delete from personal_records where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "insert into community_post_prs (post_id, user_id, kind, key, display_label, display_value) values ($1, $2, 'heaviest_single', 'hs:forged', 'Forged', '1')",
+      [posted.communityPostId, ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "update community_post_prs set display_label = 'hack' where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "delete from community_post_prs where user_id = $1",
+      [ada.id],
+      /permission denied/i,
     );
   } finally {
     await client.end();
