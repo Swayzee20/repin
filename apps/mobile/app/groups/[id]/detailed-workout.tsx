@@ -1,4 +1,4 @@
-import type { CommunityWorkoutDetail, RunWorkoutSubtype, WorkoutFeedItem, WorkoutType } from "@repin/types";
+import type { CommunityWorkoutDetail, PrDetectionResult, RunWorkoutSubtype, WorkoutFeedItem, WorkoutType } from "@repin/types";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from "react";
@@ -19,6 +19,7 @@ import {
   validateIntervals,
 } from "../../../lib/detailed-run-results";
 import { Button, WorkoutSummaryCard } from "../../../ui/components";
+import { PrLogOverlay } from "../../../ui/pr-flow";
 import { FieldLabel, FlameRating, PhotoTile, TextArea, TextField, photoUploadFieldError } from "../../../ui/form-fields";
 import {
   buildDetailedMovements,
@@ -123,6 +124,7 @@ export default function DetailedWorkoutScreen() {
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editSessionId));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [prFlow, setPrFlow] = useState<{ detection: PrDetectionResult; sessionId: string } | null>(null);
   const isStrengthWorkout = workoutType === "strength_training" || workoutType === "powerlifting";
   const isFunctionalFitness = workoutType === "functional_fitness";
   const ffFormatted = isFunctionalFitness && Boolean(ffFormat.type);
@@ -344,6 +346,8 @@ export default function DetailedWorkoutScreen() {
       const body = (await response.json()) as {
         error?: string;
         issues?: { message: string; path?: PropertyKey[] }[];
+        pr?: PrDetectionResult;
+        workout?: CommunityWorkoutDetail | WorkoutFeedItem;
       };
       if (!response.ok) {
         const validationMessage = body.issues
@@ -358,6 +362,12 @@ export default function DetailedWorkoutScreen() {
       markWorkoutDataStale();
       clearWorkoutDetailCaches();
       if (isStrengthWorkout || ffFormatted) writeStoredLoadUnit(loadUnit);
+      const sessionId = body.workout?.id ?? editSessionId;
+      if (body.pr && sessionId && (body.pr.prompts.length || body.pr.detected.length)) {
+        setPrFlow({ detection: body.pr, sessionId });
+        setSubmitting(false);
+        return;
+      }
       router.back();
     } catch (submitError) {
       if (uploadedPhotoPath && supabase) {
@@ -380,6 +390,7 @@ export default function DetailedWorkoutScreen() {
   const photoUri = photo?.uri ?? (existingPhotoUrl && !photoRemoved ? existingPhotoUrl : null);
 
   return (
+    <>
     <WorkoutFormScaffold
       eyebrow={editing ? "EDIT WORKOUT" : "DETAILED WORKOUT"}
       fields={(
@@ -580,6 +591,18 @@ export default function DetailedWorkoutScreen() {
       )}
       title={editing ? "Update your rep-in" : "Track your workout"}
     />
+    {groupId && prFlow ? (
+      <PrLogOverlay
+        detection={prFlow.detection}
+        groupId={groupId}
+        onFinished={() => {
+          setPrFlow(null);
+          router.back();
+        }}
+        sessionId={prFlow.sessionId}
+      />
+    ) : null}
+    </>
   );
 }
 

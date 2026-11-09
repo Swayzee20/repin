@@ -809,6 +809,130 @@ export const communityPostComments = pgTable(
   ],
 );
 
+export const personalRecordKinds = [
+  "heaviest_single",
+  "distance_time",
+  "amrap",
+  "for_time",
+] as const;
+
+export const personalRecordSources = ["logged", "backfill"] as const;
+
+export const personalRecords = pgTable(
+  "personal_records",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text().notNull(),
+    key: text().notNull(),
+    metricLoadKg: numeric("metric_load_kg", {
+      precision: 12,
+      scale: 3,
+      mode: "number",
+    }),
+    metricDurationSeconds: integer("metric_duration_seconds"),
+    metricRounds: integer("metric_rounds"),
+    metricReps: integer("metric_reps"),
+    metricFinished: boolean("metric_finished"),
+    displayUnit: text("display_unit"),
+    displayLabel: text("display_label").notNull(),
+    displayValue: text("display_value").notNull(),
+    source: text().notNull(),
+    baselineOnly: boolean("baseline_only").notNull().default(false),
+    celebrated: boolean().notNull().default(false),
+    sourceSessionId: uuid("source_session_id").references(
+      () => workoutSessions.id,
+      { onDelete: "set null" },
+    ),
+    sourceSetId: uuid("source_set_id").references(() => setResults.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("personal_records_user_kind_key_unique").on(
+      table.userId,
+      table.kind,
+      table.key,
+    ),
+    index("personal_records_user_id_idx").on(table.userId),
+    index("personal_records_source_session_id_idx").on(table.sourceSessionId),
+    check(
+      "personal_records_kind_check",
+      sql`${table.kind} in ('heaviest_single', 'distance_time', 'amrap', 'for_time')`,
+    ),
+    check(
+      "personal_records_source_check",
+      sql`${table.source} in ('logged', 'backfill')`,
+    ),
+    check(
+      "personal_records_key_check",
+      sql`length(btrim(${table.key})) between 1 and 4000`,
+    ),
+  ],
+);
+
+export const communityPostPrs = pgTable(
+  "community_post_prs",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => communityPosts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    kind: text().notNull(),
+    key: text().notNull(),
+    metricLoadKg: numeric("metric_load_kg", {
+      precision: 12,
+      scale: 3,
+      mode: "number",
+    }),
+    metricDurationSeconds: integer("metric_duration_seconds"),
+    metricRounds: integer("metric_rounds"),
+    metricReps: integer("metric_reps"),
+    metricFinished: boolean("metric_finished"),
+    displayLabel: text("display_label").notNull(),
+    displayValue: text("display_value").notNull(),
+    sourceSessionId: uuid("source_session_id").references(
+      () => workoutSessions.id,
+      { onDelete: "set null" },
+    ),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("community_post_prs_post_kind_key_unique").on(
+      table.postId,
+      table.kind,
+      table.key,
+    ),
+    uniqueIndex("community_post_prs_user_kind_key_unique").on(
+      table.userId,
+      table.kind,
+      table.key,
+    ),
+    index("community_post_prs_post_id_idx").on(table.postId),
+    check(
+      "community_post_prs_kind_check",
+      sql`${table.kind} in ('heaviest_single', 'distance_time', 'amrap', 'for_time')`,
+    ),
+    check(
+      "community_post_prs_key_check",
+      sql`length(btrim(${table.key})) between 1 and 4000`,
+    ),
+  ],
+);
+
 export const contentReportTargetTypes = ["post", "comment"] as const;
 export const contentReportReasons = [
   "spam",
@@ -941,6 +1065,10 @@ export type CommunityPostReaction = typeof communityPostReactions.$inferSelect;
 export type NewCommunityPostReaction = typeof communityPostReactions.$inferInsert;
 export type CommunityPostComment = typeof communityPostComments.$inferSelect;
 export type NewCommunityPostComment = typeof communityPostComments.$inferInsert;
+export type PersonalRecord = typeof personalRecords.$inferSelect;
+export type NewPersonalRecord = typeof personalRecords.$inferInsert;
+export type CommunityPostPr = typeof communityPostPrs.$inferSelect;
+export type NewCommunityPostPr = typeof communityPostPrs.$inferInsert;
 export type ContentReport = typeof contentReports.$inferSelect;
 export type NewContentReport = typeof contentReports.$inferInsert;
 export type UserBlock = typeof userBlocks.$inferSelect;

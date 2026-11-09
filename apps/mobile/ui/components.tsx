@@ -32,6 +32,7 @@ import repinLockupReversed from "../assets/branding/repin-lockup-reversed.png";
 import repinMark from "../assets/branding/repin-mark.png";
 import { postMenuItems, workoutMenuItems, type ContentMenuItem } from "../lib/content-menu";
 import { formatWorkoutDate } from "../lib/workout-date";
+import { PrBadgeRow } from "./pr-badges";
 import { WideColumn } from "./layout";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import {
@@ -370,7 +371,12 @@ export function WorkoutSummaryCard({
         </View>
         <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
         {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
-        {resultSummary ? <Text numberOfLines={1} style={styles.workoutResultSummary}>{resultSummary}</Text> : null}
+        {resultSummary || workout.prBadges?.length ? (
+          <View style={styles.resultRow}>
+            {resultSummary ? <Text numberOfLines={1} style={styles.workoutResultSummary}>{resultSummary}</Text> : null}
+            <PrBadgeRow badges={workout.prBadges} />
+          </View>
+        ) : null}
         {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
         {workout.photoUrl && variant === "full" ? <WorkoutPhoto onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} uri={workout.photoUrl} variant="feed" /> : null}
         {socialSummary.length ? (
@@ -399,6 +405,7 @@ export function CommunityFeed({
   onWorkoutBlock,
   onWorkoutDelete,
   onWorkoutEdit,
+  onWorkoutRemovePrBadge,
   onWorkoutReport,
   showCommentCount = false,
   showReactionSummary = false,
@@ -413,6 +420,7 @@ export function CommunityFeed({
   onWorkoutBlock?: (workout: WorkoutFeedItem) => void;
   onWorkoutDelete?: (workout: WorkoutFeedItem) => void;
   onWorkoutEdit?: (workout: WorkoutFeedItem) => void;
+  onWorkoutRemovePrBadge?: (workout: WorkoutFeedItem) => void;
   onWorkoutReport?: (workout: WorkoutFeedItem) => void;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
@@ -489,6 +497,7 @@ export function CommunityFeed({
               onBlock: onWorkoutBlock,
               onDelete: onWorkoutDelete,
               onEdit: onWorkoutEdit,
+              onRemovePrBadge: onWorkoutRemovePrBadge,
               onReport: onWorkoutReport,
               viewerUserId,
               workout,
@@ -698,7 +707,8 @@ const styles = StyleSheet.create({
   workoutTitle: { color: colors.ink, ...type.cardTitle, marginTop: spacing.lg },
   compactWorkoutTitle: { marginTop: spacing.md },
   workoutMetadata: { color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, lineHeight: type.label.lineHeight, marginTop: spacing.xs },
-  workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight, marginTop: spacing.xs },
+  resultRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, marginTop: spacing.xs },
+  workoutResultSummary: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight },
   reactionSummary: { alignSelf: "flex-end", color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, lineHeight: type.label.lineHeight, marginTop: spacing.sm },
   workoutCardPressed: { opacity: 0.94 },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },

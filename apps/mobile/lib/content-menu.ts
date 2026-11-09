@@ -11,14 +11,17 @@ export type ContentMenuItem = {
 
 export function postMenuItems(input: {
   blockLabel?: string;
+  editLabel?: string;
   onBlock?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
+  onRemovePrBadge?: () => void;
   onReport?: () => void;
   reportLabel?: string;
 }): ContentMenuItem[] {
   const items: ContentMenuItem[] = [];
-  if (input.onEdit) items.push({ icon: "pencil", label: "Edit", onPress: input.onEdit });
+  if (input.onEdit) items.push({ icon: "pencil", label: input.editLabel ?? "Edit", onPress: input.onEdit });
+  if (input.onRemovePrBadge) items.push({ label: "Remove PR badge", onPress: input.onRemovePrBadge });
   if (input.onDelete) items.push({ danger: true, icon: "trash", label: "Delete", onPress: input.onDelete });
   if (input.onReport) items.push({ icon: "flag", label: input.reportLabel ?? "Report", onPress: input.onReport });
   if (input.onBlock) items.push({ danger: true, icon: "nosign", label: input.blockLabel ?? "Block", onPress: input.onBlock });
@@ -29,6 +32,7 @@ export function workoutMenuItems(input: {
   onBlock?: (workout: WorkoutFeedItem) => void;
   onDelete?: (workout: WorkoutFeedItem) => void;
   onEdit?: (workout: WorkoutFeedItem) => void;
+  onRemovePrBadge?: (workout: WorkoutFeedItem) => void;
   onReport?: (workout: WorkoutFeedItem) => void;
   viewerUserId?: string | null;
   workout: WorkoutFeedItem;
@@ -37,8 +41,12 @@ export function workoutMenuItems(input: {
   const own = input.viewerUserId === input.workout.userId;
   if (own) {
     return postMenuItems({
+      editLabel: "Edit workout",
       onDelete: input.onDelete ? () => input.onDelete?.(input.workout) : undefined,
       onEdit: input.onEdit ? () => input.onEdit?.(input.workout) : undefined,
+      onRemovePrBadge: input.onRemovePrBadge && input.workout.prBadges?.length
+        ? () => input.onRemovePrBadge?.(input.workout)
+        : undefined,
     });
   }
   const fullName = resolveUserDisplayName({ displayName: input.workout.displayName });

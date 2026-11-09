@@ -16,6 +16,7 @@ const sourceUrl = process.env.DATABASE_URL
 const appTables = [
   "block_movements",
   "community_post_comments",
+  "community_post_prs",
   "community_post_reactions",
   "community_posts",
   "content_reports",
@@ -24,6 +25,7 @@ const appTables = [
   "group_members",
   "groups",
   "movements",
+  "personal_records",
   "session_movement_results",
   "set_results",
   "user_blocks",
@@ -41,6 +43,8 @@ const readOnlyTables = new Set([
   "groups",
   "group_members",
   "movements",
+  "personal_records",
+  "community_post_prs",
 ]);
 
 test("invite-only groups and row level security", async () => {
@@ -1751,6 +1755,231 @@ test("crew owner tools, leave, and hidden content after remove", async () => {
   }
 });
 
+test("personal record badges stay private unless shared on a visible post", async () => {
+  const testUrl = await recreateDatabase();
+  process.env.DATABASE_URL = testUrl;
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+
+    const db = await import("../src/index.ts");
+    const ada = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Ada" });
+    const byron = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Byron" });
+    const cyrus = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Cyrus" });
+    const dana = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Dana" });
+    const crew = await db.createGroup({ ownerId: ada.id, name: "Morning Crew" });
+    await db.joinGroup({ userId: byron.id, groupId: crew.id, inviteCode: crew.inviteCode });
+    await db.joinGroup({ userId: dana.id, groupId: crew.id, inviteCode: crew.inviteCode });
+
+    const posted = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "strength_training",
+      title: "Back Squat",
+      name: "Back Squat",
+      durationMinutes: null,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date("2026-11-09T12:00:00.000Z"),
+      movements: [{
+        movementName: "Back Squat",
+        notes: null,
+        sets: [{ reps: 1, load: 325, loadUnit: "lb" }],
+      }],
+    });
+    assert.ok(posted);
+    assert.equal(posted.pr.prompts.length, 1);
+    const prompt = posted.pr.prompts[0];
+    const answered = await db.answerPersonalRecordPrompts({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+      answers: [{ kind: prompt.kind, key: prompt.key, confirmed: true }],
+    });
+    assert.equal(answered.detected.length, 1);
+    const badges = await db.shareSessionPersonalRecords({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+    });
+    assert.equal(badges.length, 1);
+
+    const adaRecords = await idsAs(
+      client,
+      "authenticated",
+      ada.id,
+      "select id from personal_records",
+    );
+    assert.equal(adaRecords.length, 1);
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from personal_records"),
+      [],
+    );
+    assert.deepEqual(
+      await idsAs(client, "authenticated", cyrus.id, "select id from personal_records"),
+      [],
+    );
+
+    const memberBadges = await idsAs(
+      client,
+      "authenticated",
+      byron.id,
+      "select id from community_post_prs",
+    );
+    assert.deepEqual(memberBadges, [badges[0].id]);
+    assert.deepEqual(
+      await idsAs(client, "authenticated", cyrus.id, "select id from community_post_prs"),
+      [],
+    );
+
+    await db.leaveCrew({ userId: dana.id, groupId: crew.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", dana.id, "select id from community_post_prs"),
+      [],
+    );
+
+    await db.blockUserForMember({ blockerId: byron.id, blockedId: ada.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_prs"),
+      [],
+    );
+    await db.unblockUserForMember({ blockerId: byron.id, blockedId: ada.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_prs"),
+      [badges[0].id],
+    );
+    await db.blockUserForMember({ blockerId: ada.id, blockedId: byron.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_prs"),
+      [],
+    );
+
+    const helpers = await client.query(`
+      select p.proname, p.prosecdef, p.provolatile, p.proconfig
+      from pg_proc as p
+      join pg_namespace as n on n.oid = p.pronamespace
+      where n.nspname = 'private'
+        and p.proname in ('can_access_community_post', 'is_blocked_between')
+      order by p.proname
+    `);
+    assert.deepEqual(
+      helpers.rows.map((row) => row.proname),
+      ["can_access_community_post", "is_blocked_between"],
+    );
+    const accessHelper = helpers.rows.find((row) => row.proname === "can_access_community_post");
+    for (const helper of helpers.rows) {
+      assert.equal(helper.prosecdef, true, helper.proname);
+      assert.equal(helper.provolatile, "s", helper.proname);
+      assert.deepEqual(helper.proconfig, accessHelper.proconfig, helper.proname);
+      assert.match(helper.proconfig?.[0] ?? "", /^search_path=/);
+    }
+    const helperGrants = await client.query(`
+      select
+        has_function_privilege('anon', 'private.is_blocked_between(uuid, uuid)', 'execute') as anon_block,
+        has_function_privilege('authenticated', 'private.is_blocked_between(uuid, uuid)', 'execute') as user_block,
+        has_table_privilege('authenticated', 'public.personal_records', 'select') as pr_select,
+        has_table_privilege('authenticated', 'public.personal_records', 'insert') as pr_insert,
+        has_table_privilege('authenticated', 'public.personal_records', 'update') as pr_update,
+        has_table_privilege('authenticated', 'public.personal_records', 'delete') as pr_delete,
+        has_table_privilege('authenticated', 'public.community_post_prs', 'select') as badge_select,
+        has_table_privilege('authenticated', 'public.community_post_prs', 'insert') as badge_insert,
+        has_table_privilege('authenticated', 'public.community_post_prs', 'update') as badge_update,
+        has_table_privilege('authenticated', 'public.community_post_prs', 'delete') as badge_delete
+    `);
+    assert.equal(helperGrants.rows[0].anon_block, false);
+    assert.equal(helperGrants.rows[0].user_block, true);
+    assert.equal(helperGrants.rows[0].pr_select, true);
+    assert.equal(helperGrants.rows[0].pr_insert, false);
+    assert.equal(helperGrants.rows[0].pr_update, false);
+    assert.equal(helperGrants.rows[0].pr_delete, false);
+    assert.equal(helperGrants.rows[0].badge_select, true);
+    assert.equal(helperGrants.rows[0].badge_insert, false);
+    assert.equal(helperGrants.rows[0].badge_update, false);
+    assert.equal(helperGrants.rows[0].badge_delete, false);
+
+    const outsiderShare = await db.shareSessionPersonalRecords({
+      userId: byron.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+    });
+    assert.deepEqual(outsiderShare, []);
+    const outsiderAnswer = await db.answerPersonalRecordPrompts({
+      userId: byron.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+      answers: [{ kind: prompt.kind, key: prompt.key, confirmed: true }],
+    });
+    assert.deepEqual(outsiderAnswer.detected, []);
+    assert.equal(
+      await countRows(client, "personal_records", "user_id = $1", [byron.id]),
+      0,
+    );
+
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "insert into personal_records (user_id, kind, key, display_label, display_value, source, baseline_only, celebrated) values ($1, 'heaviest_single', 'hs:forged', 'Forged', '1', 'logged', true, false)",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "update personal_records set display_label = 'hack' where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "delete from personal_records where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "insert into community_post_prs (post_id, user_id, kind, key, display_label, display_value) values ($1, $2, 'heaviest_single', 'hs:forged', 'Forged', '1')",
+      [posted.communityPostId, ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "update community_post_prs set display_label = 'hack' where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "delete from community_post_prs where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
 async function loggedWorkout(db, user, groupId, title) {
   return db.createWorkoutForMember({
     userId: user.id,
@@ -1873,6 +2102,7 @@ async function applySupabaseMigrations(client) {
     "20261106000000_crew_page.sql",
     "20261106120000_push_notifications.sql",
     "20261107000000_crew_photos_foldername.sql",
+    "20261109000000_personal_records.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");
