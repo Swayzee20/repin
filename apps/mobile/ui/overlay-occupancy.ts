@@ -13,6 +13,11 @@ export function occupancyForIosNativeDismiss(presented: boolean) {
   return { release: !presented };
 }
 
+/** iOS Modal onDismiss runs after hide; Android/web hide is done when visible=false. */
+export function overlayHiddenStrategy(platform: OverlayPlatform) {
+  return platform === "ios" ? "nativeDismiss" : "visibleFalse";
+}
+
 export function acquireOverlay(id: string) {
   if (owners.has(id)) return;
   owners.add(id);

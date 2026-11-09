@@ -8,6 +8,7 @@ import {
   occupancyForIosNativeDismiss,
   occupancyForVisible,
   overlayCount,
+  overlayHiddenStrategy,
   releaseOverlay,
   resetOverlayOccupancyForTests,
   subscribeOverlayCount,
@@ -61,4 +62,10 @@ test("occupancy is acquired when already visible and iOS does not release until 
 test("iOS native dismiss after reopen does not release a still-visible overlay", () => {
   assert.equal(occupancyForIosNativeDismiss(false).release, true);
   assert.equal(occupancyForIosNativeDismiss(true).release, false);
+});
+
+test("the next overlay waits for iOS Modal onDismiss and hides immediately on Android/web", () => {
+  assert.equal(overlayHiddenStrategy("ios"), "nativeDismiss");
+  assert.equal(overlayHiddenStrategy("android"), "visibleFalse");
+  assert.equal(overlayHiddenStrategy("web"), "visibleFalse");
 });

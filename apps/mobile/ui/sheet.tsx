@@ -61,6 +61,7 @@ export function BottomSheet({
   closeLabel = "Close",
   full = false,
   onDismiss,
+  onHidden,
   onRegisterClose,
   title,
   topGap,
@@ -70,6 +71,8 @@ export function BottomSheet({
   closeLabel?: string;
   full?: boolean;
   onDismiss: () => void;
+  /** Fires after native hide completes. Unmount is not hide — it will not run. */
+  onHidden?: () => void;
   onRegisterClose?: (close: SheetClose | null) => void;
   title: string;
   topGap?: number;
@@ -93,6 +96,8 @@ export function BottomSheet({
   const pendingAfterClose = useRef<(() => void) | undefined>(undefined);
   const onDismissRef = useRef(onDismiss);
   onDismissRef.current = onDismiss;
+  const onHiddenRef = useRef(onHidden);
+  onHiddenRef.current = onHidden;
   const hidePlatform: OverlayPlatform = Platform.OS === "ios"
     ? "ios"
     : Platform.OS === "android"
@@ -107,7 +112,10 @@ export function BottomSheet({
     }
     for (const effect of result.effects) {
       if (effect === "acquireOverlay") acquireOverlay(overlayId);
-      if (effect === "releaseOverlay") releaseOverlay(overlayId);
+      if (effect === "releaseOverlay") {
+        releaseOverlay(overlayId);
+        if (event.type !== "unmounted") onHiddenRef.current?.();
+      }
       if (effect === "requestVisibleFalse") onDismissRef.current();
       if (effect === "runAfterClose") {
         const afterClose = pendingAfterClose.current;

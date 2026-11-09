@@ -1,12 +1,13 @@
 import type { DetectedPr, PrDetectionResult } from "@repin/types";
-import { useEffect, useRef, useState } from "react";
-import { StyleSheet, Text, View } from "react-native";
+import { useEffect, useReducer, useRef } from "react";
+import { AccessibilityInfo, StyleSheet, Text, View } from "react-native";
 
 import { answerPrPrompts, mergeCelebrated, shareSessionPrs } from "../lib/pr-api";
 import { Button } from "./components";
 import { Dialog } from "./dialog";
 import { Icon } from "./icons";
 import { prCelebrationAnnouncement, prCopy } from "./pr-copy";
+import { initialPrFlowState, reducePrFlow } from "./pr-flow-state";
 import { RoundIconButton } from "./primitives";
 import { BottomSheet } from "./sheet";
 import { colors, radii, size, spacing, type } from "./theme";
@@ -22,99 +23,84 @@ export function PrLogOverlay({
   onFinished: () => void;
   sessionId: string;
 }) {
-  const [promptIndex, setPromptIndex] = useState(0);
-  const [celebrated, setCelebrated] = useState<DetectedPr[]>(detection?.detected ?? []);
-  const [step, setStep] = useState<"prompt" | "celebration" | "share">(
-    detection?.prompts.length ? "prompt" : "celebration",
-  );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const skipPromptDismiss = useRef(false);
+  const [state, dispatch] = useReducer(reducePrFlow, detection, initialPrFlowState);
+  const finishedRef = useRef(false);
 
   useEffect(() => {
-    skipPromptDismiss.current = false;
-    setPromptIndex(0);
-    setCelebrated(detection?.detected ?? []);
-    setStep(detection?.prompts.length ? "prompt" : "celebration");
-    setError(null);
+    finishedRef.current = false;
+    dispatch({ detection, type: "reset" });
   }, [detection]);
+
+  useEffect(() => {
+    if (!state.finished || finishedRef.current) return;
+    finishedRef.current = true;
+    if (state.notice === "no_post") {
+      AccessibilityInfo.announceForAccessibility(prCopy.noPostHelper);
+    }
+    onFinished();
+  }, [onFinished, state.finished, state.notice]);
 
   if (!detection) return null;
   if (!detection.prompts.length && !detection.detected.length) return null;
 
-  const prompt = detection.prompts[promptIndex];
-  const finish = () => {
-    if (busy) return;
-    skipPromptDismiss.current = true;
-    onFinished();
+  const prompt = detection.prompts[state.promptIndex];
+  const dismiss = () => dispatch({ type: "dismissRequested" });
+  const presenterHidden = () => {
+    if (finishedRef.current) return;
+    dispatch({ type: "presenterHidden" });
   };
 
   const answerPrompt = async (confirmed: boolean) => {
-    if (!prompt || busy) return;
-    setBusy(true);
-    setError(null);
+    if (!prompt || state.busy || state.finished) return;
+    dispatch({ type: "promptStarted" });
     try {
       const next = await answerPrPrompts(groupId, sessionId, [{
         confirmed,
         key: prompt.key,
         kind: prompt.kind,
       }]);
-      const merged = mergeCelebrated(celebrated, next.detected);
-      setCelebrated(merged);
-      if (promptIndex + 1 < detection.prompts.length) {
-        setPromptIndex((index) => index + 1);
-      } else if (merged.length) {
-        skipPromptDismiss.current = true;
-        setStep("celebration");
-      } else {
-        skipPromptDismiss.current = true;
-        onFinished();
-      }
+      dispatch({
+        hasMorePrompts: state.promptIndex + 1 < detection.prompts.length,
+        merged: mergeCelebrated(state.celebrated, next.detected),
+        type: "promptAnswered",
+      });
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Could not save that answer.");
-    } finally {
-      setBusy(false);
+      dispatch({
+        message: submitError instanceof Error ? submitError.message : "Could not save that answer.",
+        type: "promptFailed",
+      });
     }
-  };
-
-  const continueFromCelebration = () => {
-    if (detection.communityPostId) {
-      setStep("share");
-      return;
-    }
-    onFinished();
   };
 
   const share = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError(null);
+    if (state.presenter !== "share" || state.busy || state.finished) return;
+    dispatch({ type: "shareStarted" });
     try {
       await shareSessionPrs(groupId, sessionId);
-      onFinished();
+      dispatch({ type: "shareSucceeded" });
     } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "Could not share that PR.");
-    } finally {
-      setBusy(false);
+      dispatch({
+        message: submitError instanceof Error ? submitError.message : prCopy.shareFailed,
+        type: "shareFailed",
+      });
     }
   };
 
-  const promptVisible = step === "prompt" && Boolean(prompt);
-  const celebrationVisible = step === "celebration" || step === "share";
-  const shareVisible = step === "share";
-  const summary = celebrated.map((item) => `${item.label} ${item.value}`).join(", ");
-  const single = celebrated.length === 1 ? celebrated[0] : null;
+  const summary = state.celebrated.map((item) => `${item.label} ${item.value}`).join(", ");
+  const single = state.celebrated.length === 1 ? state.celebrated[0] : null;
+  const hasCommunityPost = Boolean(detection.communityPostId);
 
   return (
     <>
       <BottomSheet
         closeLabel="Close"
         onDismiss={() => {
-          if (skipPromptDismiss.current) return;
+          if (state.skipPromptDismiss) return;
           void answerPrompt(false);
         }}
+        onHidden={presenterHidden}
         title={prCopy.promptTitle}
-        visible={promptVisible}
+        visible={state.presenter === "prompt" && Boolean(prompt)}
       >
         {prompt ? (
           <View style={styles.stack}>
@@ -127,11 +113,11 @@ export function PrLogOverlay({
               <Text style={styles.promptTitle}>{prompt.title}</Text>
               <Text style={styles.promptValue}>{prompt.resultLine}</Text>
             </View>
-            {error ? <Text style={styles.error}>{error}</Text> : null}
-            <Button loading={busy} onPress={() => void answerPrompt(true)}>
+            {state.error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{state.error}</Text> : null}
+            <Button loading={state.busy} onPress={() => void answerPrompt(true)}>
               {prCopy.promptPrimary}
             </Button>
-            <Button disabled={busy} onPress={() => void answerPrompt(false)} variant="secondary">
+            <Button disabled={state.busy} onPress={() => void answerPrompt(false)} variant="secondary">
               {prCopy.promptSecondary}
             </Button>
           </View>
@@ -140,9 +126,10 @@ export function PrLogOverlay({
 
       <Dialog
         closeLabel="Close"
-        onDismiss={finish}
+        onDismiss={dismiss}
+        onHidden={presenterHidden}
         padding={spacing.xl}
-        visible={celebrationVisible && !promptVisible}
+        visible={state.presenter === "celebration"}
       >
         <View
           accessibilityLabel={prCelebrationAnnouncement(summary)}
@@ -150,12 +137,12 @@ export function PrLogOverlay({
           style={styles.celebration}
         >
           <View style={styles.dialogCloseRow}>
-            <RoundIconButton accessibilityLabel="Close" kind="close" onPress={finish} />
+            <RoundIconButton accessibilityLabel="Close" kind="close" onPress={dismiss} />
           </View>
           <View style={styles.check}>
             <Icon color={colors.success} name="checkmark" size={size.icon.md} />
           </View>
-          <Text style={styles.celebrationTitle}>{prCopy.celebrationTitle(celebrated.length)}</Text>
+          <Text style={styles.celebrationTitle}>{prCopy.celebrationTitle(state.celebrated.length)}</Text>
           {single?.autoDetected ? (
             <View style={styles.autoChip}>
               <Text style={styles.autoChipText}>{prCopy.autoChip}</Text>
@@ -166,7 +153,7 @@ export function PrLogOverlay({
           ) : (
             <View style={styles.multiList}>
               <Text style={styles.multiHelper}>From this workout — share once to badge the post.</Text>
-              {celebrated.map((item) => (
+              {state.celebrated.map((item) => (
                 <View key={`${item.kind}:${item.key}`} style={styles.multiRow}>
                   <View style={styles.miniChip}><Text style={styles.miniChipText}>PR</Text></View>
                   <View style={styles.multiCopy}>
@@ -178,31 +165,37 @@ export function PrLogOverlay({
               ))}
             </View>
           )}
-          {detection.communityPostId ? (
+          {hasCommunityPost ? (
             <Text style={styles.helper}>{prCopy.celebrationHelper}</Text>
           ) : (
             <Text style={styles.helper}>{prCopy.noPostHelper}</Text>
           )}
-          {error && !shareVisible ? <Text style={styles.error}>{error}</Text> : null}
-          <Button onPress={continueFromCelebration}>
-            {detection.communityPostId ? prCopy.continue : prCopy.noPostPrimary}
+          {state.error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{state.error}</Text> : null}
+          <Button
+            onPress={() => dispatch({
+              hasCommunityPost,
+              type: "continueCelebration",
+            })}
+          >
+            {hasCommunityPost ? prCopy.continue : prCopy.noPostPrimary}
           </Button>
         </View>
       </Dialog>
 
       <BottomSheet
         closeLabel="Close"
-        onDismiss={finish}
+        onDismiss={dismiss}
+        onHidden={presenterHidden}
         title={detection.crewName ? prCopy.shareTitle(detection.crewName) : prCopy.sharePrimary}
-        visible={shareVisible}
+        visible={state.presenter === "share"}
       >
         <View style={styles.stack}>
           <Text style={styles.body}>{prCopy.shareBody}</Text>
-          {error ? <Text style={styles.error}>{error}</Text> : null}
-          <Button loading={busy} onPress={() => void share()}>
+          {state.error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{state.error}</Text> : null}
+          <Button loading={state.busy} onPress={() => void share()}>
             {prCopy.sharePrimary}
           </Button>
-          <Button disabled={busy} onPress={finish} variant="secondary">
+          <Button disabled={state.busy} onPress={dismiss} variant="secondary">
             {prCopy.shareSecondary}
           </Button>
           <Text style={styles.helper}>{prCopy.shareHelper}</Text>

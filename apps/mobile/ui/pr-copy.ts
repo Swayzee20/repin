@@ -16,6 +16,7 @@ export const prCopy = {
   sharePrimary: "Share",
   shareSecondary: "Not now",
   shareHelper: "You can remove the badge later from the post.",
+  shareFailed: "Could not share that PR.",
   noPostHelper: "Saved privately. This workout isn't on a crew feed, so there's nothing to share yet.",
   noPostPrimary: "Done",
   continue: "Continue",
