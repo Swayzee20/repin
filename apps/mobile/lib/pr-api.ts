@@ -25,7 +25,9 @@ export async function shareSessionPrs(groupId: string, sessionId: string): Promi
     error?: string;
     prBadges?: PrBadge[];
   };
-  if (!body.prBadges) throw new Error(body.error ?? "PR badge could not be shared.");
+  if (!body.prBadges?.length) {
+    throw new Error(body.error ?? "PR badge could not be shared.");
+  }
   return body.prBadges;
 }
 
@@ -83,5 +85,16 @@ async function prRequest(
       signal: AbortSignal.timeout(10_000),
     },
   );
-  return response.json() as Promise<Record<string, unknown>>;
+  let body: Record<string, unknown> = {};
+  try {
+    body = await response.json() as Record<string, unknown>;
+  } catch {
+    body = {};
+  }
+  if (!response.ok) {
+    throw new Error(typeof body.error === "string" && body.error
+      ? body.error
+      : "Request failed.");
+  }
+  return body;
 }

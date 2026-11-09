@@ -11,6 +11,7 @@ export function Dialog({
   dismissDisabled = false,
   maxWidth,
   onDismiss,
+  onHidden,
   padding = spacing.lg,
   size = "default",
   visible,
@@ -20,13 +21,15 @@ export function Dialog({
   dismissDisabled?: boolean;
   maxWidth?: number;
   onDismiss: () => void;
+  /** Fires after the native Modal is gone. Use this to present the next overlay. */
+  onHidden?: () => void;
   padding?: number;
   /** Wide uses a 32pt card inset so a 7-column grid fits. Default stays 48. */
   size?: "default" | "wide";
   visible: boolean;
 }) {
   const cardInset = size === "wide" ? spacing.lg * 2 : undefined;
-  const { onNativeDismiss } = useOverlayOccupancy(visible);
+  const { onNativeDismiss } = useOverlayOccupancy(visible, onHidden);
   return (
     <Modal
       animationType="fade"
