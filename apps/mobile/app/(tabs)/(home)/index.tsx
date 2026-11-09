@@ -224,9 +224,7 @@ export default function HomeScreen() {
         />
       </SafeAreaView>
       {moderation.ui}
-      <View pointerEvents="box-none" style={styles.prToastDock}>
-        <PrUndoToast onClear={prUndo.clear} onUndo={() => void prUndo.undo()} visible={prUndo.visible} />
-      </View>
+      <PrUndoToast onClear={prUndo.clear} onUndo={() => void prUndo.undo()} visible={prUndo.visible} />
     </View>
   );
 }
@@ -577,7 +575,6 @@ function isStandaloneIosWebApp() {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  prToastDock: { bottom: spacing.xxl, left: spacing.xxl, position: "absolute", right: spacing.xxl, zIndex: 30 },
   flex: { flex: 1 },
   homeSafeArea: { backgroundColor: colors.background, ...Platform.select({ web: { paddingBottom: 0 } }) },
   personalZone: { backgroundColor: colors.background, paddingBottom: spacing.xxl, paddingTop: spacing.lg },

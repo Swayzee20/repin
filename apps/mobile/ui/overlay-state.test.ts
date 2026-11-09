@@ -36,6 +36,12 @@ import {
   sheetRowMinHeight,
   stateActionHeight,
   stateIconSize,
+  toastBottomNavHeight,
+  toastFrame,
+  toastGutter,
+  toastHeight,
+  toastUndoInset,
+  toastUndoSize,
   type ChooserOverlayState,
 } from "./overlay-state";
 import { colors, size, spacing } from "./theme";
@@ -541,4 +547,137 @@ test("dismissing a community post tears down the composer and lifts above the ke
   assert.match(detail, /onPress=\{\(\) => Keyboard\.dismiss\(\)\}/);
   assert.match(detail, /label: "Done"/);
   assert.match(detail, /inputRef\.current\?\.blur\(\)/);
+});
+
+type Box = { height: number; left: number; top: number; width: number };
+
+function boxFromBottom(
+  frame: { bottom: number; height: number; left: number; width: number },
+  windowHeight: number,
+): Box {
+  return {
+    height: frame.height,
+    left: frame.left,
+    top: windowHeight - frame.bottom - frame.height,
+    width: frame.width,
+  };
+}
+
+function overlaps(a: Box, b: Box) {
+  return a.left < b.left + b.width
+    && a.left + a.width > b.left
+    && a.top < b.top + b.height
+    && a.top + a.height > b.top;
+}
+
+function chromeFor(posture: {
+  height: number;
+  insets: { bottom: number; left: number; right: number };
+  stripPresent: boolean;
+  width: number;
+}) {
+  const stripWidth = Math.max(posture.insets.left, posture.insets.right);
+  const strip: Box = posture.insets.right > 0
+    ? { height: posture.height, left: posture.width - posture.insets.right, top: 0, width: posture.insets.right }
+    : { height: posture.height, left: 0, top: 0, width: posture.insets.left };
+  const bottomNav = posture.stripPresent ? 0 : toastBottomNavHeight;
+  const bottomChromeHeight = posture.insets.bottom + bottomNav;
+  const bottomNavBox: Box = {
+    height: bottomChromeHeight,
+    left: 0,
+    top: posture.height - bottomChromeHeight,
+    width: posture.width,
+  };
+  return { bottomNavBox, strip, stripWidth };
+}
+
+test("the PR undo toast stays in the content pane on Duo and phone layouts", () => {
+  const postures = [
+    { height: 844, insets: { bottom: 0, left: 0, right: 84 }, name: "folded", stripPresent: true, width: 466 },
+    { height: 669, insets: { bottom: 0, left: 0, right: 84 }, name: "unfolded", stripPresent: true, width: 951 },
+    { height: 669, insets: { bottom: 0, left: 0, right: 84 }, name: "split-view", stripPresent: true, width: 678 },
+    { height: 844, insets: { bottom: 34, left: 0, right: 0 }, name: "phone", stripPresent: false, width: 390 },
+    { height: 844, insets: { bottom: 0, left: 84, right: 0 }, name: "folded-leading", stripPresent: true, width: 466 },
+  ] as const;
+
+  for (const posture of postures) {
+    const frame = toastFrame(posture);
+    const toast = boxFromBottom(frame, posture.height);
+    const undo = boxFromBottom(frame.undo, posture.height);
+    const { bottomNavBox, strip, stripWidth } = chromeFor(posture);
+
+    assert.equal(frame.height, toastHeight);
+    assert.equal(frame.left, posture.insets.left + toastGutter);
+    assert.equal(frame.width, posture.width - posture.insets.left - posture.insets.right - toastGutter * 2);
+    assert.equal(frame.undo.width, toastUndoSize);
+    assert.equal(frame.undo.left, frame.left + frame.width - toastUndoInset - toastUndoSize);
+
+    assert.equal(overlaps(toast, strip), false, `${posture.name} toast overlaps the side strip`);
+    assert.equal(overlaps(undo, strip), false, `${posture.name} Undo overlaps the side strip`);
+    assert.equal(overlaps(toast, bottomNavBox), false, `${posture.name} toast overlaps the bottom nav`);
+    assert.equal(overlaps(undo, bottomNavBox), false, `${posture.name} Undo overlaps the bottom nav`);
+
+    assert.ok(undo.left >= toast.left, `${posture.name} Undo starts inside the toast`);
+    assert.ok(undo.left + undo.width <= toast.left + toast.width, `${posture.name} Undo ends inside the toast`);
+    assert.ok(undo.top >= toast.top, `${posture.name} Undo top stays inside the toast`);
+    assert.ok(undo.top + undo.height <= toast.top + toast.height, `${posture.name} Undo bottom stays inside the toast`);
+
+    if (stripWidth > 0) {
+      assert.ok(toast.left + toast.width <= posture.width - posture.insets.right || posture.insets.right === 0);
+      assert.ok(toast.left >= posture.insets.left);
+      assert.ok(undo.left + undo.width <= posture.width - posture.insets.right || posture.insets.right === 0);
+    }
+    if (!posture.stripPresent) {
+      assert.equal(frame.bottom, posture.insets.bottom + toastBottomNavHeight + toastGutter);
+      assert.ok(toast.top + toast.height <= bottomNavBox.top);
+    } else {
+      assert.equal(frame.bottom, posture.insets.bottom + toastGutter);
+    }
+  }
+
+  const folded = postures[0];
+  const buggy = boxFromBottom({
+    bottom: toastGutter,
+    height: toastHeight,
+    left: toastGutter,
+    width: folded.width - toastGutter * 2,
+  }, folded.height);
+  assert.equal(overlaps(buggy, chromeFor(folded).strip), true);
+});
+
+test("a toast frame with no room stays finite", () => {
+  const frame = toastFrame({
+    gutter: Number.NaN,
+    insets: { bottom: Number.NaN, left: -8, right: Number.POSITIVE_INFINITY },
+    stripPresent: false,
+    width: Number.NaN,
+  });
+  assert.equal(frame.left, 0);
+  assert.equal(frame.width, 0);
+  assert.equal(Number.isFinite(frame.bottom), true);
+  assert.equal(frame.undo.width, 0);
+  assert.equal(Number.isFinite(frame.undo.left), true);
+});
+
+test("PrUndoToast uses the shared toast frame against the window, not a full-bleed dock", () => {
+  const toast = source("pr-undo-toast.tsx");
+  assert.match(toast, /toastFrame/);
+  assert.match(toast, /useSafeAreaInsets/);
+  assert.match(toast, /useStripPresent/);
+  assert.match(toast, /useWindowDimensions/);
+  assert.match(toast, /StyleSheet\.absoluteFill/);
+  assert.equal(toast.includes("left: spacing.xxl"), false);
+  assert.equal(toast.includes("right: spacing.xxl"), false);
+
+  const home = source("../app/(tabs)/(home)/index.tsx");
+  const community = source("../app/(tabs)/community/index.tsx");
+  const detail = source("workout-detail.tsx");
+  for (const code of [home, community]) {
+    assert.match(code, /<PrUndoToast /);
+    assert.equal(code.includes("prToastDock"), false);
+    assert.equal(code.includes("bottom: spacing.xxl, left: spacing.xxl, position: \"absolute\", right: spacing.xxl"), false);
+  }
+  assert.match(detail, /contained/);
+  assert.match(detail, /gutter=\{spacing\.lg\}/);
+  assert.match(detail, /prToastDock/);
 });

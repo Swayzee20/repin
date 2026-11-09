@@ -354,3 +354,72 @@ export function sheetFrame({
     width: sheetWidth,
   };
 }
+
+/** Same gutter the feed toasts already used against the window. */
+export const toastGutter = spacing.xxl;
+/** Matches `PrUndoToast` height. */
+export const toastHeight = size.primary;
+/** Undo is a 44pt action on the trailing end. */
+export const toastUndoSize = size.hit;
+/** Horizontal inset of the Undo pressable inside the toast. */
+export const toastUndoInset = spacing.md;
+/**
+ * Bottom tab bar content height when the side strip is absent.
+ * Same token Profile uses to clear the bar (`size.primary`).
+ */
+export const toastBottomNavHeight = size.primary;
+
+export type ToastFrameBox = {
+  bottom: number;
+  height: number;
+  left: number;
+  width: number;
+};
+
+export type ToastFrame = ToastFrameBox & {
+  undo: ToastFrameBox;
+};
+
+function overlayEdge(value: number) {
+  return Math.max(0, Number.isFinite(value) ? value : 0);
+}
+
+/**
+ * In-page toast geometry in the window / scene. Sheets use `sheetFrame`;
+ * toasts stay in the content pane — left of the side strip, above the
+ * home indicator, and above the bottom tab bar when there is no strip.
+ */
+export function toastFrame({
+  gutter = toastGutter,
+  insets,
+  stripPresent,
+  width,
+}: {
+  gutter?: number;
+  insets: { bottom: number; left: number; right: number };
+  stripPresent: boolean;
+  width: number;
+}): ToastFrame {
+  const safeWidth = overlayEdge(width);
+  const pad = overlayEdge(gutter);
+  const left = overlayEdge(insets.left) + pad;
+  const right = overlayEdge(insets.right) + pad;
+  const bottomNav = stripPresent ? 0 : toastBottomNavHeight;
+  const bottom = overlayEdge(insets.bottom) + bottomNav + pad;
+  const frameWidth = Math.max(0, safeWidth - left - right);
+  const undoWidth = Math.min(toastUndoSize, frameWidth);
+  const undoLeft = left + Math.max(0, frameWidth - toastUndoInset - undoWidth);
+  const undoBottom = bottom + Math.max(0, (toastHeight - toastUndoSize) / 2);
+  return {
+    bottom,
+    height: toastHeight,
+    left,
+    width: frameWidth,
+    undo: {
+      bottom: undoBottom,
+      height: toastUndoSize,
+      left: undoLeft,
+      width: undoWidth,
+    },
+  };
+}
