@@ -31,6 +31,7 @@ CREATE TABLE "goal_periods" (
 	"display_unit" text,
 	"target_value" numeric(14, 3) NOT NULL,
 	"credit_closes_at" timestamp with time zone,
+	"archive_cutoff_at" timestamp with time zone,
 	"state" text DEFAULT 'pending' NOT NULL,
 	"completion_method" text,
 	"reached_at" timestamp with time zone,

@@ -112,6 +112,9 @@ Expected:
   NULL, so the IS NOT NULL clause is required.
 - `goals_archived_at_check`: archived rows have `archived_at IS NOT NULL`;
   every other state has a null cutoff.
+- `goal_periods.archive_cutoff_at`: nullable timestamptz stamped once when
+  the parent goal is archived (`WHERE archive_cutoff_at IS NULL`). Historical
+  revalidation uses this cutoff after reopen.
 - `community_post_goals_period_unique` (one post per completion).
 
 ## 3. Apply RLS

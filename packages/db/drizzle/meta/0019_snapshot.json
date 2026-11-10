@@ -1698,6 +1698,12 @@
           "primaryKey": false,
           "notNull": false
         },
+        "archive_cutoff_at": {
+          "name": "archive_cutoff_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": false
+        },
         "state": {
           "name": "state",
           "type": "text",

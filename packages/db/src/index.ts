@@ -60,6 +60,7 @@ import {
 import {
   evaluateGoalsForSession,
   listGoalBadgesForPosts,
+  lockUserGoals,
   recomputeGoalsForUser,
 } from "./goals";
 
@@ -1114,6 +1115,7 @@ export async function createWorkoutForMember(input: {
   segments?: CreateWorkoutSessionSegmentInput[];
 } & WorkoutFormatColumnInput) {
   return getDatabase().transaction(async (transaction) => {
+    await lockUserGoals(transaction, input.userId);
     const [membership] = await transaction
       .select({ userId: schema.groupMembers.userId })
       .from(schema.groupMembers)
@@ -1247,6 +1249,7 @@ export async function updateWorkoutForOwner(input: {
   segments?: CreateWorkoutSessionSegmentInput[];
 } & WorkoutFormatColumnInput) {
   return getDatabase().transaction(async (transaction) => {
+    await lockUserGoals(transaction, input.userId);
     const [owned] = await transaction
       .select({
         postId: schema.communityPosts.id,
@@ -1399,6 +1402,7 @@ export async function deleteCommunityPostForOwner(input: {
   deleteWorkout: boolean;
 }) {
   return getDatabase().transaction(async (transaction) => {
+    await lockUserGoals(transaction, input.userId);
     const [owned] = await transaction
       .select({
         photoPath: schema.communityPosts.photoPath,
@@ -2683,6 +2687,7 @@ export {
   GoalRequestError,
   listGoalBadgesForPosts,
   listGoalsForUser,
+  lockUserGoals,
   markGoalDoneForUser,
   recomputeGoalsForUser,
   removeCommunityPostGoalBadges,

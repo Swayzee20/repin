@@ -1265,6 +1265,7 @@ export const goalPeriods = pgTable(
       mode: "number",
     }).notNull(),
     creditClosesAt: timestamp("credit_closes_at", { withTimezone: true }),
+    archiveCutoffAt: timestamp("archive_cutoff_at", { withTimezone: true }),
     state: text().notNull().default("pending"),
     completionMethod: text("completion_method"),
     reachedAt: timestamp("reached_at", { withTimezone: true }),

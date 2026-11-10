@@ -57,6 +57,12 @@ test("goal slots, auto-reach, reopen, recompute, and hand-mark share rejection",
     await db.archiveGoalForUser(ada.id, firstFive[0].id);
     const extra = await volume();
     assert.equal(extra.state, "active");
+    const concurrentCap = await Promise.allSettled([volume(), volume()]);
+    assert.equal(concurrentCap.every((item) => item.status === "rejected"), true);
+    for (const item of concurrentCap) {
+      assert.equal(item.reason.name, "GoalRequestError");
+      assert.equal(item.reason.statusCode, 409);
+    }
 
     const lift = await db.createGoalForUser({
       userId: ada.id,
@@ -1290,6 +1296,190 @@ test("archived goals stay archived, reopen expiry uses the current version, orig
       assert.equal(editOutcome.reason.statusCode, 409);
       assert.equal(Number(racedRow.target_value), 1);
     }
+
+    const [firstLog, secondLog] = await Promise.all([
+      db.createWorkoutForMember({
+        userId: ada.id,
+        displayName: ada.displayName,
+        groupId: crew.id,
+        workoutType: "other",
+        title: "Concurrent A",
+        name: "Concurrent A",
+        durationMinutes: 8,
+        effort: 2,
+        caption: null,
+        photoPath: null,
+        occurredAt: new Date(),
+      }),
+      db.createWorkoutForMember({
+        userId: ada.id,
+        displayName: ada.displayName,
+        groupId: crew.id,
+        workoutType: "other",
+        title: "Concurrent B",
+        name: "Concurrent B",
+        durationMinutes: 9,
+        effort: 2,
+        caption: null,
+        photoPath: null,
+        occurredAt: new Date(),
+      }),
+    ]);
+    assert.ok(firstLog.id);
+    assert.ok(secondLog.id);
+    assert.notEqual(firstLog.id, secondLog.id);
+
+    const cutoffMinutes = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "volume",
+      metric: "minutes",
+      sportFilter: "cycling",
+      target: 10,
+      displayUnit: "min",
+      schedule: "weekly",
+      deadlineAt: null,
+      timeZone: zone,
+      movementId: null,
+      movementName: null,
+      lane: null,
+    });
+    const cutoffFirst = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "cycling",
+      title: "Ride A",
+      name: "Ride A",
+      durationMinutes: 5,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date(),
+    });
+    const cutoffSecond = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "cycling",
+      title: "Ride B",
+      name: "Ride B",
+      durationMinutes: 5,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date(),
+    });
+    assert.ok(cutoffSecond.goals.reached.some((item) => item.goalId === cutoffMinutes.id));
+    const cutoffFuture = new Date(Date.now() + 120_000);
+    const cutoffLater = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "cycling",
+      title: "Ride later",
+      name: "Ride later",
+      durationMinutes: 5,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: cutoffFuture,
+    });
+    assert.equal(
+      cutoffLater.goals.reached.some((item) => item.goalId === cutoffMinutes.id),
+      false,
+    );
+    await db.shareSessionGoalBadges({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: cutoffSecond.id,
+    });
+    await db.archiveGoalForUser(ada.id, cutoffMinutes.id);
+    assert.ok(
+      await scalar(client, "select archive_cutoff_at from goal_periods where goal_id = $1 limit 1", [cutoffMinutes.id]),
+    );
+    const reopenedCutoff = await db.reopenGoalForUser({ userId: ada.id, goalId: cutoffMinutes.id });
+    assert.equal(reopenedCutoff.state, "active");
+    assert.equal(reopenedCutoff.archivedAt, null);
+    assert.ok(
+      await scalar(client, "select archive_cutoff_at from goal_periods where goal_id = $1 and definition_version = 1 limit 1", [cutoffMinutes.id]),
+    );
+    await db.deleteCommunityPostForOwner({
+      userId: ada.id,
+      groupId: crew.id,
+      workoutSessionId: cutoffFirst.id,
+      deleteWorkout: true,
+    });
+    await db.recomputeGoalsForUser({
+      userId: ada.id,
+      now: new Date(cutoffFuture.getTime() + 1_000),
+    });
+    assert.notEqual(
+      await scalar(
+        client,
+        "select state from goal_periods where goal_id = $1 and definition_version = 1 order by created_at desc limit 1",
+        [cutoffMinutes.id],
+      ),
+      "reached",
+    );
+    assert.equal(
+      await scalar(
+        client,
+        `select count(*)::int
+         from community_post_goals as badge
+         join goal_periods as period on period.id = badge.goal_period_id
+         where period.goal_id = $1 and period.definition_version = 1`,
+        [cutoffMinutes.id],
+      ),
+      0,
+    );
+    assert.equal((await db.getGoalForUser(ada.id, cutoffMinutes.id)).state, "active");
+
+    const graceDeadline = formatZonedYmd(addZonedDays(now, -2, zone), zone);
+    const graceGoal = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 1,
+      displayUnit: "count",
+      schedule: "one_time",
+      deadlineAt: graceDeadline,
+      timeZone: zone,
+      movementId: null,
+      movementName: null,
+      lane: null,
+      now: addZonedDays(now, -5, zone),
+    });
+    const expiredNow = await db.listGoalsForUser(ada.id, now);
+    assert.equal(expiredNow.history.find((goal) => goal.id === graceGoal.id)?.state, "expired");
+    const graceWorkout = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "other",
+      title: "Grace log",
+      name: "Grace log",
+      durationMinutes: 12,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: addZonedDays(now, -3, zone),
+    });
+    assert.ok(graceWorkout.goals.reached.some((item) => item.goalId === graceGoal.id));
+    const afterGrace = await db.getGoalForUser(ada.id, graceGoal.id, now);
+    assert.equal(afterGrace.state, "reached");
+    assert.equal(afterGrace.activeSlot, null);
+    assert.equal(await scalar(client, "select state from goals where id = $1", [graceGoal.id]), "reached");
+    assert.equal(await scalar(client, "select active_slot from goals where id = $1", [graceGoal.id]), null);
+    await db.deleteCommunityPostForOwner({
+      userId: ada.id,
+      groupId: crew.id,
+      workoutSessionId: graceWorkout.id,
+      deleteWorkout: true,
+    });
+    const afterWithdraw = await db.getGoalForUser(ada.id, graceGoal.id, now);
+    assert.equal(afterWithdraw.state, "expired");
+    assert.equal(afterWithdraw.activeSlot, null);
   } finally {
     await client.end();
     if (globalThis.repinPool) {

@@ -98,6 +98,8 @@ export const GOAL_REOPEN_CAP_MESSAGE =
   "You already have 5 active goals. Archive one first, then you can reopen this.";
 export const GOAL_STALE_MESSAGE = "This goal was just updated. Refresh and try again.";
 
+const GOALS_ADVISORY_LOCK_NS = 1_819_242_348;
+
 type GoalRow = typeof schema.goals.$inferSelect;
 type PeriodRow = typeof schema.goalPeriods.$inferSelect;
 
@@ -191,7 +193,7 @@ export async function createGoalForUser(input: CreateGoalInput) {
   }
   const now = input.now ?? new Date();
   const goalId = await getDatabase().transaction(async (transaction) => {
-    await lockUser(transaction, input.userId);
+    await lockUserGoals(transaction, input.userId);
     await settleExpiredGoals(transaction, input.userId, now);
     const slot = await allocateSlot(transaction, input.userId);
     const canonical = canonicalTarget({
@@ -244,7 +246,7 @@ export async function createGoalForUser(input: CreateGoalInput) {
 export async function updateGoalForUser(input: CreateGoalInput & { goalId: string }) {
   const now = input.now ?? new Date();
   const goalId = await getDatabase().transaction(async (transaction) => {
-    await lockUser(transaction, input.userId);
+    await lockUserGoals(transaction, input.userId);
     const goal = await lockGoalForUser(transaction, input.userId, input.goalId);
     if (!goal) return null;
     if (goal.state !== "active") {
@@ -325,7 +327,7 @@ export async function updateGoalForUser(input: CreateGoalInput & { goalId: strin
 export async function archiveGoalForUser(userId: string, goalId: string) {
   const now = new Date();
   const updated = await getDatabase().transaction(async (transaction) => {
-    await lockUser(transaction, userId);
+    await lockUserGoals(transaction, userId);
     const goal = await lockGoalForUser(transaction, userId, goalId);
     if (!goal) return null;
     if (goal.state === "archived") return goal.id;
@@ -345,6 +347,13 @@ export async function archiveGoalForUser(userId: string, goalId: string) {
       ))
       .returning();
     if (!archived) throw new GoalRequestError(GOAL_STALE_MESSAGE, 409);
+    await transaction
+      .update(schema.goalPeriods)
+      .set({ archiveCutoffAt: archived.archivedAt })
+      .where(and(
+        eq(schema.goalPeriods.goalId, archived.id),
+        isNull(schema.goalPeriods.archiveCutoffAt),
+      ));
     return archived.id;
   });
   if (!updated) return null;
@@ -353,7 +362,7 @@ export async function archiveGoalForUser(userId: string, goalId: string) {
 
 export async function deleteGoalForUser(userId: string, goalId: string) {
   return getDatabase().transaction(async (transaction) => {
-    await lockUser(transaction, userId);
+    await lockUserGoals(transaction, userId);
     const goal = await lockGoalForUser(transaction, userId, goalId);
     if (!goal) return false;
     const deleted = await transaction
@@ -368,7 +377,7 @@ export async function deleteGoalForUser(userId: string, goalId: string) {
 export async function markGoalDoneForUser(userId: string, goalId: string) {
   const now = new Date();
   const updated = await getDatabase().transaction(async (transaction) => {
-    await lockUser(transaction, userId);
+    await lockUserGoals(transaction, userId);
     const goal = await lockGoalForUser(transaction, userId, goalId);
     if (!goal) return null;
     if (goal.state !== "active") {
@@ -415,7 +424,7 @@ export async function reopenGoalForUser(input: {
 }) {
   const now = input.now ?? new Date();
   const updatedId = await getDatabase().transaction(async (transaction) => {
-    await lockUser(transaction, input.userId);
+    await lockUserGoals(transaction, input.userId);
     await settleExpiredGoals(transaction, input.userId, now);
     const goal = await lockGoalForUser(transaction, input.userId, input.goalId);
     if (!goal) return null;
@@ -499,6 +508,7 @@ export async function shareSessionGoalBadges(input: {
   periodIds?: string[];
 }): Promise<GoalBadge[]> {
   return getDatabase().transaction(async (transaction) => {
+    await lockUserGoals(transaction, input.userId);
     if (input.periodIds?.length) {
       const requested = await transaction
         .select()
@@ -573,6 +583,7 @@ export async function removeCommunityPostGoalBadges(input: {
   groupId: string;
 }): Promise<GoalBadge[]> {
   return getDatabase().transaction(async (transaction) => {
+    await lockUserGoals(transaction, input.userId);
     const share = await loadAuthorizedSessionPost(transaction, {
       groupId: input.groupId,
       sessionId: input.sessionId,
@@ -634,7 +645,7 @@ async function recomputeUserGoals(
   celebratingSessionId?: string,
   occurredAt?: Date,
 ): Promise<GoalReached[]> {
-  await lockUser(transaction, userId);
+  await lockUserGoals(transaction, userId);
   await settleExpiredGoals(transaction, userId, now);
   const goals = await transaction
     .select()
@@ -648,6 +659,7 @@ async function recomputeUserGoals(
     const newly = await recomputeGoal(transaction, goal, now, celebratingSessionId, occurredAt);
     reached.push(...newly);
   }
+  await settleExpiredGoals(transaction, userId, now);
   return reached;
 }
 
@@ -672,7 +684,7 @@ async function recomputeGoal(
           period,
           asPeriodDefinition(period),
           now,
-          goal.archivedAt ?? undefined,
+          historicalArchiveCutoff(period, goal),
         );
       }
     }
@@ -686,12 +698,25 @@ async function recomputeGoal(
     const currentVersion = period.definitionVersion === goal.definitionVersion;
     if (!currentVersion) {
       if (period.completionMethod === "auto" && period.state === "reached") {
-        await revalidateExistingAuto(transaction, goal, period, definition, now);
+        await revalidateExistingAuto(
+          transaction,
+          goal,
+          period,
+          definition,
+          now,
+          historicalArchiveCutoff(period, goal),
+        );
       }
       continue;
     }
     const window = periodWindow(period);
-    const snapshots = await loadEligibleSnapshots(transaction, definition, window, now);
+    const snapshots = await loadEligibleSnapshots(
+      transaction,
+      definition,
+      window,
+      now,
+      historicalArchiveCutoff(period, goal),
+    );
     const before = period.state;
     const celebrated = period.celebrated;
     if (definition.kind === "volume") {
@@ -799,7 +824,7 @@ async function markAutoReached(
       .delete(schema.communityPostGoals)
       .where(eq(schema.communityPostGoals.goalPeriodId, period.id));
   }
-  await transaction
+  const [reachedPeriod] = await transaction
     .update(schema.goalPeriods)
     .set({
       state: "reached",
@@ -818,7 +843,9 @@ async function markAutoReached(
       celebrated: true,
       updatedAt: now,
     })
-    .where(eq(schema.goalPeriods.id, period.id));
+    .where(eq(schema.goalPeriods.id, period.id))
+    .returning({ id: schema.goalPeriods.id });
+  if (!reachedPeriod) throw new GoalRequestError(GOAL_STALE_MESSAGE, 409);
   if (sameSource) {
     await transaction
       .update(schema.communityPostGoals)
@@ -828,11 +855,16 @@ async function markAutoReached(
       })
       .where(eq(schema.communityPostGoals.goalPeriodId, period.id));
   }
-  if (goal.schedule === "one_time" && goal.state !== "archived") {
-    await transaction
+  if (goal.schedule === "one_time" && goal.state !== "archived" && goal.state !== "reached") {
+    const [reachedGoal] = await transaction
       .update(schema.goals)
       .set({ state: "reached", activeSlot: null, updatedAt: now })
-      .where(and(eq(schema.goals.id, goal.id), eq(schema.goals.state, "active")));
+      .where(and(
+        eq(schema.goals.id, goal.id),
+        inArray(schema.goals.state, ["active", "expired", "needs_review"]),
+      ))
+      .returning({ id: schema.goals.id });
+    if (!reachedGoal) throw new GoalRequestError(GOAL_STALE_MESSAGE, 409);
   }
   if (period.celebrated) return null;
   return {
@@ -874,6 +906,16 @@ async function invalidateAutoPeriod(
     && goal.schedule === "one_time"
     && (goal.state === "reached" || goal.state === "expired")
   ) {
+    if (goal.deadlineAt && now >= goal.deadlineAt) {
+      await transaction
+        .update(schema.goals)
+        .set({ state: "expired", activeSlot: null, updatedAt: now })
+        .where(and(
+          eq(schema.goals.id, goal.id),
+          inArray(schema.goals.state, ["reached", "expired"]),
+        ));
+      return;
+    }
     try {
       const slot = await allocateSlot(transaction, goal.userId);
       await transaction
@@ -1033,6 +1075,7 @@ async function settleExpiredGoals(transaction: DatabaseTransaction, userId: stri
 }
 
 async function allocateSlot(transaction: DatabaseTransaction, userId: string) {
+  await lockUserGoals(transaction, userId);
   const occupied = await transaction
     .select({ slot: schema.goals.activeSlot })
     .from(schema.goals)
@@ -1050,13 +1093,10 @@ async function countActiveGoals(database: Queryable, userId: string) {
   return rows.length;
 }
 
-async function lockUser(transaction: DatabaseTransaction, userId: string) {
-  await transaction
-    .select({ id: schema.users.id })
-    .from(schema.users)
-    .where(eq(schema.users.id, userId))
-    .limit(1)
-    .for("update");
+export async function lockUserGoals(transaction: DatabaseTransaction, userId: string) {
+  await transaction.execute(
+    sql`select pg_advisory_xact_lock(${GOALS_ADVISORY_LOCK_NS}::int, hashtext(${userId}::text))`,
+  );
 }
 
 async function lockGoalForUser(
@@ -1589,9 +1629,13 @@ async function loadAuthorizedSessionPost(
 
 async function settleUserGoalReads(userId: string, now: Date) {
   await getDatabase().transaction(async (transaction) => {
-    await lockUser(transaction, userId);
+    await lockUserGoals(transaction, userId);
     await settleExpiredGoals(transaction, userId, now);
   });
+}
+
+function historicalArchiveCutoff(period: PeriodRow, goal: GoalRow) {
+  return period.archiveCutoffAt ?? (goal.state === "archived" ? goal.archivedAt ?? undefined : undefined);
 }
 
 function resolveUpdatedDeadline(
