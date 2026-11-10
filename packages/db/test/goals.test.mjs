@@ -1060,6 +1060,136 @@ test("archived goals stay archived, reopen expiry uses the current version, orig
       await scalar(client, "select state from goal_periods where goal_id = $1 and period_start = $2", [closed.id, twoWeeksStart]),
       "pending",
     );
+
+    const futureMinutes = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "volume",
+      metric: "minutes",
+      sportFilter: "walk",
+      target: 10,
+      displayUnit: "min",
+      schedule: "weekly",
+      deadlineAt: null,
+      timeZone: zone,
+      movementId: null,
+      movementName: null,
+      lane: null,
+    });
+    const firstOccurred = new Date();
+    const firstFiveMin = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "walk",
+      title: "Walk A",
+      name: "Walk A",
+      durationMinutes: 5,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: firstOccurred,
+    });
+    const secondOccurred = new Date();
+    const secondFiveMin = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "walk",
+      title: "Walk B",
+      name: "Walk B",
+      durationMinutes: 5,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: secondOccurred,
+    });
+    assert.ok(secondFiveMin.goals.reached.some((item) => item.goalId === futureMinutes.id));
+    const futureOccurred = new Date(Date.now() + 120_000);
+    const futureSession = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "walk",
+      title: "Walk later",
+      name: "Walk later",
+      durationMinutes: 5,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: futureOccurred,
+    });
+    assert.equal(
+      futureSession.goals.reached.some((item) => item.goalId === futureMinutes.id),
+      false,
+    );
+    await db.shareSessionGoalBadges({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: secondFiveMin.id,
+    });
+    const archivedFuture = await db.archiveGoalForUser(ada.id, futureMinutes.id);
+    assert.equal(archivedFuture.state, "archived");
+    const firstCutoff = await scalar(client, "select updated_at from goals where id = $1", [futureMinutes.id]);
+    await client.query("select pg_sleep(0.05)");
+    await db.archiveGoalForUser(ada.id, futureMinutes.id);
+    const secondCutoff = await scalar(client, "select updated_at from goals where id = $1", [futureMinutes.id]);
+    assert.equal(new Date(firstCutoff).getTime(), new Date(secondCutoff).getTime());
+    await db.deleteCommunityPostForOwner({
+      userId: ada.id,
+      groupId: crew.id,
+      workoutSessionId: firstFiveMin.id,
+      deleteWorkout: true,
+    });
+    await db.recomputeGoalsForUser({
+      userId: ada.id,
+      now: new Date(futureOccurred.getTime() + 1_000),
+    });
+    assert.equal((await db.getGoalForUser(ada.id, futureMinutes.id)).state, "archived");
+    assert.notEqual(
+      await scalar(
+        client,
+        "select state from goal_periods where goal_id = $1 order by created_at desc limit 1",
+        [futureMinutes.id],
+      ),
+      "reached",
+    );
+    assert.equal(
+      await scalar(
+        client,
+        `select count(*)::int
+         from community_post_goals as badge
+         join goal_periods as period on period.id = badge.goal_period_id
+         where period.goal_id = $1`,
+        [futureMinutes.id],
+      ),
+      0,
+    );
+    await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "walk",
+      title: "Walk after archive",
+      name: "Walk after archive",
+      durationMinutes: 20,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date(futureOccurred.getTime() + 2_000),
+    });
+    await db.recomputeGoalsForUser({
+      userId: ada.id,
+      now: new Date(futureOccurred.getTime() + 3_000),
+    });
+    assert.notEqual(
+      await scalar(
+        client,
+        "select state from goal_periods where goal_id = $1 order by created_at desc limit 1",
+        [futureMinutes.id],
+      ),
+      "reached",
+    );
+    assert.equal((await db.getGoalForUser(ada.id, futureMinutes.id)).state, "archived");
   } finally {
     await client.end();
     if (globalThis.repinPool) {

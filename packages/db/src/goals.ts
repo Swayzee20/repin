@@ -333,6 +333,7 @@ export async function archiveGoalForUser(userId: string, goalId: string) {
       .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)))
       .limit(1);
     if (!goal) return null;
+    if (goal.state === "archived") return goal.id;
     await transaction
       .update(schema.goals)
       .set({ state: "archived", activeSlot: null, updatedAt: now })
@@ -739,7 +740,7 @@ async function revalidateExistingAuto(
   period: PeriodRow,
   definition: GoalDefinition,
   now: Date,
-  createdBefore?: Date,
+  archiveCutoff?: Date,
 ) {
   if (!period.sourceSessionId) {
     await invalidateAutoPeriod(transaction, goal, period, now);
@@ -751,7 +752,7 @@ async function revalidateExistingAuto(
     asPeriodDefinition(period),
     window,
     now,
-    createdBefore,
+    archiveCutoff,
   );
   const source = snapshots.find((snapshot) => snapshot.id === period.sourceSessionId);
   if (!source) {
@@ -1053,7 +1054,7 @@ async function loadEligibleSnapshots(
   definition: GoalDefinition & { userId: string },
   period: GoalPeriodWindow,
   now: Date,
-  createdBefore?: Date,
+  archiveCutoff?: Date,
 ) {
   const filters = [
     eq(schema.workoutSessions.userId, definition.userId),
@@ -1065,8 +1066,9 @@ async function loadEligibleSnapshots(
   if (period.creditClosesAt) {
     filters.push(sql`${schema.workoutSessions.createdAt} < ${period.creditClosesAt}`);
   }
-  if (createdBefore) {
-    filters.push(lte(schema.workoutSessions.createdAt, createdBefore));
+  if (archiveCutoff) {
+    filters.push(lte(schema.workoutSessions.createdAt, archiveCutoff));
+    filters.push(lte(schema.workoutSessions.occurredAt, archiveCutoff));
   }
   if (definition.sportFilter) {
     filters.push(eq(schema.workoutSessions.workoutType, definition.sportFilter));
