@@ -614,7 +614,7 @@
           "value": "length(btrim(\"community_post_goals\".\"display_value\")) between 1 and 120"
         }
       },
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.community_post_prs": {
       "name": "community_post_prs",
@@ -1961,7 +1961,7 @@
           "value": "length(btrim(\"goal_periods\".\"period_key\")) between 1 and 64"
         }
       },
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.goals": {
       "name": "goals",
@@ -2266,7 +2266,7 @@
           "value": "(\n        \"goals\".\"kind\" = 'volume'\n        and \"goals\".\"metric\" in ('workout_count', 'distance', 'minutes')\n        and \"goals\".\"pr_kind\" is null\n        and \"goals\".\"pr_key\" is null\n        and (\n          (\n            \"goals\".\"schedule\" in ('weekly', 'monthly')\n          ) or (\n            \"goals\".\"schedule\" = 'one_time'\n            and \"goals\".\"deadline_at\" is not null\n          )\n        )\n        and (\n          \"goals\".\"sport_filter\" is null\n          or (\n            \"goals\".\"metric\" = 'distance'\n            and \"goals\".\"sport_filter\" in ('run', 'walk', 'cycling')\n          )\n          or (\n            \"goals\".\"metric\" in ('workout_count', 'minutes')\n            and \"goals\".\"sport_filter\" in (\n              'run', 'walk', 'cycling', 'strength_training', 'powerlifting',\n              'hiit', 'functional_fitness', 'other'\n            )\n          )\n        )\n      ) or (\n        \"goals\".\"kind\" = 'time'\n        and \"goals\".\"metric\" = 'time'\n        and \"goals\".\"schedule\" = 'one_time'\n        and \"goals\".\"pr_kind\" = 'distance_time'\n        and \"goals\".\"pr_key\" is not null\n        and \"goals\".\"sport_filter\" in ('run', 'walk', 'cycling')\n      ) or (\n        \"goals\".\"kind\" = 'lift'\n        and \"goals\".\"metric\" = 'load'\n        and \"goals\".\"schedule\" = 'one_time'\n        and \"goals\".\"pr_kind\" = 'heaviest_single'\n        and \"goals\".\"pr_key\" is not null\n      )"
         }
       },
-      "isRLSEnabled": false
+      "isRLSEnabled": true
     },
     "public.group_members": {
       "name": "group_members",

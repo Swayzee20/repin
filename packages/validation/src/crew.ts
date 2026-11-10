@@ -1,8 +1,8 @@
 import { z } from "zod";
 
-import { isValidTimeZone, sundayWeekBounds } from "./calendar";
+import { isValidTimeZone, sundayWeekBounds, sundayWeekBoundsFromOffset } from "./calendar";
 
-export { sundayWeekBounds } from "./calendar";
+export { sundayWeekBounds, sundayWeekBoundsFromOffset } from "./calendar";
 
 export const crewAlertTypes = [
   "crew_workout",
@@ -119,8 +119,8 @@ export const crewNotificationPrefsSchema = z
   .strict();
 
 export const crewPageQuerySchema = z.object({
-  timeZone: z.string().trim().min(1).max(64).superRefine((value, context) => {
-    if (!isValidTimeZone(value)) {
+  timeZone: z.string().trim().min(1).max(64).optional().superRefine((value, context) => {
+    if (value && !isValidTimeZone(value)) {
       context.addIssue({
         code: "custom",
         message: "Choose a valid time zone",
@@ -128,7 +128,23 @@ export const crewPageQuerySchema = z.object({
     }
   }),
   timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840).optional(),
+}).superRefine((value, context) => {
+  if (!value.timeZone && value.timezoneOffsetMinutes == null) {
+    context.addIssue({
+      code: "custom",
+      message: "Choose a valid time zone",
+      path: ["timeZone"],
+    });
+  }
 });
+
+export function crewSundayWeekBounds(
+  now: Date,
+  query: { timeZone?: string; timezoneOffsetMinutes?: number },
+) {
+  if (query.timeZone) return sundayWeekBounds(now, query.timeZone);
+  return sundayWeekBoundsFromOffset(now, query.timezoneOffsetMinutes ?? 0);
+}
 
 export const crewPhotoPathPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[^/].+$/i;

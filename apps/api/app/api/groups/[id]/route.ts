@@ -7,9 +7,9 @@ import {
 import { getUserInitials } from "@repin/types";
 import {
   crewPageQuerySchema,
+  crewSundayWeekBounds,
   groupIdSchema,
   isCrewPhotoPathForGroup,
-  sundayWeekBounds,
   notificationSummary,
   updateCrewSchema,
 } from "@repin/validation";
@@ -59,10 +59,7 @@ export async function GET(
       return NextResponse.json({ error: "Crew not found" }, { status: 404 });
     }
 
-    const { weekStart, weekEnd } = sundayWeekBounds(
-      new Date(),
-      query.data.timeZone,
-    );
+    const { weekStart, weekEnd } = crewSundayWeekBounds(new Date(), query.data);
     const [members, notifications, photoUrl] = await Promise.all([
       listCrewMembers({
         groupId: group.id,

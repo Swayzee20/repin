@@ -1223,7 +1223,7 @@ export const goals = pgTable(
       )`,
     ),
   ],
-);
+).enableRLS();
 
 export const goalPeriods = pgTable(
   "goal_periods",
@@ -1315,7 +1315,7 @@ export const goalPeriods = pgTable(
       sql`length(btrim(${table.periodKey})) between 1 and 64`,
     ),
   ],
-);
+).enableRLS();
 
 export const communityPostGoals = pgTable(
   "community_post_goals",
@@ -1363,7 +1363,7 @@ export const communityPostGoals = pgTable(
       sql`length(btrim(${table.displayValue})) between 1 and 120`,
     ),
   ],
-);
+).enableRLS();
 
 export type Goal = typeof goals.$inferSelect;
 export type NewGoal = typeof goals.$inferInsert;

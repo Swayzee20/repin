@@ -43,10 +43,15 @@ select exists (
 ) as drizzle_has_rows;
 ```
 
-If `goals_table` is already present, skip step 1 and go to verification.
-Confirm the journal/hash and `goals_slot_state_check` (active rows require
-`active_slot IS NOT NULL AND BETWEEN 1 AND 5`) before treating 0019 as applied.
-If the RLS policies listed in step 4 already exist, skip step 3.
+If `goals_table` is already present, do **not** skip Drizzle 0019 until
+verification confirms the journal hash for tag `0019_ancient_wind_dancer`
+and `goals_slot_state_check` (active rows require `active_slot IS NOT NULL
+AND BETWEEN 1 AND 5`). Table presence alone can be an older draft.
+
+Do **not** skip the RLS migration solely because policy names already exist.
+Compare live `pg_get_expr` predicates, helper bodies/ACL/`search_path`, and
+ENABLE+FORCE flags to `supabase/migrations/20261110000000_goals.sql`. An
+older draft may have installed weaker policies under the same names.
 
 ## 1. Apply Drizzle 0019
 

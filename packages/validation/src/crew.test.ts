@@ -3,11 +3,15 @@ import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
+import { readFileSync } from "node:fs";
+
 import {
   crewAlertAllowed,
   crewCopy,
   crewMarkTiles,
   crewPagePermissions,
+  crewPageQuerySchema,
+  crewSundayWeekBounds,
   defaultCrewNotificationPrefs,
   firstNameForToast,
   formatWorkoutsThisWeek,
@@ -16,6 +20,7 @@ import {
   notificationSummary,
   resolveCrewNotificationPrefs,
   sundayWeekBounds,
+  sundayWeekBoundsFromOffset,
 } from "./index";
 
 const utc = "UTC";
@@ -175,4 +180,29 @@ test("crew copy and helpers stay on spec", () => {
     isCrewPhotoPathForGroup("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/../secret.jpg", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
     false,
   );
+});
+
+test("crew page query accepts offset-only clients and prefers IANA timeZone", () => {
+  assert.equal(crewPageQuerySchema.safeParse({ timezoneOffsetMinutes: 360 }).success, true);
+  assert.equal(crewPageQuerySchema.safeParse({ timeZone: "America/Chicago" }).success, true);
+  assert.equal(
+    crewPageQuerySchema.safeParse({
+      timeZone: "America/Chicago",
+      timezoneOffsetMinutes: 360,
+    }).success,
+    true,
+  );
+  assert.equal(crewPageQuerySchema.safeParse({}).success, false);
+  assert.equal(crewPageQuerySchema.safeParse({ timeZone: "Not/AZone" }).success, false);
+
+  const now = new Date("2026-11-10T18:00:00.000Z");
+  const fromZone = crewSundayWeekBounds(now, { timeZone: "America/Chicago" });
+  const fromOffset = crewSundayWeekBounds(now, { timezoneOffsetMinutes: 360 });
+  assert.equal(fromZone.weekStart.toISOString(), sundayWeekBounds(now, "America/Chicago").weekStart.toISOString());
+  assert.equal(fromOffset.weekStart.toISOString(), sundayWeekBoundsFromOffset(now, 360).weekStart.toISOString());
+  assert.equal(fromOffset.weekStart.getUTCDay(), 0);
+
+  const route = readFileSync(new URL("../../../apps/api/app/api/groups/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(route, /crewSundayWeekBounds/);
+  assert.match(route, /timezoneOffsetMinutes/);
 });

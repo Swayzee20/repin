@@ -654,6 +654,25 @@ async function recomputeGoal(
   celebratingSessionId?: string,
   occurredAt?: Date,
 ): Promise<GoalReached[]> {
+  if (goal.state === "archived") {
+    const archived = await transaction
+      .select()
+      .from(schema.goalPeriods)
+      .where(eq(schema.goalPeriods.goalId, goal.id));
+    for (const period of archived) {
+      if (period.completionMethod === "auto" && period.state === "reached") {
+        await revalidateExistingAuto(
+          transaction,
+          goal,
+          period,
+          asPeriodDefinition(period),
+          now,
+          goal.updatedAt,
+        );
+      }
+    }
+    return [];
+  }
   const periods = await relevantPeriods(transaction, goal, now, occurredAt);
   const newly: GoalReached[] = [];
   for (const period of periods) {
@@ -720,13 +739,20 @@ async function revalidateExistingAuto(
   period: PeriodRow,
   definition: GoalDefinition,
   now: Date,
+  createdBefore?: Date,
 ) {
   if (!period.sourceSessionId) {
     await invalidateAutoPeriod(transaction, goal, period, now);
     return;
   }
   const window = periodWindow(period);
-  const snapshots = await loadEligibleSnapshots(transaction, asPeriodDefinition(period), window, now);
+  const snapshots = await loadEligibleSnapshots(
+    transaction,
+    asPeriodDefinition(period),
+    window,
+    now,
+    createdBefore,
+  );
   const source = snapshots.find((snapshot) => snapshot.id === period.sourceSessionId);
   if (!source) {
     await invalidateAutoPeriod(transaction, goal, period, now);
@@ -756,12 +782,14 @@ async function markAutoReached(
   now: Date,
   sourceSetId?: string | null,
 ): Promise<GoalReached | null> {
-  const share = await loadShareContext(transaction, source.id);
+  const sameSource = Boolean(period.sourceSessionId && period.sourceSessionId === source.id);
   const sourceChanged = Boolean(period.sourceSessionId && period.sourceSessionId !== source.id);
-  const originChanged = Boolean(
-    period.originatingPostId && period.originatingPostId !== share.communityPostId,
-  );
-  if (sourceChanged || originChanged) {
+  let originatingPostId = period.originatingPostId;
+  if (!sameSource) {
+    const share = await loadShareContext(transaction, source.id);
+    originatingPostId = share.communityPostId;
+  }
+  if (sourceChanged) {
     await transaction
       .delete(schema.communityPostGoals)
       .where(eq(schema.communityPostGoals.goalPeriodId, period.id));
@@ -775,7 +803,7 @@ async function markAutoReached(
       recordedAt: now,
       sourceSessionId: source.id,
       sourceSetId: sourceSetId ?? null,
-      originatingPostId: share.communityPostId,
+      originatingPostId,
       progressValue: value,
       evidence: {
         sessionId: source.id,
@@ -786,7 +814,16 @@ async function markAutoReached(
       updatedAt: now,
     })
     .where(eq(schema.goalPeriods.id, period.id));
-  if (goal.schedule === "one_time") {
+  if (sameSource) {
+    await transaction
+      .update(schema.communityPostGoals)
+      .set({
+        displayValue: resultDisplay(goal, value),
+        reachedAt: source.occurredAt,
+      })
+      .where(eq(schema.communityPostGoals.goalPeriodId, period.id));
+  }
+  if (goal.schedule === "one_time" && goal.state !== "archived") {
     await transaction
       .update(schema.goals)
       .set({ state: "reached", activeSlot: null, updatedAt: now })
@@ -827,7 +864,11 @@ async function invalidateAutoPeriod(
       updatedAt: now,
     })
     .where(eq(schema.goalPeriods.id, period.id));
-  if (goal.schedule === "one_time" && (goal.state === "reached" || goal.state === "expired")) {
+  if (
+    period.definitionVersion === goal.definitionVersion
+    && goal.schedule === "one_time"
+    && (goal.state === "reached" || goal.state === "expired")
+  ) {
     try {
       const slot = await allocateSlot(transaction, goal.userId);
       await transaction
@@ -868,13 +909,7 @@ async function relevantPeriods(
   return rows.filter((period) => {
     if (current && period.id === current.id) return true;
     if (period.completionMethod === "auto" && period.state === "reached") return true;
-    if (
-      period.definitionVersion === goal.definitionVersion
-      && period.creditClosesAt
-      && now < period.creditClosesAt
-    ) {
-      return true;
-    }
+    if (period.definitionVersion === goal.definitionVersion) return true;
     return false;
   });
 }
@@ -971,7 +1006,11 @@ async function settleExpiredGoals(transaction: DatabaseTransaction, userId: stri
       const [period] = await transaction
         .select()
         .from(schema.goalPeriods)
-        .where(and(eq(schema.goalPeriods.goalId, goal.id), eq(schema.goalPeriods.state, "reached")))
+        .where(and(
+          eq(schema.goalPeriods.goalId, goal.id),
+          eq(schema.goalPeriods.definitionVersion, goal.definitionVersion),
+          eq(schema.goalPeriods.state, "reached"),
+        ))
         .limit(1);
       if (period) continue;
       await transaction
@@ -1014,6 +1053,7 @@ async function loadEligibleSnapshots(
   definition: GoalDefinition & { userId: string },
   period: GoalPeriodWindow,
   now: Date,
+  createdBefore?: Date,
 ) {
   const filters = [
     eq(schema.workoutSessions.userId, definition.userId),
@@ -1024,6 +1064,9 @@ async function loadEligibleSnapshots(
   if (period.periodEnd) filters.push(sql`${schema.workoutSessions.occurredAt} < ${period.periodEnd}`);
   if (period.creditClosesAt) {
     filters.push(sql`${schema.workoutSessions.createdAt} < ${period.creditClosesAt}`);
+  }
+  if (createdBefore) {
+    filters.push(lte(schema.workoutSessions.createdAt, createdBefore));
   }
   if (definition.sportFilter) {
     filters.push(eq(schema.workoutSessions.workoutType, definition.sportFilter));

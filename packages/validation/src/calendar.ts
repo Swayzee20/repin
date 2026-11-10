@@ -125,6 +125,22 @@ export function addZonedDays(date: Date, days: number, timeZone: string) {
   );
 }
 
+/** Device-local Sunday 00:00 through next Sunday 00:00 (exclusive) from a UTC offset. */
+export function sundayWeekBoundsFromOffset(now: Date, timezoneOffsetMinutes: number) {
+  const dayMs = 24 * 60 * 60 * 1_000;
+  const local = new Date(now.getTime() - timezoneOffsetMinutes * 60_000);
+  const daysSinceSunday = local.getUTCDay();
+  const localMidnightUtc = Date.UTC(
+    local.getUTCFullYear(),
+    local.getUTCMonth(),
+    local.getUTCDate(),
+  );
+  const todayStart = localMidnightUtc + timezoneOffsetMinutes * 60_000;
+  const weekStart = new Date(todayStart - daysSinceSunday * dayMs);
+  const weekEnd = new Date(weekStart.getTime() + 7 * dayMs);
+  return { weekStart, weekEnd };
+}
+
 /** Device-local Sunday 00:00 through next Sunday 00:00 (exclusive), IANA calendar. */
 export function sundayWeekBounds(instant: Date, timeZone: string) {
   const parts = zonedParts(instant, timeZone);
