@@ -3,71 +3,85 @@ import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
+import { readFileSync } from "node:fs";
+
 import {
   crewAlertAllowed,
   crewCopy,
   crewMarkTiles,
   crewPagePermissions,
+  crewPageQuerySchema,
+  crewSundayWeekBounds,
   defaultCrewNotificationPrefs,
   firstNameForToast,
   formatWorkoutsThisWeek,
   isCrewPhotoPathForGroup,
-  isInMondayWeek,
-  mondayWeekBounds,
+  isInSundayWeek,
   notificationSummary,
   resolveCrewNotificationPrefs,
+  sundayWeekBounds,
+  sundayWeekBoundsFromOffset,
 } from "./index";
 
-const utc = 0;
-const pacific = 480;
-const tokyo = -540;
-const kiritimati = -840;
+const utc = "UTC";
+const pacific = "America/Los_Angeles";
+const tokyo = "Asia/Tokyo";
+const kiritimati = "Pacific/Kiritimati";
+const chicago = "America/Chicago";
 
-function atOffset(isoUtc: string, timezoneOffsetMinutes: number) {
-  return { now: new Date(isoUtc), timezoneOffsetMinutes };
-}
+test("workouts this week uses Sunday 00:00 through Saturday 23:59:59 in the device timezone", () => {
+  const sundayUtc = new Date("2026-11-08T08:00:00.000Z");
+  const { weekStart, weekEnd } = sundayWeekBounds(sundayUtc, pacific);
+  assert.equal(weekStart.toISOString(), "2026-11-08T08:00:00.000Z");
+  assert.equal(weekEnd.toISOString(), "2026-11-15T08:00:00.000Z");
 
-test("workouts this week uses Monday 00:00 through Sunday 23:59:59 in the device timezone", () => {
-  const mondayUtc = new Date("2026-11-09T08:00:00.000Z");
-  const { weekStart, weekEnd } = mondayWeekBounds(mondayUtc, pacific);
-  assert.equal(weekStart.toISOString(), "2026-11-09T08:00:00.000Z");
-  assert.equal(weekEnd.toISOString(), "2026-11-16T08:00:00.000Z");
-
-  assert.equal(isInMondayWeek(weekStart, mondayUtc, pacific), true);
+  assert.equal(isInSundayWeek(weekStart, sundayUtc, pacific), true);
   assert.equal(
-    isInMondayWeek(new Date(weekEnd.getTime() - 1), mondayUtc, pacific),
+    isInSundayWeek(new Date(weekEnd.getTime() - 1), sundayUtc, pacific),
     true,
   );
-  assert.equal(isInMondayWeek(weekEnd, mondayUtc, pacific), false);
+  assert.equal(isInSundayWeek(weekEnd, sundayUtc, pacific), false);
   assert.equal(
-    isInMondayWeek(new Date(weekStart.getTime() - 1), mondayUtc, pacific),
+    isInSundayWeek(new Date(weekStart.getTime() - 1), sundayUtc, pacific),
     false,
   );
 });
 
-test("a Sunday late-night workout still counts in Tokyo and UTC", () => {
-  const tokyoNow = new Date("2026-11-15T14:00:00.000Z");
-  const tokyoSundayNight = new Date("2026-11-15T14:59:59.000Z");
-  assert.equal(isInMondayWeek(tokyoSundayNight, tokyoNow, tokyo), true);
+test("a Saturday late-night workout still counts in Tokyo and UTC", () => {
+  const tokyoNow = new Date("2026-11-14T14:00:00.000Z");
+  const tokyoSaturdayNight = new Date("2026-11-14T14:59:59.000Z");
+  assert.equal(isInSundayWeek(tokyoSaturdayNight, tokyoNow, tokyo), true);
   assert.equal(
-    isInMondayWeek(new Date("2026-11-15T15:00:00.000Z"), tokyoNow, tokyo),
+    isInSundayWeek(new Date("2026-11-14T15:00:00.000Z"), tokyoNow, tokyo),
     false,
   );
 
-  const utcNow = new Date("2026-11-15T12:00:00.000Z");
-  assert.equal(isInMondayWeek(new Date("2026-11-09T00:00:00.000Z"), utcNow, utc), true);
-  assert.equal(isInMondayWeek(new Date("2026-11-15T23:59:59.000Z"), utcNow, utc), true);
-  assert.equal(isInMondayWeek(new Date("2026-11-16T00:00:00.000Z"), utcNow, utc), false);
-  assert.equal(isInMondayWeek(new Date("2026-11-08T23:59:59.000Z"), utcNow, utc), false);
+  const utcNow = new Date("2026-11-11T12:00:00.000Z");
+  assert.equal(isInSundayWeek(new Date("2026-11-08T00:00:00.000Z"), utcNow, utc), true);
+  assert.equal(isInSundayWeek(new Date("2026-11-14T23:59:59.000Z"), utcNow, utc), true);
+  assert.equal(isInSundayWeek(new Date("2026-11-15T00:00:00.000Z"), utcNow, utc), false);
+  assert.equal(isInSundayWeek(new Date("2026-11-07T23:59:59.000Z"), utcNow, utc), false);
 });
 
-test("UTC+14 week bounds stay Monday-Sunday on the device calendar", () => {
-  const { now, timezoneOffsetMinutes } = atOffset("2026-11-10T10:00:00.000Z", kiritimati);
-  const { weekStart, weekEnd } = mondayWeekBounds(now, timezoneOffsetMinutes);
-  assert.equal(isInMondayWeek(weekStart, now, timezoneOffsetMinutes), true);
-  assert.equal(isInMondayWeek(new Date(weekEnd.getTime() - 1), now, timezoneOffsetMinutes), true);
-  assert.equal(isInMondayWeek(weekEnd, now, timezoneOffsetMinutes), false);
-  assert.equal(weekEnd.getTime() - weekStart.getTime(), 7 * 24 * 60 * 60 * 1_000);
+test("UTC+14 week bounds stay Sunday-Saturday on the device calendar", () => {
+  const now = new Date("2026-11-10T10:00:00.000Z");
+  const { weekStart, weekEnd } = sundayWeekBounds(now, kiritimati);
+  assert.equal(isInSundayWeek(weekStart, now, kiritimati), true);
+  assert.equal(isInSundayWeek(new Date(weekEnd.getTime() - 1), now, kiritimati), true);
+  assert.equal(isInSundayWeek(weekEnd, now, kiritimati), false);
+});
+
+test("Sunday week bounds match the Goals IANA calendar across DST", () => {
+  const fallNoon = new Date("2026-11-01T18:00:00.000Z");
+  const fall = sundayWeekBounds(fallNoon, chicago);
+  assert.equal(fall.weekStart.toISOString(), "2026-11-01T05:00:00.000Z");
+  assert.equal(fall.weekEnd.toISOString(), "2026-11-08T06:00:00.000Z");
+  assert.notEqual(fall.weekEnd.getTime() - fall.weekStart.getTime(), 7 * 24 * 60 * 60 * 1_000);
+
+  const springNoon = new Date("2026-03-10T18:00:00.000Z");
+  const spring = sundayWeekBounds(springNoon, chicago);
+  assert.equal(spring.weekStart.toISOString(), "2026-03-08T06:00:00.000Z");
+  assert.equal(spring.weekEnd.toISOString(), "2026-03-15T05:00:00.000Z");
 });
 
 test("mute summary states match All on, N off, and Muted", () => {
@@ -166,4 +180,29 @@ test("crew copy and helpers stay on spec", () => {
     isCrewPhotoPathForGroup("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/../secret.jpg", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
     false,
   );
+});
+
+test("crew page query accepts offset-only clients and prefers IANA timeZone", () => {
+  assert.equal(crewPageQuerySchema.safeParse({ timezoneOffsetMinutes: 360 }).success, true);
+  assert.equal(crewPageQuerySchema.safeParse({ timeZone: "America/Chicago" }).success, true);
+  assert.equal(
+    crewPageQuerySchema.safeParse({
+      timeZone: "America/Chicago",
+      timezoneOffsetMinutes: 360,
+    }).success,
+    true,
+  );
+  assert.equal(crewPageQuerySchema.safeParse({}).success, false);
+  assert.equal(crewPageQuerySchema.safeParse({ timeZone: "Not/AZone" }).success, false);
+
+  const now = new Date("2026-11-10T18:00:00.000Z");
+  const fromZone = crewSundayWeekBounds(now, { timeZone: "America/Chicago" });
+  const fromOffset = crewSundayWeekBounds(now, { timezoneOffsetMinutes: 360 });
+  assert.equal(fromZone.weekStart.toISOString(), sundayWeekBounds(now, "America/Chicago").weekStart.toISOString());
+  assert.equal(fromOffset.weekStart.toISOString(), sundayWeekBoundsFromOffset(now, 360).weekStart.toISOString());
+  assert.equal(fromOffset.weekStart.getUTCDay(), 0);
+
+  const route = readFileSync(new URL("../../../apps/api/app/api/groups/[id]/route.ts", import.meta.url), "utf8");
+  assert.match(route, /crewSundayWeekBounds/);
+  assert.match(route, /timezoneOffsetMinutes/);
 });

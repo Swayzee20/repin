@@ -1,9 +1,11 @@
-import { getUserInitials, resolveUserDisplayName, type ProfileData } from "@repin/types";
+import { getUserInitials, MAX_ACTIVE_GOALS, resolveUserDisplayName, type GoalsListResponse, type ProfileData } from "@repin/types";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { listGoals } from "../../../lib/goals-api";
+import { isLayoutPreview } from "../../../lib/layout-preview";
 import { supabase } from "../../../lib/supabase";
 import {
   getWorkoutDataRevision,
@@ -11,6 +13,7 @@ import {
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
 import { BrandHeader, Card, LoadingState, StateCard } from "../../../ui/components";
+import { GoalsSection } from "../../../ui/goals";
 import { Icon } from "../../../ui/icons";
 import { TwoPane, useLayoutMode } from "../../../ui/layout";
 import { useMainTabs } from "../../../ui/main-tabs-context";
@@ -30,6 +33,9 @@ export default function ProfileTabScreen() {
   const [data, setData] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [goals, setGoals] = useState<GoalsListResponse | null>(null);
+  const [goalsError, setGoalsError] = useState<string | null>(null);
+  const [goalsLoading, setGoalsLoading] = useState(true);
   const dataRef = useRef<ProfileData | null>(null);
   const lastSuccessfulLoad = useRef<FreshnessRecord | null>(null);
   const inFlightRequests = useRef(new Map<string, Promise<void>>());
@@ -100,7 +106,27 @@ export default function ProfileTabScreen() {
     return request;
   }, [selectedGroupId, setSelectedGroupId]);
 
-  useFocusEffect(useCallback(() => { void loadProfile(); }, [loadProfile]));
+  const loadGoals = useCallback(async () => {
+    if (__DEV__ && isLayoutPreview()) {
+      setGoals({ active: [], history: [], activeCount: 0, cap: MAX_ACTIVE_GOALS });
+      setGoalsLoading(false);
+      return;
+    }
+    setGoalsLoading(true);
+    setGoalsError(null);
+    try {
+      setGoals(await listGoals());
+    } catch (loadError) {
+      setGoalsError(loadError instanceof Error ? loadError.message : "Goals could not be loaded.");
+    } finally {
+      setGoalsLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    void loadProfile();
+    void loadGoals();
+  }, [loadGoals, loadProfile]));
 
   const displayName = useMemo(() => resolveUserDisplayName({ displayName: data?.user.displayName }), [data]);
   const initials = useMemo(() => getUserInitials({ displayName: data?.user.displayName }), [data]);
@@ -213,6 +239,16 @@ export default function ProfileTabScreen() {
                   </Card>
                 )}
               </View>
+              <GoalsSection
+                cap={goals?.cap ?? MAX_ACTIVE_GOALS}
+                error={goalsError}
+                goals={goals}
+                loading={goalsLoading}
+                onAdd={() => router.push("/goals/new")}
+                onHistory={() => router.push("/goals/history")}
+                onOpen={(goalId) => router.push(`/goals/${goalId}`)}
+                onRetry={() => void loadGoals()}
+              />
               <View style={styles.block}>
                 <Text style={styles.blockTitle}>Account</Text>
                 <Card style={styles.listCard}>

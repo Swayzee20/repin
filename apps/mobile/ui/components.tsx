@@ -371,10 +371,10 @@ export function WorkoutSummaryCard({
         </View>
         <Text numberOfLines={variant === "compact" ? 1 : 2} style={[styles.workoutTitle, variant === "compact" && styles.compactWorkoutTitle]}>{title}</Text>
         {duration || effort ? <Text numberOfLines={1} style={styles.workoutMetadata}>{[duration, effort].filter(Boolean).join("  ·  ")}</Text> : null}
-        {resultSummary || workout.prBadges?.length ? (
+        {resultSummary || workout.prBadges?.length || workout.goalBadges?.length ? (
           <View style={styles.resultRow}>
             {resultSummary ? <Text numberOfLines={1} style={styles.workoutResultSummary}>{resultSummary}</Text> : null}
-            <PrBadgeRow badges={workout.prBadges} />
+            <PrBadgeRow badges={workout.prBadges} goalBadges={workout.goalBadges} />
           </View>
         ) : null}
         {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
@@ -405,6 +405,7 @@ export function CommunityFeed({
   onWorkoutBlock,
   onWorkoutDelete,
   onWorkoutEdit,
+  onWorkoutRemoveGoalBadge,
   onWorkoutRemovePrBadge,
   onWorkoutReport,
   showCommentCount = false,
@@ -420,6 +421,7 @@ export function CommunityFeed({
   onWorkoutBlock?: (workout: WorkoutFeedItem) => void;
   onWorkoutDelete?: (workout: WorkoutFeedItem) => void;
   onWorkoutEdit?: (workout: WorkoutFeedItem) => void;
+  onWorkoutRemoveGoalBadge?: (workout: WorkoutFeedItem) => void;
   onWorkoutRemovePrBadge?: (workout: WorkoutFeedItem) => void;
   onWorkoutReport?: (workout: WorkoutFeedItem) => void;
   showCommentCount?: boolean;
@@ -497,6 +499,7 @@ export function CommunityFeed({
               onBlock: onWorkoutBlock,
               onDelete: onWorkoutDelete,
               onEdit: onWorkoutEdit,
+              onRemoveGoalBadge: onWorkoutRemoveGoalBadge,
               onRemovePrBadge: onWorkoutRemovePrBadge,
               onReport: onWorkoutReport,
               viewerUserId,

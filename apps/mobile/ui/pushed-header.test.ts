@@ -272,6 +272,8 @@ test("workout form modals stay headerless with the top-left X", () => {
     "groups/[id]/log-workout",
     "groups/[id]/detailed-workout",
     "groups/[id]/workouts/[sessionId]/edit",
+    "goals/new",
+    "goals/[id]/edit",
   ]) {
     assert.equal(layout.includes(`name="${name}"`), true);
     assert.equal(layout.includes("{ ...formModalOptions, presentation }"), true);
@@ -281,6 +283,8 @@ test("workout form modals stay headerless with the top-left X", () => {
     "../app/groups/[id]/log-workout.tsx",
     "../app/groups/[id]/detailed-workout.tsx",
     "../app/groups/[id]/workouts/[sessionId]/edit.tsx",
+    "../app/goals/new.tsx",
+    "../app/goals/[id]/edit.tsx",
   ]) {
     const modal = sourceOf(path);
     assert.equal(modal.includes("pushed-header"), false);

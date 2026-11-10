@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+import { isValidTimeZone, sundayWeekBounds, sundayWeekBoundsFromOffset } from "./calendar";
+
+export { sundayWeekBounds, sundayWeekBoundsFromOffset } from "./calendar";
+
 export const crewAlertTypes = [
   "crew_workout",
   "crew_comment",
@@ -22,29 +26,12 @@ export const defaultCrewNotificationPrefs: CrewNotificationPrefs = {
   crewReaction: true,
 };
 
-const dayMs = 24 * 60 * 60 * 1_000;
-
-/** Device-local Monday 00:00 through next Monday 00:00 (exclusive). */
-export function mondayWeekBounds(now: Date, timezoneOffsetMinutes: number) {
-  const local = new Date(now.getTime() - timezoneOffsetMinutes * 60_000);
-  const daysSinceMonday = (local.getUTCDay() + 6) % 7;
-  const localMidnightUtc = Date.UTC(
-    local.getUTCFullYear(),
-    local.getUTCMonth(),
-    local.getUTCDate(),
-  );
-  const todayStart = localMidnightUtc + timezoneOffsetMinutes * 60_000;
-  const weekStart = new Date(todayStart - daysSinceMonday * dayMs);
-  const weekEnd = new Date(weekStart.getTime() + 7 * dayMs);
-  return { weekStart, weekEnd };
-}
-
-export function isInMondayWeek(
+export function isInSundayWeek(
   value: Date,
   now: Date,
-  timezoneOffsetMinutes: number,
+  timeZone: string,
 ) {
-  const { weekStart, weekEnd } = mondayWeekBounds(now, timezoneOffsetMinutes);
+  const { weekStart, weekEnd } = sundayWeekBounds(now, timeZone);
   return value >= weekStart && value < weekEnd;
 }
 
@@ -132,8 +119,32 @@ export const crewNotificationPrefsSchema = z
   .strict();
 
 export const crewPageQuerySchema = z.object({
+  timeZone: z.string().trim().min(1).max(64).optional().superRefine((value, context) => {
+    if (value && !isValidTimeZone(value)) {
+      context.addIssue({
+        code: "custom",
+        message: "Choose a valid time zone",
+      });
+    }
+  }),
   timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840).optional(),
+}).superRefine((value, context) => {
+  if (!value.timeZone && value.timezoneOffsetMinutes == null) {
+    context.addIssue({
+      code: "custom",
+      message: "Choose a valid time zone",
+      path: ["timeZone"],
+    });
+  }
 });
+
+export function crewSundayWeekBounds(
+  now: Date,
+  query: { timeZone?: string; timezoneOffsetMinutes?: number },
+) {
+  if (query.timeZone) return sundayWeekBounds(now, query.timeZone);
+  return sundayWeekBoundsFromOffset(now, query.timezoneOffsetMinutes ?? 0);
+}
 
 export const crewPhotoPathPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[^/].+$/i;

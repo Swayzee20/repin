@@ -11,8 +11,11 @@ export async function fetchGroupBoard(input: {
 }) {
   const headers = { Authorization: `Bearer ${input.accessToken}` };
   const encodedGroupId = encodeURIComponent(input.groupId);
+  const search = new URLSearchParams({
+    timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
+  });
   const [groupResponse, workoutsResponse] = await Promise.all([
-    fetch(`${apiUrl}/api/groups/${encodedGroupId}`, {
+    fetch(`${apiUrl}/api/groups/${encodedGroupId}?${search.toString()}`, {
       headers,
       signal: AbortSignal.timeout(5_000),
     }),

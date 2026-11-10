@@ -33,6 +33,25 @@ export {
 } from "./workout-format";
 
 export {
+  addCalendarDays,
+  addZonedDays,
+  exclusiveDeadlineAtEndOfLocalDay,
+  exclusiveDeadlineFromInput,
+  formatZonedYmd,
+  inclusiveCalendarDate,
+  inclusiveCalendarYmd,
+  isValidTimeZone,
+  monthBounds,
+  startOfZonedDay,
+  sundayWeekBounds,
+  sundayWeekBoundsFromOffset,
+  zonedDayDiff,
+  zonedLocalToUtc,
+  zonedParts,
+  type ZonedParts,
+} from "./calendar";
+
+export {
   crewAlertAllowed,
   crewAlertTypes,
   crewCopy,
@@ -42,14 +61,14 @@ export {
   crewPagePermissions,
   crewPageQuerySchema,
   crewPhotoPathPattern,
+  crewSundayWeekBounds,
   defaultCrewNotificationPrefs,
   firstNameForToast,
   formatCreatedLabel,
   formatMemberCount,
   formatWorkoutsThisWeek,
   isCrewPhotoPathForGroup,
-  isInMondayWeek,
-  mondayWeekBounds,
+  isInSundayWeek,
   notificationSummary,
   resolveCrewNotificationPrefs,
   transferCrewSchema,
@@ -65,6 +84,22 @@ export {
   restorePrBadgesSchema,
   shareSessionPrsSchema,
 } from "./pr";
+
+export {
+  createGoalSchema,
+  goalChipAccessibility,
+  goalCopy,
+  goalIdSchema,
+  parseOptionalDurationMinutes,
+  reopenGoalSchema,
+  resolvedSchedule,
+  resolvedTimeTargetSeconds,
+  resolvedVolumeMetric,
+  restoreGoalBadgesSchema,
+  shareSessionGoalsSchema,
+  updateGoalSchema,
+  type VolumeMetric,
+} from "./goals";
 
 export {
   commentPushBody,

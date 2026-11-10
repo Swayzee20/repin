@@ -147,7 +147,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     const [withPhoto] = await addAuthorizedWorkoutPhotoUrls([detail]);
     if (!withPhoto) throw new Error("Updated workout could not be composed");
     return NextResponse.json(
-      { pr: updated.pr, workout: withResolvedDisplayName(withPhoto) },
+      { pr: updated.pr, goals: updated.goals, workout: withResolvedDisplayName(withPhoto) },
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

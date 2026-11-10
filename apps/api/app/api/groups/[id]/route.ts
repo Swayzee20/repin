@@ -7,9 +7,9 @@ import {
 import { getUserInitials } from "@repin/types";
 import {
   crewPageQuerySchema,
+  crewSundayWeekBounds,
   groupIdSchema,
   isCrewPhotoPathForGroup,
-  mondayWeekBounds,
   notificationSummary,
   updateCrewSchema,
 } from "@repin/validation";
@@ -43,6 +43,7 @@ export async function GET(
 
     const url = new URL(request.url);
     const query = crewPageQuerySchema.safeParse({
+      timeZone: url.searchParams.get("timeZone") ?? undefined,
       timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes") ?? undefined,
     });
     if (!query.success) {
@@ -58,10 +59,7 @@ export async function GET(
       return NextResponse.json({ error: "Crew not found" }, { status: 404 });
     }
 
-    const { weekStart, weekEnd } = mondayWeekBounds(
-      new Date(),
-      query.data.timezoneOffsetMinutes ?? 0,
-    );
+    const { weekStart, weekEnd } = crewSundayWeekBounds(new Date(), query.data);
     const [members, notifications, photoUrl] = await Promise.all([
       listCrewMembers({
         groupId: group.id,

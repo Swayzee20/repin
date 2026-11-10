@@ -4,7 +4,8 @@ import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
-import type { DetectedPr, PrDetectionResult } from "@repin/types";
+import type { DetectedPr, GoalDetectionResult, PrDetectionResult } from "@repin/types";
+import { goalCopy } from "@repin/validation";
 
 import {
   hideThenPresent,
@@ -157,6 +158,33 @@ test("the last prompt answer hides the prompt sheet before the celebration modal
   const shown = reducePrFlow(answered, { type: "presenterHidden" });
   assert.equal(shown.presenter, "celebration");
   assert.equal(shown.pendingPresenter, "none");
+});
+
+test("a goal-only celebration still hides before the share sheet", () => {
+  const goals: GoalDetectionResult = {
+    communityPostId: "post-1",
+    crewName: "Morning Crew",
+    reached: [{
+      goalId: "g1",
+      kind: "time",
+      periodId: "p1",
+      resultLine: "19:59",
+      targetLine: "target 20:00",
+      title: "5K under 20:00",
+    }],
+  };
+  const state = initialPrFlowState({
+    communityPostId: "post-1",
+    crewName: "Morning Crew",
+    detected: [],
+    prompts: [],
+  }, goals);
+  assert.equal(state.presenter, "celebration");
+  assert.equal(state.goals.length, 1);
+  const queued = reducePrFlow(state, { hasCommunityPost: true, type: "continueCelebration" });
+  assert.equal(queued.presenter, "none");
+  assert.equal(queued.pendingPresenter, "share");
+  assert.equal(goalCopy.sharePrimary, "Share");
 });
 
 test("PR overlay waits for Dialog onHidden and never keeps the celebration Modal up during share", () => {

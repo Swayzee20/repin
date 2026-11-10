@@ -107,7 +107,7 @@ export async function POST(request: Request, context: RouteContext) {
       return NextResponse.json({ error: "Group not found" }, { status: 404 });
     }
 
-    const { pr, ...workout } = created;
+    const { pr, goals, ...workout } = created;
 
     scheduleCrewPush(() => notifyCrewWorkoutPosted({
       actorUserId: user.id,
@@ -118,7 +118,7 @@ export async function POST(request: Request, context: RouteContext) {
     }));
 
     return NextResponse.json(
-      { pr, workout: withResolvedDisplayName(workout) },
+      { pr, goals, workout: withResolvedDisplayName(workout) },
       { status: 201, headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {

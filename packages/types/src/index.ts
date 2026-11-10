@@ -443,6 +443,122 @@ export interface PrBadge {
   value: string;
 }
 
+export const goalKinds = ["volume", "time", "lift"] as const;
+export type GoalKind = (typeof goalKinds)[number];
+
+export const goalMetrics = [
+  "workout_count",
+  "distance",
+  "minutes",
+  "load",
+  "time",
+] as const;
+export type GoalMetric = (typeof goalMetrics)[number];
+
+export const goalSchedules = ["one_time", "weekly", "monthly"] as const;
+export type GoalSchedule = (typeof goalSchedules)[number];
+
+export const goalStates = [
+  "active",
+  "reached",
+  "expired",
+  "archived",
+  "needs_review",
+] as const;
+export type GoalState = (typeof goalStates)[number];
+
+export const goalPeriodStates = ["pending", "reached", "invalidated"] as const;
+export type GoalPeriodState = (typeof goalPeriodStates)[number];
+
+export const goalCompletionMethods = ["auto", "manual"] as const;
+export type GoalCompletionMethod = (typeof goalCompletionMethods)[number];
+
+export const goalDistanceUnits = ["mi", "km", "m"] as const;
+export type GoalDistanceUnit = (typeof goalDistanceUnits)[number];
+
+export const goalLoadUnits = ["lb", "kg"] as const;
+export type GoalLoadUnit = (typeof goalLoadUnits)[number];
+
+export const MAX_ACTIVE_GOALS = 5;
+
+export interface GoalBadge {
+  id: string;
+  periodId: string;
+  label: string;
+  value: string;
+}
+
+export interface GoalReached {
+  goalId: string;
+  periodId: string;
+  title: string;
+  resultLine: string;
+  targetLine: string;
+  kind: GoalKind;
+}
+
+export interface GoalDetectionResult {
+  reached: GoalReached[];
+  communityPostId: string | null;
+  crewName: string | null;
+}
+
+export interface GoalProgress {
+  current: number;
+  target: number;
+  ratio: number;
+  label: string;
+  periodLabel: string | null;
+  lastQualifyingLabel: string | null;
+}
+
+export interface GoalSummary {
+  id: string;
+  title: string;
+  kind: GoalKind;
+  metric: GoalMetric;
+  sportFilter: WorkoutType | null;
+  schedule: GoalSchedule;
+  state: GoalState;
+  displayUnit: string | null;
+  targetValue: number;
+  timeZone: string;
+  activationAt: string;
+  deadlineAt: string | null;
+  activeSlot: number | null;
+  createdAt: string;
+  progress: GoalProgress;
+  completionMethod: GoalCompletionMethod | null;
+  shareable: boolean;
+  shareCrewName: string | null;
+  sourceSessionId: string | null;
+  sourceGroupId: string | null;
+  currentPeriodId: string | null;
+}
+
+export interface GoalDetail extends GoalSummary {
+  prKind: PersonalRecordKind | null;
+  prKey: string | null;
+  movementId: string | null;
+  movementName: string | null;
+  lane: DistancePrLane | null;
+  helper: string;
+  canMarkDone: boolean;
+  canReopen: boolean;
+  reopenBlocked: boolean;
+  archivedAt: string | null;
+}
+
+export interface GoalsListResponse {
+  active: GoalSummary[];
+  history: GoalSummary[];
+  activeCount: number;
+  cap: number;
+}
+
+export const durationMinutesError =
+  "Enter a whole number from 1 to 1,440, or leave this blank.";
+
 export interface PrPrompt {
   kind: PersonalRecordKind;
   key: string;
@@ -491,6 +607,7 @@ export interface WorkoutFeedItem {
   reactionCounts?: CommunityReactionCounts;
   commentCount?: number;
   prBadges?: PrBadge[];
+  goalBadges?: GoalBadge[];
 }
 
 export interface WorkoutDetailMetric {

@@ -1,7 +1,9 @@
-import type { DetectedPr, PrDetectionResult } from "@repin/types";
+import type { DetectedPr, GoalDetectionResult, GoalReached, PrDetectionResult } from "@repin/types";
+import { goalCopy } from "@repin/validation";
 import { useEffect, useReducer, useRef } from "react";
 import { AccessibilityInfo, StyleSheet, Text, View } from "react-native";
 
+import { shareSessionGoals } from "../lib/goals-api";
 import { answerPrPrompts, mergeCelebrated, shareSessionPrs } from "../lib/pr-api";
 import { Button } from "./components";
 import { Dialog } from "./dialog";
@@ -14,22 +16,24 @@ import { colors, radii, size, spacing, type } from "./theme";
 
 export function PrLogOverlay({
   detection,
+  goals,
   groupId,
   onFinished,
   sessionId,
 }: {
   detection: PrDetectionResult | null;
+  goals?: GoalDetectionResult | null;
   groupId: string;
   onFinished: () => void;
   sessionId: string;
 }) {
-  const [state, dispatch] = useReducer(reducePrFlow, detection, initialPrFlowState);
+  const [state, dispatch] = useReducer(reducePrFlow, detection, (value) => initialPrFlowState(value, goals));
   const finishedRef = useRef(false);
 
   useEffect(() => {
     finishedRef.current = false;
-    dispatch({ detection, type: "reset" });
-  }, [detection]);
+    dispatch({ detection, goals, type: "reset" });
+  }, [detection, goals]);
 
   useEffect(() => {
     if (!state.finished || finishedRef.current) return;
@@ -40,10 +44,11 @@ export function PrLogOverlay({
     onFinished();
   }, [onFinished, state.finished, state.notice]);
 
-  if (!detection) return null;
-  if (!detection.prompts.length && !detection.detected.length) return null;
+  const hasGoals = Boolean(state.goals.length);
+  const hasPrs = Boolean(detection?.prompts.length || detection?.detected.length || state.celebrated.length);
+  if (!hasGoals && !hasPrs) return null;
 
-  const prompt = detection.prompts[state.promptIndex];
+  const prompt = detection?.prompts[state.promptIndex];
   const dismiss = () => dispatch({ type: "dismissRequested" });
   const presenterHidden = () => {
     if (finishedRef.current) return;
@@ -60,7 +65,7 @@ export function PrLogOverlay({
         kind: prompt.kind,
       }]);
       dispatch({
-        hasMorePrompts: state.promptIndex + 1 < detection.prompts.length,
+        hasMorePrompts: state.promptIndex + 1 < (detection?.prompts.length ?? 0),
         merged: mergeCelebrated(state.celebrated, next.detected),
         type: "promptAnswered",
       });
@@ -76,19 +81,36 @@ export function PrLogOverlay({
     if (state.presenter !== "share" || state.busy || state.finished) return;
     dispatch({ type: "shareStarted" });
     try {
-      await shareSessionPrs(groupId, sessionId);
+      if (state.goals.length) {
+        await shareSessionGoals(groupId, sessionId, state.goals.map((goal) => goal.periodId));
+      }
+      if (state.celebrated.length) {
+        await shareSessionPrs(groupId, sessionId);
+      }
       dispatch({ type: "shareSucceeded" });
     } catch (submitError) {
       dispatch({
-        message: submitError instanceof Error ? submitError.message : prCopy.shareFailed,
+        message: submitError instanceof Error ? submitError.message : (state.goals.length ? goalCopy.shareError : prCopy.shareFailed),
         type: "shareFailed",
       });
     }
   };
 
-  const summary = state.celebrated.map((item) => `${item.label} ${item.value}`).join(", ");
-  const single = state.celebrated.length === 1 ? state.celebrated[0] : null;
-  const hasCommunityPost = Boolean(detection.communityPostId);
+  const summary = [
+    ...state.goals.map((item) => item.title),
+    ...state.celebrated.map((item) => `${item.label} ${item.value}`),
+  ].join(", ");
+  const single = !hasGoals && state.celebrated.length === 1 ? state.celebrated[0] : null;
+  const singleGoal = hasGoals && !state.celebrated.length && state.goals.length === 1 ? state.goals[0] : null;
+  const hasCommunityPost = Boolean(detection?.communityPostId ?? goals?.communityPostId);
+  const crewName = detection?.crewName ?? goals?.crewName;
+  const celebrationTitle = hasGoals
+    ? goalCopy.celebration
+    : prCopy.celebrationTitle(state.celebrated.length);
+  const celebrationHelper = hasCommunityPost
+    ? (hasGoals ? "Just for you until you share. Sharing adds a Goal badge to the post you just logged." : prCopy.celebrationHelper)
+    : (hasGoals ? goalCopy.noPost : prCopy.noPostHelper);
+  const shareBody = hasGoals ? goalCopy.shareBody : prCopy.shareBody;
 
   return (
     <>
@@ -132,7 +154,7 @@ export function PrLogOverlay({
         visible={state.presenter === "celebration"}
       >
         <View
-          accessibilityLabel={prCelebrationAnnouncement(summary)}
+          accessibilityLabel={hasGoals ? `${goalCopy.celebration}${state.celebrated.length ? ` ${goalCopy.combined}` : ""}` : prCelebrationAnnouncement(summary)}
           accessible
           style={styles.celebration}
         >
@@ -142,17 +164,30 @@ export function PrLogOverlay({
           <View style={styles.check}>
             <Icon color={colors.success} name="checkmark" size={size.icon.md} />
           </View>
-          <Text style={styles.celebrationTitle}>{prCopy.celebrationTitle(state.celebrated.length)}</Text>
+          <Text style={styles.celebrationTitle}>{celebrationTitle}</Text>
+          {hasGoals && state.celebrated.length ? (
+            <Text style={styles.combined}>{goalCopy.combined}</Text>
+          ) : null}
           {single?.autoDetected ? (
             <View style={styles.autoChip}>
               <Text style={styles.autoChipText}>{prCopy.autoChip}</Text>
             </View>
           ) : null}
-          {single ? (
+          {singleGoal ? (
+            <SingleGoalBody goal={singleGoal} />
+          ) : single ? (
             <SinglePrBody pr={single} />
           ) : (
             <View style={styles.multiList}>
-              <Text style={styles.multiHelper}>From this workout — share once to badge the post.</Text>
+              {state.goals.map((item) => (
+                <View key={item.periodId} style={styles.multiRow}>
+                  <View style={styles.miniGoalChip}><Text style={styles.miniChipText}>Goal</Text></View>
+                  <View style={styles.multiCopy}>
+                    <Text style={styles.promptTitle}>{item.title}</Text>
+                    <Text style={styles.promptValue}>{item.resultLine} · {item.targetLine}</Text>
+                  </View>
+                </View>
+              ))}
               {state.celebrated.map((item) => (
                 <View key={`${item.kind}:${item.key}`} style={styles.multiRow}>
                   <View style={styles.miniChip}><Text style={styles.miniChipText}>PR</Text></View>
@@ -165,11 +200,7 @@ export function PrLogOverlay({
               ))}
             </View>
           )}
-          {hasCommunityPost ? (
-            <Text style={styles.helper}>{prCopy.celebrationHelper}</Text>
-          ) : (
-            <Text style={styles.helper}>{prCopy.noPostHelper}</Text>
-          )}
+          <Text style={styles.helper}>{celebrationHelper}</Text>
           {state.error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{state.error}</Text> : null}
           <Button
             onPress={() => dispatch({
@@ -177,7 +208,7 @@ export function PrLogOverlay({
               type: "continueCelebration",
             })}
           >
-            {hasCommunityPost ? prCopy.continue : prCopy.noPostPrimary}
+            {hasCommunityPost ? prCopy.continue : (hasGoals ? goalCopy.noPostPrimary : prCopy.noPostPrimary)}
           </Button>
         </View>
       </Dialog>
@@ -186,11 +217,11 @@ export function PrLogOverlay({
         closeLabel="Close"
         onDismiss={dismiss}
         onHidden={presenterHidden}
-        title={detection.crewName ? prCopy.shareTitle(detection.crewName) : prCopy.sharePrimary}
+        title={crewName ? (hasGoals ? goalCopy.shareTitle(crewName) : prCopy.shareTitle(crewName)) : prCopy.sharePrimary}
         visible={state.presenter === "share"}
       >
         <View style={styles.stack}>
-          <Text style={styles.body}>{prCopy.shareBody}</Text>
+          <Text style={styles.body}>{shareBody}</Text>
           {state.error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{state.error}</Text> : null}
           <Button loading={state.busy} onPress={() => void share()}>
             {prCopy.sharePrimary}
@@ -202,6 +233,15 @@ export function PrLogOverlay({
         </View>
       </BottomSheet>
     </>
+  );
+}
+
+function SingleGoalBody({ goal }: { goal: GoalReached }) {
+  return (
+    <View style={styles.singleBody}>
+      <Text style={styles.singleLabel}>{goal.title}</Text>
+      <Text style={styles.singleValue}>{goal.resultLine} · {goal.targetLine}</Text>
+    </View>
   );
 }
 
@@ -336,6 +376,21 @@ const styles = StyleSheet.create({
   miniChipText: {
     color: colors.brandPressed,
     ...type.micro,
+  },
+  miniGoalChip: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.brand,
+    borderRadius: radii.sm,
+    borderWidth: 2,
+    height: spacing.xl,
+    justifyContent: "center",
+    paddingHorizontal: spacing.sm,
+  },
+  combined: {
+    color: colors.ink,
+    textAlign: "center",
+    ...type.section,
   },
   multiCopy: {
     flex: 1,

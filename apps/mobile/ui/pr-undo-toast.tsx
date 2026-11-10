@@ -13,15 +13,19 @@ const undoToastMs = 6_000;
 export function PrUndoToast({
   contained = false,
   gutter = toastGutter,
+  message = prCopy.toast,
   onClear,
   onUndo,
+  undoLabel = prCopy.toastUndo,
   visible,
 }: {
   /** Pane or modal host already sits in the content pane. Skip window insets. */
   contained?: boolean;
   gutter?: number;
+  message?: string;
   onClear: () => void;
   onUndo: () => void;
+  undoLabel?: string;
   visible: boolean;
 }) {
   const insets = useSafeAreaInsets();
@@ -72,9 +76,9 @@ export function PrUndoToast({
         },
       ]}
     >
-      <Text style={styles.message}>{prCopy.toast}</Text>
+      <Text style={styles.message}>{message}</Text>
       <Pressable
-        accessibilityLabel={prCopy.toastUndo}
+        accessibilityLabel={undoLabel}
         accessibilityRole="button"
         onBlur={() => arm(Math.max(0, deadline.current - Date.now()))}
         onFocus={clearTimer}
@@ -85,7 +89,7 @@ export function PrUndoToast({
         }}
         style={(state) => [styles.action, state.pressed && styles.pressed, webFocusRing(pressableFocused(state))]}
       >
-        <Text style={styles.actionLabel}>{prCopy.toastUndo}</Text>
+        <Text style={styles.actionLabel}>{undoLabel}</Text>
       </Pressable>
     </View>
   );

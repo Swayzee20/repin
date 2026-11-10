@@ -9,9 +9,11 @@ import {
   type CommunityReactionType,
   type CommunityPostComment,
   type CommunityWorkoutDetail,
+  type GoalBadge,
   type PrBadge,
   type WorkoutFeedItem,
 } from "@repin/types";
+import { goalCopy } from "@repin/validation";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, type ComponentRef, type ReactNode } from "react";
@@ -19,6 +21,7 @@ import { ActivityIndicator, Animated, Easing, Keyboard, KeyboardAvoidingView, Pl
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { commentMenuItems, postMenuItems } from "../lib/content-menu";
+import { useGoalBadgeUndo } from "../lib/goal-badge-actions";
 import { usePrBadgeUndo } from "../lib/pr-badge-actions";
 import { useCommentDraft } from "../lib/comment-draft";
 import { useAuthSession } from "../lib/use-auth-session";
@@ -101,6 +104,7 @@ export function WorkoutDetailView({
   onCommentCountChange,
   onEditWorkout,
   onPostHidden,
+  onGoalBadgesChange,
   onPrBadgesChange,
   onReactionSummaryChange,
   onUnavailable,
@@ -119,6 +123,7 @@ export function WorkoutDetailView({
   onCommentCountChange?: (sessionId: string, commentCount: number) => void;
   onEditWorkout?: (workout: WorkoutFeedItem) => void;
   onPostHidden?: (sessionId: string) => void;
+  onGoalBadgesChange?: (sessionId: string, badges: GoalBadge[]) => void;
   onPrBadgesChange?: (sessionId: string, badges: PrBadge[]) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUnavailable?: () => void;
@@ -473,8 +478,11 @@ export function WorkoutDetailView({
   useEffect(() => {
     if (!seedWorkout) return;
     setWorkout((current) => {
-      if (!current || current.prBadges === seedWorkout.prBadges) return current;
-      return { ...current, prBadges: seedWorkout.prBadges };
+      if (!current) return current;
+      const nextPr = current.prBadges === seedWorkout.prBadges ? current.prBadges : seedWorkout.prBadges;
+      const nextGoal = current.goalBadges === seedWorkout.goalBadges ? current.goalBadges : seedWorkout.goalBadges;
+      if (nextPr === current.prBadges && nextGoal === current.goalBadges) return current;
+      return { ...current, goalBadges: nextGoal, prBadges: nextPr };
     });
   }, [seedWorkout]);
 
@@ -489,6 +497,17 @@ export function WorkoutDetailView({
     onPrBadgesChange?.(targetSessionId, badges);
   }, [groupId, onPrBadgesChange, sessionId]);
   const prUndo = usePrBadgeUndo(applyPrBadges);
+  const applyGoalBadges = useCallback((targetSessionId: string, badges: GoalBadge[]) => {
+    if (targetSessionId !== sessionId) return;
+    setWorkout((current) => {
+      if (!current) return current;
+      const next = { ...current, goalBadges: badges };
+      writeWorkoutDetailCache(groupId, sessionId, next);
+      return next;
+    });
+    onGoalBadgesChange?.(targetSessionId, badges);
+  }, [groupId, onGoalBadgesChange, sessionId]);
+  const goalUndo = useGoalBadgeUndo(applyGoalBadges);
 
   const pinsComposer = presentation !== "default";
   const splitSession = presentation === "session" && mode === "twoPane";
@@ -527,6 +546,7 @@ export function WorkoutDetailView({
   const postFirst = personFirstName(postName);
   const isOwn = viewerUserId === workout.userId;
   const canRemovePrBadge = isOwn && Boolean(workout.prBadges?.length) && !fixture;
+  const canRemoveGoalBadge = isOwn && Boolean(workout.goalBadges?.length) && !fixture;
   const postItems = canModerate && !isOwn
     ? postMenuItems({
         blockLabel: `Block ${postFirst}`,
@@ -549,6 +569,7 @@ export function WorkoutDetailView({
               router.push(`/groups/${encodeURIComponent(groupId)}/workouts/${encodeURIComponent(sessionId)}/edit`);
             }
           },
+          onRemoveGoalBadge: canRemoveGoalBadge ? () => void goalUndo.remove(workout) : undefined,
           onRemovePrBadge: canRemovePrBadge ? () => void prUndo.remove(workout) : undefined,
         })
       : [];
@@ -590,6 +611,7 @@ export function WorkoutDetailView({
       moderationUi={moderation.ui}
       onCommentChange={setCommentText}
       onCommentSubmit={() => void submitComment()}
+      onRemoveGoalBadge={canRemoveGoalBadge ? () => void goalUndo.remove(workout) : undefined}
       onRemovePrBadge={canRemovePrBadge ? () => void prUndo.remove(workout) : undefined}
       postMenu={postItems.length ? <ContentOptionsMenu accessibilityLabel="Post options" items={postItems} /> : null}
       onCommentsRetry={() => void loadComments(true)}
@@ -608,9 +630,11 @@ export function WorkoutDetailView({
       <PrUndoToast
         contained
         gutter={spacing.lg}
-        onClear={prUndo.clear}
-        onUndo={() => void prUndo.undo()}
-        visible={prUndo.visible}
+        message={goalUndo.visible ? goalCopy.toast : prCopy.toast}
+        onClear={goalUndo.visible ? goalUndo.clear : prUndo.clear}
+        onUndo={() => void (goalUndo.visible ? goalUndo.undo() : prUndo.undo())}
+        undoLabel={goalUndo.visible ? goalCopy.toastUndo : prCopy.toastUndo}
+        visible={prUndo.visible || goalUndo.visible}
       />
     </View>
   );
@@ -767,6 +791,7 @@ export function WorkoutDetailContent({
   onCommentsRetry,
   moderationUi = null,
   onReactionPress,
+  onRemoveGoalBadge,
   onRemovePrBadge,
   part = "all",
   postMenu = null,
@@ -790,6 +815,7 @@ export function WorkoutDetailContent({
   onCommentsRetry?: () => void;
   moderationUi?: ReactNode;
   onReactionPress?: (reactionType: CommunityReactionType) => void;
+  onRemoveGoalBadge?: () => void;
   onRemovePrBadge?: () => void;
   part?: "all" | "comments" | "post";
   postMenu?: ReactNode;
@@ -817,7 +843,7 @@ export function WorkoutDetailContent({
     setWorkoutExpanded(false);
   }, [detailExpansionResetKey, workout.id]);
 
-  const workoutResults = hasResults || onRemovePrBadge ? (
+  const workoutResults = hasResults || onRemovePrBadge || onRemoveGoalBadge ? (
     <View style={[styles.resultsSection, isCommunitySheet && styles.modalResultsSection]}>
       {!isCommunitySheet ? <Text style={styles.sectionEyebrow}>WORKOUT RESULTS</Text> : null}
       {formattedMetrics.length ? (
@@ -912,7 +938,7 @@ export function WorkoutDetailContent({
         </Card>
         );
       })}
-      {onRemovePrBadge ? (
+      {onRemoveGoalBadge || onRemovePrBadge ? (
         <Card
           style={[
             styles.removePrCard,
@@ -920,7 +946,8 @@ export function WorkoutDetailContent({
             (hasResults || isCommunitySheet) && styles.modalStackedResultCard,
           ]}
         >
-          <ListRow label={prCopy.unshare} onPress={onRemovePrBadge} />
+          {onRemoveGoalBadge ? <ListRow label={goalCopy.unshare} onPress={onRemoveGoalBadge} /> : null}
+          {onRemovePrBadge ? <ListRow label={prCopy.unshare} onPress={onRemovePrBadge} /> : null}
         </Card>
       ) : null}
     </View>
@@ -948,7 +975,7 @@ export function WorkoutDetailContent({
       ) : !hasResults && workout.durationMinutes ? (
         <Text style={styles.compatibilityDuration}>{workout.durationMinutes} min</Text>
       ) : null}
-      <PrBadgeRow badges={workout.prBadges} style={styles.badgeRow} />
+      <PrBadgeRow badges={workout.prBadges} goalBadges={workout.goalBadges} style={styles.badgeRow} />
 
       {caption ? isCommunitySheet ? (
         <Text style={[styles.caption, styles.modalCaption]}>{caption}</Text>

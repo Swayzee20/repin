@@ -1,42 +1,42 @@
 import type { StyleProp, ViewStyle } from "react-native";
 import { StyleSheet, Text, View } from "react-native";
 
-import type { PrBadge } from "@repin/types";
+import type { GoalBadge, PrBadge } from "@repin/types";
 
+import {
+  visibleMixedBadgeChips,
+} from "./pr-badge-chips";
 import { prCopy } from "./pr-copy";
 import { colors, radii, spacing, type } from "./theme";
 
-export function prBadgeAccessibilityLabel(count: number) {
-  return count === 1 ? prCopy.personalRecordChip : `${count} personal records`;
-}
-
-export function visiblePrBadgeChips<T>(badges: T[]) {
-  const extra = Math.max(0, badges.length - 2);
-  return {
-    accessibilityLabel: prBadgeAccessibilityLabel(badges.length),
-    chips: badges.slice(0, 2),
-    overflow: extra,
-  };
-}
+export {
+  mixedBadgeAccessibilityLabel,
+  prBadgeAccessibilityLabel,
+  visibleMixedBadgeChips,
+  visiblePrBadgeChips,
+  type AchievementChip,
+} from "./pr-badge-chips";
 
 export function PrBadgeRow({
   badges,
+  goalBadges,
   style,
 }: {
-  badges: PrBadge[] | undefined;
+  badges?: PrBadge[];
+  goalBadges?: GoalBadge[];
   style?: StyleProp<ViewStyle>;
 }) {
-  if (!badges?.length) return null;
-  const visible = visiblePrBadgeChips(badges);
+  if (!badges?.length && !goalBadges?.length) return null;
+  const visible = visibleMixedBadgeChips(goalBadges, badges);
   return (
     <View
       accessibilityLabel={visible.accessibilityLabel}
       accessible
       style={[styles.row, style]}
     >
-      {visible.chips.map((badge) => (
-        <View key={badge.id} style={styles.chip}>
-          <Text style={styles.chipText}>PR</Text>
+      {visible.chips.map((chip) => (
+        <View key={`${chip.type}:${chip.id}`} style={chip.type === "goal" ? styles.goalChip : styles.chip}>
+          <Text style={styles.chipText}>{chip.type === "goal" ? "Goal" : "PR"}</Text>
         </View>
       ))}
       {visible.overflow > 0 ? (
@@ -61,6 +61,16 @@ const styles = StyleSheet.create({
     borderColor: colors.boardBorder,
     borderRadius: radii.sm,
     borderWidth: 1,
+    height: spacing.xl,
+    justifyContent: "center",
+    paddingHorizontal: spacing.sm,
+  },
+  goalChip: {
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderColor: colors.brand,
+    borderRadius: radii.sm,
+    borderWidth: 2,
     height: spacing.xl,
     justifyContent: "center",
     paddingHorizontal: spacing.sm,

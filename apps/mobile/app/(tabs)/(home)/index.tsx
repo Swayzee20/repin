@@ -1,4 +1,5 @@
-import { getUserInitials, resolveUserDisplayName, type HomeData, type PrBadge, type WorkoutFeedItem } from "@repin/types";
+import { getUserInitials, resolveUserDisplayName, type GoalBadge, type HomeData, type PrBadge, type WorkoutFeedItem } from "@repin/types";
+import { goalCopy } from "@repin/validation";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useVerticalBarEdge } from "../../../ui/vertical-bar-edge";
@@ -17,8 +18,10 @@ import {
 } from "../../../lib/data-freshness";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { workoutMenuItems } from "../../../lib/content-menu";
+import { useGoalBadgeUndo } from "../../../lib/goal-badge-actions";
 import { usePrBadgeUndo } from "../../../lib/pr-badge-actions";
 import { BrandHeader, Card, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { useModeration } from "../../../ui/moderation";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
@@ -160,6 +163,20 @@ export default function HomeScreen() {
     });
   }, []);
   const prUndo = usePrBadgeUndo(applyHomePrBadges);
+  const applyHomeGoalBadges = useCallback((sessionId: string, goalBadges: GoalBadge[]) => {
+    setHomeData((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        communityWorkouts: current.communityWorkouts.map((workout) =>
+          workout.id === sessionId ? { ...workout, goalBadges } : workout,
+        ),
+      };
+      homeDataRef.current = next;
+      return next;
+    });
+  }, []);
+  const goalUndo = useGoalBadgeUndo(applyHomeGoalBadges);
   const moderation = useModeration({
     onPostHidden: (sessionId) => hideHomeWorkouts((workout) => workout.id === sessionId),
     onUserBlocked: (userId) => hideHomeWorkouts((workout) => workout.userId === userId),
@@ -208,6 +225,7 @@ export default function HomeScreen() {
                   targetId: item.communityPostId ?? item.id,
                   userId: item.userId,
                 }),
+                onRemoveGoalBadge: (item) => void goalUndo.remove(item),
                 onRemovePrBadge: (item) => void prUndo.remove(item),
                 onReport: (item) => moderation.askReportPost(item),
                 viewerUserId: session?.user.id ?? dashboardData.user.id,
@@ -224,7 +242,13 @@ export default function HomeScreen() {
         />
       </SafeAreaView>
       {moderation.ui}
-      <PrUndoToast onClear={prUndo.clear} onUndo={() => void prUndo.undo()} visible={prUndo.visible} />
+      <PrUndoToast
+        message={goalUndo.visible ? goalCopy.toast : prCopy.toast}
+        onClear={goalUndo.visible ? goalUndo.clear : prUndo.clear}
+        onUndo={() => void (goalUndo.visible ? goalUndo.undo() : prUndo.undo())}
+        undoLabel={goalUndo.visible ? goalCopy.toastUndo : prCopy.toastUndo}
+        visible={prUndo.visible || goalUndo.visible}
+      />
     </View>
   );
 }
