@@ -134,6 +134,13 @@
       "when": 1794248386572,
       "tag": "0018_first_ultron",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1794334947127,
+      "tag": "0019_ancient_wind_dancer",
+      "breakpoints": true
     }
   ]
 }

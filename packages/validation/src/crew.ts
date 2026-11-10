@@ -24,27 +24,27 @@ export const defaultCrewNotificationPrefs: CrewNotificationPrefs = {
 
 const dayMs = 24 * 60 * 60 * 1_000;
 
-/** Device-local Monday 00:00 through next Monday 00:00 (exclusive). */
-export function mondayWeekBounds(now: Date, timezoneOffsetMinutes: number) {
+/** Device-local Sunday 00:00 through next Sunday 00:00 (exclusive). */
+export function sundayWeekBounds(now: Date, timezoneOffsetMinutes: number) {
   const local = new Date(now.getTime() - timezoneOffsetMinutes * 60_000);
-  const daysSinceMonday = (local.getUTCDay() + 6) % 7;
+  const daysSinceSunday = local.getUTCDay();
   const localMidnightUtc = Date.UTC(
     local.getUTCFullYear(),
     local.getUTCMonth(),
     local.getUTCDate(),
   );
   const todayStart = localMidnightUtc + timezoneOffsetMinutes * 60_000;
-  const weekStart = new Date(todayStart - daysSinceMonday * dayMs);
+  const weekStart = new Date(todayStart - daysSinceSunday * dayMs);
   const weekEnd = new Date(weekStart.getTime() + 7 * dayMs);
   return { weekStart, weekEnd };
 }
 
-export function isInMondayWeek(
+export function isInSundayWeek(
   value: Date,
   now: Date,
   timezoneOffsetMinutes: number,
 ) {
-  const { weekStart, weekEnd } = mondayWeekBounds(now, timezoneOffsetMinutes);
+  const { weekStart, weekEnd } = sundayWeekBounds(now, timezoneOffsetMinutes);
   return value >= weekStart && value < weekEnd;
 }
 

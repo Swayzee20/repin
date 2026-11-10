@@ -1,4 +1,5 @@
-import type { CommunityData, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GroupSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
+import type { CommunityData, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GoalBadge, GroupSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
+import { goalCopy } from "@repin/validation";
 import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -22,6 +23,7 @@ import {
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
 import { workoutMenuItems } from "../../../lib/content-menu";
+import { useGoalBadgeUndo } from "../../../lib/goal-badge-actions";
 import { usePrBadgeUndo } from "../../../lib/pr-badge-actions";
 import { isLayoutPreview } from "../../../lib/layout-preview";
 import {
@@ -32,6 +34,7 @@ import {
 } from "../../../lib/community-selection";
 import { isOwnPost, workoutFeedCardLabel } from "../../../ui/community-feed-layout";
 import { BrandHeader, Button, CommunityFeed, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { Dialog } from "../../../ui/dialog";
 import { Chevron } from "../../../ui/icons";
@@ -386,6 +389,29 @@ export default function CommunityTabScreen() {
     visible: prToastVisible,
   } = usePrBadgeUndo(updateFeedPrBadges);
 
+  const updateFeedGoalBadges = useCallback((sessionId: string, goalBadges: GoalBadge[]) => {
+    setData((current) => {
+      if (!current) return current;
+      const next = {
+        ...current,
+        communityWorkouts: current.communityWorkouts.map((workout) =>
+          workout.id === sessionId ? { ...workout, goalBadges } : workout,
+        ),
+      };
+      dataRef.current = next;
+      return next;
+    });
+    setDetailTarget((current) => current?.workout.id === sessionId
+      ? { ...current, workout: { ...current.workout, goalBadges } }
+      : current);
+  }, []);
+  const {
+    clear: clearGoalToast,
+    remove: removeGoalBadge,
+    undo: undoGoalBadge,
+    visible: goalToastVisible,
+  } = useGoalBadgeUndo(updateFeedGoalBadges);
+
   const editWorkout = useCallback((workout: WorkoutFeedItem) => {
     if (!selectedGroup) return;
     router.push(`/groups/${encodeURIComponent(selectedGroup.id)}/workouts/${encodeURIComponent(workout.id)}/edit`);
@@ -405,11 +431,12 @@ export default function CommunityTabScreen() {
       setDeleteTarget(item);
     },
     onEdit: editWorkout,
+    onRemoveGoalBadge: (item) => void removeGoalBadge(item),
     onRemovePrBadge: (item) => void removePrBadge(item),
     onReport: (item) => moderation.askReportPost(item),
     viewerUserId: loadedUserId.current,
     workout,
-  }), [editWorkout, moderation, removePrBadge]);
+  }), [editWorkout, moderation, removeGoalBadge, removePrBadge]);
 
   const deleteWorkout = useCallback(async (scope: "post" | "workout") => {
     if (!deleteTarget || !selectedGroup || !supabase) return;
@@ -557,6 +584,7 @@ export default function CommunityTabScreen() {
                 sessionId={openSessionId}
                 onCommentCountChange={updateFeedCommentCount}
                 onEditWorkout={editWorkout}
+                onGoalBadgesChange={updateFeedGoalBadges}
                 onPrBadgesChange={updateFeedPrBadges}
                 onReactionSummaryChange={updateFeedReactionSummary}
               />
@@ -571,7 +599,13 @@ export default function CommunityTabScreen() {
           visible={datePickerOpen}
         />
         {moderation.ui}
-        <PrUndoToast onClear={clearPrToast} onUndo={() => void undoPrBadge()} visible={prToastVisible} />
+        <PrUndoToast
+          message={goalToastVisible ? goalCopy.toast : prCopy.toast}
+          onClear={goalToastVisible ? clearGoalToast : clearPrToast}
+          onUndo={() => void (goalToastVisible ? undoGoalBadge() : undoPrBadge())}
+          undoLabel={goalToastVisible ? goalCopy.toastUndo : prCopy.toastUndo}
+          visible={prToastVisible || goalToastVisible}
+        />
         <DeleteWorkoutModal
           error={deleteError}
           onDeletePost={() => void deleteWorkout("post")}
@@ -682,7 +716,7 @@ export default function CommunityTabScreen() {
               ) : error ? (
                 <View style={styles.feedState}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Activity unavailable" /></View>
               ) : (board?.communityWorkouts.length ?? 0) > 0 ? (
-                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutRemovePrBadge={(workout) => void removePrBadge(workout)} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={viewerUserId} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
+                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutRemoveGoalBadge={(workout) => void removeGoalBadge(workout)} onWorkoutRemovePrBadge={(workout) => void removePrBadge(workout)} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={viewerUserId} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
               ) : isSameLocalDay(selectedDate, currentDay) ? (
                 <View style={styles.todayEmpty}>
                   <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
@@ -714,6 +748,7 @@ export default function CommunityTabScreen() {
         onCommentCountChange={updateFeedCommentCount}
         onEditWorkout={editWorkout}
         onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}
+        onGoalBadgesChange={updateFeedGoalBadges}
         onPrBadgesChange={updateFeedPrBadges}
         onUserBlocked={(userId) => hideWorkouts((workout) => workout.userId === userId)}
         onDismiss={() => {
@@ -725,7 +760,13 @@ export default function CommunityTabScreen() {
         sessionId={detailTarget?.workout.id ?? null}
         visible={detailTarget !== null}
       />
-      <PrUndoToast onClear={clearPrToast} onUndo={() => void undoPrBadge()} visible={prToastVisible} />
+      <PrUndoToast
+        message={goalToastVisible ? goalCopy.toast : prCopy.toast}
+        onClear={goalToastVisible ? clearGoalToast : clearPrToast}
+        onUndo={() => void (goalToastVisible ? undoGoalBadge() : undoPrBadge())}
+        undoLabel={goalToastVisible ? goalCopy.toastUndo : prCopy.toastUndo}
+        visible={prToastVisible || goalToastVisible}
+      />
       <DeleteWorkoutModal
         error={deleteError}
         onDeletePost={() => void deleteWorkout("post")}

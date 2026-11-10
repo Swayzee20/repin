@@ -1,4 +1,5 @@
-import type { CommunityWorkoutDetail, PrDetectionResult, RunWorkoutSubtype, WorkoutFeedItem, WorkoutType } from "@repin/types";
+import type { CommunityWorkoutDetail, GoalDetectionResult, PrDetectionResult, RunWorkoutSubtype, WorkoutFeedItem, WorkoutType } from "@repin/types";
+import { goalCopy, parseOptionalDurationMinutes } from "@repin/validation";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, type ComponentRef } from "react";
@@ -20,7 +21,7 @@ import {
 } from "../../../lib/detailed-run-results";
 import { Button, WorkoutSummaryCard } from "../../../ui/components";
 import { PrLogOverlay } from "../../../ui/pr-flow";
-import { FieldLabel, FlameRating, PhotoTile, TextArea, TextField, photoUploadFieldError } from "../../../ui/form-fields";
+import { FieldLabel, FlameRating, NumberField, PhotoTile, TextArea, TextField, photoUploadFieldError } from "../../../ui/form-fields";
 import {
   buildDetailedMovements,
   DetailedExerciseFields,
@@ -124,7 +125,13 @@ export default function DetailedWorkoutScreen() {
   const [loadingExisting, setLoadingExisting] = useState(Boolean(editSessionId));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [prFlow, setPrFlow] = useState<{ detection: PrDetectionResult; sessionId: string } | null>(null);
+  const [durationText, setDurationText] = useState(layoutPreview ? "48" : "");
+  const [existingDurationMinutes, setExistingDurationMinutes] = useState<number | null>(null);
+  const [prFlow, setPrFlow] = useState<{
+    detection: PrDetectionResult;
+    goals: GoalDetectionResult | null;
+    sessionId: string;
+  } | null>(null);
   const isStrengthWorkout = workoutType === "strength_training" || workoutType === "powerlifting";
   const isFunctionalFitness = workoutType === "functional_fitness";
   const ffFormatted = isFunctionalFitness && Boolean(ffFormat.type);
@@ -167,6 +174,8 @@ export default function DetailedWorkoutScreen() {
           setWebTime(parts.time);
         }
         setCaption(workout.caption ?? "");
+        setDurationText(workout.durationMinutes != null ? String(workout.durationMinutes) : "");
+        setExistingDurationMinutes(workout.durationMinutes ?? null);
         setExistingPhotoPath(workout.photoPath);
         setExistingPhotoUrl(workout.photoUrl ?? null);
         setRunResultsExpanded(false);
@@ -306,9 +315,19 @@ export default function DetailedWorkoutScreen() {
         ? { durationSeconds: null, metrics: [] }
         : buildQuickLogResults(results, workoutType);
       const segments = isIntervalRun ? buildIntervalSegments(intervals) : [];
-      const durationMinutes = structuredResults.durationSeconds == null
+      const durationField = isStrengthWorkout
+        ? parseOptionalDurationMinutes(durationText)
+        : { error: null as string | null, value: null as number | null };
+      if (durationField.error) {
+        setError(durationField.error);
+        return;
+      }
+      const computedDuration = structuredResults.durationSeconds == null
         ? null
         : Math.max(1, Math.round(structuredResults.durationSeconds / 60));
+      const durationMinutes = isStrengthWorkout
+        ? durationField.value
+        : computedDuration ?? existingDurationMinutes;
 
       const endpoint = editSessionId
         ? `${apiUrl}/api/groups/${encodeURIComponent(groupId)}/workouts/${encodeURIComponent(editSessionId)}`
@@ -347,6 +366,7 @@ export default function DetailedWorkoutScreen() {
         error?: string;
         issues?: { message: string; path?: PropertyKey[] }[];
         pr?: PrDetectionResult;
+        goals?: GoalDetectionResult;
         workout?: CommunityWorkoutDetail | WorkoutFeedItem;
       };
       if (!response.ok) {
@@ -363,8 +383,18 @@ export default function DetailedWorkoutScreen() {
       clearWorkoutDetailCaches();
       if (isStrengthWorkout || ffFormatted) writeStoredLoadUnit(loadUnit);
       const sessionId = body.workout?.id ?? editSessionId;
-      if (body.pr && sessionId && (body.pr.prompts.length || body.pr.detected.length)) {
-        setPrFlow({ detection: body.pr, sessionId });
+      const reachedGoals = body.goals?.reached.length ?? 0;
+      if (sessionId && ((body.pr && (body.pr.prompts.length || body.pr.detected.length)) || reachedGoals)) {
+        setPrFlow({
+          detection: body.pr ?? {
+            communityPostId: body.goals?.communityPostId ?? null,
+            crewName: body.goals?.crewName ?? null,
+            detected: [],
+            prompts: [],
+          },
+          goals: body.goals ?? null,
+          sessionId,
+        });
         setSubmitting(false);
         return;
       }
@@ -376,7 +406,7 @@ export default function DetailedWorkoutScreen() {
       setError(submitError instanceof Error ? submitError.message : "Workout could not be created.");
       setSubmitting(false);
     }
-  }, [caption, editSessionId, editing, effort, exercises, existingPhotoPath, ffExercises, ffFormat, ffFormatted, groupId, intervals, isFunctionalFitness, isStrengthWorkout, loadUnit, name, occurredAt, photo, photoRemoved, results, router, runSubtype, workoutType]);
+  }, [caption, durationText, editSessionId, editing, effort, exercises, existingDurationMinutes, existingPhotoPath, ffExercises, ffFormat, ffFormatted, groupId, intervals, isFunctionalFitness, isStrengthWorkout, loadUnit, name, occurredAt, photo, photoRemoved, results, router, runSubtype, workoutType]);
 
   const showsMetrics = usesMetricFields(workoutType)
     && (workoutType !== "functional_fitness" || (!ffFormat.type && editing));
@@ -458,6 +488,20 @@ export default function DetailedWorkoutScreen() {
                   writeStoredLoadUnit(unit);
                 }}
                 onUseUndo={setUseUndo}
+              />
+            </FormCard>
+          ) : null}
+          {isStrengthWorkout ? (
+            <FormCard>
+              <NumberField
+                error={parseOptionalDurationMinutes(durationText).error}
+                hint={goalCopy.durationHelper}
+                kind="number"
+                label="Duration (minutes)"
+                onChangeText={setDurationText}
+                optional
+                placeholder="48"
+                value={durationText}
               />
             </FormCard>
           ) : null}
@@ -557,6 +601,9 @@ export default function DetailedWorkoutScreen() {
           workout={previewWorkout({
             caption,
             displayName: "You",
+            durationMinutes: isStrengthWorkout
+              ? parseOptionalDurationMinutes(durationText).value
+              : null,
             effort,
             groupId: groupId ?? "preview",
             name,
@@ -594,6 +641,7 @@ export default function DetailedWorkoutScreen() {
     {groupId && prFlow ? (
       <PrLogOverlay
         detection={prFlow.detection}
+        goals={prFlow.goals}
         groupId={groupId}
         onFinished={() => {
           setPrFlow(null);
@@ -644,6 +692,7 @@ function previewResultSummary(
 function previewWorkout({
   caption,
   displayName,
+  durationMinutes,
   effort,
   groupId,
   name,
@@ -655,6 +704,7 @@ function previewWorkout({
 }: {
   caption: string;
   displayName: string;
+  durationMinutes: number | null;
   effort: number | null;
   groupId: string;
   name: string;
@@ -672,7 +722,7 @@ function previewWorkout({
     completedAt: occurred,
     createdAt: occurred,
     displayName,
-    durationMinutes: null,
+    durationMinutes,
     effort,
     groupId,
     id: "preview",

@@ -9,7 +9,7 @@ import {
   crewPageQuerySchema,
   groupIdSchema,
   isCrewPhotoPathForGroup,
-  mondayWeekBounds,
+  sundayWeekBounds,
   notificationSummary,
   updateCrewSchema,
 } from "@repin/validation";
@@ -58,7 +58,7 @@ export async function GET(
       return NextResponse.json({ error: "Crew not found" }, { status: 404 });
     }
 
-    const { weekStart, weekEnd } = mondayWeekBounds(
+    const { weekStart, weekEnd } = sundayWeekBounds(
       new Date(),
       query.data.timezoneOffsetMinutes ?? 0,
     );

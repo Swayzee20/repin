@@ -1,4 +1,5 @@
-import type { PrDetectionResult, WorkoutFeedItem, WorkoutType } from "@repin/types";
+import type { GoalDetectionResult, PrDetectionResult, WorkoutFeedItem, WorkoutType } from "@repin/types";
+import { goalCopy, parseOptionalDurationMinutes } from "@repin/validation";
 import * as ImagePicker from "expo-image-picker";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useReducer, useRef, useState, type ComponentRef } from "react";
@@ -9,7 +10,7 @@ import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import { isLayoutPreview } from "../../../lib/layout-preview";
 import { Button, WorkoutSummaryCard } from "../../../ui/components";
 import { PrLogOverlay } from "../../../ui/pr-flow";
-import { FieldLabel, FlameRating, PhotoTile, TextArea, photoUploadFieldError } from "../../../ui/form-fields";
+import { FieldLabel, FlameRating, NumberField, PhotoTile, TextArea, photoUploadFieldError } from "../../../ui/form-fields";
 import { useLayoutMode } from "../../../ui/layout";
 import { ScrollAnchor, useScrollAnchor, writeStoredScrollAnchor } from "../../../ui/scroll-anchor";
 import { spacing } from "../../../ui/theme";
@@ -31,6 +32,7 @@ type PhotoStatus = "idle" | "picking" | "uploading";
 
 type LogFormState = {
   caption: string;
+  durationText: string;
   effort: number | null;
   error: string | null;
   occurredAt: string;
@@ -56,6 +58,7 @@ type LogFormAction =
   | { type: "submit-done" }
   | { type: "submit-start" }
   | { type: "type"; workoutType: WorkoutType }
+  | { durationText: string; type: "duration" }
   | { type: "web-date"; webDate: string }
   | { type: "web-time"; webTime: string };
 
@@ -66,7 +69,11 @@ export default function LogWorkoutScreen() {
   const params = useLocalSearchParams<{ id?: string | string[] }>();
   const groupId = Array.isArray(params.id) ? params.id[0] : params.id;
   const [form, dispatch] = useReducer(logFormReducer, layoutPreview, createLogFormState);
-  const [prFlow, setPrFlow] = useState<{ detection: PrDetectionResult; sessionId: string } | null>(null);
+  const [prFlow, setPrFlow] = useState<{
+    detection: PrDetectionResult;
+    goals: GoalDetectionResult | null;
+    sessionId: string;
+  } | null>(null);
   const postAnchor = useScrollAnchor(mode, postAnchorKey);
   const captionRef = useRef<ComponentRef<typeof TextInput>>(null);
   const focusedField = useRef<"caption" | null>(null);
@@ -147,6 +154,11 @@ export default function LogWorkoutScreen() {
       dispatch({ error: "Choose a workout type.", type: "error" });
       return;
     }
+    const duration = parseOptionalDurationMinutes(form.durationText);
+    if (duration.error) {
+      dispatch({ error: duration.error, type: "error" });
+      return;
+    }
     if (!supabase || !groupId) {
       dispatch({ error: "This workout cannot be submitted from the current screen.", type: "error" });
       return;
@@ -171,7 +183,7 @@ export default function LogWorkoutScreen() {
         headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
         body: JSON.stringify(attachLogVersion({
           workoutType: form.workoutType,
-          durationMinutes: null,
+          durationMinutes: duration.value,
           effort: form.effort,
           caption: form.caption,
           photoPath: uploadedPhotoPath,
@@ -187,6 +199,7 @@ export default function LogWorkoutScreen() {
         error?: string;
         issues?: { message: string; path?: PropertyKey[] }[];
         pr?: PrDetectionResult;
+        goals?: GoalDetectionResult;
         workout?: WorkoutFeedItem;
       };
       if (!response.ok) {
@@ -195,8 +208,13 @@ export default function LogWorkoutScreen() {
         throw new Error(validationMessage || body.error || "Workout could not be created.");
       }
       markWorkoutDataStale();
-      if (body.pr && body.workout && (body.pr.prompts.length || body.pr.detected.length)) {
-        setPrFlow({ detection: body.pr, sessionId: body.workout.id });
+      const reachedGoals = body.goals?.reached.length ?? 0;
+      if (body.workout && ((body.pr && (body.pr.prompts.length || body.pr.detected.length)) || reachedGoals)) {
+        setPrFlow({
+          detection: body.pr ?? { communityPostId: body.goals?.communityPostId ?? null, crewName: body.goals?.crewName ?? null, detected: [], prompts: [] },
+          goals: body.goals ?? null,
+          sessionId: body.workout.id,
+        });
         dispatch({ type: "submit-done" });
         return;
       }
@@ -208,7 +226,7 @@ export default function LogWorkoutScreen() {
         type: "submit-error",
       });
     }
-  }, [form.caption, form.effort, form.occurredAt, form.photo, form.workoutType, groupId, router]);
+  }, [form.caption, form.durationText, form.effort, form.occurredAt, form.photo, form.workoutType, groupId, router]);
 
   return (
     <>
@@ -220,6 +238,18 @@ export default function LogWorkoutScreen() {
           <FormCard>
             <CardHeading>What&apos;d you do?</CardHeading>
             <WorkoutTypeGrid onChange={(workoutType) => dispatch({ type: "type", workoutType })} value={form.workoutType} />
+          </FormCard>
+          <FormCard>
+            <NumberField
+              error={parseOptionalDurationMinutes(form.durationText).error}
+              hint={goalCopy.durationHelper}
+              kind="number"
+              label="Duration (minutes)"
+              onChangeText={(durationText) => dispatch({ durationText, type: "duration" })}
+              optional
+              placeholder="55"
+              value={form.durationText}
+            />
           </FormCard>
           <FormCard>
             <FieldLabel label="How'd it feel?" optional />
@@ -305,6 +335,7 @@ export default function LogWorkoutScreen() {
     {groupId && prFlow ? (
       <PrLogOverlay
         detection={prFlow.detection}
+        goals={prFlow.goals}
         groupId={groupId}
         onFinished={() => {
           setPrFlow(null);
@@ -322,6 +353,7 @@ function createLogFormState(preview: boolean): LogFormState {
   const parts = getLocalDateParts(now);
   return {
     caption: preview ? "Legs felt great today" : "",
+    durationText: preview ? "55" : "",
     effort: preview ? 4 : null,
     error: null,
     occurredAt: now.toISOString(),
@@ -340,6 +372,8 @@ function logFormReducer(state: LogFormState, action: LogFormAction): LogFormStat
   switch (action.type) {
     case "caption":
       return { ...state, caption: action.caption };
+    case "duration":
+      return { ...state, durationText: action.durationText };
     case "effort":
       return { ...state, effort: action.effort };
     case "error":
@@ -378,7 +412,7 @@ function previewWorkout(form: LogFormState, displayName: string, groupId: string
     completedAt: form.occurredAt,
     createdAt: form.occurredAt,
     displayName,
-    durationMinutes: null,
+    durationMinutes: parseOptionalDurationMinutes(form.durationText).value,
     effort: form.effort,
     groupId,
     id: "preview",

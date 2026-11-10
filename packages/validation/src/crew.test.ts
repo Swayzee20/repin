@@ -12,10 +12,10 @@ import {
   firstNameForToast,
   formatWorkoutsThisWeek,
   isCrewPhotoPathForGroup,
-  isInMondayWeek,
-  mondayWeekBounds,
+  isInSundayWeek,
   notificationSummary,
   resolveCrewNotificationPrefs,
+  sundayWeekBounds,
 } from "./index";
 
 const utc = 0;
@@ -27,46 +27,46 @@ function atOffset(isoUtc: string, timezoneOffsetMinutes: number) {
   return { now: new Date(isoUtc), timezoneOffsetMinutes };
 }
 
-test("workouts this week uses Monday 00:00 through Sunday 23:59:59 in the device timezone", () => {
-  const mondayUtc = new Date("2026-11-09T08:00:00.000Z");
-  const { weekStart, weekEnd } = mondayWeekBounds(mondayUtc, pacific);
-  assert.equal(weekStart.toISOString(), "2026-11-09T08:00:00.000Z");
-  assert.equal(weekEnd.toISOString(), "2026-11-16T08:00:00.000Z");
+test("workouts this week uses Sunday 00:00 through Saturday 23:59:59 in the device timezone", () => {
+  const sundayUtc = new Date("2026-11-08T08:00:00.000Z");
+  const { weekStart, weekEnd } = sundayWeekBounds(sundayUtc, pacific);
+  assert.equal(weekStart.toISOString(), "2026-11-08T08:00:00.000Z");
+  assert.equal(weekEnd.toISOString(), "2026-11-15T08:00:00.000Z");
 
-  assert.equal(isInMondayWeek(weekStart, mondayUtc, pacific), true);
+  assert.equal(isInSundayWeek(weekStart, sundayUtc, pacific), true);
   assert.equal(
-    isInMondayWeek(new Date(weekEnd.getTime() - 1), mondayUtc, pacific),
+    isInSundayWeek(new Date(weekEnd.getTime() - 1), sundayUtc, pacific),
     true,
   );
-  assert.equal(isInMondayWeek(weekEnd, mondayUtc, pacific), false);
+  assert.equal(isInSundayWeek(weekEnd, sundayUtc, pacific), false);
   assert.equal(
-    isInMondayWeek(new Date(weekStart.getTime() - 1), mondayUtc, pacific),
+    isInSundayWeek(new Date(weekStart.getTime() - 1), sundayUtc, pacific),
     false,
   );
 });
 
-test("a Sunday late-night workout still counts in Tokyo and UTC", () => {
-  const tokyoNow = new Date("2026-11-15T14:00:00.000Z");
-  const tokyoSundayNight = new Date("2026-11-15T14:59:59.000Z");
-  assert.equal(isInMondayWeek(tokyoSundayNight, tokyoNow, tokyo), true);
+test("a Saturday late-night workout still counts in Tokyo and UTC", () => {
+  const tokyoNow = new Date("2026-11-14T14:00:00.000Z");
+  const tokyoSaturdayNight = new Date("2026-11-14T14:59:59.000Z");
+  assert.equal(isInSundayWeek(tokyoSaturdayNight, tokyoNow, tokyo), true);
   assert.equal(
-    isInMondayWeek(new Date("2026-11-15T15:00:00.000Z"), tokyoNow, tokyo),
+    isInSundayWeek(new Date("2026-11-14T15:00:00.000Z"), tokyoNow, tokyo),
     false,
   );
 
-  const utcNow = new Date("2026-11-15T12:00:00.000Z");
-  assert.equal(isInMondayWeek(new Date("2026-11-09T00:00:00.000Z"), utcNow, utc), true);
-  assert.equal(isInMondayWeek(new Date("2026-11-15T23:59:59.000Z"), utcNow, utc), true);
-  assert.equal(isInMondayWeek(new Date("2026-11-16T00:00:00.000Z"), utcNow, utc), false);
-  assert.equal(isInMondayWeek(new Date("2026-11-08T23:59:59.000Z"), utcNow, utc), false);
+  const utcNow = new Date("2026-11-11T12:00:00.000Z");
+  assert.equal(isInSundayWeek(new Date("2026-11-08T00:00:00.000Z"), utcNow, utc), true);
+  assert.equal(isInSundayWeek(new Date("2026-11-14T23:59:59.000Z"), utcNow, utc), true);
+  assert.equal(isInSundayWeek(new Date("2026-11-15T00:00:00.000Z"), utcNow, utc), false);
+  assert.equal(isInSundayWeek(new Date("2026-11-07T23:59:59.000Z"), utcNow, utc), false);
 });
 
-test("UTC+14 week bounds stay Monday-Sunday on the device calendar", () => {
+test("UTC+14 week bounds stay Sunday-Saturday on the device calendar", () => {
   const { now, timezoneOffsetMinutes } = atOffset("2026-11-10T10:00:00.000Z", kiritimati);
-  const { weekStart, weekEnd } = mondayWeekBounds(now, timezoneOffsetMinutes);
-  assert.equal(isInMondayWeek(weekStart, now, timezoneOffsetMinutes), true);
-  assert.equal(isInMondayWeek(new Date(weekEnd.getTime() - 1), now, timezoneOffsetMinutes), true);
-  assert.equal(isInMondayWeek(weekEnd, now, timezoneOffsetMinutes), false);
+  const { weekStart, weekEnd } = sundayWeekBounds(now, timezoneOffsetMinutes);
+  assert.equal(isInSundayWeek(weekStart, now, timezoneOffsetMinutes), true);
+  assert.equal(isInSundayWeek(new Date(weekEnd.getTime() - 1), now, timezoneOffsetMinutes), true);
+  assert.equal(isInSundayWeek(weekEnd, now, timezoneOffsetMinutes), false);
   assert.equal(weekEnd.getTime() - weekStart.getTime(), 7 * 24 * 60 * 60 * 1_000);
 });
 

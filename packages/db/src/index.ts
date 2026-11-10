@@ -57,6 +57,11 @@ import {
   recomputePersonalRecordsAfterDelete,
   recomputePersonalRecordsForSession,
 } from "./personal-records";
+import {
+  evaluateGoalsForSession,
+  listGoalBadgesForPosts,
+  recomputeGoalsForUser,
+} from "./goals";
 
 export { checkDatabaseConnection, getDatabase };
 
@@ -1189,6 +1194,12 @@ export async function createWorkoutForMember(input: {
       transaction,
       userId: input.userId,
     });
+    const goals = await evaluateGoalsForSession({
+      groupId: input.groupId,
+      sessionId: session.id,
+      transaction,
+      userId: input.userId,
+    });
 
     return {
       id: session.id,
@@ -1210,6 +1221,7 @@ export async function createWorkoutForMember(input: {
       updatedAt: post.updatedAt,
       displayName: input.displayName,
       pr,
+      goals,
     };
   });
 }
@@ -1369,8 +1381,14 @@ export async function updateWorkoutForOwner(input: {
       transaction,
       userId: input.userId,
     });
+    const goals = await evaluateGoalsForSession({
+      groupId: input.groupId,
+      sessionId: owned.sessionId,
+      transaction,
+      userId: input.userId,
+    });
 
-    return { postId: owned.postId, sessionId: owned.sessionId, pr };
+    return { postId: owned.postId, sessionId: owned.sessionId, pr, goals };
   });
 }
 
@@ -1436,6 +1454,10 @@ export async function deleteCommunityPostForOwner(input: {
       );
       await recomputePersonalRecordsAfterDelete({
         keys,
+        transaction,
+        userId: input.userId,
+      });
+      await recomputeGoalsForUser({
         transaction,
         userId: input.userId,
       });
@@ -1915,12 +1937,15 @@ async function listRecentWorkouts(input: {
       : {}),
   }));
 
-  const badgeMap = await listPrBadgesForPosts(
-    mapped.flatMap((post) => post.communityPostId ? [post.communityPostId] : []),
-  );
+  const postIds = mapped.flatMap((post) => post.communityPostId ? [post.communityPostId] : []);
+  const [badgeMap, goalBadgeMap] = await Promise.all([
+    listPrBadgesForPosts(postIds),
+    listGoalBadgesForPosts(postIds),
+  ]);
   return mapped.map((post) => ({
     ...post,
     prBadges: post.communityPostId ? badgeMap.get(post.communityPostId) ?? [] : [],
+    goalBadges: post.communityPostId ? goalBadgeMap.get(post.communityPostId) ?? [] : [],
   }));
 }
 
@@ -2213,6 +2238,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
       viewerReactionRows[0]?.reactionType ?? null,
     ),
     prBadges: (await listPrBadgesForPosts([post.communityPostId])).get(post.communityPostId) ?? [],
+    goalBadges: (await listGoalBadgesForPosts([post.communityPostId])).get(post.communityPostId) ?? [],
   };
 }
 
@@ -2642,8 +2668,31 @@ export {
 } from "./personal-records";
 
 export {
+  archiveGoalForUser,
+  createGoalForUser,
+  deleteGoalForUser,
+  evaluateGoalsForSession,
+  getGoalForUser,
+  GOAL_CAP_MESSAGE,
+  GOAL_HAND_MARK_SHARE_MESSAGE,
+  GOAL_REOPEN_CAP_MESSAGE,
+  GOAL_TIMEZONE_MESSAGE,
+  GoalRequestError,
+  listGoalBadgesForPosts,
+  listGoalsForUser,
+  markGoalDoneForUser,
+  recomputeGoalsForUser,
+  removeCommunityPostGoalBadges,
+  reopenGoalForUser,
+  restoreCommunityPostGoalBadges,
+  shareSessionGoalBadges,
+  updateGoalForUser,
+} from "./goals";
+
+export {
   blockMovements,
   communityPostComments,
+  communityPostGoals,
   communityPostPrs,
   communityPostReactions,
   communityPosts,
@@ -2651,6 +2700,8 @@ export {
   crewNotificationPrefs,
   devicePushTokens,
   groupMembers,
+  goalPeriods,
+  goals,
   groups,
   movements,
   personalRecords,

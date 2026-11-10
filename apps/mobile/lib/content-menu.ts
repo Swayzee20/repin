@@ -15,12 +15,14 @@ export function postMenuItems(input: {
   onBlock?: () => void;
   onDelete?: () => void;
   onEdit?: () => void;
+  onRemoveGoalBadge?: () => void;
   onRemovePrBadge?: () => void;
   onReport?: () => void;
   reportLabel?: string;
 }): ContentMenuItem[] {
   const items: ContentMenuItem[] = [];
   if (input.onEdit) items.push({ icon: "pencil", label: input.editLabel ?? "Edit", onPress: input.onEdit });
+  if (input.onRemoveGoalBadge) items.push({ label: "Remove Goal badge", onPress: input.onRemoveGoalBadge });
   if (input.onRemovePrBadge) items.push({ label: "Remove PR badge", onPress: input.onRemovePrBadge });
   if (input.onDelete) items.push({ danger: true, icon: "trash", label: "Delete", onPress: input.onDelete });
   if (input.onReport) items.push({ icon: "flag", label: input.reportLabel ?? "Report", onPress: input.onReport });
@@ -32,6 +34,7 @@ export function workoutMenuItems(input: {
   onBlock?: (workout: WorkoutFeedItem) => void;
   onDelete?: (workout: WorkoutFeedItem) => void;
   onEdit?: (workout: WorkoutFeedItem) => void;
+  onRemoveGoalBadge?: (workout: WorkoutFeedItem) => void;
   onRemovePrBadge?: (workout: WorkoutFeedItem) => void;
   onReport?: (workout: WorkoutFeedItem) => void;
   viewerUserId?: string | null;
@@ -44,6 +47,9 @@ export function workoutMenuItems(input: {
       editLabel: "Edit workout",
       onDelete: input.onDelete ? () => input.onDelete?.(input.workout) : undefined,
       onEdit: input.onEdit ? () => input.onEdit?.(input.workout) : undefined,
+      onRemoveGoalBadge: input.onRemoveGoalBadge && input.workout.goalBadges?.length
+        ? () => input.onRemoveGoalBadge?.(input.workout)
+        : undefined,
       onRemovePrBadge: input.onRemovePrBadge && input.workout.prBadges?.length
         ? () => input.onRemovePrBadge?.(input.workout)
         : undefined,

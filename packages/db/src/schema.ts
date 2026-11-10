@@ -1,6 +1,7 @@
 import {
   boolean,
   check,
+  foreignKey,
   index,
   integer,
   jsonb,
@@ -10,6 +11,7 @@ import {
   primaryKey,
   text,
   timestamp,
+  unique,
   uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
@@ -1069,6 +1071,298 @@ export type PersonalRecord = typeof personalRecords.$inferSelect;
 export type NewPersonalRecord = typeof personalRecords.$inferInsert;
 export type CommunityPostPr = typeof communityPostPrs.$inferSelect;
 export type NewCommunityPostPr = typeof communityPostPrs.$inferInsert;
+
+export const goalKinds = ["volume", "time", "lift"] as const;
+export const goalMetrics = [
+  "workout_count",
+  "distance",
+  "minutes",
+  "load",
+  "time",
+] as const;
+export const goalSchedules = ["one_time", "weekly", "monthly"] as const;
+export const goalStates = [
+  "active",
+  "reached",
+  "expired",
+  "archived",
+  "needs_review",
+] as const;
+export const goalPeriodStates = ["pending", "reached", "invalidated"] as const;
+export const goalCompletionMethods = ["auto", "manual"] as const;
+
+export const goals = pgTable(
+  "goals",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    title: text().notNull(),
+    kind: text().notNull(),
+    metric: text().notNull(),
+    sportFilter: text("sport_filter"),
+    targetValue: numeric("target_value", {
+      precision: 14,
+      scale: 3,
+      mode: "number",
+    }).notNull(),
+    displayUnit: text("display_unit"),
+    prKind: text("pr_kind"),
+    prKey: text("pr_key"),
+    movementId: uuid("movement_id").references(() => movements.id, {
+      onDelete: "set null",
+    }),
+    movementName: text("movement_name"),
+    lane: text(),
+    schedule: text().notNull(),
+    startsAt: timestamp("starts_at", { withTimezone: true }).notNull(),
+    deadlineAt: timestamp("deadline_at", { withTimezone: true }),
+    timeZone: text("time_zone").notNull(),
+    weekStartsOn: text("week_starts_on").notNull().default("sunday"),
+    activationAt: timestamp("activation_at", { withTimezone: true }).notNull(),
+    definitionVersion: integer("definition_version").notNull().default(1),
+    state: text().notNull().default("active"),
+    activeSlot: integer("active_slot"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("goals_id_user_id_unique").on(table.id, table.userId),
+    uniqueIndex("goals_user_active_slot_unique")
+      .on(table.userId, table.activeSlot)
+      .where(sql`${table.activeSlot} is not null`),
+    index("goals_user_state_idx").on(table.userId, table.state),
+    index("goals_user_activation_idx").on(table.userId, table.activationAt),
+    check(
+      "goals_kind_check",
+      sql`${table.kind} in ('volume', 'time', 'lift')`,
+    ),
+    check(
+      "goals_metric_check",
+      sql`${table.metric} in ('workout_count', 'distance', 'minutes', 'load', 'time')`,
+    ),
+    check(
+      "goals_schedule_check",
+      sql`${table.schedule} in ('one_time', 'weekly', 'monthly')`,
+    ),
+    check(
+      "goals_state_check",
+      sql`${table.state} in ('active', 'reached', 'expired', 'archived', 'needs_review')`,
+    ),
+    check(
+      "goals_week_starts_on_check",
+      sql`${table.weekStartsOn} = 'sunday'`,
+    ),
+    check("goals_target_positive_check", sql`${table.targetValue} > 0`),
+    check(
+      "goals_time_zone_check",
+      sql`length(btrim(${table.timeZone})) between 1 and 64`,
+    ),
+    check(
+      "goals_title_check",
+      sql`length(btrim(${table.title})) between 1 and 120`,
+    ),
+    check(
+      "goals_slot_state_check",
+      sql`(
+        ${table.state} = 'active'
+        and ${table.activeSlot} between 1 and 5
+      ) or (
+        ${table.state} <> 'active'
+        and ${table.activeSlot} is null
+      )`,
+    ),
+    check(
+      "goals_definition_check",
+      sql`(
+        ${table.kind} = 'volume'
+        and ${table.metric} in ('workout_count', 'distance', 'minutes')
+        and ${table.prKind} is null
+        and ${table.prKey} is null
+        and (
+          (
+            ${table.schedule} in ('weekly', 'monthly')
+          ) or (
+            ${table.schedule} = 'one_time'
+            and ${table.deadlineAt} is not null
+          )
+        )
+        and (
+          ${table.sportFilter} is null
+          or (
+            ${table.metric} = 'distance'
+            and ${table.sportFilter} in ('run', 'walk', 'cycling')
+          )
+          or (
+            ${table.metric} in ('workout_count', 'minutes')
+            and ${table.sportFilter} in (
+              'run', 'walk', 'cycling', 'strength_training', 'powerlifting',
+              'hiit', 'functional_fitness', 'other'
+            )
+          )
+        )
+      ) or (
+        ${table.kind} = 'time'
+        and ${table.metric} = 'time'
+        and ${table.schedule} = 'one_time'
+        and ${table.prKind} = 'distance_time'
+        and ${table.prKey} is not null
+        and ${table.sportFilter} in ('run', 'walk', 'cycling')
+      ) or (
+        ${table.kind} = 'lift'
+        and ${table.metric} = 'load'
+        and ${table.schedule} = 'one_time'
+        and ${table.prKind} = 'heaviest_single'
+        and ${table.prKey} is not null
+      )`,
+    ),
+  ],
+);
+
+export const goalPeriods = pgTable(
+  "goal_periods",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    goalId: uuid("goal_id")
+      .notNull()
+      .references(() => goals.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    definitionVersion: integer("definition_version").notNull(),
+    periodKey: text("period_key").notNull(),
+    periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
+    periodEnd: timestamp("period_end", { withTimezone: true }),
+    eligibleStart: timestamp("eligible_start", { withTimezone: true }).notNull(),
+    timeZone: text("time_zone").notNull(),
+    targetValue: numeric("target_value", {
+      precision: 14,
+      scale: 3,
+      mode: "number",
+    }).notNull(),
+    creditClosesAt: timestamp("credit_closes_at", { withTimezone: true }),
+    state: text().notNull().default("pending"),
+    completionMethod: text("completion_method"),
+    reachedAt: timestamp("reached_at", { withTimezone: true }),
+    recordedAt: timestamp("recorded_at", { withTimezone: true }),
+    sourceSessionId: uuid("source_session_id").references(
+      () => workoutSessions.id,
+      { onDelete: "set null" },
+    ),
+    sourceSetId: uuid("source_set_id").references(() => setResults.id, {
+      onDelete: "set null",
+    }),
+    originatingPostId: uuid("originating_post_id").references(
+      () => communityPosts.id,
+      { onDelete: "set null" },
+    ),
+    evidence: jsonb(),
+    progressValue: numeric("progress_value", {
+      precision: 14,
+      scale: 3,
+      mode: "number",
+    }),
+    celebrated: boolean().notNull().default(false),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    unique("goal_periods_id_user_id_unique").on(table.id, table.userId),
+    uniqueIndex("goal_periods_goal_version_key_unique").on(
+      table.goalId,
+      table.definitionVersion,
+      table.periodKey,
+    ),
+    index("goal_periods_user_id_idx").on(table.userId),
+    index("goal_periods_goal_id_idx").on(table.goalId),
+    index("goal_periods_source_session_id_idx").on(table.sourceSessionId),
+    foreignKey({
+      columns: [table.goalId, table.userId],
+      foreignColumns: [goals.id, goals.userId],
+      name: "goal_periods_goal_user_fk",
+    }).onDelete("cascade"),
+    check(
+      "goal_periods_state_check",
+      sql`${table.state} in ('pending', 'reached', 'invalidated')`,
+    ),
+    check(
+      "goal_periods_method_check",
+      sql`${table.completionMethod} is null or ${table.completionMethod} in ('auto', 'manual')`,
+    ),
+    check(
+      "goal_periods_target_positive_check",
+      sql`${table.targetValue} > 0`,
+    ),
+    check(
+      "goal_periods_key_check",
+      sql`length(btrim(${table.periodKey})) between 1 and 64`,
+    ),
+  ],
+);
+
+export const communityPostGoals = pgTable(
+  "community_post_goals",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => communityPosts.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    goalPeriodId: uuid("goal_period_id")
+      .notNull()
+      .references(() => goalPeriods.id, { onDelete: "cascade" }),
+    sourceSessionId: uuid("source_session_id").references(
+      () => workoutSessions.id,
+      { onDelete: "set null" },
+    ),
+    displayLabel: text("display_label").notNull(),
+    displayValue: text("display_value").notNull(),
+    reachedAt: timestamp("reached_at", { withTimezone: true }).notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("community_post_goals_period_unique").on(table.goalPeriodId),
+    uniqueIndex("community_post_goals_post_period_unique").on(
+      table.postId,
+      table.goalPeriodId,
+    ),
+    index("community_post_goals_post_id_idx").on(table.postId),
+    index("community_post_goals_user_id_idx").on(table.userId),
+    foreignKey({
+      columns: [table.goalPeriodId, table.userId],
+      foreignColumns: [goalPeriods.id, goalPeriods.userId],
+      name: "community_post_goals_period_user_fk",
+    }).onDelete("cascade"),
+    check(
+      "community_post_goals_label_check",
+      sql`length(btrim(${table.displayLabel})) between 1 and 120`,
+    ),
+    check(
+      "community_post_goals_value_check",
+      sql`length(btrim(${table.displayValue})) between 1 and 120`,
+    ),
+  ],
+);
+
+export type Goal = typeof goals.$inferSelect;
+export type NewGoal = typeof goals.$inferInsert;
+export type GoalPeriod = typeof goalPeriods.$inferSelect;
+export type NewGoalPeriod = typeof goalPeriods.$inferInsert;
+export type CommunityPostGoal = typeof communityPostGoals.$inferSelect;
+export type NewCommunityPostGoal = typeof communityPostGoals.$inferInsert;
 export type ContentReport = typeof contentReports.$inferSelect;
 export type NewContentReport = typeof contentReports.$inferInsert;
 export type UserBlock = typeof userBlocks.$inferSelect;

@@ -673,7 +673,7 @@ test("PrUndoToast uses the shared toast frame against the window, not a full-ble
   const community = source("../app/(tabs)/community/index.tsx");
   const detail = source("workout-detail.tsx");
   for (const code of [home, community]) {
-    assert.match(code, /<PrUndoToast /);
+    assert.match(code, /<PrUndoToast/);
     assert.equal(code.includes("prToastDock"), false);
     assert.equal(code.includes("bottom: spacing.xxl, left: spacing.xxl, position: \"absolute\", right: spacing.xxl"), false);
   }

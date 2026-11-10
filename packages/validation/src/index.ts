@@ -48,8 +48,8 @@ export {
   formatMemberCount,
   formatWorkoutsThisWeek,
   isCrewPhotoPathForGroup,
-  isInMondayWeek,
-  mondayWeekBounds,
+  isInSundayWeek,
+  sundayWeekBounds,
   notificationSummary,
   resolveCrewNotificationPrefs,
   transferCrewSchema,
@@ -65,6 +65,21 @@ export {
   restorePrBadgesSchema,
   shareSessionPrsSchema,
 } from "./pr";
+
+export {
+  createGoalSchema,
+  goalChipAccessibility,
+  goalCopy,
+  goalIdSchema,
+  parseOptionalDurationMinutes,
+  resolvedSchedule,
+  resolvedTimeTargetSeconds,
+  resolvedVolumeMetric,
+  restoreGoalBadgesSchema,
+  shareSessionGoalsSchema,
+  updateGoalSchema,
+  type VolumeMetric,
+} from "./goals";
 
 export {
   commentPushBody,

@@ -1,4 +1,4 @@
-import type { DetectedPr, PrDetectionResult } from "@repin/types";
+import type { DetectedPr, GoalDetectionResult, GoalReached, PrDetectionResult } from "@repin/types";
 
 export type PrFlowPresenter = "none" | "prompt" | "celebration" | "share";
 
@@ -7,6 +7,7 @@ export type PrFlowState = {
   celebrated: DetectedPr[];
   error: string | null;
   finished: boolean;
+  goals: GoalReached[];
   notice: "no_post" | null;
   pendingPresenter: PrFlowPresenter;
   presenter: PrFlowPresenter;
@@ -15,7 +16,7 @@ export type PrFlowState = {
 };
 
 export type PrFlowEvent =
-  | { type: "reset"; detection: PrDetectionResult | null }
+  | { type: "reset"; detection: PrDetectionResult | null; goals?: GoalDetectionResult | null }
   | { type: "continueCelebration"; hasCommunityPost: boolean }
   | { type: "presenterHidden" }
   | { type: "dismissRequested" }
@@ -35,6 +36,7 @@ const idleState: PrFlowState = {
   celebrated: [],
   error: null,
   finished: false,
+  goals: [],
   notice: null,
   pendingPresenter: "none",
   presenter: "none",
@@ -42,13 +44,18 @@ const idleState: PrFlowState = {
   skipPromptDismiss: false,
 };
 
-export function initialPrFlowState(detection: PrDetectionResult | null): PrFlowState {
-  if (!detection) return idleState;
-  if (!detection.prompts.length && !detection.detected.length) return idleState;
+export function initialPrFlowState(
+  detection: PrDetectionResult | null,
+  goals?: GoalDetectionResult | null,
+): PrFlowState {
+  const reached = goals?.reached ?? [];
+  if (!detection && !reached.length) return idleState;
+  if (!detection?.prompts.length && !detection?.detected.length && !reached.length) return idleState;
   return {
     ...idleState,
-    celebrated: detection.detected,
-    presenter: detection.prompts.length ? "prompt" : "celebration",
+    celebrated: detection?.detected ?? [],
+    goals: reached,
+    presenter: detection?.prompts.length ? "prompt" : "celebration",
   };
 }
 
@@ -71,7 +78,7 @@ export function hideThenPresent(state: PrFlowState, next: PrFlowPresenter): PrFl
 export function reducePrFlow(state: PrFlowState, event: PrFlowEvent): PrFlowState {
   switch (event.type) {
     case "reset":
-      return initialPrFlowState(event.detection);
+      return initialPrFlowState(event.detection, event.goals);
     case "continueCelebration":
       if (state.busy || state.finished) return state;
       if (state.presenter === "share" || state.pendingPresenter === "share") return state;
@@ -141,7 +148,7 @@ export function reducePrFlow(state: PrFlowState, event: PrFlowEvent): PrFlowStat
           promptIndex,
         };
       }
-      if (celebrated.length) {
+      if (celebrated.length || state.goals.length) {
         return hideThenPresent({
           ...state,
           busy: false,

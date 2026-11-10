@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CommunityReactionSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
+import type { CommunityReactionSummary, GoalBadge, PrBadge, WorkoutFeedItem } from "@repin/types";
 
 import { clearComposerFocus } from "./composer-focus";
 import { keyboardOverlapFromFrame, overlayBottomInset } from "./keyboard";
@@ -32,6 +32,7 @@ export function WorkoutDetailModal({
   onDismiss,
   onEditWorkout,
   onPostHidden,
+  onGoalBadgesChange,
   onPrBadgesChange,
   onReactionSummaryChange,
   onUserBlocked,
@@ -46,6 +47,7 @@ export function WorkoutDetailModal({
   onDismiss: () => void;
   onEditWorkout?: (workout: WorkoutFeedItem) => void;
   onPostHidden?: (sessionId: string) => void;
+  onGoalBadgesChange?: (sessionId: string, badges: GoalBadge[]) => void;
   onPrBadgesChange?: (sessionId: string, badges: PrBadge[]) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUserBlocked?: (userId: string) => void;
@@ -183,6 +185,7 @@ export function WorkoutDetailModal({
                       onCommentCountChange={onCommentCountChange}
                       onEditWorkout={onEditWorkout}
                       onPostHidden={onPostHidden}
+                      onGoalBadgesChange={onGoalBadgesChange}
                       onPrBadgesChange={onPrBadgesChange}
                       onReactionSummaryChange={onReactionSummaryChange}
                       onUserBlocked={onUserBlocked}

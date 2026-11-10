@@ -16,12 +16,15 @@ const sourceUrl = process.env.DATABASE_URL
 const appTables = [
   "block_movements",
   "community_post_comments",
+  "community_post_goals",
   "community_post_prs",
   "community_post_reactions",
   "community_posts",
   "content_reports",
   "crew_notification_prefs",
   "device_push_tokens",
+  "goal_periods",
+  "goals",
   "group_members",
   "groups",
   "movements",
@@ -45,6 +48,9 @@ const readOnlyTables = new Set([
   "movements",
   "personal_records",
   "community_post_prs",
+  "goals",
+  "goal_periods",
+  "community_post_goals",
 ]);
 
 test("invite-only groups and row level security", async () => {
@@ -1980,6 +1986,201 @@ test("personal record badges stay private unless shared on a visible post", asyn
   }
 });
 
+test("goals stay owner-private and Goal badges follow post visibility", async () => {
+  const testUrl = await recreateDatabase();
+  process.env.DATABASE_URL = testUrl;
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+
+    const db = await import("../src/index.ts");
+    const ada = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Ada" });
+    const byron = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Byron" });
+    const cyrus = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Cyrus" });
+    const dana = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Dana" });
+    const crew = await db.createGroup({ ownerId: ada.id, name: "Morning Crew" });
+    await db.joinGroup({ userId: byron.id, groupId: crew.id, inviteCode: crew.inviteCode });
+    await db.joinGroup({ userId: dana.id, groupId: crew.id, inviteCode: crew.inviteCode });
+
+    const created = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "lift",
+      metric: "load",
+      sportFilter: null,
+      target: 300,
+      displayUnit: "lb",
+      schedule: "one_time",
+      deadlineAt: null,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: "Back Squat",
+      lane: null,
+    });
+    assert.ok(created.id);
+
+    const adaGoals = await idsAs(client, "authenticated", ada.id, "select id from goals");
+    assert.deepEqual(adaGoals, [created.id]);
+    assert.deepEqual(await idsAs(client, "authenticated", byron.id, "select id from goals"), []);
+    assert.deepEqual(await idsAs(client, "authenticated", cyrus.id, "select id from goals"), []);
+    assert.deepEqual(await idsAs(client, "authenticated", byron.id, "select id from goal_periods"), []);
+
+    const posted = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "strength_training",
+      title: "Back Squat",
+      name: "Back Squat",
+      durationMinutes: 48,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date(),
+      movements: [{
+        movementName: "Back Squat",
+        notes: null,
+        sets: [{ reps: 1, load: 315, loadUnit: "lb" }],
+      }],
+    });
+    assert.ok(posted.goals.reached.length >= 1);
+    const badges = await db.shareSessionGoalBadges({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+    });
+    assert.equal(badges.length, 1);
+
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_goals"),
+      [badges[0].id],
+    );
+    assert.deepEqual(
+      await idsAs(client, "authenticated", cyrus.id, "select id from community_post_goals"),
+      [],
+    );
+
+    await db.leaveCrew({ userId: dana.id, groupId: crew.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", dana.id, "select id from community_post_goals"),
+      [],
+    );
+
+    await db.blockUserForMember({ blockerId: byron.id, blockedId: ada.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_goals"),
+      [],
+    );
+    await db.unblockUserForMember({ blockerId: byron.id, blockedId: ada.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_goals"),
+      [badges[0].id],
+    );
+    await db.blockUserForMember({ blockerId: ada.id, blockedId: byron.id });
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_goals"),
+      [],
+    );
+
+    const grants = await client.query(`
+      select
+        has_table_privilege('authenticated', 'public.goals', 'select') as goals_select,
+        has_table_privilege('authenticated', 'public.goals', 'insert') as goals_insert,
+        has_table_privilege('authenticated', 'public.goals', 'update') as goals_update,
+        has_table_privilege('authenticated', 'public.goals', 'delete') as goals_delete,
+        has_table_privilege('authenticated', 'public.goal_periods', 'select') as periods_select,
+        has_table_privilege('authenticated', 'public.goal_periods', 'insert') as periods_insert,
+        has_table_privilege('authenticated', 'public.community_post_goals', 'select') as badge_select,
+        has_table_privilege('authenticated', 'public.community_post_goals', 'insert') as badge_insert,
+        has_table_privilege('authenticated', 'public.community_post_goals', 'update') as badge_update,
+        has_table_privilege('authenticated', 'public.community_post_goals', 'delete') as badge_delete
+    `);
+    assert.equal(grants.rows[0].goals_select, true);
+    assert.equal(grants.rows[0].goals_insert, false);
+    assert.equal(grants.rows[0].goals_update, false);
+    assert.equal(grants.rows[0].goals_delete, false);
+    assert.equal(grants.rows[0].periods_select, true);
+    assert.equal(grants.rows[0].periods_insert, false);
+    assert.equal(grants.rows[0].badge_select, true);
+    assert.equal(grants.rows[0].badge_insert, false);
+    assert.equal(grants.rows[0].badge_update, false);
+    assert.equal(grants.rows[0].badge_delete, false);
+
+    const helpers = await client.query(`
+      select p.proname, p.prosecdef, p.provolatile
+      from pg_proc as p
+      join pg_namespace as n on n.oid = p.pronamespace
+      where n.nspname = 'private'
+        and p.proname in ('can_access_community_post', 'is_blocked_between')
+      order by p.proname
+    `);
+    for (const helper of helpers.rows) {
+      assert.equal(helper.prosecdef, true, helper.proname);
+      assert.equal(helper.provolatile, "s", helper.proname);
+    }
+
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "insert into goals (user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, active_slot) values ($1, 'Hack', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 1)",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "update goals set title = 'hack' where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "delete from goals where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "insert into community_post_goals (post_id, user_id, goal_period_id, display_label, display_value, reached_at) values ($1, $2, $3, 'Hack', '1', now())",
+      [posted.communityPostId, ada.id, posted.goals.reached[0].periodId],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "update community_post_goals set display_label = 'hack' where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+    await expectDenied(
+      client,
+      "authenticated",
+      ada.id,
+      "delete from community_post_goals where user_id = $1",
+      [ada.id],
+      /permission denied/i,
+    );
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
 async function loggedWorkout(db, user, groupId, title) {
   return db.createWorkoutForMember({
     userId: user.id,
@@ -2103,6 +2304,7 @@ async function applySupabaseMigrations(client) {
     "20261106120000_push_notifications.sql",
     "20261107000000_crew_photos_foldername.sql",
     "20261109000000_personal_records.sql",
+    "20261110000000_goals.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");

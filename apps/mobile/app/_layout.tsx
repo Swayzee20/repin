@@ -107,6 +107,8 @@ function RootStack() {
       <Stack.Screen name="groups/[id]/log-workout" options={{ ...formModalOptions, presentation }} />
       <Stack.Screen name="groups/[id]/detailed-workout" options={{ ...formModalOptions, presentation }} />
       <Stack.Screen name="groups/[id]/workouts/[sessionId]/edit" options={{ ...formModalOptions, presentation }} />
+      <Stack.Screen name="goals/new" options={{ ...formModalOptions, presentation }} />
+      <Stack.Screen name="goals/[id]/edit" options={{ ...formModalOptions, presentation }} />
     </Stack>
   );
 }
