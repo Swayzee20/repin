@@ -606,6 +606,8 @@ export function WorkoutDetailView({
   const prToast = (
     <View pointerEvents="box-none" style={styles.prToastDock}>
       <PrUndoToast
+        contained
+        gutter={spacing.lg}
         onClear={prUndo.clear}
         onUndo={() => void prUndo.undo()}
         visible={prUndo.visible}

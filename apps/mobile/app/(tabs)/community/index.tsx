@@ -571,9 +571,7 @@ export default function CommunityTabScreen() {
           visible={datePickerOpen}
         />
         {moderation.ui}
-        <View pointerEvents="box-none" style={styles.prToastDock}>
-          <PrUndoToast onClear={clearPrToast} onUndo={() => void undoPrBadge()} visible={prToastVisible} />
-        </View>
+        <PrUndoToast onClear={clearPrToast} onUndo={() => void undoPrBadge()} visible={prToastVisible} />
         <DeleteWorkoutModal
           error={deleteError}
           onDeletePost={() => void deleteWorkout("post")}
@@ -727,9 +725,7 @@ export default function CommunityTabScreen() {
         sessionId={detailTarget?.workout.id ?? null}
         visible={detailTarget !== null}
       />
-      <View pointerEvents="box-none" style={styles.prToastDock}>
-        <PrUndoToast onClear={clearPrToast} onUndo={() => void undoPrBadge()} visible={prToastVisible} />
-      </View>
+      <PrUndoToast onClear={clearPrToast} onUndo={() => void undoPrBadge()} visible={prToastVisible} />
       <DeleteWorkoutModal
         error={deleteError}
         onDeletePost={() => void deleteWorkout("post")}
@@ -920,7 +916,6 @@ function DeleteWorkoutModal({
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1, overflow: "hidden" },
-  prToastDock: { bottom: spacing.xxl, left: spacing.xxl, position: "absolute", right: spacing.xxl, zIndex: 30 },
   flex: { flex: 1 },
   content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
