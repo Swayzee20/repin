@@ -1124,6 +1124,7 @@ export const goals = pgTable(
     definitionVersion: integer("definition_version").notNull().default(1),
     state: text().notNull().default("active"),
     activeSlot: integer("active_slot"),
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .defaultNow()
       .notNull(),
@@ -1176,6 +1177,16 @@ export const goals = pgTable(
       ) or (
         ${table.state} <> 'active'
         and ${table.activeSlot} is null
+      )`,
+    ),
+    check(
+      "goals_archived_at_check",
+      sql`(
+        ${table.state} = 'archived'
+        and ${table.archivedAt} is not null
+      ) or (
+        ${table.state} <> 'archived'
+        and ${table.archivedAt} is null
       )`,
     ),
     check(

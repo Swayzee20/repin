@@ -36,6 +36,17 @@ begin
       'Apply Drizzle 0019_ancient_wind_dancer.sql before this RLS migration.';
   end if;
 
+  if not exists (
+    select 1
+    from information_schema.columns
+    where table_schema = 'public'
+      and table_name = 'goals'
+      and column_name = 'archived_at'
+  ) then
+    raise exception
+      'Apply Drizzle 0019_ancient_wind_dancer.sql including goals.archived_at before this RLS migration.';
+  end if;
+
   if to_regprocedure('private.can_access_community_post(uuid)') is null
      or to_regprocedure('private.is_group_member(uuid)') is null
      or to_regprocedure('private.crew_content_visible(uuid, uuid, timestamptz)') is null

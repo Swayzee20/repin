@@ -342,6 +342,24 @@ test("goal review regressions for slots, frozen periods, share, and late logs", 
       ),
       /goals_slot_state_check|check constraint/i,
     );
+    await assert.rejects(
+      () => client.query(
+        `insert into goals (
+           user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot
+         ) values ($1, 'Archived null cutoff', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'archived', null)`,
+        [ada.id],
+      ),
+      /goals_archived_at_check|check constraint/i,
+    );
+    await assert.rejects(
+      () => client.query(
+        `insert into goals (
+           user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot, archived_at
+         ) values ($1, 'Active with cutoff', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'active', 1, now())`,
+        [ada.id],
+      ),
+      /goals_archived_at_check|check constraint/i,
+    );
 
     const weekly = await db.createGoalForUser({
       userId: ada.id,
@@ -1129,11 +1147,13 @@ test("archived goals stay archived, reopen expiry uses the current version, orig
     });
     const archivedFuture = await db.archiveGoalForUser(ada.id, futureMinutes.id);
     assert.equal(archivedFuture.state, "archived");
-    const firstCutoff = await scalar(client, "select updated_at from goals where id = $1", [futureMinutes.id]);
+    assert.ok(archivedFuture.archivedAt);
+    const firstCutoff = await scalar(client, "select archived_at from goals where id = $1", [futureMinutes.id]);
     await client.query("select pg_sleep(0.05)");
     await db.archiveGoalForUser(ada.id, futureMinutes.id);
-    const secondCutoff = await scalar(client, "select updated_at from goals where id = $1", [futureMinutes.id]);
+    const secondCutoff = await scalar(client, "select archived_at from goals where id = $1", [futureMinutes.id]);
     assert.equal(new Date(firstCutoff).getTime(), new Date(secondCutoff).getTime());
+    assert.equal(archivedFuture.archivedAt, new Date(firstCutoff).toISOString());
     await db.deleteCommunityPostForOwner({
       userId: ada.id,
       groupId: crew.id,
@@ -1190,6 +1210,86 @@ test("archived goals stay archived, reopen expiry uses the current version, orig
       "reached",
     );
     assert.equal((await db.getGoalForUser(ada.id, futureMinutes.id)).state, "archived");
+
+    const raceArchive = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 1,
+      displayUnit: "count",
+      schedule: "weekly",
+      deadlineAt: null,
+      timeZone: zone,
+      movementId: null,
+      movementName: null,
+      lane: null,
+    });
+    const [firstArchive, secondArchive] = await Promise.all([
+      db.archiveGoalForUser(ada.id, raceArchive.id),
+      db.archiveGoalForUser(ada.id, raceArchive.id),
+    ]);
+    assert.equal(firstArchive.state, "archived");
+    assert.equal(secondArchive.state, "archived");
+    assert.equal(firstArchive.archivedAt, secondArchive.archivedAt);
+    assert.equal(
+      await scalar(client, "select count(distinct archived_at)::int from goals where id = $1", [raceArchive.id]),
+      1,
+    );
+    assert.ok(await scalar(client, "select archived_at from goals where id = $1", [raceArchive.id]));
+
+    const raceEdit = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 1,
+      displayUnit: "count",
+      schedule: "weekly",
+      deadlineAt: null,
+      timeZone: zone,
+      movementId: null,
+      movementName: null,
+      lane: null,
+    });
+    const raceEditResult = await Promise.allSettled([
+      db.archiveGoalForUser(ada.id, raceEdit.id),
+      db.updateGoalForUser({
+        userId: ada.id,
+        goalId: raceEdit.id,
+        kind: "volume",
+        metric: "workout_count",
+        sportFilter: null,
+        target: 3,
+        displayUnit: "count",
+        schedule: "weekly",
+        deadlineAt: null,
+        timeZone: zone,
+        movementId: null,
+        movementName: null,
+        lane: null,
+      }),
+    ]);
+    const afterRace = await db.getGoalForUser(ada.id, raceEdit.id);
+    const raced = await client.query(
+      "select state, archived_at, target_value, active_slot from goals where id = $1",
+      [raceEdit.id],
+    );
+    const racedRow = raced.rows[0];
+    assert.equal(racedRow.state === "archived", racedRow.archived_at != null);
+    assert.equal(afterRace.state, "archived");
+    assert.ok(afterRace.archivedAt);
+    assert.equal(racedRow.state, "archived");
+    assert.ok(racedRow.archived_at);
+    assert.equal(racedRow.active_slot, null);
+    assert.ok([1, 3].includes(Number(racedRow.target_value)));
+    assert.ok(raceEditResult.some((item) => item.status === "fulfilled"));
+    const editOutcome = raceEditResult[1];
+    if (editOutcome.status === "rejected") {
+      assert.equal(editOutcome.reason.name, "GoalRequestError");
+      assert.equal(editOutcome.reason.statusCode, 409);
+      assert.equal(Number(racedRow.target_value), 1);
+    }
   } finally {
     await client.end();
     if (globalThis.repinPool) {

@@ -26,6 +26,7 @@ import {
   isNotNull,
   isNull,
   lte,
+  ne,
   sql,
 } from "drizzle-orm";
 
@@ -95,6 +96,7 @@ export const GOAL_SHARE_UNAVAILABLE_MESSAGE = "This goal isn't available to shar
 export const GOAL_REOPEN_DEADLINE_MESSAGE = "Choose a future end date";
 export const GOAL_REOPEN_CAP_MESSAGE =
   "You already have 5 active goals. Archive one first, then you can reopen this.";
+export const GOAL_STALE_MESSAGE = "This goal was just updated. Refresh and try again.";
 
 type GoalRow = typeof schema.goals.$inferSelect;
 type PeriodRow = typeof schema.goalPeriods.$inferSelect;
@@ -179,7 +181,7 @@ export async function getGoalForUser(
       && !currentVersion.some((period) => period.state === "reached"),
     canReopen,
     reopenBlocked: canReopen && activeCount >= MAX_ACTIVE_GOALS,
-    archivedAt: goal.state === "archived" ? goal.updatedAt.toISOString() : null,
+    archivedAt: goal.archivedAt?.toISOString() ?? null,
   };
 }
 
@@ -242,14 +244,11 @@ export async function createGoalForUser(input: CreateGoalInput) {
 export async function updateGoalForUser(input: CreateGoalInput & { goalId: string }) {
   const now = input.now ?? new Date();
   const goalId = await getDatabase().transaction(async (transaction) => {
-    const [goal] = await transaction
-      .select()
-      .from(schema.goals)
-      .where(and(eq(schema.goals.id, input.goalId), eq(schema.goals.userId, input.userId)))
-      .limit(1);
+    await lockUser(transaction, input.userId);
+    const goal = await lockGoalForUser(transaction, input.userId, input.goalId);
     if (!goal) return null;
     if (goal.state !== "active") {
-      throw new GoalRequestError("Only an active goal can be edited");
+      throw new GoalRequestError("Only an active goal can be edited", 409);
     }
     if (input.timeZone && input.timeZone !== goal.timeZone) {
       throw new GoalRequestError(GOAL_TIMEZONE_LOCKED_MESSAGE);
@@ -277,7 +276,7 @@ export async function updateGoalForUser(input: CreateGoalInput & { goalId: strin
     const deadlineChanged = (deadlineAt?.getTime() ?? null) !== (goal.deadlineAt?.getTime() ?? null);
     if (!definitionChanged && !deadlineChanged) return goal.id;
     const nextVersion = definitionChanged ? goal.definitionVersion + 1 : goal.definitionVersion;
-    await transaction
+    const [updated] = await transaction
       .update(schema.goals)
       .set({
         title,
@@ -296,13 +295,12 @@ export async function updateGoalForUser(input: CreateGoalInput & { goalId: strin
         definitionVersion: nextVersion,
         updatedAt: now,
       })
-      .where(eq(schema.goals.id, goal.id));
-    const [updated] = await transaction
-      .select()
-      .from(schema.goals)
-      .where(eq(schema.goals.id, goal.id))
-      .limit(1);
-    if (!updated) return null;
+      .where(and(
+        eq(schema.goals.id, goal.id),
+        eq(schema.goals.state, "active"),
+      ))
+      .returning();
+    if (!updated) throw new GoalRequestError(GOAL_STALE_MESSAGE, 409);
     if (!definitionChanged && updated.schedule === "one_time") {
       await transaction
         .update(schema.goalPeriods)
@@ -327,18 +325,27 @@ export async function updateGoalForUser(input: CreateGoalInput & { goalId: strin
 export async function archiveGoalForUser(userId: string, goalId: string) {
   const now = new Date();
   const updated = await getDatabase().transaction(async (transaction) => {
-    const [goal] = await transaction
-      .select()
-      .from(schema.goals)
-      .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)))
-      .limit(1);
+    await lockUser(transaction, userId);
+    const goal = await lockGoalForUser(transaction, userId, goalId);
     if (!goal) return null;
     if (goal.state === "archived") return goal.id;
-    await transaction
+    const [archived] = await transaction
       .update(schema.goals)
-      .set({ state: "archived", activeSlot: null, updatedAt: now })
-      .where(eq(schema.goals.id, goal.id));
-    return goal.id;
+      .set({
+        state: "archived",
+        activeSlot: null,
+        archivedAt: now,
+        updatedAt: now,
+      })
+      .where(and(
+        eq(schema.goals.id, goal.id),
+        eq(schema.goals.userId, userId),
+        ne(schema.goals.state, "archived"),
+        isNull(schema.goals.archivedAt),
+      ))
+      .returning();
+    if (!archived) throw new GoalRequestError(GOAL_STALE_MESSAGE, 409);
+    return archived.id;
   });
   if (!updated) return null;
   return getGoalForUser(userId, goalId, now);
@@ -346,13 +353,14 @@ export async function archiveGoalForUser(userId: string, goalId: string) {
 
 export async function deleteGoalForUser(userId: string, goalId: string) {
   return getDatabase().transaction(async (transaction) => {
-    const [goal] = await transaction
-      .select({ id: schema.goals.id })
-      .from(schema.goals)
-      .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)))
-      .limit(1);
+    await lockUser(transaction, userId);
+    const goal = await lockGoalForUser(transaction, userId, goalId);
     if (!goal) return false;
-    await transaction.delete(schema.goals).where(eq(schema.goals.id, goal.id));
+    const deleted = await transaction
+      .delete(schema.goals)
+      .where(and(eq(schema.goals.id, goal.id), eq(schema.goals.userId, userId)))
+      .returning({ id: schema.goals.id });
+    if (!deleted[0]) throw new GoalRequestError(GOAL_STALE_MESSAGE, 409);
     return true;
   });
 }
@@ -360,14 +368,11 @@ export async function deleteGoalForUser(userId: string, goalId: string) {
 export async function markGoalDoneForUser(userId: string, goalId: string) {
   const now = new Date();
   const updated = await getDatabase().transaction(async (transaction) => {
-    const [goal] = await transaction
-      .select()
-      .from(schema.goals)
-      .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)))
-      .limit(1);
+    await lockUser(transaction, userId);
+    const goal = await lockGoalForUser(transaction, userId, goalId);
     if (!goal) return null;
     if (goal.state !== "active") {
-      throw new GoalRequestError("Only an active goal can be marked done");
+      throw new GoalRequestError("Only an active goal can be marked done", 409);
     }
     if (goal.kind === "volume") {
       throw new GoalRequestError("Volume goals complete from workouts");
@@ -386,15 +391,17 @@ export async function markGoalDoneForUser(userId: string, goalId: string) {
         updatedAt: now,
       })
       .where(eq(schema.goalPeriods.id, period.id));
-    await transaction
+    const [reached] = await transaction
       .update(schema.goals)
       .set({
         state: "reached",
         activeSlot: null,
         updatedAt: now,
       })
-      .where(eq(schema.goals.id, goal.id));
-    return goal.id;
+      .where(and(eq(schema.goals.id, goal.id), eq(schema.goals.state, "active")))
+      .returning({ id: schema.goals.id });
+    if (!reached) throw new GoalRequestError(GOAL_STALE_MESSAGE, 409);
+    return reached.id;
   });
   if (!updated) return null;
   return getGoalForUser(userId, goalId, now);
@@ -410,17 +417,13 @@ export async function reopenGoalForUser(input: {
   const updatedId = await getDatabase().transaction(async (transaction) => {
     await lockUser(transaction, input.userId);
     await settleExpiredGoals(transaction, input.userId, now);
-    const [goal] = await transaction
-      .select()
-      .from(schema.goals)
-      .where(and(eq(schema.goals.id, input.goalId), eq(schema.goals.userId, input.userId)))
-      .limit(1);
+    const goal = await lockGoalForUser(transaction, input.userId, input.goalId);
     if (!goal) return null;
     if (goal.state === "active") return goal.id;
     const slot = await allocateSlot(transaction, input.userId);
     const version = goal.definitionVersion + 1;
     const deadlineAt = nextDeadlineAfterReopen(goal, now, input.deadlineAt);
-    await transaction
+    const [updated] = await transaction
       .update(schema.goals)
       .set({
         state: "active",
@@ -429,15 +432,15 @@ export async function reopenGoalForUser(input: {
         startsAt: now,
         deadlineAt,
         definitionVersion: version,
+        archivedAt: null,
         updatedAt: now,
       })
-      .where(eq(schema.goals.id, goal.id));
-    const [updated] = await transaction
-      .select()
-      .from(schema.goals)
-      .where(eq(schema.goals.id, goal.id))
-      .limit(1);
-    if (!updated) return null;
+      .where(and(
+        eq(schema.goals.id, goal.id),
+        eq(schema.goals.state, goal.state),
+      ))
+      .returning();
+    if (!updated) throw new GoalRequestError(GOAL_STALE_MESSAGE, 409);
     await ensurePeriod(transaction, updated, now);
     return updated.id;
   });
@@ -656,6 +659,7 @@ async function recomputeGoal(
   occurredAt?: Date,
 ): Promise<GoalReached[]> {
   if (goal.state === "archived") {
+    if (!goal.archivedAt) return [];
     const archived = await transaction
       .select()
       .from(schema.goalPeriods)
@@ -668,7 +672,7 @@ async function recomputeGoal(
           period,
           asPeriodDefinition(period),
           now,
-          goal.updatedAt,
+          goal.archivedAt ?? undefined,
         );
       }
     }
@@ -828,7 +832,7 @@ async function markAutoReached(
     await transaction
       .update(schema.goals)
       .set({ state: "reached", activeSlot: null, updatedAt: now })
-      .where(eq(schema.goals.id, goal.id));
+      .where(and(eq(schema.goals.id, goal.id), eq(schema.goals.state, "active")));
   }
   if (period.celebrated) return null;
   return {
@@ -875,13 +879,19 @@ async function invalidateAutoPeriod(
       await transaction
         .update(schema.goals)
         .set({ state: "active", activeSlot: slot, updatedAt: now })
-        .where(eq(schema.goals.id, goal.id));
+        .where(and(
+          eq(schema.goals.id, goal.id),
+          inArray(schema.goals.state, ["reached", "expired"]),
+        ));
     } catch (error) {
       if (error instanceof GoalRequestError && error.statusCode === 409) {
         await transaction
           .update(schema.goals)
           .set({ state: "needs_review", activeSlot: null, updatedAt: now })
-          .where(eq(schema.goals.id, goal.id));
+          .where(and(
+            eq(schema.goals.id, goal.id),
+            inArray(schema.goals.state, ["reached", "expired"]),
+          ));
       } else {
         throw error;
       }
@@ -1017,7 +1027,7 @@ async function settleExpiredGoals(transaction: DatabaseTransaction, userId: stri
       await transaction
         .update(schema.goals)
         .set({ state: "expired", activeSlot: null, updatedAt: now })
-        .where(eq(schema.goals.id, goal.id));
+        .where(and(eq(schema.goals.id, goal.id), eq(schema.goals.state, "active")));
     }
   }
 }
@@ -1047,6 +1057,20 @@ async function lockUser(transaction: DatabaseTransaction, userId: string) {
     .where(eq(schema.users.id, userId))
     .limit(1)
     .for("update");
+}
+
+async function lockGoalForUser(
+  transaction: DatabaseTransaction,
+  userId: string,
+  goalId: string,
+) {
+  const [goal] = await transaction
+    .select()
+    .from(schema.goals)
+    .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)))
+    .limit(1)
+    .for("update");
+  return goal ?? null;
 }
 
 async function loadEligibleSnapshots(

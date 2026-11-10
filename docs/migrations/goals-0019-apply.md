@@ -110,6 +110,8 @@ Expected:
 - `goals_slot_state_check`: active rows have `active_slot IS NOT NULL AND
   between 1 and 5`; inactive rows have a null slot. PostgreSQL CHECK accepts
   NULL, so the IS NOT NULL clause is required.
+- `goals_archived_at_check`: archived rows have `archived_at IS NOT NULL`;
+  every other state has a null cutoff.
 - `community_post_goals_period_unique` (one post per completion).
 
 ## 3. Apply RLS

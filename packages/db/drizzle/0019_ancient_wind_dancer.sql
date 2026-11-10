@@ -73,6 +73,7 @@ CREATE TABLE "goals" (
 	"definition_version" integer DEFAULT 1 NOT NULL,
 	"state" text DEFAULT 'active' NOT NULL,
 	"active_slot" integer,
+	"archived_at" timestamp with time zone,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
 	CONSTRAINT "goals_id_user_id_unique" UNIQUE("id","user_id"),
@@ -91,6 +92,13 @@ CREATE TABLE "goals" (
       ) or (
         "goals"."state" <> 'active'
         and "goals"."active_slot" is null
+      )),
+	CONSTRAINT "goals_archived_at_check" CHECK ((
+        "goals"."state" = 'archived'
+        and "goals"."archived_at" is not null
+      ) or (
+        "goals"."state" <> 'archived'
+        and "goals"."archived_at" is null
       )),
 	CONSTRAINT "goals_definition_check" CHECK ((
         "goals"."kind" = 'volume'
