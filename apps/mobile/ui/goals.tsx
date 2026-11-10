@@ -5,6 +5,9 @@ import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button, Card, StateCard } from "./components";
 import { pressableFocused, webFocusRing } from "./focus-ring";
 import { percentLabel } from "./goal-form-state";
+import { goalsSectionLayout } from "./goals-section";
+
+export { goalsSectionLayout } from "./goals-section";
 import { colors, fonts, radii, spacing, type } from "./theme";
 
 export function GoalsSection({
@@ -27,7 +30,8 @@ export function GoalsSection({
   onRetry: () => void;
 }) {
   const active = goals?.active ?? [];
-  const atCap = active.length >= cap;
+  const historyCount = goals?.history.length ?? 0;
+  const layout = goalsSectionLayout(active.length, historyCount, cap);
   return (
     <View style={styles.block}>
       <Text style={styles.blockTitle}>Goals</Text>
@@ -42,19 +46,28 @@ export function GoalsSection({
         <Card><Text style={styles.muted}>Loading goals…</Text></Card>
       ) : !active.length ? (
         <Card style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>{goalCopy.emptyTitle}</Text>
-          <Text style={styles.muted}>{goalCopy.emptyBody}</Text>
+          <Text style={styles.emptyTitle}>
+            {layout.hasHistory ? goalCopy.emptyActiveTitle : goalCopy.emptyTitle}
+          </Text>
+          <Text style={styles.muted}>
+            {layout.hasHistory ? goalCopy.emptyActiveBody : goalCopy.emptyBody}
+          </Text>
           <Button onPress={onAdd}>{goalCopy.emptyAction}</Button>
+          {layout.showHistory ? (
+            <Button onPress={onHistory} variant="secondary">{goalCopy.history}</Button>
+          ) : null}
         </Card>
       ) : (
         <View style={styles.stack}>
           {active.map((goal) => (
             <GoalProgressCard key={goal.id} goal={goal} onPress={() => onOpen(goal.id)} />
           ))}
-          {atCap ? <Text style={styles.helper}>{goalCopy.cap}</Text> : (
+          {layout.atCap ? <Text style={styles.helper}>{goalCopy.cap}</Text> : (
             <Button onPress={onAdd} variant="tonal">{goalCopy.addGoal}</Button>
           )}
-          <Button onPress={onHistory} variant="secondary">{goalCopy.history}</Button>
+          {layout.showHistory ? (
+            <Button onPress={onHistory} variant="secondary">{goalCopy.history}</Button>
+          ) : null}
         </View>
       )}
     </View>
@@ -68,7 +81,7 @@ export function GoalProgressCard({
   goal: GoalSummary;
   onPress?: () => void;
 }) {
-  const complete = goal.state === "reached" || goal.progress.ratio >= 1;
+  const complete = goal.state === "reached" || (goal.kind !== "time" && goal.progress.ratio >= 1);
   const body = (
     <Card>
       <View style={styles.cardTop}>

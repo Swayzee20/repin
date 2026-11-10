@@ -481,3 +481,14 @@ test("picker selections append exercises and keep sets when replacing a name", (
   assert.equal(replaced.exercises[0]?.defaultMeasure, "cal");
   assert.equal(replaced.exercises[0]?.sets[0]?.reps, "5");
 });
+
+test("detailed workout validates duration before Save is busy or a photo uploads", () => {
+  const detailed = readFileSync(new URL("../app/groups/[id]/detailed-workout.tsx", import.meta.url), "utf8");
+  const durationIdx = detailed.indexOf("parseOptionalDurationMinutes(durationText)");
+  const submittingIdx = detailed.indexOf("setSubmitting(true)");
+  const uploadIdx = detailed.indexOf("workout-photos");
+  assert.ok(durationIdx > 0);
+  assert.ok(submittingIdx > durationIdx);
+  assert.ok(uploadIdx > durationIdx);
+  assert.match(detailed, /if \(durationField\.error\) \{\s*setError\(durationField\.error\);\s*return;/);
+});

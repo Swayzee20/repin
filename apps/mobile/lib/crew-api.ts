@@ -20,6 +20,7 @@ export async function fetchCrewPage(input: {
   groupId: string;
 }) {
   const search = new URLSearchParams({
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
   });
   const response = await fetch(

@@ -33,6 +33,23 @@ export {
 } from "./workout-format";
 
 export {
+  addCalendarDays,
+  addZonedDays,
+  exclusiveDeadlineAtEndOfLocalDay,
+  exclusiveDeadlineFromInput,
+  formatZonedYmd,
+  inclusiveCalendarDate,
+  inclusiveCalendarYmd,
+  isValidTimeZone,
+  monthBounds,
+  startOfZonedDay,
+  zonedDayDiff,
+  zonedLocalToUtc,
+  zonedParts,
+  type ZonedParts,
+} from "./calendar";
+
+export {
   crewAlertAllowed,
   crewAlertTypes,
   crewCopy,
@@ -72,6 +89,7 @@ export {
   goalCopy,
   goalIdSchema,
   parseOptionalDurationMinutes,
+  reopenGoalSchema,
   resolvedSchedule,
   resolvedTimeTargetSeconds,
   resolvedVolumeMetric,

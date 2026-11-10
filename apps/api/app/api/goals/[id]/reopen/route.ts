@@ -1,5 +1,5 @@
 import { reopenGoalForUser } from "@repin/db";
-import { goalIdSchema } from "@repin/validation";
+import { goalIdSchema, reopenGoalSchema } from "@repin/validation";
 import { NextResponse } from "next/server";
 
 import { handleGoalRouteError } from "../../../../../lib/goals-route";
@@ -18,7 +18,20 @@ export async function POST(request: Request, context: RouteContext) {
     if (!goalId.success) {
       return NextResponse.json({ error: "Goal not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
     }
-    const goal = await reopenGoalForUser(user.id, goalId.data);
+    const raw = await request.text();
+    const body: unknown = raw.trim() ? JSON.parse(raw) : {};
+    const input = reopenGoalSchema.safeParse(body);
+    if (!input.success) {
+      return NextResponse.json(
+        { error: "Goal could not be reopened", issues: input.error.issues },
+        { status: 400, headers: { "Cache-Control": "no-store" } },
+      );
+    }
+    const goal = await reopenGoalForUser({
+      userId: user.id,
+      goalId: goalId.data,
+      deadlineAt: input.data.deadlineAt ?? undefined,
+    });
     if (!goal) return NextResponse.json({ error: "Goal not found" }, { status: 404, headers: { "Cache-Control": "no-store" } });
     return NextResponse.json({ goal }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {

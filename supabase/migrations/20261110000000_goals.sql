@@ -7,9 +7,11 @@
 -- goals and goal_periods: owner SELECT only.
 -- community_post_goals: owner and current crew members may SELECT badge
 -- rows on posts in groups they currently belong to via
--- private.can_access_community_post. Block checks go through
+-- private.goal_badge_post_visible (nonremoved post +
+-- private.can_access_community_post). Block checks go through
 -- private.is_blocked_between so both directions are visible under FORCE
--- RLS on user_blocks (blocker-only SELECT).
+-- RLS on user_blocks (blocker-only SELECT). The removed-post lookup is a
+-- SECURITY DEFINER STABLE helper so caller RLS cannot hide the post row.
 --
 -- Writes stay on DATABASE_URL. authenticated is granted SELECT only; there
 -- are no insert/update/delete policies, so a client cannot forge a badge.
@@ -41,6 +43,38 @@ begin
     raise exception
       'Crew visibility helpers are required. Apply 20261106000000_crew_page.sql and 20261109000000_personal_records.sql first.';
   end if;
+end $$;
+
+create or replace function private.goal_badge_post_visible(target_post_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = ''
+as $$
+  select exists (
+    select 1
+    from public.community_posts as post
+    where post.id = target_post_id
+      and post.removed_at is null
+      and private.can_access_community_post(post.id)
+  );
+$$;
+
+do $$
+declare
+  fn regprocedure;
+begin
+  for fn in
+    select p.oid::regprocedure
+    from pg_proc as p
+    join pg_namespace as n on n.oid = p.pronamespace
+    where n.nspname = 'private'
+      and p.proname = 'goal_badge_post_visible'
+  loop
+    execute format('revoke all on function %s from public, anon', fn);
+    execute format('grant execute on function %s to authenticated', fn);
+  end loop;
 end $$;
 
 alter table public.goals enable row level security;
@@ -80,13 +114,7 @@ to authenticated
 using (
   user_id = auth.uid()
   or (
-    private.can_access_community_post(post_id)
-    and exists (
-      select 1
-      from public.community_posts as post
-      where post.id = community_post_goals.post_id
-        and post.removed_at is null
-    )
+    private.goal_badge_post_visible(post_id)
     and not private.is_blocked_between(auth.uid(), community_post_goals.user_id)
   )
 );

@@ -21,7 +21,14 @@ CREATE TABLE "goal_periods" (
 	"period_start" timestamp with time zone NOT NULL,
 	"period_end" timestamp with time zone,
 	"eligible_start" timestamp with time zone NOT NULL,
+	"activation_at" timestamp with time zone NOT NULL,
 	"time_zone" text NOT NULL,
+	"kind" text NOT NULL,
+	"metric" text NOT NULL,
+	"sport_filter" text,
+	"pr_kind" text,
+	"pr_key" text,
+	"display_unit" text,
 	"target_value" numeric(14, 3) NOT NULL,
 	"credit_closes_at" timestamp with time zone,
 	"state" text DEFAULT 'pending' NOT NULL,
@@ -79,6 +86,7 @@ CREATE TABLE "goals" (
 	CONSTRAINT "goals_title_check" CHECK (length(btrim("goals"."title")) between 1 and 120),
 	CONSTRAINT "goals_slot_state_check" CHECK ((
         "goals"."state" = 'active'
+        and "goals"."active_slot" is not null
         and "goals"."active_slot" between 1 and 5
       ) or (
         "goals"."state" <> 'active'
@@ -151,3 +159,13 @@ CREATE INDEX "goal_periods_source_session_id_idx" ON "goal_periods" USING btree 
 CREATE UNIQUE INDEX "goals_user_active_slot_unique" ON "goals" USING btree ("user_id","active_slot") WHERE "goals"."active_slot" is not null;--> statement-breakpoint
 CREATE INDEX "goals_user_state_idx" ON "goals" USING btree ("user_id","state");--> statement-breakpoint
 CREATE INDEX "goals_user_activation_idx" ON "goals" USING btree ("user_id","activation_at");
+--> statement-breakpoint
+ALTER TABLE "goals" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "goals" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "goal_periods" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "goal_periods" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "community_post_goals" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
+ALTER TABLE "community_post_goals" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
+REVOKE ALL ON TABLE "goals" FROM PUBLIC;--> statement-breakpoint
+REVOKE ALL ON TABLE "goal_periods" FROM PUBLIC;--> statement-breakpoint
+REVOKE ALL ON TABLE "community_post_goals" FROM PUBLIC;

@@ -280,9 +280,460 @@ test("goal slots, auto-reach, reopen, recompute, and hand-mark share rejection",
     await db.archiveGoalForUser(ada.id, firstFive[2].id);
     await db.archiveGoalForUser(ada.id, firstFive[3].id);
     await db.archiveGoalForUser(ada.id, firstFive[4].id);
-    const reopened = await db.reopenGoalForUser(ada.id, timeGoal.id);
+    const reopened = await db.reopenGoalForUser({ userId: ada.id, goalId: timeGoal.id });
     assert.equal(reopened.state, "active");
     assert.ok(new Date(reopened.activationAt).getTime() >= activation.getTime());
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
+test("goal review regressions for slots, frozen periods, share, and late logs", async () => {
+  const testUrl = await recreateDatabase();
+  process.env.DATABASE_URL = testUrl;
+  if (globalThis.repinPool) {
+    await globalThis.repinPool.end();
+    globalThis.repinPool = undefined;
+    globalThis.repinDatabase = undefined;
+  }
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+
+    const { addZonedDays, formatZonedYmd, sundayWeekBounds } = await import("@repin/validation");
+    const db = await import("../src/index.ts");
+    const zone = "America/Chicago";
+    const now = new Date();
+    const currentWeek = sundayWeekBounds(now, zone);
+    const previousStart = addZonedDays(currentWeek.weekStart, -7, zone);
+    const previousMid = addZonedDays(previousStart, 3, zone);
+    const createdAt = addZonedDays(previousStart, 1, zone);
+    const ada = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Ada" });
+    const byron = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Byron" });
+    const crew = await db.createGroup({ ownerId: ada.id, name: "Morning Crew" });
+    const beta = await db.createGroup({ ownerId: ada.id, name: "Beta Crew" });
+    await db.joinGroup({ userId: byron.id, groupId: crew.id, inviteCode: crew.inviteCode });
+
+    await assert.rejects(
+      () => client.query(
+        `insert into goals (
+           user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot
+         ) values ($1, 'Null slot', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'active', null)`,
+        [ada.id],
+      ),
+      /goals_slot_state_check|check constraint/i,
+    );
+    await assert.rejects(
+      () => client.query(
+        `insert into goals (
+           user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot
+         ) values ($1, 'Sixth', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'active', 6)`,
+        [ada.id],
+      ),
+      /goals_slot_state_check|check constraint/i,
+    );
+
+    const weekly = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 1,
+      displayUnit: "count",
+      schedule: "weekly",
+      deadlineAt: null,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: null,
+      lane: null,
+      now: createdAt,
+    });
+    await assert.rejects(
+      () => client.query(
+        `insert into goals (
+           user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot
+         ) values ($1, 'Dup slot', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'active', 1)`,
+        [ada.id],
+      ),
+      /goals_user_active_slot_unique|unique/i,
+    );
+    const firstPeriod = await scalar(
+      client,
+      "select period_end from goal_periods where goal_id = $1",
+      [weekly.id],
+    );
+    assert.ok(firstPeriod);
+    const firstEndMs = new Date(firstPeriod).getTime();
+    const noOp = await db.updateGoalForUser({
+      userId: ada.id,
+      goalId: weekly.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 1,
+      displayUnit: "count",
+      schedule: "weekly",
+      deadlineAt: null,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: null,
+      lane: null,
+      now: createdAt,
+    });
+    assert.equal(noOp.timeZone, "America/Chicago");
+    assert.equal(
+      new Date(await scalar(client, "select period_end from goal_periods where goal_id = $1", [weekly.id])).getTime(),
+      firstEndMs,
+    );
+    await assert.rejects(
+      () => db.updateGoalForUser({
+        userId: ada.id,
+        goalId: weekly.id,
+        kind: "volume",
+        metric: "workout_count",
+        sportFilter: null,
+        target: 1,
+        displayUnit: "count",
+        schedule: "weekly",
+        deadlineAt: null,
+        timeZone: "Pacific/Kiritimati",
+        movementId: null,
+        movementName: null,
+        lane: null,
+      }),
+      (error) => error.name === "GoalRequestError" && error.message.includes("time zone"),
+    );
+
+    const deadlineDay = formatZonedYmd(addZonedDays(createdAt, 10, zone), zone);
+    const dated = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 12,
+      displayUnit: "count",
+      schedule: "one_time",
+      deadlineAt: deadlineDay,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: null,
+      lane: null,
+      now: createdAt,
+    });
+    const originalDeadline = dated.deadlineAt;
+    const unchanged = await db.updateGoalForUser({
+      userId: ada.id,
+      goalId: dated.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 12,
+      displayUnit: "count",
+      schedule: "one_time",
+      deadlineAt: deadlineDay,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: null,
+      lane: null,
+      now: createdAt,
+    });
+    assert.equal(unchanged.deadlineAt, originalDeadline);
+
+    await db.archiveGoalForUser(ada.id, dated.id);
+
+    const expiredDeadline = formatZonedYmd(addZonedDays(previousStart, 5, zone), zone);
+    const oneTime = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 3,
+      displayUnit: "count",
+      schedule: "one_time",
+      deadlineAt: expiredDeadline,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: null,
+      lane: null,
+      now: createdAt,
+    });
+    const afterDeadline = await db.listGoalsForUser(ada.id, now);
+    const expiredGoal = afterDeadline.history.find((goal) => goal.id === oneTime.id)
+      ?? afterDeadline.active.find((goal) => goal.id === oneTime.id);
+    assert.equal(expiredGoal?.state, "expired");
+    const reopenedDated = await db.reopenGoalForUser({
+      userId: ada.id,
+      goalId: oneTime.id,
+      now,
+    });
+    assert.equal(reopenedDated.state, "active");
+    assert.ok(new Date(reopenedDated.deadlineAt).getTime() > now.getTime());
+
+    const rolled = await db.getGoalForUser(ada.id, weekly.id, now);
+    assert.equal(rolled.progress.current, 0);
+    assert.notEqual(rolled.currentPeriodId, weekly.currentPeriodId);
+
+    const late = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "other",
+      title: "Late log",
+      name: "Late log",
+      durationMinutes: null,
+      effort: 2,
+      caption: null,
+      photoPath: null,
+      occurredAt: previousMid,
+    });
+    const credited = await db.getGoalForUser(ada.id, weekly.id, now);
+    assert.equal(credited.progress.current, 0);
+    assert.equal(
+      await scalar(
+        client,
+        "select state from goal_periods where goal_id = $1 and period_key = $2",
+        [weekly.id, formatZonedYmd(previousStart, zone)],
+      ),
+      "reached",
+    );
+
+    const lift = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "lift",
+      metric: "load",
+      sportFilter: null,
+      target: 300,
+      displayUnit: "lb",
+      schedule: "one_time",
+      deadlineAt: null,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: "Back Squat",
+      lane: null,
+      now: createdAt,
+    });
+    const posted = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "strength_training",
+      title: "Back Squat",
+      name: "Back Squat",
+      durationMinutes: 48,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: previousMid,
+      movements: [{
+        movementName: "Back Squat",
+        notes: null,
+        sets: [{ reps: 1, load: 315, loadUnit: "lb" }],
+      }],
+    });
+    assert.ok(posted.goals.reached.some((item) => item.goalId === lift.id));
+    const shared = await db.shareSessionGoalBadges({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: posted.id,
+    });
+    assert.equal(shared.length, 1);
+    await client.query(
+      "insert into community_posts (user_id, group_id, workout_session_id) values ($1, $2, $3)",
+      [ada.id, beta.id, posted.id],
+    );
+    await assert.rejects(
+      () => db.shareSessionGoalBadges({
+        userId: ada.id,
+        groupId: beta.id,
+        sessionId: posted.id,
+      }),
+      (error) => error.name === "GoalRequestError" && error.statusCode === 403,
+    );
+    await db.leaveCrew({ userId: byron.id, groupId: crew.id });
+    await client.query(
+      "update goal_periods set originating_post_id = null where source_session_id = $1",
+      [posted.id],
+    );
+    await assert.rejects(
+      () => db.shareSessionGoalBadges({
+        userId: ada.id,
+        groupId: crew.id,
+        sessionId: posted.id,
+      }),
+      (error) => error.name === "GoalRequestError" && error.statusCode === 403,
+    );
+    await client.query(
+      "update goal_periods set originating_post_id = (select id from community_posts where workout_session_id = $1 and group_id = $2) where source_session_id = $1",
+      [posted.id, crew.id],
+    );
+
+    const replacement = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "strength_training",
+      title: "Back Squat 2",
+      name: "Back Squat 2",
+      durationMinutes: 40,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date(now.getTime() - 1_000),
+      movements: [{
+        movementName: "Back Squat",
+        notes: null,
+        sets: [{ reps: 1, load: 335, loadUnit: "lb" }],
+      }],
+    });
+    await db.updateWorkoutForOwner({
+      userId: ada.id,
+      groupId: crew.id,
+      workoutSessionId: posted.id,
+      workoutType: "strength_training",
+      name: "Back Squat",
+      durationMinutes: 48,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: previousMid,
+      movements: [{
+        movementName: "Back Squat",
+        notes: null,
+        sets: [{ reps: 5, load: 135, loadUnit: "lb" }],
+      }],
+    });
+    assert.equal(
+      await scalar(client, "select count(*)::int from community_post_goals where source_session_id = $1", [posted.id]),
+      0,
+    );
+    assert.equal(
+      await scalar(client, "select count(*)::int from community_post_goals where source_session_id = $1", [replacement.id]),
+      0,
+    );
+
+    await db.archiveGoalForUser(ada.id, lift.id);
+    const archivedPosted = await db.createGoalForUser({
+      userId: ada.id,
+      kind: "lift",
+      metric: "load",
+      sportFilter: null,
+      target: 200,
+      displayUnit: "lb",
+      schedule: "one_time",
+      deadlineAt: null,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: "Deadlift",
+      lane: null,
+      now: createdAt,
+    });
+    const archivedWorkout = await db.createWorkoutForMember({
+      userId: ada.id,
+      displayName: ada.displayName,
+      groupId: crew.id,
+      workoutType: "strength_training",
+      title: "Deadlift",
+      name: "Deadlift",
+      durationMinutes: 30,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date(now.getTime() - 2_000),
+      movements: [{
+        movementName: "Deadlift",
+        notes: null,
+        sets: [{ reps: 1, load: 225, loadUnit: "lb" }],
+      }],
+    });
+    assert.ok(archivedWorkout.goals.reached.some((item) => item.goalId === archivedPosted.id));
+    await db.shareSessionGoalBadges({
+      userId: ada.id,
+      groupId: crew.id,
+      sessionId: archivedWorkout.id,
+    });
+    await db.archiveGoalForUser(ada.id, archivedPosted.id);
+    const editedArchived = await db.updateWorkoutForOwner({
+      userId: ada.id,
+      groupId: crew.id,
+      workoutSessionId: archivedWorkout.id,
+      workoutType: "strength_training",
+      name: "Deadlift",
+      durationMinutes: 30,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date(now.getTime() - 2_000),
+      movements: [{
+        movementName: "Deadlift",
+        notes: null,
+        sets: [{ reps: 5, load: 135, loadUnit: "lb" }],
+      }],
+    });
+    assert.ok(editedArchived);
+    await db.recomputeGoalsForUser({ userId: ada.id });
+    assert.equal(
+      await scalar(
+        client,
+        `select count(*)::int
+         from community_post_goals as badge
+         join goal_periods as period on period.id = badge.goal_period_id
+         where period.goal_id = $1`,
+        [archivedPosted.id],
+      ),
+      0,
+    );
+    assert.notEqual(
+      await scalar(client, "select state from goal_periods where goal_id = $1 order by created_at desc limit 1", [archivedPosted.id]),
+      "reached",
+    );
+
+    const raised = await db.updateGoalForUser({
+      userId: ada.id,
+      goalId: weekly.id,
+      kind: "volume",
+      metric: "workout_count",
+      sportFilter: null,
+      target: 4,
+      displayUnit: "count",
+      schedule: "weekly",
+      deadlineAt: null,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: null,
+      lane: null,
+      now: createdAt,
+    });
+    const oldEnd = await scalar(
+      client,
+      "select period_end from goal_periods where goal_id = $1 and definition_version = 1 limit 1",
+      [weekly.id],
+    );
+    assert.ok(oldEnd);
+    assert.notEqual(raised.progress.target, 1);
+    assert.equal(
+      await scalar(
+        client,
+        "select count(*)::int from goal_periods where goal_id = $1 and period_end is null and state = 'pending'",
+        [weekly.id],
+      ),
+      0,
+    );
+
+    await assert.rejects(
+      () => db.markGoalDoneForUser(ada.id, archivedPosted.id),
+      (error) => error.name === "GoalRequestError",
+    );
+    assert.ok(late.id);
   } finally {
     await client.end();
     if (globalThis.repinPool) {

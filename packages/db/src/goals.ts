@@ -35,15 +35,22 @@ import {
   type DatabaseTransaction,
 } from "./connection";
 import {
+  addZonedDays,
   creditClosesAt,
   currentCalendarPeriod,
-  exclusiveDeadlineAtEndOfLocalDay,
+  exclusiveDeadlineFromInput,
   formatDueDate,
   formatShortRange,
   isValidTimeZone,
   startOfZonedDay,
+  zonedDayDiff,
   zonedParts,
 } from "./goal-calendar";
+import {
+  activeMembership,
+  crewAuthorVisibleSql,
+  openGroup,
+} from "./membership";
 import {
   canonicalTarget,
   extractGoalPerformanceCandidates,
@@ -83,6 +90,9 @@ export const GOAL_CAP_MESSAGE =
 
 export const GOAL_HAND_MARK_SHARE_MESSAGE = "Hand-marked goals stay private, with no badge.";
 export const GOAL_TIMEZONE_MESSAGE = "Choose a valid time zone";
+export const GOAL_TIMEZONE_LOCKED_MESSAGE = "This goal's time zone is locked";
+export const GOAL_SHARE_UNAVAILABLE_MESSAGE = "This goal isn't available to share.";
+export const GOAL_REOPEN_DEADLINE_MESSAGE = "Choose a future end date";
 export const GOAL_REOPEN_CAP_MESSAGE =
   "You already have 5 active goals. Archive one first, then you can reopen this.";
 
@@ -97,7 +107,7 @@ export type CreateGoalInput = {
   target: number;
   displayUnit: string | null;
   schedule: GoalSchedule;
-  deadlineAt: Date | null;
+  deadlineAt: Date | string | null;
   timeZone: string;
   movementId: string | null;
   movementName: string | null;
@@ -106,6 +116,7 @@ export type CreateGoalInput = {
 };
 
 export async function listGoalsForUser(userId: string, now = new Date()): Promise<GoalsListResponse> {
+  await settleUserGoalReads(userId, now);
   const database = getDatabase();
   const rows = await database
     .select()
@@ -139,6 +150,7 @@ export async function getGoalForUser(
   goalId: string,
   now = new Date(),
 ): Promise<GoalDetail | null> {
+  await settleUserGoalReads(userId, now);
   const database = getDatabase();
   const [goal] = await database
     .select()
@@ -152,6 +164,7 @@ export async function getGoalForUser(
     .where(eq(schema.goalPeriods.goalId, goal.id));
   const summary = await toSummary(database, goal, periods, now);
   const activeCount = await countActiveGoals(database, userId);
+  const currentVersion = periods.filter((period) => period.definitionVersion === goal.definitionVersion);
   const canReopen = goal.state === "expired" || goal.state === "reached" || goal.state === "archived";
   return {
     ...summary,
@@ -163,7 +176,7 @@ export async function getGoalForUser(
     helper: helperFor(goal),
     canMarkDone: goal.kind !== "volume"
       && goal.state === "active"
-      && !periods.some((period) => period.state === "reached"),
+      && !currentVersion.some((period) => period.state === "reached"),
     canReopen,
     reopenBlocked: canReopen && activeCount >= MAX_ACTIVE_GOALS,
     archivedAt: goal.state === "archived" ? goal.updatedAt.toISOString() : null,
@@ -186,7 +199,7 @@ export async function createGoalForUser(input: CreateGoalInput) {
       target: input.target,
     });
     const deadlineAt = input.deadlineAt
-      ? exclusiveDeadlineAtEndOfLocalDay(input.deadlineAt, input.timeZone)
+      ? exclusiveDeadlineFromInput(input.deadlineAt, input.timeZone)
       : null;
     const pr = performanceIdentity(input);
     const title = titleFor({ ...input, targetValue: canonical, prKey: pr.prKey });
@@ -238,17 +251,32 @@ export async function updateGoalForUser(input: CreateGoalInput & { goalId: strin
     if (goal.state !== "active") {
       throw new GoalRequestError("Only an active goal can be edited");
     }
+    if (input.timeZone && input.timeZone !== goal.timeZone) {
+      throw new GoalRequestError(GOAL_TIMEZONE_LOCKED_MESSAGE);
+    }
     const canonical = canonicalTarget({
       displayUnit: input.displayUnit,
       kind: input.kind,
       metric: input.metric,
       target: input.target,
     });
-    const deadlineAt = input.deadlineAt
-      ? exclusiveDeadlineAtEndOfLocalDay(input.deadlineAt, input.timeZone)
-      : null;
+    const deadlineAt = resolveUpdatedDeadline(input.deadlineAt, goal);
     const pr = performanceIdentity(input);
     const title = titleFor({ ...input, targetValue: canonical, prKey: pr.prKey });
+    const definitionChanged = goal.kind !== input.kind
+      || goal.metric !== input.metric
+      || goal.sportFilter !== input.sportFilter
+      || goal.targetValue !== canonical
+      || goal.displayUnit !== input.displayUnit
+      || goal.prKind !== pr.prKind
+      || goal.prKey !== pr.prKey
+      || goal.movementId !== input.movementId
+      || goal.movementName !== input.movementName
+      || goal.lane !== input.lane
+      || goal.schedule !== input.schedule;
+    const deadlineChanged = (deadlineAt?.getTime() ?? null) !== (goal.deadlineAt?.getTime() ?? null);
+    if (!definitionChanged && !deadlineChanged) return goal.id;
+    const nextVersion = definitionChanged ? goal.definitionVersion + 1 : goal.definitionVersion;
     await transaction
       .update(schema.goals)
       .set({
@@ -265,8 +293,7 @@ export async function updateGoalForUser(input: CreateGoalInput & { goalId: strin
         lane: input.lane,
         schedule: input.schedule,
         deadlineAt,
-        timeZone: input.timeZone,
-        definitionVersion: goal.definitionVersion + 1,
+        definitionVersion: nextVersion,
         updatedAt: now,
       })
       .where(eq(schema.goals.id, goal.id));
@@ -276,20 +303,20 @@ export async function updateGoalForUser(input: CreateGoalInput & { goalId: strin
       .where(eq(schema.goals.id, goal.id))
       .limit(1);
     if (!updated) return null;
-    await transaction
-      .update(schema.goalPeriods)
-      .set({
-        definitionVersion: updated.definitionVersion,
-        targetValue: canonical,
-        timeZone: updated.timeZone,
-        periodEnd: updated.deadlineAt,
-        creditClosesAt: creditClosesAt(updated.deadlineAt ?? currentPeriodEnd(updated, now), updated.timeZone),
-        updatedAt: now,
-      })
-      .where(and(
-        eq(schema.goalPeriods.goalId, updated.id),
-        eq(schema.goalPeriods.state, "pending"),
-      ));
+    if (!definitionChanged && updated.schedule === "one_time") {
+      await transaction
+        .update(schema.goalPeriods)
+        .set({
+          periodEnd: updated.deadlineAt,
+          creditClosesAt: creditClosesAt(updated.deadlineAt, updated.timeZone),
+          updatedAt: now,
+        })
+        .where(and(
+          eq(schema.goalPeriods.goalId, updated.id),
+          eq(schema.goalPeriods.definitionVersion, updated.definitionVersion),
+          eq(schema.goalPeriods.state, "pending"),
+        ));
+    }
     await recomputeGoal(transaction, updated, now);
     return updated.id;
   });
@@ -338,6 +365,9 @@ export async function markGoalDoneForUser(userId: string, goalId: string) {
       .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)))
       .limit(1);
     if (!goal) return null;
+    if (goal.state !== "active") {
+      throw new GoalRequestError("Only an active goal can be marked done");
+    }
     if (goal.kind === "volume") {
       throw new GoalRequestError("Volume goals complete from workouts");
     }
@@ -369,19 +399,26 @@ export async function markGoalDoneForUser(userId: string, goalId: string) {
   return getGoalForUser(userId, goalId, now);
 }
 
-export async function reopenGoalForUser(userId: string, goalId: string, now = new Date()) {
+export async function reopenGoalForUser(input: {
+  userId: string;
+  goalId: string;
+  now?: Date;
+  deadlineAt?: Date | string | null;
+}) {
+  const now = input.now ?? new Date();
   const updatedId = await getDatabase().transaction(async (transaction) => {
-    await lockUser(transaction, userId);
-    await settleExpiredGoals(transaction, userId, now);
+    await lockUser(transaction, input.userId);
+    await settleExpiredGoals(transaction, input.userId, now);
     const [goal] = await transaction
       .select()
       .from(schema.goals)
-      .where(and(eq(schema.goals.id, goalId), eq(schema.goals.userId, userId)))
+      .where(and(eq(schema.goals.id, input.goalId), eq(schema.goals.userId, input.userId)))
       .limit(1);
     if (!goal) return null;
     if (goal.state === "active") return goal.id;
-    const slot = await allocateSlot(transaction, userId);
+    const slot = await allocateSlot(transaction, input.userId);
     const version = goal.definitionVersion + 1;
+    const deadlineAt = nextDeadlineAfterReopen(goal, now, input.deadlineAt);
     await transaction
       .update(schema.goals)
       .set({
@@ -389,6 +426,7 @@ export async function reopenGoalForUser(userId: string, goalId: string, now = ne
         activeSlot: slot,
         activationAt: now,
         startsAt: now,
+        deadlineAt,
         definitionVersion: version,
         updatedAt: now,
       })
@@ -403,7 +441,7 @@ export async function reopenGoalForUser(userId: string, goalId: string, now = ne
     return updated.id;
   });
   if (!updatedId) return null;
-  return getGoalForUser(userId, goalId, now);
+  return getGoalForUser(input.userId, input.goalId, now);
 }
 
 export async function evaluateGoalsForSession(input: {
@@ -415,7 +453,18 @@ export async function evaluateGoalsForSession(input: {
 }): Promise<GoalDetectionResult> {
   const run = async (transaction: DatabaseTransaction) => {
     const now = input.now ?? new Date();
-    const reached = await recomputeUserGoals(transaction, input.userId, now, input.sessionId);
+    const session = await transaction
+      .select({ occurredAt: schema.workoutSessions.occurredAt })
+      .from(schema.workoutSessions)
+      .where(eq(schema.workoutSessions.id, input.sessionId))
+      .limit(1);
+    const reached = await recomputeUserGoals(
+      transaction,
+      input.userId,
+      now,
+      input.sessionId,
+      session[0]?.occurredAt,
+    );
     const share = await loadShareContext(transaction, input.sessionId, input.groupId);
     return {
       communityPostId: share.communityPostId,
@@ -446,8 +495,6 @@ export async function shareSessionGoalBadges(input: {
   periodIds?: string[];
 }): Promise<GoalBadge[]> {
   return getDatabase().transaction(async (transaction) => {
-    const share = await loadShareContext(transaction, input.sessionId, input.groupId);
-    if (!share.communityPostId || share.postUserId !== input.userId) return [];
     if (input.periodIds?.length) {
       const requested = await transaction
         .select()
@@ -478,6 +525,18 @@ export async function shareSessionGoalBadges(input: {
         throw new GoalRequestError(GOAL_HAND_MARK_SHARE_MESSAGE);
       }
       if (period.completionMethod !== "auto") continue;
+      if (!period.originatingPostId || period.sourceSessionId !== input.sessionId) {
+        throw new GoalRequestError(GOAL_SHARE_UNAVAILABLE_MESSAGE, 403);
+      }
+      const origin = await loadAuthorizedOriginPost(transaction, {
+        groupId: input.groupId,
+        originatingPostId: period.originatingPostId,
+        sessionId: input.sessionId,
+        userId: input.userId,
+      });
+      if (!origin) {
+        throw new GoalRequestError(GOAL_SHARE_UNAVAILABLE_MESSAGE, 403);
+      }
       const [goal] = await transaction
         .select()
         .from(schema.goals)
@@ -488,7 +547,7 @@ export async function shareSessionGoalBadges(input: {
         .insert(schema.communityPostGoals)
         .values({
           id: randomUUID(),
-          postId: share.communityPostId,
+          postId: origin.communityPostId,
           userId: input.userId,
           goalPeriodId: period.id,
           sourceSessionId: input.sessionId,
@@ -510,8 +569,12 @@ export async function removeCommunityPostGoalBadges(input: {
   groupId: string;
 }): Promise<GoalBadge[]> {
   return getDatabase().transaction(async (transaction) => {
-    const share = await loadShareContext(transaction, input.sessionId, input.groupId);
-    if (!share.communityPostId || share.postUserId !== input.userId) return [];
+    const share = await loadAuthorizedSessionPost(transaction, {
+      groupId: input.groupId,
+      sessionId: input.sessionId,
+      userId: input.userId,
+    });
+    if (!share) return [];
     const existing = await transaction
       .select()
       .from(schema.communityPostGoals)
@@ -565,6 +628,7 @@ async function recomputeUserGoals(
   userId: string,
   now: Date,
   celebratingSessionId?: string,
+  occurredAt?: Date,
 ): Promise<GoalReached[]> {
   await lockUser(transaction, userId);
   await settleExpiredGoals(transaction, userId, now);
@@ -573,11 +637,11 @@ async function recomputeUserGoals(
     .from(schema.goals)
     .where(and(
       eq(schema.goals.userId, userId),
-      inArray(schema.goals.state, ["active", "reached", "expired", "needs_review"]),
+      inArray(schema.goals.state, ["active", "reached", "expired", "needs_review", "archived"]),
     ));
   const reached: GoalReached[] = [];
   for (const goal of goals) {
-    const newly = await recomputeGoal(transaction, goal, now, celebratingSessionId);
+    const newly = await recomputeGoal(transaction, goal, now, celebratingSessionId, occurredAt);
     reached.push(...newly);
   }
   return reached;
@@ -588,22 +652,31 @@ async function recomputeGoal(
   goal: GoalRow,
   now: Date,
   celebratingSessionId?: string,
+  occurredAt?: Date,
 ): Promise<GoalReached[]> {
-  const periods = await relevantPeriods(transaction, goal, now);
+  const periods = await relevantPeriods(transaction, goal, now, occurredAt);
   const newly: GoalReached[] = [];
   for (const period of periods) {
     if (period.completionMethod === "manual" && period.state === "reached") continue;
+    const definition = asPeriodDefinition(period);
+    const currentVersion = period.definitionVersion === goal.definitionVersion;
+    if (!currentVersion) {
+      if (period.completionMethod === "auto" && period.state === "reached") {
+        await revalidateExistingAuto(transaction, goal, period, definition, now);
+      }
+      continue;
+    }
     const window = periodWindow(period);
-    const snapshots = await loadEligibleSnapshots(transaction, goal, window, now);
+    const snapshots = await loadEligibleSnapshots(transaction, definition, window, now);
     const before = period.state;
     const celebrated = period.celebrated;
-    if (goal.kind === "volume") {
-      const { total, source } = accumulateVolume(goal, snapshots);
+    if (definition.kind === "volume") {
+      const { total, source } = accumulateVolume(definition, snapshots);
       await transaction
         .update(schema.goalPeriods)
         .set({ progressValue: total, updatedAt: now })
         .where(eq(schema.goalPeriods.id, period.id));
-      if (total >= goal.targetValue && source) {
+      if (total >= definition.targetValue && source) {
         const next = await markAutoReached(transaction, goal, period, source, total, now);
         if (next && !celebrated && source.id === celebratingSessionId) newly.push(next);
       } else if (before === "reached" && period.completionMethod === "auto") {
@@ -614,18 +687,18 @@ async function recomputeGoal(
       let source: GoalSessionSnapshot | null = null;
       const ordered = [...snapshots].sort(byOccurrence);
       for (const snapshot of ordered) {
-        const candidate = goal.kind === "time"
-          ? qualifyingTimeCandidate(snapshot, asDefinition(goal))
-          : qualifyingLiftCandidate(snapshot, asDefinition(goal));
+        const candidate = definition.kind === "time"
+          ? qualifyingTimeCandidate(snapshot, definition)
+          : qualifyingLiftCandidate(snapshot, definition);
         if (!candidate) continue;
         best = candidate;
         source = snapshot;
         break;
       }
       if (best && source) {
-        const value = goal.kind === "time"
-          ? best.metric.durationSeconds ?? goal.targetValue
-          : best.metric.loadKg ?? goal.targetValue;
+        const value = definition.kind === "time"
+          ? best.metric.durationSeconds ?? definition.targetValue
+          : best.metric.loadKg ?? definition.targetValue;
         const next = await markAutoReached(transaction, goal, period, source, value, now, best.sourceSetId);
         if (next && !celebrated && source.id === celebratingSessionId) newly.push(next);
       } else if (before === "reached" && period.completionMethod === "auto") {
@@ -633,12 +706,45 @@ async function recomputeGoal(
       } else {
         await transaction
           .update(schema.goalPeriods)
-          .set({ progressValue: bestValue(goal, snapshots), updatedAt: now })
+          .set({ progressValue: bestValue(definition, snapshots), updatedAt: now })
           .where(eq(schema.goalPeriods.id, period.id));
       }
     }
   }
   return newly;
+}
+
+async function revalidateExistingAuto(
+  transaction: DatabaseTransaction,
+  goal: GoalRow,
+  period: PeriodRow,
+  definition: GoalDefinition,
+  now: Date,
+) {
+  if (!period.sourceSessionId) {
+    await invalidateAutoPeriod(transaction, goal, period, now);
+    return;
+  }
+  const window = periodWindow(period);
+  const snapshots = await loadEligibleSnapshots(transaction, asPeriodDefinition(period), window, now);
+  const source = snapshots.find((snapshot) => snapshot.id === period.sourceSessionId);
+  if (!source) {
+    await invalidateAutoPeriod(transaction, goal, period, now);
+    return;
+  }
+  if (definition.kind === "volume") {
+    const { total } = accumulateVolume(definition, snapshots);
+    if (total < definition.targetValue) {
+      await invalidateAutoPeriod(transaction, goal, period, now);
+    }
+    return;
+  }
+  const candidate = definition.kind === "time"
+    ? qualifyingTimeCandidate(source, definition)
+    : qualifyingLiftCandidate(source, definition);
+  if (!candidate) {
+    await invalidateAutoPeriod(transaction, goal, period, now);
+  }
 }
 
 async function markAutoReached(
@@ -651,6 +757,15 @@ async function markAutoReached(
   sourceSetId?: string | null,
 ): Promise<GoalReached | null> {
   const share = await loadShareContext(transaction, source.id);
+  const sourceChanged = Boolean(period.sourceSessionId && period.sourceSessionId !== source.id);
+  const originChanged = Boolean(
+    period.originatingPostId && period.originatingPostId !== share.communityPostId,
+  );
+  if (sourceChanged || originChanged) {
+    await transaction
+      .delete(schema.communityPostGoals)
+      .where(eq(schema.communityPostGoals.goalPeriodId, period.id));
+  }
   await transaction
     .update(schema.goalPeriods)
     .set({
@@ -736,18 +851,51 @@ async function relevantPeriods(
   transaction: DatabaseTransaction,
   goal: GoalRow,
   now: Date,
+  occurredAt?: Date,
 ) {
-  const current = await ensurePeriod(transaction, goal, now);
+  const canMaterialize = goal.state === "active"
+    || goal.state === "needs_review"
+    || (goal.schedule === "one_time" && (goal.state === "reached" || goal.state === "expired"));
+  let current: PeriodRow | null = null;
+  if (canMaterialize) {
+    current = await ensurePeriod(transaction, goal, now);
+    if (occurredAt) await ensurePeriodForInstant(transaction, goal, occurredAt, now);
+  }
   const rows = await transaction
     .select()
     .from(schema.goalPeriods)
     .where(eq(schema.goalPeriods.goalId, goal.id));
   return rows.filter((period) => {
-    if (period.id === current.id) return true;
-    if (period.state === "reached") return true;
-    if (period.creditClosesAt && now < period.creditClosesAt) return true;
+    if (current && period.id === current.id) return true;
+    if (period.completionMethod === "auto" && period.state === "reached") return true;
+    if (
+      period.definitionVersion === goal.definitionVersion
+      && period.creditClosesAt
+      && now < period.creditClosesAt
+    ) {
+      return true;
+    }
     return false;
   });
+}
+
+async function ensurePeriodForInstant(
+  transaction: DatabaseTransaction,
+  goal: GoalRow,
+  occurredAt: Date,
+  now: Date,
+) {
+  if (occurredAt > now) return null;
+  const calendar = currentCalendarPeriod(
+    occurredAt,
+    goal.timeZone,
+    goal.schedule as "weekly" | "monthly" | "one_time",
+    goal.deadlineAt,
+  );
+  if (calendar.end && goal.activationAt >= calendar.end) return null;
+  const close = creditClosesAt(calendar.end, goal.timeZone);
+  if (close && now >= close) return null;
+  return insertPeriodIfMissing(transaction, goal, calendar, now);
 }
 
 async function ensurePeriod(
@@ -755,10 +903,23 @@ async function ensurePeriod(
   goal: GoalRow,
   now: Date,
 ): Promise<PeriodRow> {
-  const calendar = currentCalendarPeriod(now, goal.timeZone, goal.schedule as "weekly" | "monthly" | "one_time", goal.deadlineAt);
-  const periodStart = calendar.start;
-  const periodEnd = calendar.end;
-  const eligibleStart = goal.activationAt > periodStart ? goal.activationAt : periodStart;
+  const calendar = currentCalendarPeriod(
+    now,
+    goal.timeZone,
+    goal.schedule as "weekly" | "monthly" | "one_time",
+    goal.deadlineAt,
+  );
+  const inserted = await insertPeriodIfMissing(transaction, goal, calendar, now);
+  if (!inserted) throw new Error("Goal period could not be created");
+  return inserted;
+}
+
+async function insertPeriodIfMissing(
+  transaction: DatabaseTransaction,
+  goal: GoalRow,
+  calendar: { key: string; start: Date; end: Date | null },
+  now: Date,
+) {
   const existing = await transaction
     .select()
     .from(schema.goalPeriods)
@@ -769,6 +930,7 @@ async function ensurePeriod(
     ))
     .limit(1);
   if (existing[0]) return existing[0];
+  const eligibleStart = goal.activationAt > calendar.start ? goal.activationAt : calendar.start;
   const [inserted] = await transaction
     .insert(schema.goalPeriods)
     .values({
@@ -777,19 +939,25 @@ async function ensurePeriod(
       userId: goal.userId,
       definitionVersion: goal.definitionVersion,
       periodKey: calendar.key,
-      periodStart,
-      periodEnd,
+      periodStart: calendar.start,
+      periodEnd: calendar.end,
       eligibleStart,
+      activationAt: goal.activationAt,
       timeZone: goal.timeZone,
+      kind: goal.kind,
+      metric: goal.metric,
+      sportFilter: goal.sportFilter,
+      prKind: goal.prKind,
+      prKey: goal.prKey,
+      displayUnit: goal.displayUnit,
       targetValue: goal.targetValue,
-      creditClosesAt: creditClosesAt(periodEnd, goal.timeZone),
+      creditClosesAt: creditClosesAt(calendar.end, goal.timeZone),
       state: "pending",
       createdAt: now,
       updatedAt: now,
     })
     .returning();
-  if (!inserted) throw new Error("Goal period could not be created");
-  return inserted;
+  return inserted ?? null;
 }
 
 async function settleExpiredGoals(transaction: DatabaseTransaction, userId: string, now: Date) {
@@ -843,13 +1011,13 @@ async function lockUser(transaction: DatabaseTransaction, userId: string) {
 
 async function loadEligibleSnapshots(
   transaction: Queryable,
-  goal: GoalRow,
+  definition: GoalDefinition & { userId: string },
   period: GoalPeriodWindow,
   now: Date,
 ) {
   const filters = [
-    eq(schema.workoutSessions.userId, goal.userId),
-    sql`${schema.workoutSessions.createdAt} > ${goal.activationAt}`,
+    eq(schema.workoutSessions.userId, definition.userId),
+    sql`${schema.workoutSessions.createdAt} > ${definition.activationAt}`,
     gte(schema.workoutSessions.occurredAt, period.eligibleStart),
     lte(schema.workoutSessions.occurredAt, now),
   ];
@@ -857,7 +1025,9 @@ async function loadEligibleSnapshots(
   if (period.creditClosesAt) {
     filters.push(sql`${schema.workoutSessions.createdAt} < ${period.creditClosesAt}`);
   }
-  if (goal.sportFilter) filters.push(eq(schema.workoutSessions.workoutType, goal.sportFilter));
+  if (definition.sportFilter) {
+    filters.push(eq(schema.workoutSessions.workoutType, definition.sportFilter));
+  }
   const sessions = await transaction
     .select()
     .from(schema.workoutSessions)
@@ -934,12 +1104,18 @@ async function toSummary(
 ): Promise<GoalSummary> {
   const current = pickCurrentPeriod(goal, periods, now);
   const progress = await progressFor(database, goal, current, now);
-  const reachedPeriod = periods.find((period) => period.state === "reached");
-  const shareCrew = reachedPeriod?.originatingPostId
-    ? await crewNameForPost(database, reachedPeriod.originatingPostId)
-    : null;
-  const sourceGroupId = reachedPeriod?.originatingPostId
-    ? await groupIdForPost(database, reachedPeriod.originatingPostId)
+  const currentVersion = periods.filter((period) => period.definitionVersion === goal.definitionVersion);
+  const reachedPeriod = current?.state === "reached"
+    ? current
+    : goal.state === "active"
+      ? null
+      : currentVersion.find((period) => period.state === "reached") ?? null;
+  const origin = reachedPeriod?.completionMethod === "auto" && reachedPeriod.originatingPostId && reachedPeriod.sourceSessionId
+    ? await loadAuthorizedOriginPost(database, {
+      originatingPostId: reachedPeriod.originatingPostId,
+      sessionId: reachedPeriod.sourceSessionId,
+      userId: goal.userId,
+    })
     : null;
   return {
     id: goal.id,
@@ -958,11 +1134,11 @@ async function toSummary(
     createdAt: goal.createdAt.toISOString(),
     progress,
     completionMethod: (reachedPeriod?.completionMethod as GoalSummary["completionMethod"]) ?? null,
-    shareable: reachedPeriod?.completionMethod === "auto" && Boolean(reachedPeriod.originatingPostId),
-    shareCrewName: shareCrew,
+    shareable: Boolean(origin),
+    shareCrewName: origin?.crewName ?? null,
     sourceSessionId: reachedPeriod?.sourceSessionId ?? null,
-    sourceGroupId,
-    currentPeriodId: current?.id ?? reachedPeriod?.id ?? null,
+    sourceGroupId: origin?.groupId ?? null,
+    currentPeriodId: current?.id ?? null,
   };
 }
 
@@ -984,10 +1160,18 @@ async function progressFor(
     eligibleStart: goal.activationAt > calendar.start ? goal.activationAt : calendar.start,
     creditClosesAt: creditClosesAt(calendar.end, goal.timeZone),
   };
-  const snapshots = await loadEligibleSnapshots(database, goal, window, now);
+  const snapshots = await loadEligibleSnapshots(
+    database,
+    period ? asPeriodDefinition(period) : asDefinition(goal),
+    window,
+    now,
+  );
   const periodLabel = formatPeriodLabel(goal, window);
   if (goal.kind === "volume") {
-    const { total } = accumulateVolume(goal, snapshots);
+    const { total } = accumulateVolume(
+      { metric: goal.metric as GoalDefinition["metric"], targetValue: goal.targetValue },
+      snapshots,
+    );
     const last = snapshots.at(-1);
     return {
       current: total,
@@ -998,7 +1182,7 @@ async function progressFor(
       lastQualifyingLabel: last ? formatLastLog(last, goal.timeZone) : null,
     };
   }
-  const best = bestValue(goal, snapshots);
+  const best = bestValue(period ? asPeriodDefinition(period) : asDefinition(goal), snapshots);
   const status = deadlineLabel(goal);
   return {
     current: best ?? 0,
@@ -1010,11 +1194,14 @@ async function progressFor(
   };
 }
 
-function accumulateVolume(goal: GoalRow, snapshots: GoalSessionSnapshot[]) {
+function accumulateVolume(
+  goal: Pick<GoalDefinition, "metric" | "targetValue">,
+  snapshots: GoalSessionSnapshot[],
+) {
   let total = 0;
   let source: GoalSessionSnapshot | null = null;
   for (const snapshot of [...snapshots].sort(byOccurrence)) {
-    const contribution = sessionVolumeContribution(snapshot, goal.metric as GoalDefinition["metric"]);
+    const contribution = sessionVolumeContribution(snapshot, goal.metric);
     if (contribution == null) continue;
     total += contribution;
     if (!source && total >= goal.targetValue) source = snapshot;
@@ -1022,30 +1209,33 @@ function accumulateVolume(goal: GoalRow, snapshots: GoalSessionSnapshot[]) {
   return { total, source };
 }
 
-function bestValue(goal: GoalRow, snapshots: GoalSessionSnapshot[]) {
+function bestValue(definition: GoalDefinition, snapshots: GoalSessionSnapshot[]) {
   let best: number | null = null;
   for (const snapshot of snapshots) {
-    const candidate = goal.kind === "time"
-      ? qualifyingTimeCandidate(snapshot, asDefinition(goal))
-        ?? extractGoalPerformanceCandidates(snapshot).find((item) => item.key === goal.prKey)
-      : qualifyingLiftCandidate(snapshot, asDefinition(goal))
-        ?? extractGoalPerformanceCandidates(snapshot).find((item) => item.key === goal.prKey);
+    const candidate = definition.kind === "time"
+      ? qualifyingTimeCandidate(snapshot, definition)
+        ?? extractGoalPerformanceCandidates(snapshot).find((item) => item.key === definition.prKey)
+      : qualifyingLiftCandidate(snapshot, definition)
+        ?? extractGoalPerformanceCandidates(snapshot).find((item) => item.key === definition.prKey);
     if (!candidate) continue;
-    const value = goal.kind === "time" ? candidate.metric.durationSeconds : candidate.metric.loadKg;
+    const value = definition.kind === "time" ? candidate.metric.durationSeconds : candidate.metric.loadKg;
     if (value == null) continue;
     if (best == null) {
       best = value;
       continue;
     }
-    if (goal.kind === "time" && value < best) best = value;
-    if (goal.kind === "lift" && value > best) best = value;
+    if (definition.kind === "time" && value < best) best = value;
+    if (definition.kind === "lift" && value > best) best = value;
   }
   return best;
 }
 
 function progressRatio(goal: GoalRow, best: number | null) {
   if (best == null || best <= 0) return 0;
-  if (goal.kind === "time") return Math.min(1, goal.targetValue / best);
+  if (goal.kind === "time") {
+    if (best >= goal.targetValue) return Math.min(0.99, goal.targetValue / best);
+    return 1;
+  }
   return Math.min(1, best / goal.targetValue);
 }
 
@@ -1151,7 +1341,7 @@ function performanceIdentity(input: {
   return { prKind: null, prKey: null };
 }
 
-function asDefinition(goal: GoalRow): GoalDefinition {
+function asDefinition(goal: GoalRow): GoalDefinition & { userId: string } {
   return {
     activationAt: goal.activationAt,
     displayUnit: goal.displayUnit,
@@ -1162,6 +1352,22 @@ function asDefinition(goal: GoalRow): GoalDefinition {
     sportFilter: goal.sportFilter,
     targetValue: goal.targetValue,
     timeZone: goal.timeZone,
+    userId: goal.userId,
+  };
+}
+
+function asPeriodDefinition(period: PeriodRow): GoalDefinition & { userId: string } {
+  return {
+    activationAt: period.activationAt,
+    displayUnit: period.displayUnit,
+    kind: period.kind as GoalDefinition["kind"],
+    metric: period.metric as GoalDefinition["metric"],
+    prKey: period.prKey,
+    prKind: period.prKind,
+    sportFilter: period.sportFilter,
+    targetValue: period.targetValue,
+    timeZone: period.timeZone,
+    userId: period.userId,
   };
 }
 
@@ -1174,15 +1380,6 @@ function periodWindow(period: PeriodRow): GoalPeriodWindow {
   };
 }
 
-function currentPeriodEnd(goal: GoalRow, now: Date) {
-  return currentCalendarPeriod(
-    now,
-    goal.timeZone,
-    goal.schedule as "weekly" | "monthly" | "one_time",
-    goal.deadlineAt,
-  ).end;
-}
-
 function pickCurrentPeriod(goal: GoalRow, periods: PeriodRow[], now: Date) {
   const calendar = currentCalendarPeriod(
     now,
@@ -1190,10 +1387,9 @@ function pickCurrentPeriod(goal: GoalRow, periods: PeriodRow[], now: Date) {
     goal.schedule as "weekly" | "monthly" | "one_time",
     goal.deadlineAt,
   );
-  return periods.find((period) => period.periodKey === calendar.key && period.definitionVersion === goal.definitionVersion)
-    ?? periods.find((period) => period.state === "reached")
-    ?? periods.at(-1)
-    ?? null;
+  return periods.find((period) => (
+    period.periodKey === calendar.key && period.definitionVersion === goal.definitionVersion
+  )) ?? null;
 }
 
 function groupPeriods(periods: PeriodRow[]) {
@@ -1247,23 +1443,135 @@ async function loadShareContext(
   };
 }
 
-async function crewNameForPost(database: Queryable, postId: string) {
-  const [row] = await database
-    .select({ name: schema.groups.name })
+async function loadAuthorizedOriginPost(
+  database: Queryable,
+  input: {
+    userId: string;
+    sessionId: string;
+    originatingPostId: string;
+    groupId?: string;
+  },
+) {
+  const filters = [
+    eq(schema.communityPosts.id, input.originatingPostId),
+    eq(schema.communityPosts.workoutSessionId, input.sessionId),
+    eq(schema.communityPosts.userId, input.userId),
+    isNull(schema.communityPosts.removedAt),
+    eq(schema.groupMembers.userId, input.userId),
+    activeMembership,
+    openGroup,
+    crewAuthorVisibleSql(
+      schema.communityPosts.groupId,
+      schema.communityPosts.userId,
+      schema.communityPosts.createdAt,
+    ),
+  ];
+  if (input.groupId) filters.push(eq(schema.communityPosts.groupId, input.groupId));
+  const [post] = await database
+    .select({
+      communityPostId: schema.communityPosts.id,
+      crewName: schema.groups.name,
+      groupId: schema.communityPosts.groupId,
+      postUserId: schema.communityPosts.userId,
+    })
     .from(schema.communityPosts)
     .innerJoin(schema.groups, eq(schema.communityPosts.groupId, schema.groups.id))
-    .where(eq(schema.communityPosts.id, postId))
+    .innerJoin(schema.groupMembers, eq(schema.groupMembers.groupId, schema.communityPosts.groupId))
+    .where(and(...filters))
     .limit(1);
-  return row?.name ?? null;
+  return post ?? null;
 }
 
-async function groupIdForPost(database: Queryable, postId: string) {
-  const [row] = await database
-    .select({ groupId: schema.communityPosts.groupId })
+async function loadAuthorizedSessionPost(
+  database: Queryable,
+  input: {
+    userId: string;
+    sessionId: string;
+    groupId: string;
+  },
+) {
+  const [post] = await database
+    .select({
+      communityPostId: schema.communityPosts.id,
+      crewName: schema.groups.name,
+      groupId: schema.communityPosts.groupId,
+      postUserId: schema.communityPosts.userId,
+    })
     .from(schema.communityPosts)
-    .where(eq(schema.communityPosts.id, postId))
+    .innerJoin(schema.groups, eq(schema.communityPosts.groupId, schema.groups.id))
+    .innerJoin(schema.groupMembers, eq(schema.groupMembers.groupId, schema.communityPosts.groupId))
+    .where(and(
+      eq(schema.communityPosts.workoutSessionId, input.sessionId),
+      eq(schema.communityPosts.groupId, input.groupId),
+      eq(schema.communityPosts.userId, input.userId),
+      isNull(schema.communityPosts.removedAt),
+      eq(schema.groupMembers.userId, input.userId),
+      activeMembership,
+      openGroup,
+      crewAuthorVisibleSql(
+        schema.communityPosts.groupId,
+        schema.communityPosts.userId,
+        schema.communityPosts.createdAt,
+      ),
+    ))
     .limit(1);
-  return row?.groupId ?? null;
+  return post ?? null;
+}
+
+async function settleUserGoalReads(userId: string, now: Date) {
+  await getDatabase().transaction(async (transaction) => {
+    await lockUser(transaction, userId);
+    await settleExpiredGoals(transaction, userId, now);
+  });
+}
+
+function resolveUpdatedDeadline(
+  input: Date | string | null | undefined,
+  goal: GoalRow,
+) {
+  if (input == null || input === "") return null;
+  if (goal.deadlineAt && input instanceof Date && input.getTime() === goal.deadlineAt.getTime()) {
+    return goal.deadlineAt;
+  }
+  if (goal.deadlineAt && typeof input === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    const parsed = new Date(input);
+    if (parsed.getTime() === goal.deadlineAt.getTime()) return goal.deadlineAt;
+  }
+  const next = exclusiveDeadlineFromInput(input, goal.timeZone);
+  if (goal.deadlineAt && next.getTime() === goal.deadlineAt.getTime()) return goal.deadlineAt;
+  const existingInclusive = goal.deadlineAt
+    ? addZonedDays(goal.deadlineAt, -1, goal.timeZone)
+    : null;
+  if (existingInclusive && typeof input === "string") {
+    const existingYmd = zonedParts(existingInclusive, goal.timeZone);
+    const ymd = `${existingYmd.year}-${String(existingYmd.month).padStart(2, "0")}-${String(existingYmd.day).padStart(2, "0")}`;
+    if (input === ymd || input.startsWith(ymd)) return goal.deadlineAt;
+  }
+  return next;
+}
+
+function nextDeadlineAfterReopen(
+  goal: GoalRow,
+  now: Date,
+  requested?: Date | string | null,
+) {
+  if (requested != null && requested !== "") {
+    const exclusive = exclusiveDeadlineFromInput(requested, goal.timeZone);
+    if (exclusive <= now) throw new GoalRequestError(GOAL_REOPEN_DEADLINE_MESSAGE);
+    return exclusive;
+  }
+  if (!goal.deadlineAt) return null;
+  if (goal.deadlineAt > now) return goal.deadlineAt;
+  if (goal.kind !== "volume") return null;
+  const lastInclusive = addZonedDays(goal.deadlineAt, -1, goal.timeZone);
+  const originalStart = startOfZonedDay(goal.startsAt, goal.timeZone);
+  const span = Math.max(zonedDayDiff(originalStart, lastInclusive, goal.timeZone), 0);
+  const newLast = addZonedDays(startOfZonedDay(now, goal.timeZone), span, goal.timeZone);
+  const exclusive = addZonedDays(newLast, 1, goal.timeZone);
+  if (exclusive <= now) {
+    return addZonedDays(startOfZonedDay(now, goal.timeZone), 1, goal.timeZone);
+  }
+  return exclusive;
 }
 
 export { loadSnapshots as loadGoalSessionSnapshots };

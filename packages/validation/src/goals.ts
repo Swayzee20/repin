@@ -12,16 +12,18 @@ import {
 } from "@repin/types";
 import { z } from "zod";
 
+import { isValidTimeZone } from "./calendar";
+
 const ianaTimeZoneSchema = z.string().trim().min(1).max(64).superRefine((value, context) => {
-  try {
-    Intl.DateTimeFormat("en-US", { timeZone: value });
-  } catch {
+  if (!isValidTimeZone(value)) {
     context.addIssue({
       code: "custom",
       message: "Choose a valid time zone",
     });
   }
 });
+
+const deadlineInputSchema = z.union([z.iso.datetime(), z.iso.date()]).nullable().optional();
 
 const distanceUnitSchema = z.enum(["mi", "km", "m"]);
 const volumeMetrics = ["distance", "workout_count", "minutes"] as const;
@@ -57,7 +59,7 @@ export const createGoalSchema = z
     targetSeconds: z.number().int().min(0).max(59).optional(),
     displayUnit: z.string().trim().min(1).max(16).nullable().optional(),
     schedule: z.enum(goalSchedules).optional(),
-    deadlineAt: z.iso.datetime().nullable().optional(),
+    deadlineAt: deadlineInputSchema,
     timeZone: ianaTimeZoneSchema,
     movementId: z.uuid().nullable().optional(),
     movementName: z.string().trim().min(1).max(80).nullable().optional(),
@@ -160,6 +162,12 @@ export const createGoalSchema = z
 
 export const updateGoalSchema = createGoalSchema;
 
+export const reopenGoalSchema = z
+  .object({
+    deadlineAt: deadlineInputSchema,
+  })
+  .strict();
+
 export const shareSessionGoalsSchema = z
   .object({
     periodIds: z.array(z.uuid()).max(5).optional(),
@@ -201,6 +209,8 @@ export const goalCopy = {
   emptyBody:
     "Set a private goal to track distance, workouts, minutes, or a time or lift target.",
   emptyAction: "Set a goal",
+  emptyActiveTitle: "No active goals",
+  emptyActiveBody: "Reached, expired, and archived goals are in History.",
   cap: "You have 5 active goals. Archive one, or wait for a one-time goal to finish, before adding another.",
   errorTitle: "Couldn't load goals",
   errorBody: "Check your connection and try again.",

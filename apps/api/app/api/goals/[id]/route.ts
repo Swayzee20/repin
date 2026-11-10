@@ -58,7 +58,7 @@ export async function PATCH(request: Request, context: RouteContext) {
         : input.data.target,
       displayUnit: input.data.displayUnit ?? (input.data.kind === "lift" ? "lb" : input.data.kind === "volume" && metric === "distance" ? "mi" : null),
       schedule: resolvedSchedule(input.data.kind, input.data.schedule),
-      deadlineAt: input.data.deadlineAt ? new Date(input.data.deadlineAt) : null,
+      deadlineAt: input.data.deadlineAt ?? null,
       timeZone: input.data.timeZone,
       movementId: input.data.movementId ?? null,
       movementName: input.data.movementName ?? null,

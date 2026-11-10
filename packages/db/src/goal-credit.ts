@@ -56,23 +56,16 @@ export function nextActiveSlot(occupied: Array<number | null | undefined>) {
 }
 
 export function extractGoalPerformanceCandidates(session: PrSessionSnapshot): PrCandidate[] {
-  return extractPrCandidates(session).filter((candidate) => {
-    if (candidate.kind === "heaviest_single") {
-      return completedSet(session, candidate.sourceSetId);
-    }
-    return candidate.kind === "distance_time";
-  });
-}
-
-function completedSet(session: PrSessionSnapshot, setId: string | null) {
-  if (!setId) return false;
-  for (const movement of session.movements) {
-    for (const set of movement.sets) {
-      if (set.id !== setId) continue;
-      return set.completed !== false;
-    }
-  }
-  return false;
+  const completed: PrSessionSnapshot = {
+    ...session,
+    movements: session.movements.map((movement) => ({
+      ...movement,
+      sets: movement.sets.filter((set) => set.completed !== false),
+    })),
+  };
+  return extractPrCandidates(completed).filter((candidate) => (
+    candidate.kind === "heaviest_single" || candidate.kind === "distance_time"
+  ));
 }
 
 export function sessionDistanceMeters(session: GoalSessionSnapshot): number | null {

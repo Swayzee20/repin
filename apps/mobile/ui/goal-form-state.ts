@@ -9,6 +9,8 @@ import {
 } from "@repin/types";
 import {
   createGoalSchema,
+  formatZonedYmd,
+  inclusiveCalendarDate,
   resolvedSchedule,
   resolvedVolumeMetric,
   type VolumeMetric,
@@ -117,7 +119,9 @@ export function hydrateGoalForm(goal: GoalDetail): GoalFormDraft {
   draft.displayUnit = goal.displayUnit ?? (goal.kind === "lift" ? "lb" : draft.volumeMetric === "distance" ? "mi" : "");
   draft.movementId = goal.movementId;
   draft.movementName = goal.movementName ?? "";
-  draft.deadline = goal.deadlineAt ? new Date(goal.deadlineAt) : null;
+  draft.deadline = goal.deadlineAt
+    ? inclusiveCalendarDate(new Date(goal.deadlineAt), goal.timeZone)
+    : null;
   if (goal.kind === "time") {
     const total = Math.round(goal.targetValue);
     draft.targetMinutes = String(Math.floor(total / 60));
@@ -155,7 +159,7 @@ export function goalFormPayload(draft: GoalFormDraft, timeZone: string) {
     ? Number(draft.targetMinutes || "0") * 60 + Number(draft.targetSeconds || "0")
     : Number(draft.targetText);
   return {
-    deadlineAt: draft.deadline ? draft.deadline.toISOString() : null,
+    deadlineAt: draft.deadline ? formatZonedYmd(draft.deadline, timeZone) : null,
     displayUnit: draft.kind === "volume" && draft.volumeMetric !== "distance"
       ? (draft.volumeMetric === "minutes" ? "min" : "count")
       : (draft.displayUnit || null),

@@ -17,7 +17,8 @@ export default function EditGoalScreen() {
   const [error, setError] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
   const [saving, setSaving] = useState(false);
-  const timeZone = deviceTimeZone();
+  const deviceZone = deviceTimeZone();
+  const [timeZone, setTimeZone] = useState(deviceZone);
 
   useEffect(() => {
     if (!goalId) {
@@ -33,6 +34,7 @@ export default function EditGoalScreen() {
     void getGoal(goalId).then((goal) => {
       if (!active) return;
       setDraft(hydrateGoalForm(goal));
+      setTimeZone(goal.timeZone);
       setReady(true);
     }).catch((loadError) => {
       if (!active) return;

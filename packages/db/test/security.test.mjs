@@ -2111,17 +2111,140 @@ test("goals stay owner-private and Goal badges follow post visibility", async ()
     assert.equal(grants.rows[0].badge_delete, false);
 
     const helpers = await client.query(`
-      select p.proname, p.prosecdef, p.provolatile
+      select p.proname, p.prosecdef, p.provolatile, p.proconfig,
+        has_function_privilege('authenticated', p.oid, 'EXECUTE') as authenticated_execute,
+        has_function_privilege('anon', p.oid, 'EXECUTE') as anon_execute,
+        exists(
+          select 1
+          from aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) as acl
+          where acl.grantee = 0 and acl.privilege_type = 'EXECUTE'
+        ) as public_execute
       from pg_proc as p
       join pg_namespace as n on n.oid = p.pronamespace
       where n.nspname = 'private'
-        and p.proname in ('can_access_community_post', 'is_blocked_between')
+        and p.proname in (
+          'can_access_community_post',
+          'is_blocked_between',
+          'goal_badge_post_visible'
+        )
       order by p.proname
     `);
+    assert.equal(helpers.rows.length, 3);
     for (const helper of helpers.rows) {
       assert.equal(helper.prosecdef, true, helper.proname);
       assert.equal(helper.provolatile, "s", helper.proname);
+      assert.equal(helper.authenticated_execute, true, helper.proname);
+      assert.equal(helper.anon_execute, false, helper.proname);
+      assert.equal(helper.public_execute, false, helper.proname);
+      assert.ok(
+        (helper.proconfig ?? []).some((entry) => entry === "search_path=" || entry === "search_path=\"\""),
+        helper.proname,
+      );
     }
+
+    await assert.rejects(
+      () => client.query(
+        `insert into goals (
+           user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot
+         ) values ($1, 'Null slot', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'active', null)`,
+        [ada.id],
+      ),
+      /goals_slot_state_check|check constraint/i,
+    );
+    await assert.rejects(
+      () => client.query(
+        `insert into goals (
+           user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot
+         ) values ($1, 'Sixth', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'active', 6)`,
+        [ada.id],
+      ),
+      /goals_slot_state_check|check constraint/i,
+    );
+    await client.query(
+      `insert into goals (
+         user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot
+       ) values ($1, 'Cap weekly', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'active', 1)`,
+      [ada.id],
+    );
+    await assert.rejects(
+      () => client.query(
+        `insert into goals (
+           user_id, title, kind, metric, target_value, schedule, starts_at, time_zone, activation_at, state, active_slot
+         ) values ($1, 'Dup slot', 'volume', 'workout_count', 1, 'weekly', now(), 'America/Chicago', now(), 'active', 1)`,
+        [ada.id],
+      ),
+      /goals_user_active_slot_unique|unique/i,
+    );
+
+    const policy = await client.query(`
+      select pg_get_expr(p.polqual, p.polrelid) as using_predicate
+      from pg_policy p
+      join pg_class c on c.oid = p.polrelid
+      where c.relname = 'community_post_goals'
+        and p.polname = 'community_post_goals_select_member'
+    `);
+    assert.match(policy.rows[0].using_predicate, /goal_badge_post_visible/);
+    assert.doesNotMatch(policy.rows[0].using_predicate, /removed_at is null/);
+
+    await client.query("update community_posts set removed_at = now() where id = $1", [posted.communityPostId]);
+    assert.deepEqual(
+      await idsAs(client, "authenticated", byron.id, "select id from community_post_goals"),
+      [],
+    );
+    assert.deepEqual(
+      await idsAs(client, "authenticated", ada.id, "select id from community_post_goals"),
+      [badges[0].id],
+    );
+    await client.query("update community_posts set removed_at = null where id = $1", [posted.communityPostId]);
+
+    const byronGoal = await db.createGoalForUser({
+      userId: byron.id,
+      kind: "lift",
+      metric: "load",
+      sportFilter: null,
+      target: 200,
+      displayUnit: "lb",
+      schedule: "one_time",
+      deadlineAt: null,
+      timeZone: "America/Chicago",
+      movementId: null,
+      movementName: "Bench Press",
+      lane: null,
+    });
+    const byronPosted = await db.createWorkoutForMember({
+      userId: byron.id,
+      displayName: byron.displayName,
+      groupId: crew.id,
+      workoutType: "strength_training",
+      title: "Bench Press",
+      name: "Bench Press",
+      durationMinutes: 40,
+      effort: 3,
+      caption: null,
+      photoPath: null,
+      occurredAt: new Date(),
+      movements: [{
+        movementName: "Bench Press",
+        notes: null,
+        sets: [{ reps: 1, load: 225, loadUnit: "lb" }],
+      }],
+    });
+    assert.ok(byronPosted.goals.reached.some((item) => item.goalId === byronGoal.id));
+    const byronBadges = await db.shareSessionGoalBadges({
+      userId: byron.id,
+      groupId: crew.id,
+      sessionId: byronPosted.id,
+    });
+    assert.equal(byronBadges.length, 1);
+    await db.leaveCrew({ userId: byron.id, groupId: crew.id });
+    await assert.rejects(
+      () => db.shareSessionGoalBadges({
+        userId: byron.id,
+        groupId: crew.id,
+        sessionId: byronPosted.id,
+      }),
+      (error) => error.name === "GoalRequestError" && error.statusCode === 403,
+    );
 
     await expectDenied(
       client,

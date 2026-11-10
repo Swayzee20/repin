@@ -1171,6 +1171,7 @@ export const goals = pgTable(
       "goals_slot_state_check",
       sql`(
         ${table.state} = 'active'
+        and ${table.activeSlot} is not null
         and ${table.activeSlot} between 1 and 5
       ) or (
         ${table.state} <> 'active'
@@ -1239,7 +1240,14 @@ export const goalPeriods = pgTable(
     periodStart: timestamp("period_start", { withTimezone: true }).notNull(),
     periodEnd: timestamp("period_end", { withTimezone: true }),
     eligibleStart: timestamp("eligible_start", { withTimezone: true }).notNull(),
+    activationAt: timestamp("activation_at", { withTimezone: true }).notNull(),
     timeZone: text("time_zone").notNull(),
+    kind: text().notNull(),
+    metric: text().notNull(),
+    sportFilter: text("sport_filter"),
+    prKind: text("pr_kind"),
+    prKey: text("pr_key"),
+    displayUnit: text("display_unit"),
     targetValue: numeric("target_value", {
       precision: 14,
       scale: 3,

@@ -18,14 +18,11 @@ import {
   sundayWeekBounds,
 } from "./index";
 
-const utc = 0;
-const pacific = 480;
-const tokyo = -540;
-const kiritimati = -840;
-
-function atOffset(isoUtc: string, timezoneOffsetMinutes: number) {
-  return { now: new Date(isoUtc), timezoneOffsetMinutes };
-}
+const utc = "UTC";
+const pacific = "America/Los_Angeles";
+const tokyo = "Asia/Tokyo";
+const kiritimati = "Pacific/Kiritimati";
+const chicago = "America/Chicago";
 
 test("workouts this week uses Sunday 00:00 through Saturday 23:59:59 in the device timezone", () => {
   const sundayUtc = new Date("2026-11-08T08:00:00.000Z");
@@ -62,12 +59,24 @@ test("a Saturday late-night workout still counts in Tokyo and UTC", () => {
 });
 
 test("UTC+14 week bounds stay Sunday-Saturday on the device calendar", () => {
-  const { now, timezoneOffsetMinutes } = atOffset("2026-11-10T10:00:00.000Z", kiritimati);
-  const { weekStart, weekEnd } = sundayWeekBounds(now, timezoneOffsetMinutes);
-  assert.equal(isInSundayWeek(weekStart, now, timezoneOffsetMinutes), true);
-  assert.equal(isInSundayWeek(new Date(weekEnd.getTime() - 1), now, timezoneOffsetMinutes), true);
-  assert.equal(isInSundayWeek(weekEnd, now, timezoneOffsetMinutes), false);
-  assert.equal(weekEnd.getTime() - weekStart.getTime(), 7 * 24 * 60 * 60 * 1_000);
+  const now = new Date("2026-11-10T10:00:00.000Z");
+  const { weekStart, weekEnd } = sundayWeekBounds(now, kiritimati);
+  assert.equal(isInSundayWeek(weekStart, now, kiritimati), true);
+  assert.equal(isInSundayWeek(new Date(weekEnd.getTime() - 1), now, kiritimati), true);
+  assert.equal(isInSundayWeek(weekEnd, now, kiritimati), false);
+});
+
+test("Sunday week bounds match the Goals IANA calendar across DST", () => {
+  const fallNoon = new Date("2026-11-01T18:00:00.000Z");
+  const fall = sundayWeekBounds(fallNoon, chicago);
+  assert.equal(fall.weekStart.toISOString(), "2026-11-01T05:00:00.000Z");
+  assert.equal(fall.weekEnd.toISOString(), "2026-11-08T06:00:00.000Z");
+  assert.notEqual(fall.weekEnd.getTime() - fall.weekStart.getTime(), 7 * 24 * 60 * 60 * 1_000);
+
+  const springNoon = new Date("2026-03-10T18:00:00.000Z");
+  const spring = sundayWeekBounds(springNoon, chicago);
+  assert.equal(spring.weekStart.toISOString(), "2026-03-08T06:00:00.000Z");
+  assert.equal(spring.weekEnd.toISOString(), "2026-03-15T05:00:00.000Z");
 });
 
 test("mute summary states match All on, N off, and Muted", () => {

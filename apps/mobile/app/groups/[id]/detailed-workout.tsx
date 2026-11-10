@@ -292,6 +292,13 @@ export default function DetailedWorkoutScreen() {
       setError("This workout cannot be submitted from the current screen.");
       return;
     }
+    const durationField = isStrengthWorkout
+      ? parseOptionalDurationMinutes(durationText)
+      : { error: null as string | null, value: null as number | null };
+    if (durationField.error) {
+      setError(durationField.error);
+      return;
+    }
 
     setSubmitting(true);
     let uploadedPhotoPath: string | null = null;
@@ -315,13 +322,6 @@ export default function DetailedWorkoutScreen() {
         ? { durationSeconds: null, metrics: [] }
         : buildQuickLogResults(results, workoutType);
       const segments = isIntervalRun ? buildIntervalSegments(intervals) : [];
-      const durationField = isStrengthWorkout
-        ? parseOptionalDurationMinutes(durationText)
-        : { error: null as string | null, value: null as number | null };
-      if (durationField.error) {
-        setError(durationField.error);
-        return;
-      }
       const computedDuration = structuredResults.durationSeconds == null
         ? null
         : Math.max(1, Math.round(structuredResults.durationSeconds / 60));

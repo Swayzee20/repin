@@ -97,6 +97,44 @@ test("edit hydration converts canonical metres, seconds, and kilograms back to t
   assert.equal(draft.displayUnit, "mi");
 });
 
+test("hydrate subtracts the exclusive deadline and an unchanged save keeps the calendar day", () => {
+  const exclusive = "2026-11-21T06:00:00.000Z";
+  const draft = hydrateGoalForm({
+    id: "goal-1",
+    title: "12 workouts",
+    kind: "volume",
+    metric: "workout_count",
+    sportFilter: null,
+    schedule: "one_time",
+    state: "active",
+    displayUnit: "count",
+    targetValue: 12,
+    timeZone: "America/Chicago",
+    activationAt: "2026-11-10T16:00:00.000Z",
+    deadlineAt: exclusive,
+    activeSlot: 1,
+    createdAt: "2026-11-10T16:00:00.000Z",
+    progress: { current: 0, target: 12, ratio: 0, label: "", periodLabel: null, lastQualifyingLabel: null },
+    completionMethod: null,
+    shareable: false,
+    shareCrewName: null,
+    sourceSessionId: null,
+    sourceGroupId: null,
+    currentPeriodId: null,
+    prKind: null,
+    prKey: null,
+    movementId: null,
+    movementName: null,
+    lane: null,
+    helper: "",
+    canMarkDone: false,
+    canReopen: false,
+    reopenBlocked: false,
+    archivedAt: null,
+  });
+  assert.equal(goalFormPayload(draft, "America/Chicago").deadlineAt, "2026-11-20");
+});
+
 test("count and minutes goals offer all eight sports; distance stays run, walk, ride, or all", () => {
   assert.equal(volumeSportsFor("distance").length, 4);
   assert.equal(volumeSportsFor("workout_count").length, 9);

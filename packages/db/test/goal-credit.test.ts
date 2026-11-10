@@ -225,3 +225,52 @@ test("lift goals accept any 1-rep at or above the target, including below a life
   assert.equal(qualifyingLiftCandidate(incomplete, goal), null);
   assert.equal(emptyPrMetric().loadKg, null);
 });
+
+test("incomplete heavier singles are ignored before extracting the qualifying lift", () => {
+  const mixed = session({
+    workoutType: "strength_training",
+    movements: [{
+      id: "m1",
+      movementId: null,
+      movementName: "Back Squat",
+      position: 0,
+      sets: [
+        {
+          id: "set-complete",
+          position: 0,
+          reps: 1,
+          load: 315,
+          loadUnit: "lb",
+          durationSeconds: null,
+          distance: null,
+          distanceUnit: null,
+          calories: null,
+          completed: true,
+        },
+        {
+          id: "set-incomplete",
+          position: 1,
+          reps: 1,
+          load: 350,
+          loadUnit: "lb",
+          durationSeconds: null,
+          distance: null,
+          distanceUnit: null,
+          calories: null,
+          completed: false,
+        },
+      ],
+    }],
+  });
+  const goal: GoalDefinition = {
+    ...volumeGoal,
+    kind: "lift",
+    metric: "load",
+    targetValue: 136.078,
+    prKind: "heaviest_single",
+    prKey: "hs:name:back squat",
+  };
+  const candidate = qualifyingLiftCandidate(mixed, goal);
+  assert.ok(candidate);
+  assert.equal(candidate?.sourceSetId, "set-complete");
+});

@@ -43,6 +43,7 @@ export async function GET(
 
     const url = new URL(request.url);
     const query = crewPageQuerySchema.safeParse({
+      timeZone: url.searchParams.get("timeZone") ?? undefined,
       timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes") ?? undefined,
     });
     if (!query.success) {
@@ -60,7 +61,7 @@ export async function GET(
 
     const { weekStart, weekEnd } = sundayWeekBounds(
       new Date(),
-      query.data.timezoneOffsetMinutes ?? 0,
+      query.data.timeZone,
     );
     const [members, notifications, photoUrl] = await Promise.all([
       listCrewMembers({

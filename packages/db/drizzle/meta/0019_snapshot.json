@@ -1638,11 +1638,53 @@
           "primaryKey": false,
           "notNull": true
         },
+        "activation_at": {
+          "name": "activation_at",
+          "type": "timestamp with time zone",
+          "primaryKey": false,
+          "notNull": true
+        },
         "time_zone": {
           "name": "time_zone",
           "type": "text",
           "primaryKey": false,
           "notNull": true
+        },
+        "kind": {
+          "name": "kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "metric": {
+          "name": "metric",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true
+        },
+        "sport_filter": {
+          "name": "sport_filter",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pr_kind": {
+          "name": "pr_kind",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "pr_key": {
+          "name": "pr_key",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "display_unit": {
+          "name": "display_unit",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false
         },
         "target_value": {
           "name": "target_value",
@@ -2217,7 +2259,7 @@
         },
         "goals_slot_state_check": {
           "name": "goals_slot_state_check",
-          "value": "(\n        \"goals\".\"state\" = 'active'\n        and \"goals\".\"active_slot\" between 1 and 5\n      ) or (\n        \"goals\".\"state\" <> 'active'\n        and \"goals\".\"active_slot\" is null\n      )"
+          "value": "(\n        \"goals\".\"state\" = 'active'\n        and \"goals\".\"active_slot\" is not null\n        and \"goals\".\"active_slot\" between 1 and 5\n      ) or (\n        \"goals\".\"state\" <> 'active'\n        and \"goals\".\"active_slot\" is null\n      )"
         },
         "goals_definition_check": {
           "name": "goals_definition_check",

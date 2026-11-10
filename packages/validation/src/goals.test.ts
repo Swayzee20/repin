@@ -25,6 +25,18 @@ test("optional duration accepts blank, 1, and 1440, and rejects 0 and fractions"
   assert.deepEqual(parseOptionalDurationMinutes("1441"), { error: durationMinutesError, value: null });
 });
 
+test("create goal schema accepts a date-only end date", () => {
+  const parsed = createGoalSchema.safeParse({
+    kind: "volume",
+    metric: "workout_count",
+    target: 12,
+    schedule: "one_time",
+    deadlineAt: "2026-11-20",
+    timeZone: "America/Chicago",
+  });
+  assert.equal(parsed.success, true);
+});
+
 test("create goal schema requires an IANA zone and volume end date", () => {
   const weekly = createGoalSchema.safeParse({
     kind: "volume",
