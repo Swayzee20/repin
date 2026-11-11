@@ -7,11 +7,15 @@ import { fileURLToPath } from "node:url";
 
 import pg from "pg";
 
+import { assertLocalDatabaseUrl } from "./local-database-guard.mjs";
+
 const { Client } = pg;
 const dbPackageRoot = fileURLToPath(new URL("..", import.meta.url));
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
 const sourceUrl = process.env.DATABASE_URL
   ?? "postgresql://postgres:postgres@127.0.0.1:5432/postgres";
+
+assertLocalDatabaseUrl(sourceUrl);
 
 test("owner-only dashboard reads hide another member's workouts, bests, and totals", async () => {
   const testUrl = await recreateDatabase();
@@ -146,6 +150,7 @@ test("owner-only dashboard reads hide another member's workouts, bests, and tota
 });
 
 async function recreateDatabase() {
+  assertLocalDatabaseUrl(sourceUrl);
   const admin = new Client({ connectionString: withDatabase(sourceUrl, "postgres") });
   await admin.connect();
   try {
