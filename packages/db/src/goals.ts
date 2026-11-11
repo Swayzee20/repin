@@ -47,11 +47,7 @@ import {
   zonedDayDiff,
   zonedParts,
 } from "./goal-calendar";
-import {
-  activeMembership,
-  crewAuthorVisibleSql,
-  openGroup,
-} from "./membership";
+import { communityPostVisibleToSql } from "./visibility";
 import {
   canonicalTarget,
   extractGoalPerformanceCandidates,
@@ -1565,15 +1561,8 @@ async function loadAuthorizedOriginPost(
     eq(schema.communityPosts.id, input.originatingPostId),
     eq(schema.communityPosts.workoutSessionId, input.sessionId),
     eq(schema.communityPosts.userId, input.userId),
-    isNull(schema.communityPosts.removedAt),
     eq(schema.groupMembers.userId, input.userId),
-    activeMembership,
-    openGroup,
-    crewAuthorVisibleSql(
-      schema.communityPosts.groupId,
-      schema.communityPosts.userId,
-      schema.communityPosts.createdAt,
-    ),
+    communityPostVisibleToSql(input.userId, schema.communityPosts.id),
   ];
   if (input.groupId) filters.push(eq(schema.communityPosts.groupId, input.groupId));
   const [post] = await database
@@ -1613,15 +1602,8 @@ async function loadAuthorizedSessionPost(
       eq(schema.communityPosts.workoutSessionId, input.sessionId),
       eq(schema.communityPosts.groupId, input.groupId),
       eq(schema.communityPosts.userId, input.userId),
-      isNull(schema.communityPosts.removedAt),
       eq(schema.groupMembers.userId, input.userId),
-      activeMembership,
-      openGroup,
-      crewAuthorVisibleSql(
-        schema.communityPosts.groupId,
-        schema.communityPosts.userId,
-        schema.communityPosts.createdAt,
-      ),
+      communityPostVisibleToSql(input.userId, schema.communityPosts.id),
     ))
     .limit(1);
   return post ?? null;

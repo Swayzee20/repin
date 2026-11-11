@@ -9,7 +9,6 @@ import {
   eq,
   gte,
   inArray,
-  isNull,
   lt,
   sql,
 } from "drizzle-orm";
@@ -25,6 +24,7 @@ import {
 import { getDatabase, type DatabaseTransaction } from "./connection";
 import { activeMembership, openGroup } from "./membership";
 import * as schema from "./schema";
+import { communityPostVisibleToSql } from "./visibility";
 
 export {
   crewAlertAllowed,
@@ -114,6 +114,7 @@ async function countActiveMembers(
 
 export async function listCrewMembers(input: {
   groupId: string;
+  viewerUserId: string;
   weekStart: Date;
   weekEnd: Date;
 }) {
@@ -158,9 +159,9 @@ export async function listCrewMembers(input: {
     .where(
       and(
         eq(schema.communityPosts.groupId, input.groupId),
-        isNull(schema.communityPosts.removedAt),
         gte(schema.communityPosts.createdAt, input.weekStart),
         lt(schema.communityPosts.createdAt, input.weekEnd),
+        communityPostVisibleToSql(input.viewerUserId, schema.communityPosts.id),
         inArray(
           schema.communityPosts.userId,
           members.map((member) => member.userId),
