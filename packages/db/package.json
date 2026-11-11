@@ -14,8 +14,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "seed:generate": "node ./seed/generate-starter-movements.mjs",
-    "test:security": "node --conditions=react-server --import ./test/register.mjs --test --test-concurrency=1 test/security.test.mjs test/formats.test.mjs test/last-session.test.mjs test/push.test.mjs test/personal-records.test.mjs test/goals.test.mjs",
-    "test:pr": "pnpm --dir ../../apps/mobile exec tsx --test ../../packages/db/test/pr-detection.test.ts ../../packages/db/test/goal-calendar.test.ts ../../packages/db/test/goal-credit.test.ts",
+    "test:security": "node --conditions=react-server --import ./test/register.mjs --test --test-concurrency=1 test/security.test.mjs test/formats.test.mjs test/last-session.test.mjs test/push.test.mjs test/personal-records.test.mjs test/goals.test.mjs test/profile-dashboard-ownership.test.mjs",
+    "test:pr": "pnpm --dir ../../apps/mobile exec tsx --test ../../packages/db/test/pr-detection.test.ts ../../packages/db/test/goal-calendar.test.ts ../../packages/db/test/goal-credit.test.ts ../../packages/db/test/profile-dashboard.test.ts",
     "test:seed": "pnpm --dir ../../apps/mobile exec tsx --test ../../packages/db/test/starter-movements-seed.test.mjs",
     "test:summary": "pnpm --dir ../../apps/mobile exec tsx --test ../../packages/db/test/summary.test.mjs",
     "typecheck": "tsc --noEmit"

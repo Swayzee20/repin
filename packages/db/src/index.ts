@@ -2552,6 +2552,7 @@ export async function getUserWorkoutSnapshot(input: {
   userId: string;
   todayStart: Date;
   weekStart: Date;
+  weekEnd?: Date;
   now: Date;
 }) {
   const database = getDatabase();
@@ -2591,6 +2592,9 @@ export async function getUserWorkoutSnapshot(input: {
         and(
           eq(schema.workoutSessions.userId, input.userId),
           gte(schema.workoutSessions.occurredAt, input.weekStart),
+          input.weekEnd
+            ? lt(schema.workoutSessions.occurredAt, input.weekEnd)
+            : undefined,
           lte(schema.workoutSessions.occurredAt, input.now),
         ),
       ),
@@ -2670,6 +2674,19 @@ export {
   removeCommunityPostPrBadges,
   shareSessionPersonalRecords,
 } from "./personal-records";
+
+export {
+  getOwnedWorkoutDetail,
+  getOwnedWorkoutStats,
+  listOwnedPersonalRecords,
+  listOwnedWorkouts,
+} from "./profile-dashboard";
+export {
+  aggregatePeriodStats,
+  DashboardRequestError,
+  dashboardSessionContribution,
+} from "./profile-dashboard-stats";
+export type { DashboardSessionContribution } from "./profile-dashboard-stats";
 
 export {
   archiveGoalForUser,

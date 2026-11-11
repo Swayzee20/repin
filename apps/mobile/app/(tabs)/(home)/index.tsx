@@ -87,7 +87,11 @@ export default function HomeScreen() {
     const request = (async () => {
       setHomeLoading(true); setHomeError(null);
       try {
-      const search = new URLSearchParams({ timezoneOffsetMinutes: String(new Date().getTimezoneOffset()), view: "home" });
+      const search = new URLSearchParams({
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
+        view: "home",
+      });
       if (selectedGroupId) search.set("groupId", selectedGroupId);
       const response = await fetch(`${apiUrl}/api/home?${search.toString()}`, {
         headers: { Authorization: `Bearer ${session.access_token}` }, signal: AbortSignal.timeout(7_500),
