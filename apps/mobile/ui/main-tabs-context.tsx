@@ -46,8 +46,13 @@ export function MainTabsProvider({ children }: { children: ReactNode }) {
   return <MainTabsContext.Provider value={value}>{children}</MainTabsContext.Provider>;
 }
 
+/** Returns null outside the provider. Pushed screens use this so a missing tree cannot crash. */
+export function useMainTabsIfPresent() {
+  return useContext(MainTabsContext);
+}
+
 export function useMainTabs() {
-  const context = useContext(MainTabsContext);
+  const context = useMainTabsIfPresent();
   if (!context) throw new Error("useMainTabs must be used within MainTabsProvider");
   return context;
 }

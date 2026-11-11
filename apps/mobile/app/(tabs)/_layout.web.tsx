@@ -4,17 +4,14 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Icon } from "../../ui/icons";
 import { MainTabsGate } from "../../ui/main-tabs-gate";
-import { MainTabsProvider } from "../../ui/main-tabs-context";
 import { webTabIconName } from "../../ui/tab-root-header";
 import { colors, size, spacing, type } from "../../ui/theme";
 
 export default function MainTabsLayout() {
   return (
-    <MainTabsProvider>
-      <MainTabsGate>
-        <WebTabs />
-      </MainTabsGate>
-    </MainTabsProvider>
+    <MainTabsGate>
+      <WebTabs />
+    </MainTabsGate>
   );
 }
 

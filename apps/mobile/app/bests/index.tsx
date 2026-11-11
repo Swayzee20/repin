@@ -12,7 +12,7 @@ import {
 } from "../../lib/profile-dashboard-api";
 import { LoadingState, StateCard } from "../../ui/components";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
-import { useMainTabs } from "../../ui/main-tabs-context";
+import { useMainTabsIfPresent } from "../../ui/main-tabs-context";
 import { PersonalWorkoutDetailContent } from "../../ui/personal-workout-detail";
 import { CurrentBestRow, groupedBests } from "../../ui/profile-dashboard";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
@@ -34,7 +34,7 @@ export default function CurrentBestsScreen() {
   const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
   const roundBack = pushedShowsRoundBack(Platform.OS);
   const headerClearance = pushedHeaderClearance(Platform.OS, strip);
-  const { selectedGroupId, toggleWorkoutChooser } = useMainTabs();
+  const tabs = useMainTabsIfPresent();
   const [bests, setBests] = useState<CurrentBest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -42,7 +42,8 @@ export default function CurrentBestsScreen() {
   const [detail, setDetail] = useState<PersonalWorkoutDetail | null>(null);
   const [missingSource, setMissingSource] = useState(false);
   const timeZone = deviceTimeZone();
-  const showPlus = Boolean(selectedGroupId) && !stripPresent;
+  const showPlus = Boolean(tabs?.selectedGroupId) && !stripPresent;
+  const onPlusPress = tabs?.toggleWorkoutChooser;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,8 +122,8 @@ export default function CurrentBestsScreen() {
         <Stack.Screen
           options={{
             ...pushedHeaderScreenOptions(),
-            headerRight: showPlus
-              ? () => <RoundIconButton accessibilityLabel="Log a workout" kind="plus" onPress={toggleWorkoutChooser} />
+            headerRight: showPlus && onPlusPress
+              ? () => <RoundIconButton accessibilityLabel="Log a workout" kind="plus" onPress={onPlusPress} />
               : undefined,
           }}
         />
@@ -137,8 +138,8 @@ export default function CurrentBestsScreen() {
                 <View style={styles.headerRow}>
                   {roundBack ? <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} /> : null}
                   <Text style={styles.title}>{profileDashboardCopy.bestsTitle}</Text>
-                  {showPlus && !nativeHeader ? (
-                    <RoundIconButton accessibilityLabel="Log a workout" kind="plus" onPress={toggleWorkoutChooser} />
+                  {showPlus && onPlusPress && !nativeHeader ? (
+                    <RoundIconButton accessibilityLabel="Log a workout" kind="plus" onPress={onPlusPress} />
                   ) : null}
                 </View>
                 {list}

@@ -1,19 +1,15 @@
-import { Redirect, useGlobalSearchParams, useRouter } from "expo-router";
+import { Redirect, useGlobalSearchParams } from "expo-router";
 import { type ReactNode } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { normalizeInviteRedirect } from "../lib/invite-route";
 import { isLayoutPreview } from "../lib/layout-preview";
 import { useAuthSession } from "../lib/use-auth-session";
-import { LogWorkoutChooser } from "./log-workout-chooser";
-import { useMainTabs } from "./main-tabs-context";
 import { colors } from "./theme";
 
 export function MainTabsGate({ children }: { children: ReactNode }) {
-  const router = useRouter();
   const params = useGlobalSearchParams<{ redirect?: string | string[] }>();
   const { ready, session } = useAuthSession();
-  const { selectedGroupId, setWorkoutChooserVisible, workoutChooserVisible } = useMainTabs();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
 
   const layoutPreview = __DEV__ && isLayoutPreview();
@@ -26,25 +22,7 @@ export function MainTabsGate({ children }: { children: ReactNode }) {
     );
   }
 
-  return (
-    <View style={styles.fill}>
-      {children}
-      {selectedGroupId ? (
-        <LogWorkoutChooser
-          onDetailedWorkout={() => {
-            setWorkoutChooserVisible(false);
-            router.push(`/groups/${selectedGroupId}/detailed-workout`);
-          }}
-          onDismiss={() => setWorkoutChooserVisible(false)}
-          onQuickLog={() => {
-            setWorkoutChooserVisible(false);
-            router.push(`/groups/${selectedGroupId}/log-workout`);
-          }}
-          visible={workoutChooserVisible}
-        />
-      ) : null}
-    </View>
-  );
+  return <View style={styles.fill}>{children}</View>;
 }
 
 const styles = StyleSheet.create({
