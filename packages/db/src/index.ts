@@ -23,25 +23,27 @@ import {
 import {
   checkDatabaseConnection,
   getDatabase,
+  type Database,
   type DatabaseTransaction,
 } from "./connection";
 import {
   dismissOpenReportsForComment,
   dismissOpenReportsForCommunityPost,
-  notBlockedAuthor,
-  notReportedContent,
   visibleCommentCountSql,
   visibleReactionCountSql,
 } from "./moderation";
 import {
   activeMembership,
-  crewAuthorVisibleSql,
-  commentAuthorVisibleSql,
   openGroup,
-  reactionAuthorVisibleSql,
   viewerActiveMembership,
 } from "./membership";
 import * as schema from "./schema";
+import {
+  communityCommentVisibleToSql,
+  communityPostVisibleToSql,
+  communityReactionVisibleToSql,
+  isCreatorAuthorizedDefinitionVisibleTo,
+} from "./visibility";
 import {
   deriveLogVersion,
   derivedDisplayMetrics,
@@ -65,6 +67,18 @@ import {
 } from "./goals";
 
 export { checkDatabaseConnection, getDatabase };
+export {
+  communityCommentVisibleTo,
+  communityCommentVisibleToSql,
+  communityPostVisibleTo,
+  communityPostVisibleToSql,
+  communityReactionVisibleTo,
+  communityReactionVisibleToSql,
+  creatorAuthorizedDefinitionSql,
+  isCreatorAuthorizedDefinitionVisibleTo,
+  isWorkoutSessionVisibleTo,
+  workoutSessionVisibleToSql,
+} from "./visibility";
 
 export class WorkoutRequestError extends Error {
   readonly statusCode = 400;
@@ -244,6 +258,7 @@ export async function createWorkoutDefinition(input: {
   });
 }
 
+/** Internal loader. Not an authorization boundary; do not expose unguarded. */
 export async function getWorkoutDefinition(definitionId: string) {
   const database = getDatabase();
   const [definition] = await database
@@ -285,6 +300,16 @@ export async function getWorkoutDefinition(definitionId: string) {
       ),
     })),
   };
+}
+
+export async function getAuthorizedWorkoutDefinitionForViewer(input: {
+  viewerId: string;
+  definitionId: string;
+}) {
+  if (!(await isCreatorAuthorizedDefinitionVisibleTo(input.viewerId, input.definitionId))) {
+    return null;
+  }
+  return getWorkoutDefinition(input.definitionId);
 }
 
 export type WorkoutSessionMetricType =
@@ -533,6 +558,7 @@ export async function createWorkoutSessionWithResults(
   });
 }
 
+/** Internal loader. Not an authorization boundary; do not expose unguarded. */
 export async function getWorkoutSessionWithResults(workoutSessionId: string) {
   const database = getDatabase();
   const [session] = await database
@@ -1632,6 +1658,7 @@ export async function listRecentWorkoutsForAuthorizedGroup(input: {
   occurredAtStart?: Date;
   occurredAtEnd?: Date;
 }) {
+  if (!input.viewerUserId) throw new Error("A viewer is required to list workouts");
   return listRecentWorkouts({
     userId: input.viewerUserId,
     groupId: input.groupId,
@@ -1645,7 +1672,7 @@ export async function listRecentWorkoutsForAuthorizedGroup(input: {
 }
 
 async function listRecentWorkouts(input: {
-  userId?: string;
+  userId: string;
   groupId: string;
   limit?: number;
   includeReactionCounts?: boolean;
@@ -1656,7 +1683,6 @@ async function listRecentWorkouts(input: {
 }) {
   const database = getDatabase();
   if (input.verifyMembership) {
-    if (!input.userId) throw new Error("A user is required to verify membership");
     const [membership] = await database
       .select({ userId: schema.groupMembers.userId })
       .from(schema.groupMembers)
@@ -1728,14 +1754,7 @@ async function listRecentWorkouts(input: {
     )
     .where(and(
       eq(schema.communityPosts.groupId, input.groupId),
-      isNull(schema.communityPosts.removedAt),
-      crewAuthorVisibleSql(
-        schema.communityPosts.groupId,
-        schema.communityPosts.userId,
-        schema.communityPosts.createdAt,
-      ),
-      input.userId ? notBlockedAuthor(input.userId, schema.communityPosts.userId) : undefined,
-      input.userId ? notReportedContent(input.userId, "post", schema.communityPosts.id) : undefined,
+      communityPostVisibleToSql(input.userId, schema.communityPosts.id),
       input.occurredAtStart ? gte(schema.workoutSessions.occurredAt, input.occurredAtStart) : undefined,
       input.occurredAtEnd ? lt(schema.workoutSessions.occurredAt, input.occurredAtEnd) : undefined,
     ))
@@ -2007,21 +2026,14 @@ export async function getCommunityWorkoutDetailForMember(input: {
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
-        isNull(schema.communityPosts.removedAt),
-        crewAuthorVisibleSql(
-          schema.communityPosts.groupId,
-          schema.communityPosts.userId,
-          schema.communityPosts.createdAt,
-        ),
-        notBlockedAuthor(input.userId, schema.communityPosts.userId),
-        notReportedContent(input.userId, "post", schema.communityPosts.id),
+        communityPostVisibleToSql(input.userId, schema.communityPosts.id),
       ),
     )
     .limit(1);
 
   if (!post) return null;
 
-  const [metrics, segments, movementSetRows, reactionCountRows, viewerReactionRows] = await Promise.all([
+  const [metrics, segments, movementSetRows, reactionCountRows, viewerReactionRows, prBadgeMap, goalBadgeMap] = await Promise.all([
     database
       .select({
         id: schema.workoutSessionMetrics.id,
@@ -2105,8 +2117,7 @@ export async function getCommunityWorkoutDetailForMember(input: {
       .from(schema.communityPostReactions)
       .where(and(
         eq(schema.communityPostReactions.communityPostId, post.communityPostId),
-        reactionAuthorVisibleSql(input.groupId),
-        notBlockedAuthor(input.userId, schema.communityPostReactions.userId),
+        communityReactionVisibleToSql(input.userId, schema.communityPostReactions.id),
       ))
       .groupBy(schema.communityPostReactions.reactionType),
     database
@@ -2119,6 +2130,8 @@ export async function getCommunityWorkoutDetailForMember(input: {
         ),
       )
       .limit(1),
+    listPrBadgesForPosts([post.communityPostId]),
+    listGoalBadgesForPosts([post.communityPostId]),
   ]);
 
   const movements = new Map<
@@ -2241,8 +2254,8 @@ export async function getCommunityWorkoutDetailForMember(input: {
       reactionCountRows,
       viewerReactionRows[0]?.reactionType ?? null,
     ),
-    prBadges: (await listPrBadgesForPosts([post.communityPostId])).get(post.communityPostId) ?? [],
-    goalBadges: (await listGoalBadgesForPosts([post.communityPostId])).get(post.communityPostId) ?? [],
+    prBadges: prBadgeMap.get(post.communityPostId) ?? [],
+    goalBadges: goalBadgeMap.get(post.communityPostId) ?? [],
   };
 }
 
@@ -2374,32 +2387,7 @@ export async function listCommunityPostCommentsForMember(input: {
   workoutSessionId: string;
 }) {
   const database = getDatabase();
-  const [post] = await database
-    .select({ id: schema.communityPosts.id })
-    .from(schema.communityPosts)
-    .innerJoin(
-      schema.groupMembers,
-      and(
-        eq(schema.groupMembers.groupId, schema.communityPosts.groupId),
-        viewerActiveMembership(input.userId),
-      ),
-    )
-    .where(
-      and(
-        eq(schema.communityPosts.groupId, input.groupId),
-        eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
-        isNull(schema.communityPosts.removedAt),
-        crewAuthorVisibleSql(
-          schema.communityPosts.groupId,
-          schema.communityPosts.userId,
-          schema.communityPosts.createdAt,
-        ),
-        notBlockedAuthor(input.userId, schema.communityPosts.userId),
-        notReportedContent(input.userId, "post", schema.communityPosts.id),
-      ),
-    )
-    .limit(1);
-
+  const post = await getAuthorizedCommunityPost(database, input);
   if (!post) return null;
 
   return database
@@ -2418,10 +2406,7 @@ export async function listCommunityPostCommentsForMember(input: {
     )
     .where(and(
       eq(schema.communityPostComments.communityPostId, post.id),
-      isNull(schema.communityPostComments.removedAt),
-      commentAuthorVisibleSql(input.groupId),
-      notBlockedAuthor(input.userId, schema.communityPostComments.userId),
-      notReportedContent(input.userId, "comment", schema.communityPostComments.id),
+      communityCommentVisibleToSql(input.userId, schema.communityPostComments.id),
     ))
     .orderBy(
       asc(schema.communityPostComments.createdAt),
@@ -2465,31 +2450,17 @@ export async function createCommunityPostCommentForMember(input: {
 }
 
 async function getAuthorizedCommunityPost(
-  transaction: DatabaseTransaction,
+  database: Database | DatabaseTransaction,
   input: { userId: string; groupId: string; workoutSessionId: string },
 ) {
-  const [post] = await transaction
+  const [post] = await database
     .select({ id: schema.communityPosts.id })
     .from(schema.communityPosts)
-    .innerJoin(
-      schema.groupMembers,
-      and(
-        eq(schema.groupMembers.groupId, schema.communityPosts.groupId),
-        viewerActiveMembership(input.userId),
-      ),
-    )
     .where(
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
-        isNull(schema.communityPosts.removedAt),
-        crewAuthorVisibleSql(
-          schema.communityPosts.groupId,
-          schema.communityPosts.userId,
-          schema.communityPosts.createdAt,
-        ),
-        notBlockedAuthor(input.userId, schema.communityPosts.userId),
-        notReportedContent(input.userId, "post", schema.communityPosts.id),
+        communityPostVisibleToSql(input.userId, schema.communityPosts.id),
       ),
     )
     .limit(1);
@@ -2508,14 +2479,9 @@ async function getReactionCounts(
       value: count(),
     })
     .from(schema.communityPostReactions)
-    .innerJoin(
-      schema.communityPosts,
-      eq(schema.communityPosts.id, schema.communityPostReactions.communityPostId),
-    )
     .where(and(
       eq(schema.communityPostReactions.communityPostId, communityPostId),
-      reactionAuthorVisibleSql(schema.communityPosts.groupId),
-      notBlockedAuthor(viewerId, schema.communityPostReactions.userId),
+      communityReactionVisibleToSql(viewerId, schema.communityPostReactions.id),
     ))
     .groupBy(schema.communityPostReactions.reactionType);
 }

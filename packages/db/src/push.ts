@@ -13,10 +13,13 @@ import { getDatabase } from "./connection";
 import { notBlockedAuthor } from "./moderation";
 import {
   activeMembership,
-  crewAuthorVisibleSql,
   openGroup,
 } from "./membership";
 import * as schema from "./schema";
+import {
+  communityPostVisibleToSql,
+  communityReactionVisibleToSql,
+} from "./visibility";
 
 export type CrewPushRecipient = {
   userId: string;
@@ -121,13 +124,7 @@ export async function listCrewWorkoutPushRecipients(input: {
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.sessionId),
-        isNull(schema.communityPosts.removedAt),
-        openGroup,
-        crewAuthorVisibleSql(
-          schema.communityPosts.groupId,
-          schema.communityPosts.userId,
-          schema.communityPosts.createdAt,
-        ),
+        communityPostVisibleToSql(input.actorUserId, schema.communityPosts.id),
       ),
     )
     .limit(1);
@@ -150,7 +147,7 @@ export async function listCrewWorkoutPushRecipients(input: {
         openGroup,
         ne(schema.groupMembers.userId, input.actorUserId),
         lte(schema.groupMembers.contentVisibleAfter, input.contentCreatedAt),
-        notBlockedAuthor(input.actorUserId, schema.groupMembers.userId),
+        communityPostVisibleToSql(schema.groupMembers.userId, post.id),
       ),
     );
 
@@ -198,14 +195,8 @@ export async function listPostAuthorPushRecipient(input: {
       and(
         eq(schema.communityPosts.groupId, input.groupId),
         eq(schema.communityPosts.workoutSessionId, input.sessionId),
-        isNull(schema.communityPosts.removedAt),
-        openGroup,
-        activeMembership,
-        crewAuthorVisibleSql(
-          schema.communityPosts.groupId,
-          schema.communityPosts.userId,
-          schema.communityPosts.createdAt,
-        ),
+        communityPostVisibleToSql(input.actorUserId, schema.communityPosts.id),
+        communityPostVisibleToSql(schema.communityPosts.userId, schema.communityPosts.id),
         notBlockedAuthor(input.actorUserId, schema.communityPosts.userId),
         lte(schema.groupMembers.contentVisibleAfter, input.contentCreatedAt),
       ),
@@ -289,14 +280,7 @@ export async function countVisibleReactors(input: {
       and(
         eq(schema.communityPostReactions.communityPostId, input.postId),
         ne(schema.communityPostReactions.userId, input.authorId),
-        sql`exists (
-          select 1
-          from ${schema.groupMembers} as visible_reactor
-          where visible_reactor.group_id = ${schema.communityPosts.groupId}
-            and visible_reactor.user_id = ${schema.communityPostReactions.userId}
-            and visible_reactor.left_at is null
-            and ${schema.communityPostReactions.createdAt} >= visible_reactor.content_visible_after
-        )`,
+        communityReactionVisibleToSql(input.authorId, schema.communityPostReactions.id),
       ),
     );
 
