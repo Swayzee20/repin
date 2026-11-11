@@ -21,6 +21,7 @@ import {
 } from "./keyboard-accessory";
 import { multilineAccessoryProps, numberPadAccessoryProps } from "./keyboard";
 import {
+  choiceLabelFlex,
   choiceText,
   choiceTileChrome,
   dateRowHeight,
@@ -466,7 +467,7 @@ export function ChoiceTile({
       ]}
     >
       {leadingCheck ? check : null}
-      <Text numberOfLines={1} style={[choiceText, styles.choiceLabel, centered && styles.choiceLabelCentered, { color: chrome.color }]}>{label}</Text>
+      <Text numberOfLines={1} style={[choiceText, choiceLabelFlex, styles.choiceLabel, centered && styles.choiceLabelCentered, { color: chrome.color }]}>{label}</Text>
       {leadingCheck ? null : check}
     </Pressable>
   );
@@ -706,9 +707,9 @@ const styles = StyleSheet.create({
     alignSelf: "stretch",
     flexDirection: "row",
     gap: spacing.sm,
+    maxWidth: "100%",
   },
   choiceLabel: {
-    flex: 1,
     textAlign: "left",
   },
   choiceCentered: {

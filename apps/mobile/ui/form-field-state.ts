@@ -84,6 +84,17 @@ export const choiceText = {
   lineHeight: type.bodySmall.lineHeight,
 } as const;
 
+/**
+ * Wrap-row chips (goal Type / Metric / Sport / Distance) have no tile width.
+ * React Native `flex: 1` sets `flexBasis: 0`, so the label collapses to an
+ * empty box and only the check shows. Grow/shrink with auto basis keeps the
+ * text’s intrinsic width, then fills leftover space in stretched tiles.
+ */
+export const choiceLabelFlex = {
+  flexGrow: 1,
+  flexShrink: 1,
+} as const;
+
 export const dateRowLabelText = {
   color: colors.ink,
   fontFamily: fonts.bold,

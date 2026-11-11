@@ -8,11 +8,13 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { Button } from "./components";
 import { ChoiceTile, DateRow, FieldLabel, NumberField, TextField } from "./form-fields";
+import { goalFormSheetFrame } from "./goal-form-layout";
 import {
   formatGoalDate,
   goalKindTiles,
@@ -24,10 +26,9 @@ import {
   type GoalFormDraft,
 } from "./goal-form-state";
 import { keyboardScrollProps } from "./keyboard";
-import { TwoPane, useLayoutMode } from "./layout";
 import { MovementPicker, type PickerMovement } from "./movement-picker";
 import { RoundIconButton } from "./primitives";
-import { colors, layout, size, spacing, type } from "./theme";
+import { colors, size, spacing, type } from "./theme";
 import { CardHeading, FormCard, FormError } from "./workout-form-frame";
 
 export function GoalFormScaffold({
@@ -46,71 +47,50 @@ export function GoalFormScaffold({
   title: string;
 }) {
   const insets = useSafeAreaInsets();
-  const { mode, split } = useLayoutMode();
-  const twoPane = mode === "twoPane";
+  const { width: windowWidth } = useWindowDimensions();
+  const [frameWidth, setFrameWidth] = useState<number | null>(null);
+  const frame = goalFormSheetFrame({
+    frameWidth,
+    insets: { left: insets.left, right: insets.right },
+    windowWidth,
+  });
   const footerBottom = Math.max(insets.bottom, spacing.lg);
 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
+      onLayout={(event) => {
+        const next = event.nativeEvent.layout.width;
+        setFrameWidth((current) => (current === next ? current : next));
+      }}
       style={styles.root}
     >
       <View
         style={[
-          styles.root,
-          twoPane ? null : styles.compactFrame,
-          twoPane ? null : { paddingLeft: insets.left + spacing.xl, paddingRight: insets.right + spacing.xl },
+          styles.column,
+          {
+            marginLeft: frame.left,
+            paddingHorizontal: spacing.xl,
+            width: frame.width,
+          },
         ]}
       >
-        <View
-          style={[
-            styles.closeRow,
-            {
-              paddingLeft: twoPane ? split.left.x : 0,
-              paddingTop: insets.top + spacing.sm,
-            },
-          ]}
-        >
+        <View style={[styles.closeRow, { paddingTop: insets.top + spacing.sm }]}>
           <View style={styles.closeButtonSlot}>
             <RoundIconButton accessibilityLabel="Close" kind="close" onPress={onClose} />
-            {twoPane ? null : (
-              <View pointerEvents="none" style={styles.closeEyebrow}>
-                <Text style={styles.eyebrow}>{eyebrow}</Text>
-              </View>
-            )}
+            <View pointerEvents="none" style={styles.closeEyebrow}>
+              <Text style={styles.eyebrow}>{eyebrow}</Text>
+            </View>
           </View>
         </View>
-        {twoPane ? (
-          <TwoPane
-            keyboardShouldPersistTaps="handled"
-            left={(
-              <FieldsScroll>
-                <Text style={styles.eyebrow}>{eyebrow}</Text>
-                <Text style={styles.title}>{title}</Text>
-                {fields}
-              </FieldsScroll>
-            )}
-            right={(
-              <View style={[styles.footer, { paddingBottom: footerBottom }]}>
-                {error ? <FormError message={error} /> : null}
-                {submit}
-              </View>
-            )}
-            scrollableLeft={false}
-            scrollableRight={false}
-          />
-        ) : (
-          <>
-            <FieldsScroll>
-              <Text style={styles.title}>{title}</Text>
-              {fields}
-            </FieldsScroll>
-            <View style={[styles.footer, { paddingBottom: footerBottom }]}>
-              {error ? <FormError message={error} /> : null}
-              {submit}
-            </View>
-          </>
-        )}
+        <FieldsScroll>
+          <Text style={styles.title}>{title}</Text>
+          {fields}
+        </FieldsScroll>
+        <View style={[styles.footer, { paddingBottom: footerBottom }]}>
+          {error ? <FormError message={error} /> : null}
+          {submit}
+        </View>
       </View>
     </KeyboardAvoidingView>
   );
@@ -410,7 +390,7 @@ export function GoalFormFields({
 
 const styles = StyleSheet.create({
   root: { backgroundColor: colors.background, flex: 1 },
-  compactFrame: { alignSelf: "center", maxWidth: layout.maxReadable, width: "100%" },
+  column: { alignSelf: "flex-start", flex: 1 },
   closeRow: { paddingBottom: spacing.sm },
   closeButtonSlot: { justifyContent: "center", minHeight: size.hit },
   closeEyebrow: {

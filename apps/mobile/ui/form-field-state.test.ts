@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
@@ -6,6 +7,7 @@ import { test } from "node:test";
 import { colors, fonts, radii, size, spacing, type } from "./theme";
 import { controlHelperGap } from "./primitive-state";
 import {
+  choiceLabelFlex,
   choiceText,
   choiceTileChrome,
   choiceTileHeight,
@@ -194,6 +196,15 @@ test("choice tiles are 48pt, and selected tiles use brand tint, a 2pt brand bord
   assert.equal(disabled.color, colors.disabledText);
   assert.equal(disabled.showCheck, false);
   assert.equal("opacity" in disabled, false);
+
+  assert.equal(choiceLabelFlex.flexGrow, 1);
+  assert.equal(choiceLabelFlex.flexShrink, 1);
+  assert.equal("flex" in choiceLabelFlex, false);
+  assert.equal("flexBasis" in choiceLabelFlex, false);
+  const fields = readFileSync(new URL("./form-fields.tsx", import.meta.url), "utf8");
+  assert.match(fields, /choiceLabelFlex/);
+  assert.match(fields, /\{label\}/);
+  assert.equal(fields.includes("choiceLabel: {\n    flex: 1"), false);
 });
 
 test("date rows match a list row with a bold 16 label and a muted value", () => {
