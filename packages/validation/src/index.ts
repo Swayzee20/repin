@@ -11,6 +11,7 @@ import {
   workoutTypes,
 } from "@repin/types";
 
+import { isValidTimeZone } from "./calendar";
 import {
   canonicalWorkoutFormatSchema,
   durationMinutesFromFormat,
@@ -84,6 +85,46 @@ export {
   restorePrBadgesSchema,
   shareSessionPrsSchema,
 } from "./pr";
+
+export {
+  dashboardDistanceSports,
+  dashboardDistanceUnits,
+  dashboardHistoryDefaultLimit,
+  dashboardHistoryMaxLimit,
+  dashboardPeriodBounds,
+  dashboardPreviewLimit,
+  dashboardSportFilterOptions,
+  dashboardSportLabel,
+  dashboardSportSchema,
+  decodeWorkoutCursor,
+  encodeWorkoutCursor,
+  formatDashboardDistance,
+  formatMonthRangeLabel,
+  formatPerformedDateGroup,
+  formatPerformedDateTime,
+  formatRecordedDuration,
+  formatTotalsDistance,
+  formatTotalsTime,
+  formatWeekRangeLabel,
+  homeLocalBounds,
+  identityThisWeekLabel,
+  inclusiveDateRangeBounds,
+  ianaTimeZoneQuerySchema,
+  isDashboardDistanceSport,
+  metersFromLoggedDistance,
+  metersToDashboardUnit,
+  personalRecordsQuerySchema,
+  personalWorkoutListQuerySchema,
+  profileDashboardCopy,
+  timeZoneDisplayName,
+  totalsCoverageLine,
+  totalsEmptyLabel,
+  totalsHelpParagraphs,
+  workoutStatsQuerySchema,
+  type DashboardDistanceUnit,
+  type TotalsCoverageInput,
+  type WorkoutListCursor,
+} from "./profile-dashboard";
 
 export {
   createGoalSchema,
@@ -528,12 +569,27 @@ export const movementLastSessionQuerySchema = z.object({
 export const homeQuerySchema = z.object({
   view: z.enum(["home", "community", "profile"]).optional(),
   groupId: z.uuid().optional(),
-  timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840),
+  timeZone: z.string().trim().min(1).max(64).optional().superRefine((value, context) => {
+    if (value && !isValidTimeZone(value)) {
+      context.addIssue({
+        code: "custom",
+        message: "Choose a valid time zone",
+      });
+    }
+  }),
+  timezoneOffsetMinutes: z.coerce.number().int().min(-840).max(840).optional(),
   start: z.iso.datetime().optional(),
   end: z.iso.datetime().optional(),
   includeReactions: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
   includeComments: z.enum(["true", "false"]).optional().transform((value) => value === "true"),
 }).superRefine((query, context) => {
+  if (!query.timeZone && query.timezoneOffsetMinutes == null) {
+    context.addIssue({
+      code: "custom",
+      message: "Choose a valid time zone",
+      path: ["timeZone"],
+    });
+  }
   if (Boolean(query.start) !== Boolean(query.end)) {
     context.addIssue({ code: "custom", message: "Start and end must be supplied together", path: [query.start ? "end" : "start"] });
     return;

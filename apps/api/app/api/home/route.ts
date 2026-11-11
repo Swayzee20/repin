@@ -3,7 +3,7 @@ import {
   listGroupsForUser,
   listRecentWorkoutsForAuthorizedGroup,
 } from "@repin/db";
-import { homeQuerySchema } from "@repin/validation";
+import { homeLocalBounds, homeQuerySchema } from "@repin/validation";
 
 import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
@@ -27,7 +27,8 @@ export async function GET(request: Request) {
     const query = homeQuerySchema.safeParse({
       view: url.searchParams.get("view") ?? undefined,
       groupId: url.searchParams.get("groupId") ?? undefined,
-      timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes"),
+      timeZone: url.searchParams.get("timeZone") ?? undefined,
+      timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes") ?? undefined,
       start: url.searchParams.get("start") ?? undefined,
       end: url.searchParams.get("end") ?? undefined,
       includeReactions: url.searchParams.get("includeReactions") ?? undefined,
@@ -56,10 +57,10 @@ export async function GET(request: Request) {
     const workoutSnapshotPromise = view === "community"
       ? null
       : timing.measure("db", () =>
-          getWorkoutSnapshot(
-            identity.id,
-            query.data.timezoneOffsetMinutes,
-          ));
+          getWorkoutSnapshot(identity.id, {
+            timeZone: query.data.timeZone,
+            timezoneOffsetMinutes: query.data.timezoneOffsetMinutes,
+          }));
     const groups = await groupsPromise;
 
     // A client selection can become stale after membership changes. Always fall
@@ -138,15 +139,12 @@ export async function GET(request: Request) {
 
 async function getWorkoutSnapshot(
   userId: string,
-  timezoneOffsetMinutes: number,
+  query: { timeZone?: string; timezoneOffsetMinutes?: number },
 ) {
   const now = new Date();
-  const { todayStart, weekStart } = getLocalBoundaries(
-    now,
-    timezoneOffsetMinutes,
-  );
+  const { todayStart, weekStart, weekEnd } = homeLocalBounds(now, query);
 
-  return getUserWorkoutSnapshot({ userId, todayStart, weekStart, now });
+  return getUserWorkoutSnapshot({ userId, todayStart, weekStart, weekEnd, now });
 }
 
 function formatWorkoutSnapshot(
@@ -172,26 +170,6 @@ function jsonNoStore(timing: ServerTiming, body: unknown) {
   return timedJson(timing, body, {
     headers: { "Cache-Control": "no-store" },
   });
-}
-
-function getLocalBoundaries(now: Date, timezoneOffsetMinutes: number) {
-  const localNow = new Date(
-    now.getTime() - timezoneOffsetMinutes * 60 * 1_000,
-  );
-  const localMidnight = Date.UTC(
-    localNow.getUTCFullYear(),
-    localNow.getUTCMonth(),
-    localNow.getUTCDate(),
-  );
-  const todayStart = new Date(
-    localMidnight + timezoneOffsetMinutes * 60 * 1_000,
-  );
-  const daysSinceSunday = localNow.getUTCDay();
-  const weekStart = new Date(
-    todayStart.getTime() - daysSinceSunday * 24 * 60 * 60 * 1_000,
-  );
-
-  return { todayStart, weekStart };
 }
 
 function getSnapshotMessage(hasWorkoutToday: boolean, workoutsThisWeek: number) {

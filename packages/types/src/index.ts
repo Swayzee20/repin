@@ -697,3 +697,92 @@ export interface ProfileData {
   groups: GroupSummary[];
   selectedGroupId: string | null;
 }
+
+export const dashboardDistanceUnits = ["mi", "km"] as const;
+export type DashboardDistanceUnit = (typeof dashboardDistanceUnits)[number];
+
+export const personalRecordKindGroupLabels: Record<PersonalRecordKind, string> = {
+  heaviest_single: "Heaviest singles",
+  distance_time: "Distance times",
+  amrap: "AMRAP",
+  for_time: "For Time",
+};
+
+export interface PersonalWorkoutListItem {
+  id: string;
+  workoutType: string;
+  title: string;
+  name: string | null;
+  occurredAt: string;
+  durationMinutes: number | null;
+  effort: number | null;
+  resultSummary: string | null;
+  hasDetailedResults: boolean;
+}
+
+export interface PersonalWorkoutPage {
+  workouts: PersonalWorkoutListItem[];
+  nextCursor: string | null;
+}
+
+export interface PersonalWorkoutDetail {
+  id: string;
+  workoutType: string;
+  workoutSubtype: WorkoutSubtype | null;
+  title: string;
+  name: string | null;
+  occurredAt: string;
+  durationMinutes: number | null;
+  effort: number | null;
+  format: WorkoutFormatDetail | null;
+  metrics: WorkoutDetailMetric[];
+  movements: WorkoutDetailMovement[];
+  segments: WorkoutDetailSegment[];
+  resultSummary: string | null;
+  hasDetailedResults: boolean;
+  recordedSeconds: number | null;
+  prBadges: PrBadge[];
+  goalBadges: GoalBadge[];
+  currentBestSetIds: string[];
+  startingBestSetIds: string[];
+  baselineOnly: boolean;
+}
+
+export interface WorkoutPeriodStats {
+  period: "week" | "month";
+  start: string;
+  end: string;
+  rangeLabel: string;
+  workoutCount: number;
+  recordedSeconds: number | null;
+  recordedMeters: number | null;
+  missingDurationCount: number;
+  distanceWorkoutCount: number;
+  distanceWithValueCount: number;
+  loggedDistanceUnits: string[];
+}
+
+export interface WorkoutStatsResponse {
+  timeZone: string;
+  timeZoneLabel: string;
+  week: WorkoutPeriodStats;
+  month: WorkoutPeriodStats;
+}
+
+export interface CurrentBest {
+  id: string;
+  kind: PersonalRecordKind;
+  key: string;
+  label: string;
+  value: string;
+  baselineOnly: boolean;
+  celebrated: boolean;
+  sourceSessionId: string | null;
+  sourceSetId: string | null;
+  sourceOccurredAt: string | null;
+  sourceAvailable: boolean;
+}
+
+export interface CurrentBestsResponse {
+  bests: CurrentBest[];
+}
