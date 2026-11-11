@@ -63,6 +63,7 @@ export async function GET(
     const [members, notifications, photoUrl] = await Promise.all([
       listCrewMembers({
         groupId: group.id,
+        viewerUserId: user.id,
         weekStart,
         weekEnd,
       }),

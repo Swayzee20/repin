@@ -7,6 +7,8 @@ import { fileURLToPath } from "node:url";
 
 import pg from "pg";
 
+import { assertLocalDatabaseUrl } from "./local-database-guard.mjs";
+
 const { Client } = pg;
 const dbPackageRoot = fileURLToPath(new URL("..", import.meta.url));
 const repoRoot = fileURLToPath(new URL("../../..", import.meta.url));
@@ -1497,6 +1499,7 @@ async function scalar(client, text, params = []) {
 }
 
 async function recreateDatabase() {
+  assertLocalDatabaseUrl(sourceUrl);
   const admin = new Client({ connectionString: withDatabase(sourceUrl, "postgres") });
   await admin.connect();
   try {
