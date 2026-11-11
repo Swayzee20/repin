@@ -82,8 +82,8 @@ test("existing-member launch, join/create, and account switch share one lock", (
 });
 
 test("afterClose callers keep onDismiss hide-only so both-run is not double navigation", () => {
-  const gate = source("main-tabs-gate.tsx");
-  const chooser = gate.slice(gate.indexOf("<LogWorkoutChooser"), gate.indexOf("visible={workoutChooserVisible}"));
+  const host = source("workout-chooser-host.tsx");
+  const chooser = host.slice(host.indexOf("<LogWorkoutChooser"), host.indexOf("visible={workoutChooserVisible}"));
   assert.match(chooser, /onDismiss=\{\(\) => setWorkoutChooserVisible\(false\)\}/);
   assert.match(chooser, /onQuickLog=\{\(\) => \{[\s\S]*setWorkoutChooserVisible\(false\);[\s\S]*router\.push\(`\/groups\/\$\{selectedGroupId\}\/log-workout`\)/);
   assert.match(chooser, /onDetailedWorkout=\{\(\) => \{[\s\S]*setWorkoutChooserVisible\(false\);[\s\S]*router\.push\(`\/groups\/\$\{selectedGroupId\}\/detailed-workout`\)/);

@@ -12,7 +12,7 @@ import {
 } from "../../lib/profile-dashboard-api";
 import { LoadingState, StateCard } from "../../ui/components";
 import { TwoPane, useLayoutMode } from "../../ui/layout";
-import { useMainTabs } from "../../ui/main-tabs-context";
+import { useMainTabsIfPresent } from "../../ui/main-tabs-context";
 import { PersonalWorkoutDetailContent } from "../../ui/personal-workout-detail";
 import { WorkoutHistoryRow } from "../../ui/profile-dashboard";
 import { RoundIconButton, roundNavButtonStyle } from "../../ui/primitives";
@@ -38,7 +38,7 @@ export default function WorkoutHistoryScreen() {
   const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
   const roundBack = pushedShowsRoundBack(Platform.OS);
   const headerClearance = pushedHeaderClearance(Platform.OS, strip);
-  const { selectedGroupId, toggleWorkoutChooser } = useMainTabs();
+  const tabs = useMainTabsIfPresent();
   const [workouts, setWorkouts] = useState<PersonalWorkoutListItem[]>([]);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -108,7 +108,8 @@ export default function WorkoutHistoryScreen() {
   }, [selectedId, twoPane]));
 
   const grouped = useMemo(() => groupByDate(workouts, timeZone), [timeZone, workouts]);
-  const showPlus = Boolean(selectedGroupId) && !stripPresent;
+  const showPlus = Boolean(tabs?.selectedGroupId) && !stripPresent;
+  const onPlusPress = tabs?.toggleWorkoutChooser;
   const filteredEmpty = !loading && !workouts.length && (filter.sport || filter.from);
 
   const filterControl = (
@@ -179,8 +180,8 @@ export default function WorkoutHistoryScreen() {
     <View style={styles.headerRow}>
       {roundBack ? <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} /> : null}
       <Text style={styles.title}>{profileDashboardCopy.workoutsTitle}</Text>
-      {showPlus && !nativeHeader ? (
-        <RoundIconButton accessibilityLabel="Log a workout" kind="plus" onPress={toggleWorkoutChooser} />
+      {showPlus && onPlusPress && !nativeHeader ? (
+        <RoundIconButton accessibilityLabel="Log a workout" kind="plus" onPress={onPlusPress} />
       ) : null}
     </View>
   );
@@ -189,8 +190,8 @@ export default function WorkoutHistoryScreen() {
     <Stack.Screen
       options={{
         ...pushedHeaderScreenOptions(),
-        headerRight: showPlus
-          ? () => <RoundIconButton accessibilityLabel="Log a workout" kind="plus" onPress={toggleWorkoutChooser} />
+        headerRight: showPlus && onPlusPress
+          ? () => <RoundIconButton accessibilityLabel="Log a workout" kind="plus" onPress={onPlusPress} />
           : undefined,
       }}
     />

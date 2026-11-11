@@ -300,3 +300,17 @@ test("the locked tab-root plus stays on its own header", () => {
   assert.equal(stack.includes('variant="prominent"'), true);
   assert.equal(stack.includes("toggleWorkoutChooser"), true);
 });
+
+test("history, bests, and personal workout detail keep pushed-header chrome", () => {
+  for (const path of ["../app/history/index.tsx", "../app/bests/index.tsx", "../app/history/[sessionId].tsx"]) {
+    const code = sourceOf(path);
+    assert.equal(code.includes("getVerticalBarEdge("), false);
+    assert.equal(code.includes(".getVerticalBarEdge"), false);
+    assert.equal(code.includes("useStripState"), true);
+    assert.equal(code.includes("pushedNativeHeaderEnabled"), true);
+    assert.equal(code.includes("pushedShowsRoundBack"), true);
+    assert.equal(code.includes("pushedHeaderClearance"), true);
+    assert.equal(code.includes("pushedHeaderScreenOptions"), true);
+    assert.equal(code.includes("<Stack.Toolbar"), false);
+  }
+});

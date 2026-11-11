@@ -22,8 +22,10 @@ import { useAuthSession } from "../lib/use-auth-session";
 import { KeyboardDoneAccessory } from "../ui/keyboard-done";
 import { useLayoutMode } from "../ui/layout";
 import { formPresentation } from "../ui/layout-math";
+import { MainTabsProvider } from "../ui/main-tabs-context";
 import { PushNotificationsHost } from "../ui/push-notifications-host";
 import { colors } from "../ui/theme";
+import { WorkoutChooserHost } from "../ui/workout-chooser-host";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -56,14 +58,17 @@ function RootLayout() {
 
   return (
     <RootErrorBoundary>
-      <ReservedRegionsProvider style={styles.root}>
-        <PushNotificationsHost>
-          <RootStack />
-          <SignedOutRedirect />
-          <KeyboardDoneAccessory />
-          <StatusBar style="dark" />
-        </PushNotificationsHost>
-      </ReservedRegionsProvider>
+      <MainTabsProvider>
+        <ReservedRegionsProvider style={styles.root}>
+          <PushNotificationsHost>
+            <RootStack />
+            <SignedOutRedirect />
+            <WorkoutChooserHost />
+            <KeyboardDoneAccessory />
+            <StatusBar style="dark" />
+          </PushNotificationsHost>
+        </ReservedRegionsProvider>
+      </MainTabsProvider>
     </RootErrorBoundary>
   );
 }
