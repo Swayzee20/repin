@@ -1,8 +1,12 @@
 import {
+  getPinnedGeneralPostForMember,
   getUserWorkoutSnapshot,
+  hydrateGeneralFeedItems,
+  listCommunityFeedForMember,
   listGroupsForUser,
   listRecentWorkoutsForAuthorizedGroup,
 } from "@repin/db";
+import type { CommunityFeedItem, GeneralPostFeedItem, WorkoutFeedItem } from "@repin/types";
 import { homeLocalBounds, homeQuerySchema } from "@repin/validation";
 
 import { reportUnexpectedRouteError } from "../../../lib/sentry";
@@ -12,7 +16,7 @@ import {
   requireAuthenticatedUser,
 } from "../../../lib/supabase-auth";
 import { ServerTiming, timedJson } from "../../../lib/server-timing";
-import { addAuthorizedWorkoutPhotoUrls } from "../../../lib/workout-photos";
+import { addAuthorizedWorkoutPhotoUrls, signWorkoutPhotoPaths } from "../../../lib/workout-photos";
 import { withResolvedDisplayName } from "../../../lib/user-display";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +30,9 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const query = homeQuerySchema.safeParse({
       view: url.searchParams.get("view") ?? undefined,
+      feed: url.searchParams.get("feed") ?? undefined,
+      cursor: url.searchParams.get("cursor") ?? undefined,
+      limit: url.searchParams.get("limit") ?? undefined,
       groupId: url.searchParams.get("groupId") ?? undefined,
       timeZone: url.searchParams.get("timeZone") ?? undefined,
       timezoneOffsetMinutes: url.searchParams.get("timezoneOffsetMinutes") ?? undefined,
@@ -101,6 +108,21 @@ export async function GET(request: Request) {
       workoutsWithPhotos.map(withResolvedDisplayName));
 
     if (view === "community") {
+      if (query.data.feed === "mixed" && selectedGroup) {
+        const mixed = await timing.measure("db", () =>
+          listMixedCommunityFeed({
+            groupId: selectedGroup.id,
+            viewerUserId: identity.id,
+            cursor: query.data.cursor,
+            limit: query.data.limit,
+          }));
+        return jsonNoStore(timing, {
+          groups,
+          selectedGroupId: selectedGroup.id,
+          communityWorkouts,
+          ...mixed,
+        });
+      }
       return jsonNoStore(timing, {
         groups,
         selectedGroupId: selectedGroup?.id ?? null,
@@ -164,6 +186,109 @@ function formatWorkoutSnapshot(
       workoutSnapshot.workoutsThisWeek,
     ),
   };
+}
+
+async function listMixedCommunityFeed(input: {
+  groupId: string;
+  viewerUserId: string;
+  cursor?: string;
+  limit?: number;
+}) {
+  const page = await listCommunityFeedForMember({
+    viewerUserId: input.viewerUserId,
+    groupId: input.groupId,
+    cursor: input.cursor,
+    limit: input.limit,
+  });
+  if (!page) {
+    return {
+      communityFeed: [] as CommunityFeedItem[],
+      pinnedPost: null,
+      nextCursor: null,
+    };
+  }
+
+  const workoutSessionIds = page.items.flatMap((row) =>
+    row.kind === "workout" && row.workoutSessionId ? [row.workoutSessionId] : []);
+  const workouts = workoutSessionIds.length
+    ? ((await listRecentWorkoutsForAuthorizedGroup({
+        groupId: input.groupId,
+        viewerUserId: input.viewerUserId,
+        sessionIds: workoutSessionIds,
+        includeReactionCounts: true,
+        includeCommentCounts: true,
+      })) ?? [])
+    : [];
+  const workoutsWithPhotos = await addAuthorizedWorkoutPhotoUrls(workouts);
+  const workoutBySession = new Map(
+    workoutsWithPhotos.map((workout) => [workout.id, toWorkoutFeedItem(workout)]),
+  );
+
+  const generals = await signGeneralPostPhotos(
+    hydrateGeneralFeedItems(
+      page.items.filter((row) => row.kind === "general"),
+      page.publications,
+    ),
+  );
+  const generalById = new Map(generals.map((item) => [item.id, item]));
+
+  const communityFeed: CommunityFeedItem[] = [];
+  for (const row of page.items) {
+    if (row.kind === "general") {
+      const item = generalById.get(row.id);
+      if (item) communityFeed.push(item);
+      continue;
+    }
+    const item = row.workoutSessionId ? workoutBySession.get(row.workoutSessionId) : undefined;
+    if (item) communityFeed.push(item);
+  }
+
+  const pinned = await getPinnedGeneralPostForMember({
+    viewerUserId: input.viewerUserId,
+    groupId: input.groupId,
+  });
+  const pinnedPost = pinned ? (await signGeneralPostPhotos([pinned]))[0] ?? null : null;
+
+  return {
+    communityFeed,
+    pinnedPost,
+    nextCursor: page.nextCursor,
+  };
+}
+
+function toIso(value: Date | string | null | undefined) {
+  if (value instanceof Date) return value.toISOString();
+  return value ?? undefined;
+}
+
+function toWorkoutFeedItem(workout: {
+  displayName: string;
+  occurredAt?: Date | string | null;
+  completedAt?: Date | string | null;
+  createdAt?: Date | string | null;
+  updatedAt: Date | string;
+}): WorkoutFeedItem {
+  const named = withResolvedDisplayName(workout);
+  return {
+    ...(named as unknown as WorkoutFeedItem),
+    kind: "workout",
+    occurredAt: toIso(named.occurredAt) ?? null,
+    completedAt: toIso(named.completedAt) ?? null,
+    createdAt: toIso(named.createdAt) ?? null,
+    updatedAt: toIso(named.updatedAt) ?? new Date(0).toISOString(),
+  };
+}
+
+async function signGeneralPostPhotos(items: GeneralPostFeedItem[]) {
+  const paths = items.flatMap((item) => item.photos.map((photo) => photo.path));
+  const urls = await signWorkoutPhotoPaths(paths);
+  return items.map((item) => ({
+    ...withResolvedDisplayName(item),
+    photos: item.photos.map((photo) => ({
+      ...photo,
+      url: urls.get(photo.path) ?? null,
+    })),
+  }));
 }
 
 function jsonNoStore(timing: ServerTiming, body: unknown) {

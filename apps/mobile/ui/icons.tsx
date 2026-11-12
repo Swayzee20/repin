@@ -24,6 +24,7 @@ const vectorIcons = {
   magnifyingglass: "search",
   nosign: "slash",
   pencil: "edit-2",
+  pin: "map-pin",
   "person.2": "users",
   "person.crop.circle": "user",
   plus: "plus",

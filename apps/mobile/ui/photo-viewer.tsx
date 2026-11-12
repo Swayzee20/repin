@@ -8,13 +8,14 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  Text,
   View,
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { RoundIconButton } from "./primitives";
-import { colors, radii, spacing } from "./theme";
+import { colors, fonts, radii, spacing, type } from "./theme";
 import { useOverlayOccupancy } from "./use-overlay-occupancy";
 
 type NaturalSize = { height: number; width: number };
@@ -28,11 +29,13 @@ export function PhotoViewer({
   images,
   initialIndex = 0,
   onRequestClose,
+  showPaging = false,
   visible,
 }: {
   images: PhotoViewerImage[];
   initialIndex?: number;
   onRequestClose: () => void;
+  showPaging?: boolean;
   visible: boolean;
 }) {
   const { height: viewportHeight, width: viewportWidth } = useWindowDimensions();
@@ -172,7 +175,24 @@ export function PhotoViewer({
                 },
               ]}
             >
-              <Pressable accessibilityRole="imagebutton" onPress={() => undefined} style={styles.mediaPressable}>
+              <Pressable
+                accessibilityRole="imagebutton"
+                onPress={() => undefined}
+                onStartShouldSetResponder={() => showPaging && images.length > 1}
+                onMoveShouldSetResponder={() => showPaging && images.length > 1}
+                onResponderRelease={(event) => {
+                  if (!showPaging || images.length < 2) return;
+                  const x = event.nativeEvent.locationX;
+                  if (x < viewportWidth / 3) {
+                    setActiveIndex((current) => Math.max(0, current - 1));
+                    setNaturalSize(null);
+                  } else if (x > (viewportWidth * 2) / 3) {
+                    setActiveIndex((current) => Math.min(images.length - 1, current + 1));
+                    setNaturalSize(null);
+                  }
+                }}
+                style={styles.mediaPressable}
+              >
                 <Image
                   accessibilityLabel={activeImage.accessibilityLabel ?? "Workout photo"}
                   onLoad={(event) => {
@@ -185,6 +205,19 @@ export function PhotoViewer({
                 />
               </Pressable>
             </Animated.View>
+          </View>
+        ) : null}
+        {showPaging && images.length > 1 ? (
+          <View pointerEvents="none" style={[styles.paging, { bottom: insets.bottom + spacing.xl }]}>
+            <Text style={styles.pagingLabel}>{`${activeIndex + 1} of ${images.length}`}</Text>
+            <View style={styles.dots}>
+              {images.map((image, index) => (
+                <View
+                  key={image.uri + String(index)}
+                  style={[styles.dot, index === activeIndex && styles.dotActive]}
+                />
+              ))}
+            </View>
           </View>
         ) : null}
       </View>
@@ -202,4 +235,14 @@ const styles = StyleSheet.create({
   mediaPressable: { height: "100%", width: "100%" },
   image: { borderRadius: radii.sm, height: "100%", width: "100%" },
   closeButton: { position: "absolute", zIndex: 2 },
+  paging: { alignItems: "center", left: 0, position: "absolute", right: 0 },
+  pagingLabel: { color: colors.surface, ...type.bodySmall, fontFamily: fonts.semibold },
+  dots: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.sm },
+  dot: {
+    backgroundColor: colors.photoRing,
+    borderRadius: radii.pill,
+    height: spacing.sm,
+    width: spacing.sm,
+  },
+  dotActive: { backgroundColor: colors.surface },
 });

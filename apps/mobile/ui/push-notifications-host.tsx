@@ -1,7 +1,8 @@
 import { crewPushHref, parseCrewPushPayload } from "@repin/validation";
 import { usePathname, useRouter } from "expo-router";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import { AppState, Linking, Platform } from "react-native";
+import { AppState, Linking, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { fetchHasCrewMembership } from "../lib/push-api";
 import { registerPushHost } from "../lib/push-controller";
@@ -28,6 +29,7 @@ import {
 import { useAuthSession } from "../lib/use-auth-session";
 import { overlayCount, subscribeOverlayCount } from "./overlay-occupancy";
 import { PushPermissionSheet } from "./push-permission-sheet";
+import { colors, fonts, radii, spacing, type } from "./theme";
 
 type PushPermissionValue = {
   osStatus: PushOsStatus;
@@ -71,6 +73,7 @@ export function PushNotificationsHost({
   const [pending, setPending] = useState(false);
   const [forcePrompt, setForcePrompt] = useState(false);
   const [overlayTick, setOverlayTick] = useState(0);
+  const [banner, setBanner] = useState<{ title: string; body: string; href: string } | null>(null);
 
   sessionRef.current = session;
   sheetVisibleRef.current = sheetVisible;
@@ -277,6 +280,19 @@ export function PushNotificationsHost({
       });
       if (!active) return;
 
+      Notifications.addNotificationReceivedListener((notification) => {
+        const payload = parseCrewPushPayload(notification.request.content.data);
+        if (!payload) return;
+        const title = notification.request.content.title?.trim()
+          || notification.request.content.body?.trim()
+          || "";
+        const body = notification.request.content.body?.trim() || title;
+        setBanner({
+          title: title || body,
+          body,
+          href: crewPushHref(payload),
+        });
+      });
       subscription = Notifications.addNotificationResponseReceivedListener((response) => {
         const identifier = response.notification.request.identifier;
         if (handledResponse.current === identifier) return;
@@ -315,6 +331,18 @@ export function PushNotificationsHost({
       value={{ osStatus, promptFromSettings: () => void showPreprompt(true) }}
     >
       {children}
+      {banner ? (
+        <InAppPostBanner
+          body={banner.body}
+          onDismiss={() => setBanner(null)}
+          onOpen={() => {
+            const href = banner.href;
+            setBanner(null);
+            router.push(href);
+          }}
+          title={banner.title}
+        />
+      ) : null}
       <PushPermissionSheet
         onAllow={() => void allowNotifications()}
         onDismiss={dismissSheet}
@@ -324,3 +352,38 @@ export function PushNotificationsHost({
     </PushPermissionContext.Provider>
   );
 }
+
+function InAppPostBanner({
+  body,
+  onDismiss,
+  onOpen,
+  title,
+}: {
+  body: string;
+  onDismiss: () => void;
+  onOpen: () => void;
+  title: string;
+}) {
+  const insets = useSafeAreaInsets();
+  return (
+    <View pointerEvents="box-none" style={[bannerStyles.wrap, { paddingTop: insets.top + spacing.sm }]}>
+      <Pressable accessibilityRole="button" onPress={onOpen} style={bannerStyles.card}>
+        <Text numberOfLines={1} style={bannerStyles.title}>{title}</Text>
+        <Text numberOfLines={2} style={bannerStyles.body}>{body}</Text>
+      </Pressable>
+      <Pressable accessibilityLabel="Dismiss alert" onPress={onDismiss} style={bannerStyles.dismiss} />
+    </View>
+  );
+}
+
+const bannerStyles = StyleSheet.create({
+  wrap: { left: spacing.lg, position: "absolute", right: spacing.lg, zIndex: 50 },
+  card: {
+    backgroundColor: colors.surface,
+    borderRadius: radii.lg,
+    padding: spacing.lg,
+  },
+  title: { color: colors.ink, ...type.body, fontFamily: fonts.bold },
+  body: { color: colors.muted, marginTop: spacing.xs, ...type.bodySmall },
+  dismiss: { height: spacing.sm },
+});

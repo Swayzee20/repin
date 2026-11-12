@@ -58,8 +58,32 @@ export const crewNotificationAlertTypes = [
   "crew_workout",
   "crew_comment",
   "crew_reaction",
+  "crew_post",
   "mute_all",
 ] as const;
+
+export const communityPostKinds = ["workout", "general"] as const;
+
+export const generalPublicationPhotoContentTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+] as const;
+
+export const generalPublicationUploadStatuses = [
+  "reserved",
+  "uploaded",
+  "failed",
+  "consumed",
+  "expired",
+] as const;
+
+export const GENERAL_POST_BODY_MAX = 2000;
+export const GENERAL_POST_PHOTO_MAX = 6;
+export const GENERAL_POST_PHOTO_MAX_BYTES = 10 * 1024 * 1024;
+export const GENERAL_POST_CREW_MAX = 10;
 
 export const users = pgTable("users", {
   id: uuid().primaryKey(),
@@ -136,7 +160,7 @@ export const crewNotificationPrefs = pgTable(
     index("crew_notification_prefs_group_id_idx").on(table.groupId),
     check(
       "crew_notification_prefs_alert_type_check",
-      sql`${table.alertType} in ('crew_workout', 'crew_comment', 'crew_reaction', 'mute_all')`,
+      sql`${table.alertType} in ('crew_workout', 'crew_comment', 'crew_reaction', 'crew_post', 'mute_all')`,
     ),
   ],
 );
@@ -704,6 +728,152 @@ export const setResults = pgTable(
   ],
 );
 
+export const generalPublications = pgTable(
+  "general_publications",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    body: text(),
+    revision: integer().notNull().default(1),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("general_publications_author_id_idx").on(table.authorId),
+    check(
+      "general_publications_body_check",
+      sql`${table.body} is null or length(${table.body}) <= 2000`,
+    ),
+    check(
+      "general_publications_revision_check",
+      sql`${table.revision} >= 1`,
+    ),
+  ],
+).enableRLS();
+
+export const generalPublicationPhotos = pgTable(
+  "general_publication_photos",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    publicationId: uuid("publication_id")
+      .notNull()
+      .references(() => generalPublications.id, { onDelete: "cascade" }),
+    storagePath: text("storage_path").notNull(),
+    sortOrder: integer("sort_order").notNull(),
+    contentType: text("content_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("general_publication_photos_publication_sort_unique").on(
+      table.publicationId,
+      table.sortOrder,
+    ),
+    uniqueIndex("general_publication_photos_storage_path_unique").on(
+      table.storagePath,
+    ),
+    check(
+      "general_publication_photos_sort_check",
+      sql`${table.sortOrder} between 0 and 5`,
+    ),
+    check(
+      "general_publication_photos_size_check",
+      sql`${table.byteSize} > 0 and ${table.byteSize} <= 10485760`,
+    ),
+    check(
+      "general_publication_photos_type_check",
+      sql`${table.contentType} in ('image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif')`,
+    ),
+  ],
+).enableRLS();
+
+export const generalPublicationLinks = pgTable(
+  "general_publication_links",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    publicationId: uuid("publication_id")
+      .notNull()
+      .references(() => generalPublications.id, { onDelete: "cascade" }),
+    url: text().notNull(),
+    position: integer().notNull(),
+    previewTitle: text("preview_title"),
+    previewDescription: text("preview_description"),
+    previewImageUrl: text("preview_image_url"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("general_publication_links_publication_position_unique").on(
+      table.publicationId,
+      table.position,
+    ),
+    check(
+      "general_publication_links_position_check",
+      sql`${table.position} >= 0`,
+    ),
+    check(
+      "general_publication_links_url_check",
+      sql`length(btrim(${table.url})) between 1 and 2048`,
+    ),
+  ],
+).enableRLS();
+
+export const generalPublicationUploadReservations = pgTable(
+  "general_publication_upload_reservations",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    publicationId: uuid("publication_id")
+      .notNull()
+      .references(() => generalPublications.id, { onDelete: "cascade" }),
+    authorId: uuid("author_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    assetId: uuid("asset_id").notNull(),
+    storagePath: text("storage_path").notNull(),
+    contentType: text("content_type").notNull(),
+    byteSize: integer("byte_size").notNull(),
+    status: text().notNull().default("reserved"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    uploadedAt: timestamp("uploaded_at", { withTimezone: true }),
+  },
+  (table) => [
+    uniqueIndex("general_publication_upload_reservations_path_unique").on(
+      table.storagePath,
+    ),
+    uniqueIndex("general_publication_upload_reservations_asset_unique").on(
+      table.publicationId,
+      table.assetId,
+    ),
+    index("general_publication_upload_reservations_author_idx").on(
+      table.authorId,
+    ),
+    check(
+      "general_publication_upload_reservations_status_check",
+      sql`${table.status} in ('reserved', 'uploaded', 'failed', 'consumed', 'expired')`,
+    ),
+    check(
+      "general_publication_upload_reservations_size_check",
+      sql`${table.byteSize} > 0 and ${table.byteSize} <= 10485760`,
+    ),
+    check(
+      "general_publication_upload_reservations_type_check",
+      sql`${table.contentType} in ('image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif')`,
+    ),
+  ],
+).enableRLS();
+
 export const communityPosts = pgTable(
   "community_posts",
   {
@@ -714,13 +884,16 @@ export const communityPosts = pgTable(
     groupId: uuid("group_id")
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),
+    kind: text().notNull().default("workout"),
     workoutSessionId: uuid("workout_session_id")
-      .notNull()
       .references(() => workoutSessions.id, { onDelete: "cascade" }),
+    publicationId: uuid("publication_id")
+      .references(() => generalPublications.id, { onDelete: "cascade" }),
     caption: text(),
     photoPath: text("photo_path"),
     removedAt: timestamp("removed_at", { withTimezone: true }),
     removedBy: uuid("removed_by").references(() => users.id, { onDelete: "set null" }),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
     reactionPushLastSentAt: timestamp("reaction_push_last_sent_at", {
       withTimezone: true,
     }),
@@ -736,12 +909,37 @@ export const communityPosts = pgTable(
       table.groupId,
       table.createdAt,
     ),
+    index("community_posts_group_created_id_idx").on(
+      table.groupId,
+      table.createdAt,
+      table.id,
+    ),
     index("community_posts_workout_session_id_idx").on(
       table.workoutSessionId,
     ),
-    uniqueIndex("community_posts_group_session_unique").on(
-      table.groupId,
-      table.workoutSessionId,
+    index("community_posts_publication_id_idx").on(table.publicationId),
+    uniqueIndex("community_posts_id_group_unique").on(table.id, table.groupId),
+    uniqueIndex("community_posts_group_session_unique")
+      .on(table.groupId, table.workoutSessionId)
+      .where(sql`${table.workoutSessionId} is not null`),
+    uniqueIndex("community_posts_group_publication_unique")
+      .on(table.groupId, table.publicationId)
+      .where(sql`${table.publicationId} is not null`),
+    check(
+      "community_posts_kind_check",
+      sql`${table.kind} in ('workout', 'general')`,
+    ),
+    check(
+      "community_posts_kind_shape_check",
+      sql`(
+        ${table.kind} = 'workout'
+        and ${table.workoutSessionId} is not null
+        and ${table.publicationId} is null
+      ) or (
+        ${table.kind} = 'general'
+        and ${table.publicationId} is not null
+        and ${table.workoutSessionId} is null
+      )`,
     ),
   ],
 );
@@ -810,6 +1008,61 @@ export const communityPostComments = pgTable(
     ),
   ],
 );
+
+export const crewPinnedPosts = pgTable(
+  "crew_pinned_posts",
+  {
+    groupId: uuid("group_id")
+      .primaryKey()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    postId: uuid("post_id")
+      .notNull()
+      .references(() => communityPosts.id, { onDelete: "cascade" }),
+    pinnedBy: uuid("pinned_by")
+      .notNull()
+      .references(() => users.id, { onDelete: "restrict" }),
+    pinnedAt: timestamp("pinned_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    index("crew_pinned_posts_post_id_idx").on(table.postId),
+    foreignKey({
+      columns: [table.postId, table.groupId],
+      foreignColumns: [communityPosts.id, communityPosts.groupId],
+      name: "crew_pinned_posts_post_same_crew_fk",
+    }),
+  ],
+).enableRLS();
+
+export const pushNotificationDedupe = pgTable(
+  "push_notification_dedupe",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    recipientUserId: uuid("recipient_user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    eventKey: text("event_key").notNull(),
+    alertType: text("alert_type").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("push_notification_dedupe_recipient_event_unique").on(
+      table.recipientUserId,
+      table.eventKey,
+    ),
+    check(
+      "push_notification_dedupe_alert_type_check",
+      sql`${table.alertType} in ('crew_workout', 'crew_comment', 'crew_reaction', 'crew_post')`,
+    ),
+    check(
+      "push_notification_dedupe_event_key_check",
+      sql`length(btrim(${table.eventKey})) between 1 and 200`,
+    ),
+  ],
+).enableRLS();
 
 export const personalRecordKinds = [
   "heaviest_single",
@@ -960,8 +1213,7 @@ export const contentReports = pgTable(
     targetType: text("target_type").notNull(),
     targetId: uuid("target_id").notNull(),
     targetUserId: uuid("target_user_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "set null" }),
     reason: text().notNull(),
     details: text(),
     status: text().notNull().default("open"),
@@ -1012,6 +1264,40 @@ export const contentReports = pgTable(
     ),
   ],
 );
+
+export const contentReportEvidence = pgTable(
+  "content_report_evidence",
+  {
+    id: uuid().defaultRandom().primaryKey(),
+    reportId: uuid("report_id").references(() => contentReports.id, {
+      onDelete: "set null",
+    }),
+    targetType: text("target_type").notNull(),
+    targetId: uuid("target_id").notNull(),
+    groupId: uuid("group_id")
+      .notNull()
+      .references(() => groups.id, { onDelete: "cascade" }),
+    snapshot: jsonb().notNull(),
+    mediaPaths: text("media_paths").array().notNull().default(sql`'{}'`),
+    authorErasedAt: timestamp("author_erased_at", { withTimezone: true }),
+    retainUntil: timestamp("retain_until", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("content_report_evidence_report_unique").on(table.reportId),
+    index("content_report_evidence_retain_until_idx").on(table.retainUntil),
+    index("content_report_evidence_target_idx").on(
+      table.targetType,
+      table.targetId,
+    ),
+    check(
+      "content_report_evidence_target_type_check",
+      sql`${table.targetType} in ('post', 'comment')`,
+    ),
+  ],
+).enableRLS();
 
 export const userBlocks = pgTable(
   "user_blocks",
@@ -1385,6 +1671,11 @@ export type CommunityPostGoal = typeof communityPostGoals.$inferSelect;
 export type NewCommunityPostGoal = typeof communityPostGoals.$inferInsert;
 export type ContentReport = typeof contentReports.$inferSelect;
 export type NewContentReport = typeof contentReports.$inferInsert;
+export type ContentReportEvidence = typeof contentReportEvidence.$inferSelect;
+export type NewContentReportEvidence = typeof contentReportEvidence.$inferInsert;
+export type GeneralPublication = typeof generalPublications.$inferSelect;
+export type NewGeneralPublication = typeof generalPublications.$inferInsert;
+export type CrewPinnedPost = typeof crewPinnedPosts.$inferSelect;
 export type UserBlock = typeof userBlocks.$inferSelect;
 export type NewUserBlock = typeof userBlocks.$inferInsert;
 export type CrewNotificationPref = typeof crewNotificationPrefs.$inferSelect;
@@ -1406,6 +1697,7 @@ export const devicePushTokens = pgTable(
       .defaultNow()
       .notNull(),
     disabledAt: timestamp("disabled_at", { withTimezone: true }),
+    supportsPostTargets: boolean("supports_post_targets").notNull().default(false),
   },
   (table) => [
     uniqueIndex("device_push_tokens_expo_push_token_unique").on(

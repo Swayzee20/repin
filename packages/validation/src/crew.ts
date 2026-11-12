@@ -8,6 +8,7 @@ export const crewAlertTypes = [
   "crew_workout",
   "crew_comment",
   "crew_reaction",
+  "crew_post",
 ] as const;
 
 export type CrewAlertType = (typeof crewAlertTypes)[number];
@@ -17,6 +18,7 @@ export type CrewNotificationPrefs = {
   crewWorkout: boolean;
   crewComment: boolean;
   crewReaction: boolean;
+  crewPost: boolean;
 };
 
 export const defaultCrewNotificationPrefs: CrewNotificationPrefs = {
@@ -24,6 +26,7 @@ export const defaultCrewNotificationPrefs: CrewNotificationPrefs = {
   crewWorkout: true,
   crewComment: true,
   crewReaction: true,
+  crewPost: true,
 };
 
 export function isInSundayWeek(
@@ -44,12 +47,14 @@ export function resolveCrewNotificationPrefs(
     crewWorkout: byType.get("crew_workout") ?? true,
     crewComment: byType.get("crew_comment") ?? true,
     crewReaction: byType.get("crew_reaction") ?? true,
+    crewPost: byType.get("crew_post") ?? true,
   };
 }
 
 export function notificationSummary(prefs: CrewNotificationPrefs) {
   if (prefs.muteAll) return "Muted";
   const offCount = [
+    prefs.crewPost,
     prefs.crewWorkout,
     prefs.crewComment,
     prefs.crewReaction,
@@ -63,6 +68,7 @@ export function crewAlertAllowed(
   alertType: CrewAlertType,
 ) {
   if (prefs.muteAll) return false;
+  if (alertType === "crew_post") return prefs.crewPost;
   if (alertType === "crew_workout") return prefs.crewWorkout;
   if (alertType === "crew_comment") return prefs.crewComment;
   return prefs.crewReaction;
@@ -115,6 +121,7 @@ export const crewNotificationPrefsSchema = z
     crewWorkout: z.boolean(),
     crewComment: z.boolean(),
     crewReaction: z.boolean(),
+    crewPost: z.boolean().optional().default(true),
   })
   .strict();
 

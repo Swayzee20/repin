@@ -6,11 +6,17 @@ import {
   claimReactionPushSlot,
   countVisibleReactors,
   listActivePushTokensForUsers,
+  listCrewPostPushRecipients,
   listCrewWorkoutPushRecipients,
   listPostAuthorPushRecipient,
   type CrewPushRecipient,
 } from "@repin/db";
-import { crewPushBody, type CrewPushAlertType } from "@repin/validation";
+import {
+  crewPushBody,
+  crewPushTitle,
+  firstPostLine,
+  type CrewPushAlertType,
+} from "@repin/validation";
 
 import { sendExpoPushMessages, type ExpoPushMessage } from "./expo-push";
 
@@ -47,17 +53,39 @@ export async function notifyCrewWorkoutPosted(input: {
   });
 }
 
+export async function notifyCrewPostPosted(input: {
+  actorUserId: string;
+  actorDisplayName: string;
+  publicationId: string;
+  createdAt: Date;
+  body: string | null;
+}) {
+  const recipients = await listCrewPostPushRecipients({
+    actorUserId: input.actorUserId,
+    publicationId: input.publicationId,
+    contentCreatedAt: input.createdAt,
+  });
+  await deliverPush({
+    actorDisplayName: input.actorDisplayName,
+    firstLine: firstPostLine(input.body),
+    recipients,
+    type: "crew_post",
+  });
+}
+
 export async function notifyCrewComment(input: {
   actorUserId: string;
   actorDisplayName: string;
   groupId: string;
-  sessionId: string;
+  sessionId?: string;
+  postId?: string;
   createdAt: Date;
 }) {
   const recipient = await listPostAuthorPushRecipient({
     actorUserId: input.actorUserId,
     groupId: input.groupId,
     sessionId: input.sessionId,
+    postId: input.postId,
     alertType: "crew_comment",
     contentCreatedAt: input.createdAt,
   });
@@ -73,13 +101,15 @@ export async function notifyCrewReaction(input: {
   actorUserId: string;
   actorDisplayName: string;
   groupId: string;
-  sessionId: string;
+  sessionId?: string;
+  postId?: string;
   createdAt: Date;
 }) {
   const recipient = await listPostAuthorPushRecipient({
     actorUserId: input.actorUserId,
     groupId: input.groupId,
     sessionId: input.sessionId,
+    postId: input.postId,
     alertType: "crew_reaction",
     contentCreatedAt: input.createdAt,
   });
@@ -104,6 +134,7 @@ export async function notifyCrewReaction(input: {
 
 async function deliverPush(input: {
   actorDisplayName: string;
+  firstLine?: string;
   reactionCount?: number;
   recipients: CrewPushRecipient[];
   type: CrewPushAlertType;
@@ -123,22 +154,36 @@ async function deliverPush(input: {
   for (const token of tokens) {
     const recipient = recipientByUser.get(token.userId);
     if (!recipient) continue;
+    if (input.type === "crew_post" && !token.supportsPostTargets) continue;
+    const title = crewPushTitle({
+      type: input.type,
+      actorName: input.actorDisplayName,
+      crewName: recipient.groupName,
+    });
     messages.push({
       to: token.expoPushToken,
+      title,
       body: crewPushBody({
         type: input.type,
         actorName: input.actorDisplayName,
         crewName: recipient.groupName,
         reactionCount: input.reactionCount,
+        firstLine: input.firstLine,
       }),
       sound: "default",
       channelId: "default",
-      data: {
-        type: input.type,
-        groupId: recipient.groupId,
-        sessionId: recipient.sessionId,
-        postId: recipient.postId,
-      },
+      data: input.type === "crew_post"
+        ? {
+            type: input.type,
+            groupId: recipient.groupId,
+            postId: recipient.postId,
+          }
+        : {
+            type: input.type,
+            groupId: recipient.groupId,
+            sessionId: recipient.sessionId ?? undefined,
+            postId: recipient.postId,
+          },
     });
   }
 

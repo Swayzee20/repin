@@ -98,4 +98,6 @@ test("own-post VoiceOver text includes Your post and selected stays a 2 pt ring"
   assert.match(community, /workoutFeedCardLabel/);
   assert.match(community, /isOwn=\{isOwn\}/);
   assert.match(community, /selected=\{selected\}/);
+  assert.match(community, /generalPostCopy\.newPost/);
+  assert.equal(community.includes("CommunityDatePicker"), false);
 });

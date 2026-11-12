@@ -11,9 +11,9 @@ export function resolveWorkoutDate(
   return null;
 }
 
-export function formatWorkoutDate(workout: WorkoutFeedItem) {
-  const date = resolveWorkoutDate(workout);
-  if (!date) return "Date unavailable";
+export function formatRelativeTimestamp(value: Date | string) {
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
 
   const today = new Date();
   const yesterday = new Date(today);
@@ -28,4 +28,15 @@ export function formatWorkoutDate(workout: WorkoutFeedItem) {
     day: "numeric",
     year: date.getFullYear() === today.getFullYear() ? undefined : "numeric",
   });
+}
+
+export function formatWorkoutDate(workout: WorkoutFeedItem) {
+  const date = resolveWorkoutDate(workout);
+  if (!date) return "Date unavailable";
+  return formatRelativeTimestamp(date);
+}
+
+export function formatPostTimestamp(createdAt: string, editedAt?: string | null) {
+  const label = formatRelativeTimestamp(createdAt);
+  return editedAt ? `${label} · Edited` : label;
 }

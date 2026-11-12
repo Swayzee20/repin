@@ -1,7 +1,5 @@
 import { useState } from "react";
 
-import type { WorkoutFeedItem } from "@repin/types";
-
 import { markWorkoutDataStale } from "../lib/data-freshness";
 import { clearWorkoutDetailCaches } from "../lib/workout-detail-cache";
 import { BlockSheet, type BlockRequest } from "./block-sheet";
@@ -78,13 +76,18 @@ export function useModeration(handlers?: {
         userId: comment.userId,
       });
     },
-    askReportPost(workout: WorkoutFeedItem) {
+    askReportPost(post: {
+      communityPostId?: string;
+      displayName: string;
+      id: string;
+      userId: string;
+    }) {
       setReport({
-        displayName: workout.displayName,
-        hideId: workout.id,
+        displayName: post.displayName,
+        hideId: post.id,
         kind: "post",
-        targetId: workout.communityPostId ?? workout.id,
-        userId: workout.userId,
+        targetId: post.communityPostId ?? post.id,
+        userId: post.userId,
       });
     },
     ui,

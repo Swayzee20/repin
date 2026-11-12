@@ -25,14 +25,16 @@ export type CrewPushRecipient = {
   userId: string;
   groupId: string;
   groupName: string;
-  sessionId: string;
+  sessionId: string | null;
   postId: string;
+  publicationId?: string | null;
 };
 
 export async function upsertDevicePushToken(input: {
   userId: string;
   expoPushToken: string;
   platform: PushPlatform;
+  supportsPostTargets?: boolean;
 }) {
   const now = new Date();
   const [row] = await getDatabase()
@@ -44,6 +46,7 @@ export async function upsertDevicePushToken(input: {
       createdAt: now,
       lastSeenAt: now,
       disabledAt: null,
+      supportsPostTargets: input.supportsPostTargets ?? false,
     })
     .onConflictDoUpdate({
       target: schema.devicePushTokens.expoPushToken,
@@ -52,6 +55,9 @@ export async function upsertDevicePushToken(input: {
         platform: input.platform,
         lastSeenAt: now,
         disabledAt: null,
+        ...(input.supportsPostTargets == null
+          ? {}
+          : { supportsPostTargets: input.supportsPostTargets }),
       },
     })
     .returning({
@@ -96,6 +102,7 @@ export async function listActivePushTokensForUsers(userIds: string[]) {
     .select({
       userId: schema.devicePushTokens.userId,
       expoPushToken: schema.devicePushTokens.expoPushToken,
+      supportsPostTargets: schema.devicePushTokens.supportsPostTargets,
     })
     .from(schema.devicePushTokens)
     .where(
@@ -163,13 +170,103 @@ export async function listCrewWorkoutPushRecipients(input: {
   });
 }
 
+export async function claimPushDedupe(input: {
+  recipientUserId: string;
+  eventKey: string;
+  alertType: CrewAlertType;
+}) {
+  const [row] = await getDatabase()
+    .insert(schema.pushNotificationDedupe)
+    .values({
+      recipientUserId: input.recipientUserId,
+      eventKey: input.eventKey,
+      alertType: input.alertType,
+    })
+    .onConflictDoNothing({
+      target: [
+        schema.pushNotificationDedupe.recipientUserId,
+        schema.pushNotificationDedupe.eventKey,
+      ],
+    })
+    .returning({ id: schema.pushNotificationDedupe.id });
+  return Boolean(row);
+}
+
+export async function listCrewPostPushRecipients(input: {
+  actorUserId: string;
+  publicationId: string;
+  contentCreatedAt: Date;
+}): Promise<CrewPushRecipient[]> {
+  const copies = await getDatabase()
+    .select({
+      id: schema.communityPosts.id,
+      groupId: schema.communityPosts.groupId,
+      groupName: schema.groups.name,
+      closedAt: schema.groups.closedAt,
+    })
+    .from(schema.communityPosts)
+    .innerJoin(schema.groups, eq(schema.groups.id, schema.communityPosts.groupId))
+    .where(and(
+      eq(schema.communityPosts.publicationId, input.publicationId),
+      eq(schema.communityPosts.kind, "general"),
+      isNull(schema.communityPosts.removedAt),
+    ));
+
+  const eligible: CrewPushRecipient[] = [];
+  for (const copy of copies) {
+    const members = await getDatabase()
+      .select({
+        userId: schema.groupMembers.userId,
+        leftAt: schema.groupMembers.leftAt,
+        contentVisibleAfter: schema.groupMembers.contentVisibleAfter,
+        closedAt: schema.groups.closedAt,
+      })
+      .from(schema.groupMembers)
+      .innerJoin(schema.groups, eq(schema.groups.id, schema.groupMembers.groupId))
+      .where(and(
+        eq(schema.groupMembers.groupId, copy.groupId),
+        activeMembership,
+        openGroup,
+        ne(schema.groupMembers.userId, input.actorUserId),
+        lte(schema.groupMembers.contentVisibleAfter, input.contentCreatedAt),
+        communityPostVisibleToSql(schema.groupMembers.userId, copy.id),
+      ));
+    eligible.push(...await filterRecipients({
+      actorUserId: input.actorUserId,
+      alertType: "crew_post",
+      contentCreatedAt: input.contentCreatedAt,
+      groupId: copy.groupId,
+      groupName: copy.groupName,
+      postId: copy.id,
+      sessionId: null,
+      publicationId: input.publicationId,
+      members,
+    }));
+  }
+
+  const chosen = new Map<string, CrewPushRecipient>();
+  for (const recipient of eligible) {
+    if (chosen.has(recipient.userId)) continue;
+    const claimed = await claimPushDedupe({
+      recipientUserId: recipient.userId,
+      eventKey: `crew_post:${input.publicationId}`,
+      alertType: "crew_post",
+    });
+    if (!claimed) continue;
+    chosen.set(recipient.userId, recipient);
+  }
+  return [...chosen.values()];
+}
+
 export async function listPostAuthorPushRecipient(input: {
   actorUserId: string;
   groupId: string;
-  sessionId: string;
+  sessionId?: string;
+  postId?: string;
   alertType: Exclude<CrewAlertType, "crew_workout">;
   contentCreatedAt: Date;
 }): Promise<CrewPushRecipient | null> {
+  if (!input.postId && !input.sessionId) return null;
   const [post] = await getDatabase()
     .select({
       id: schema.communityPosts.id,
@@ -194,7 +291,9 @@ export async function listPostAuthorPushRecipient(input: {
     .where(
       and(
         eq(schema.communityPosts.groupId, input.groupId),
-        eq(schema.communityPosts.workoutSessionId, input.sessionId),
+        input.postId
+          ? eq(schema.communityPosts.id, input.postId)
+          : eq(schema.communityPosts.workoutSessionId, input.sessionId!),
         communityPostVisibleToSql(input.actorUserId, schema.communityPosts.id),
         communityPostVisibleToSql(schema.communityPosts.userId, schema.communityPosts.id),
         notBlockedAuthor(input.actorUserId, schema.communityPosts.userId),
@@ -294,7 +393,8 @@ async function filterRecipients(input: {
   groupId: string;
   groupName: string;
   postId: string;
-  sessionId: string;
+  sessionId: string | null;
+  publicationId?: string | null;
   members: Array<{
     userId: string;
     leftAt: Date | null;
@@ -347,6 +447,7 @@ async function filterRecipients(input: {
       groupName: input.groupName,
       sessionId: input.sessionId,
       postId: input.postId,
+      publicationId: input.publicationId ?? null,
     }];
   });
 }

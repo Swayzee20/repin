@@ -1,28 +1,33 @@
-import type { CommunityData, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GoalBadge, GroupSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
-import { goalCopy } from "@repin/validation";
-import { Feather } from "@expo/vector-icons";
-import { useFocusEffect, useLocalSearchParams, useRouter, useSegments } from "expo-router";
+import type { CommunityData, CommunityFeedItem, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GeneralPostFeedItem, GoalBadge, GroupSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
+import {
+  formatDeletePostBody,
+  formatEmptyBoard,
+  formatPinBody,
+  formatReplacePinBody,
+  generalPostCopy,
+  goalCopy,
+} from "@repin/validation";
+import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
 import { clearWorkoutDetailCaches } from "../../../lib/workout-detail-cache";
-import {
-  addLocalDays,
-  formatCommunityDayLabel,
-  getLocalDayRange,
-  isSameLocalDay,
-  startOfLocalDay,
-  toLocalDateInputValue,
-} from "../../../lib/community-date";
 import {
   getWorkoutDataRevision,
   isFresh,
   markWorkoutDataStale,
   type FreshnessRecord,
 } from "../../../lib/data-freshness";
-import { workoutMenuItems } from "../../../lib/content-menu";
+import { generalPostMenuItems, workoutMenuItems } from "../../../lib/content-menu";
+import {
+  deleteGeneralPost,
+  fetchGeneralPostDetail,
+  pinGeneralPost,
+  postedCrewNames,
+  unpinGeneralPost,
+} from "../../../lib/general-posts-api";
 import { useGoalBadgeUndo } from "../../../lib/goal-badge-actions";
 import { usePrBadgeUndo } from "../../../lib/pr-badge-actions";
 import { isLayoutPreview } from "../../../lib/layout-preview";
@@ -33,7 +38,10 @@ import {
   resolveCommunitySelection,
 } from "../../../lib/community-selection";
 import { isOwnPost, workoutFeedCardLabel } from "../../../ui/community-feed-layout";
-import { BrandHeader, Button, CommunityFeed, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { BrandHeader, Button, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { ConfirmSheet } from "../../../ui/crew-sheets";
+import { GeneralPostSummaryCard, generalPostFeedCardLabel } from "../../../ui/general-post-card";
+import { GeneralPostDetailView } from "../../../ui/general-post-detail";
 import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { Dialog } from "../../../ui/dialog";
@@ -41,7 +49,6 @@ import { Chevron } from "../../../ui/icons";
 import { TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
 import { Menu, MenuItem } from "../../../ui/menu";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
-import { CommunityDatePicker } from "../../../ui/community-date-picker";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
 import { colors, fonts, size, spacing, type } from "../../../ui/theme";
@@ -56,7 +63,6 @@ const layoutPreviewViewerUserId = "user-jordan";
 
 export default function CommunityTabScreen() {
   const router = useRouter();
-  const segments = useSegments();
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ post?: string | string[] }>();
   const postParam = readCommunityPostParam(params.post);
@@ -67,9 +73,6 @@ export default function CommunityTabScreen() {
   const [loading, setLoading] = useState(!layoutPreview);
   const [error, setError] = useState<string | null>(null);
   const [groupMenuView, setGroupMenuView] = useState<"actions" | "groups" | null>(null);
-  const [datePickerOpen, setDatePickerOpen] = useState(false);
-  const [currentDay, setCurrentDay] = useState(() => startOfLocalDay(new Date()));
-  const [selectedDate, setSelectedDate] = useState(() => startOfLocalDay(new Date()));
   const [boardHeight, setBoardHeight] = useState(0);
   const [detailTarget, setDetailTarget] = useState<{
     groupId: string;
@@ -82,19 +85,18 @@ export default function CommunityTabScreen() {
   const [deleteStage, setDeleteStage] = useState<"choose" | "confirm-workout">("choose");
   const [deletePending, setDeletePending] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [generalDelete, setGeneralDelete] = useState<GeneralPostFeedItem | null>(null);
+  const [deleteCrewNames, setDeleteCrewNames] = useState<string[]>([]);
+  const [pinTarget, setPinTarget] = useState<GeneralPostFeedItem | null>(null);
+  const [replacePin, setReplacePin] = useState(false);
+  const [unpinToast, setUnpinToast] = useState<GeneralPostFeedItem | null>(null);
+  const [generalDetail, setGeneralDetail] = useState<GeneralPostFeedItem | null>(null);
+  const [offline, setOffline] = useState(false);
   const dataRef = useRef<CommunityData | null>(null);
   const lastSuccessfulLoad = useRef<FreshnessRecord | null>(null);
   const inFlightRequests = useRef(new Map<string, Promise<void>>());
   const latestRequestKey = useRef<string | null>(null);
   const loadedUserId = useRef<string | null>(null);
-  const resetDateOnNextFocus = useRef(false);
-
-  const activeRoute = segments.join("/");
-
-  useEffect(() => {
-    const [root, tab] = activeRoute.split("/");
-    if (root === "(tabs)" && tab !== "community") resetDateOnNextFocus.current = true;
-  }, [activeRoute]);
 
   const loadCommunity = useCallback(async () => {
     if (!supabase) {
@@ -114,8 +116,7 @@ export default function CommunityTabScreen() {
       setData(null);
     }
 
-    const selectedDayKey = toLocalDateInputValue(selectedDate);
-    const groupKey = `community:${auth.session.user.id}:${selectedGroupId ?? "auto"}:${selectedDayKey}`;
+    const groupKey = `community:${auth.session.user.id}:${selectedGroupId ?? "auto"}:mixed`;
     const workoutRevision = getWorkoutDataRevision();
     if (
       dataRef.current &&
@@ -134,22 +135,21 @@ export default function CommunityTabScreen() {
       const search = new URLSearchParams({
         timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
         view: "community",
+        feed: "mixed",
       });
-      const range = getLocalDayRange(selectedDate);
-      search.set("start", range.start.toISOString());
-      search.set("end", range.end.toISOString());
       if (selectedGroupId) search.set("groupId", selectedGroupId);
       const response = await fetch(`${apiUrl}/api/home?${search.toString()}`, {
         headers: { Authorization: `Bearer ${auth.session.access_token}` },
         signal: AbortSignal.timeout(7_500),
       });
       const body = (await response.json()) as CommunityData & { error?: string };
-      if (!response.ok) throw new Error(body.error ?? "Community could not be loaded.");
+      if (!response.ok) throw new Error(generalPostCopy.loadErrorTitle);
+      setOffline(false);
       if (latestRequestKey.current !== requestKey) return;
       dataRef.current = body;
       loadedUserId.current = auth.session.user.id;
       lastSuccessfulLoad.current = {
-        key: `community:${auth.session.user.id}:${body.selectedGroupId ?? "none"}:${selectedDayKey}`,
+        key: `community:${auth.session.user.id}:${body.selectedGroupId ?? "none"}:mixed`,
         loadedAt: Date.now(),
         workoutRevision,
       };
@@ -157,7 +157,15 @@ export default function CommunityTabScreen() {
       setSelectedGroupId(body.selectedGroupId);
       } catch (loadError) {
         if (latestRequestKey.current === requestKey) {
-          setError(loadError instanceof Error ? loadError.message : "Community could not be loaded.");
+          const message = loadError instanceof Error ? loadError.message : generalPostCopy.loadErrorTitle;
+          if (dataRef.current) {
+            setOffline(true);
+            setError(null);
+          } else {
+            setError(message === "Failed to fetch" || /network|offline/i.test(message)
+              ? generalPostCopy.offline
+              : generalPostCopy.loadErrorTitle);
+          }
         }
       } finally {
         if (latestRequestKey.current === requestKey) setLoading(false);
@@ -165,37 +173,24 @@ export default function CommunityTabScreen() {
     })().finally(() => inFlightRequests.current.delete(requestKey));
     inFlightRequests.current.set(requestKey, request);
     return request;
-  }, [selectedDate, selectedGroupId, setSelectedGroupId]);
-
-  useEffect(() => {
-    if (layoutPreview) return;
-    const now = new Date();
-    const nextDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
-    const timeout = setTimeout(() => {
-      const nextCurrentDay = startOfLocalDay(new Date());
-      latestRequestKey.current = null;
-      setData((current) => {
-        if (!current) return current;
-        const next = { ...current, communityWorkouts: [] };
-        dataRef.current = next;
-        return next;
-      });
-      setCurrentDay(nextCurrentDay);
-      setSelectedDate((current) => isSameLocalDay(current, currentDay) ? nextCurrentDay : current);
-      lastSuccessfulLoad.current = null;
-    }, nextDay.getTime() - now.getTime() + 1_000);
-    return () => clearTimeout(timeout);
-  }, [currentDay, layoutPreview]);
+  }, [selectedGroupId, setSelectedGroupId]);
 
   const previewBoard = useMemo(() => (layoutPreview ? layoutPreviewCommunity() : null), [layoutPreview]);
   const board = previewBoard ?? data;
   const workouts = useMemo(() => board?.communityWorkouts ?? [], [board]);
+  const mixedFeed = useMemo<CommunityFeedItem[]>(
+    () => board?.communityFeed ?? workouts.map((workout) => ({ ...workout, kind: "workout" as const })),
+    [board, workouts],
+  );
+  const pinnedPost = board?.pinnedPost ?? null;
   const selectedGroup = useMemo(
     () => board?.groups.find((group) => group.id === (selectedGroupId ?? board.selectedGroupId)) ?? null,
     [board, selectedGroupId],
   );
+  const requestedPostId = explicitOverride ?? postParam;
+  const generalFromParam = mixedFeed.find((item) => item.kind === "general" && item.id === requestedPostId);
   const baseSelection = resolveCommunitySelection({
-    postParam: explicitOverride ?? postParam,
+    postParam: generalFromParam ? null : requestedPostId,
     workouts,
   });
   let selection = baseSelection;
@@ -240,6 +235,12 @@ export default function CommunityTabScreen() {
     if (!explicitOverride || explicitOverride === postParam) return;
     router.setParams({ post: explicitOverride });
   }, [explicitOverride, postParam, router]);
+
+  useEffect(() => {
+    if (!postParam) return;
+    const item = mixedFeed.find((row): row is GeneralPostFeedItem => row.kind === "general" && row.id === postParam);
+    if (item) setGeneralDetail(item);
+  }, [mixedFeed, postParam]);
 
   const clearPostSelection = useCallback(() => {
     setExplicitOverride(null);
@@ -287,40 +288,8 @@ export default function CommunityTabScreen() {
 
   useFocusEffect(useCallback(() => {
     if (layoutPreview) return;
-    if (!resetDateOnNextFocus.current) {
-      void loadCommunity();
-      return;
-    }
-
-    resetDateOnNextFocus.current = false;
-    const today = startOfLocalDay(new Date());
-    const dateChanged = !isSameLocalDay(selectedDate, today);
-
-    setCurrentDay(today);
-    lastSuccessfulLoad.current = null;
-    clearFeed();
-
-    if (dateChanged) {
-      clearPostSelection();
-      setSelectedDate(today);
-      return;
-    }
-
     void loadCommunity();
-  }, [clearFeed, clearPostSelection, layoutPreview, loadCommunity, selectedDate]));
-
-  const selectDate = useCallback((nextDate: Date) => {
-    const normalized = startOfLocalDay(nextDate);
-    if (normalized > currentDay || isSameLocalDay(normalized, selectedDate)) return;
-    if (communitySelectionClears({
-      nextDayKey: toLocalDateInputValue(normalized),
-      nextGroupId: selectedGroupId,
-      previousDayKey: toLocalDateInputValue(selectedDate),
-      previousGroupId: selectedGroupId,
-    })) clearPostSelection();
-    clearFeed();
-    setSelectedDate(normalized);
-  }, [clearFeed, clearPostSelection, currentDay, selectedDate, selectedGroupId]);
+  }, [layoutPreview, loadCommunity]));
 
   const handleBoardLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = Math.floor(event.nativeEvent.layout.height);
@@ -417,6 +386,96 @@ export default function CommunityTabScreen() {
     router.push(`/groups/${encodeURIComponent(selectedGroup.id)}/workouts/${encodeURIComponent(workout.id)}/edit`);
   }, [router, selectedGroup]);
 
+  const openNewPost = useCallback(() => {
+    if (!selectedGroup) return;
+    router.push(`/groups/${encodeURIComponent(selectedGroup.id)}/new-post`);
+  }, [router, selectedGroup]);
+
+  const editGeneralPost = useCallback((post: GeneralPostFeedItem) => {
+    if (!selectedGroup) return;
+    router.push(`/groups/${encodeURIComponent(selectedGroup.id)}/posts/${encodeURIComponent(post.id)}/edit`);
+  }, [router, selectedGroup]);
+
+  const generalMenu = useCallback((post: GeneralPostFeedItem) => generalPostMenuItems({
+    isPinned: pinnedPost?.id === post.id,
+    onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
+      displayName: item.displayName,
+      hideId: item.id,
+      kind: "post",
+      targetId: item.id,
+      userId: item.userId,
+    }),
+    onDelete: (item) => {
+      setGeneralDelete(item);
+      setDeleteCrewNames(selectedGroup ? [selectedGroup.name] : []);
+      void (async () => {
+        if (!selectedGroup || !supabase) return;
+        const { data: auth } = await supabase.auth.getSession();
+        if (!auth.session) return;
+        const detail = await fetchGeneralPostDetail({
+          accessToken: auth.session.access_token,
+          groupId: selectedGroup.id,
+          postId: item.id,
+        }).catch(() => null);
+        if (!detail) return;
+        const names = postedCrewNames(detail);
+        if (names.length) setDeleteCrewNames(names);
+      })();
+    },
+    onEdit: editGeneralPost,
+    onPin: setPinTarget,
+    onReport: (item) => moderation.askReportPost({
+      id: item.id,
+      communityPostId: item.id,
+      displayName: item.displayName,
+      userId: item.userId,
+    }),
+    onUnpin: (item) => {
+      void (async () => {
+        if (!selectedGroup || !supabase) return;
+        const { data: auth } = await supabase.auth.getSession();
+        if (!auth.session) return;
+        await unpinGeneralPost({
+          accessToken: auth.session.access_token,
+          groupId: selectedGroup.id,
+          postId: item.id,
+        });
+        markWorkoutDataStale();
+        setUnpinToast(item);
+        void loadCommunity();
+      })();
+    },
+    post,
+    viewerRole: selectedGroup && selectedGroup.ownerId === loadedUserId.current ? "owner" : "member",
+    viewerUserId: loadedUserId.current,
+  }), [editGeneralPost, loadCommunity, moderation, pinnedPost?.id, selectedGroup]);
+
+  const restoreUnpinnedPost = useCallback((item: GeneralPostFeedItem) => {
+    void (async () => {
+      if (!selectedGroup || !supabase) return;
+      const { data: auth } = await supabase.auth.getSession();
+      if (!auth.session) return;
+      try {
+        await pinGeneralPost({
+          accessToken: auth.session.access_token,
+          groupId: selectedGroup.id,
+          postId: item.id,
+        });
+      } catch (pinError) {
+        const status = (pinError as { status?: number }).status;
+        if (status !== 409) return;
+        await pinGeneralPost({
+          accessToken: auth.session.access_token,
+          groupId: selectedGroup.id,
+          postId: item.id,
+          replace: true,
+        }).catch(() => undefined);
+      }
+      markWorkoutDataStale();
+      void loadCommunity();
+    })();
+  }, [loadCommunity, selectedGroup]);
+
   const feedMenu = useCallback((workout: WorkoutFeedItem) => workoutMenuItems({
     onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
       displayName: item.displayName,
@@ -508,29 +567,70 @@ export default function CommunityTabScreen() {
                 <ScrollAnchor id="community-header">
                   <BrandHeader />
                   <CommunityGroupControls
-                    currentDay={currentDay}
                     groupMenuView={groupMenuView}
                     groups={board?.groups ?? []}
-                    onOpenDatePicker={() => setDatePickerOpen(true)}
                     onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}
-                    onSelectDate={selectDate}
                     onSelectGroup={(groupId) => {
                       if (communitySelectionClears({
-                        nextDayKey: toLocalDateInputValue(selectedDate),
+                        nextDayKey: "mixed",
                         nextGroupId: groupId,
-                        previousDayKey: toLocalDateInputValue(selectedDate),
+                        previousDayKey: "mixed",
                         previousGroupId: selectedGroup.id,
                       })) clearPostSelection();
                       clearFeed(groupId);
                       setSelectedGroupId(groupId);
                     }}
                     onToggleMenu={setGroupMenuView}
-                    selectedDate={selectedDate}
                     selectedGroup={selectedGroup}
                   />
                 </ScrollAnchor>
                 <Text style={styles.boardTitle}>Community Board</Text>
-                {workouts.length ? workouts.map((workout) => {
+                <Button
+                  onPress={openNewPost}
+                  style={styles.newPost}
+                  variant="tonal"
+                  labelColor={colors.brandPressed}
+                >
+                  {generalPostCopy.newPost}
+                </Button>
+                {pinnedPost ? (
+                  <View style={styles.paneCardPress}>
+                    <GeneralPostSummaryCard
+                      isPinned
+                      menuItems={generalMenu(pinnedPost)}
+                      post={pinnedPost}
+                      showCommentCount
+                      showReactionSummary
+                      viewerUserId={viewerUserId}
+                    />
+                  </View>
+                ) : null}
+                {mixedFeed.length ? mixedFeed.map((item) => {
+                  if (item.kind === "general") {
+                    const isOwn = isOwnPost(item.userId, viewerUserId);
+                    const selected = item.id === openSessionId;
+                    return (
+                      <ScrollAnchor id={item.id} key={item.id}>
+                        <Pressable
+                          accessibilityLabel={generalPostFeedCardLabel({ isOwn })}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          onPress={() => setGeneralDetail(item)}
+                          style={styles.paneCardPress}
+                        >
+                          <GeneralPostSummaryCard
+                            menuItems={generalMenu(item)}
+                            post={item}
+                            selected={selected}
+                            showCommentCount
+                            showReactionSummary
+                            viewerUserId={viewerUserId}
+                          />
+                        </Pressable>
+                      </ScrollAnchor>
+                    );
+                  }
+                  const workout = item;
                   const selected = workout.id === openSessionId;
                   const isOwn = isOwnPost(workout.userId, viewerUserId);
                   const title = workout.name?.trim() || workout.title;
@@ -558,13 +658,15 @@ export default function CommunityTabScreen() {
                 }) : null}
               </View>
             )}
-            right={openSessionId === null ? (
+            right={generalDetail ? (
+              <GeneralPostDetailView
+                groupId={selectedGroup.id}
+                post={generalDetail}
+                presentation="community-pane"
+              />
+            ) : openSessionId === null ? (
               <View style={[styles.paneEmpty, { paddingBottom: insets.bottom }]}>
-                {isSameLocalDay(selectedDate, currentDay) ? (
-                  <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
-                ) : (
-                  <StateCard message="No workouts were logged this day." title="No workouts" />
-                )}
+                <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
               </View>
             ) : (
               <WorkoutDetailView
@@ -591,13 +693,6 @@ export default function CommunityTabScreen() {
             )}
           />
         </SafeAreaView>
-        <CommunityDatePicker
-          maximumDate={currentDay}
-          onChange={selectDate}
-          onDismiss={() => setDatePickerOpen(false)}
-          value={selectedDate}
-          visible={datePickerOpen}
-        />
         {moderation.ui}
         <PrUndoToast
           message={goalToastVisible ? goalCopy.toast : prCopy.toast}
@@ -622,6 +717,82 @@ export default function CommunityTabScreen() {
           pending={deletePending}
           stage={deleteStage}
           visible={deleteTarget !== null}
+        />
+        <ConfirmSheet
+          body={formatDeletePostBody(deleteCrewNames)}
+          confirmLabel={generalPostCopy.deleteAction}
+          onConfirm={() => {
+            void (async () => {
+              if (!generalDelete || !selectedGroup || !supabase) return;
+              const { data: auth } = await supabase.auth.getSession();
+              if (!auth.session) return;
+              await deleteGeneralPost({
+                accessToken: auth.session.access_token,
+                groupId: selectedGroup.id,
+                postId: generalDelete.id,
+              });
+              setGeneralDelete(null);
+              setDeleteCrewNames([]);
+              markWorkoutDataStale();
+              void loadCommunity();
+            })();
+          }}
+          onDismiss={() => {
+            setGeneralDelete(null);
+            setDeleteCrewNames([]);
+          }}
+          title={generalPostCopy.deleteTitle}
+          visible={generalDelete !== null}
+        />
+        <ConfirmSheet
+          body={replacePin
+            ? formatReplacePinBody(selectedGroup?.name ?? "this crew")
+            : formatPinBody(selectedGroup?.name ?? "this crew")}
+          confirmLabel={replacePin ? generalPostCopy.replacePinAction : generalPostCopy.pinAction}
+          confirmVariant="primary"
+          onConfirm={() => {
+            void (async () => {
+              if (!pinTarget || !selectedGroup || !supabase) return;
+              const { data: auth } = await supabase.auth.getSession();
+              if (!auth.session) return;
+              try {
+                await pinGeneralPost({
+                  accessToken: auth.session.access_token,
+                  groupId: selectedGroup.id,
+                  postId: pinTarget.id,
+                  replace: replacePin,
+                });
+                setPinTarget(null);
+                setReplacePin(false);
+                markWorkoutDataStale();
+                void loadCommunity();
+              } catch (pinError) {
+                const status = (pinError as { status?: number }).status;
+                if (status === 409 && !replacePin) {
+                  setReplacePin(true);
+                  return;
+                }
+                setPinTarget(null);
+              }
+            })();
+          }}
+          onDismiss={() => {
+            setPinTarget(null);
+            setReplacePin(false);
+          }}
+          title={replacePin ? generalPostCopy.replacePinTitle : generalPostCopy.pinTitle}
+          visible={pinTarget !== null}
+        />
+        <PrUndoToast
+          contained
+          message={generalPostCopy.unpinToast}
+          onClear={() => setUnpinToast(null)}
+          onUndo={() => {
+            const item = unpinToast;
+            setUnpinToast(null);
+            if (item) restoreUnpinnedPost(item);
+          }}
+          visible={unpinToast !== null && !prToastVisible && !goalToastVisible}
         />
       </View>
     );
@@ -662,9 +833,9 @@ export default function CommunityTabScreen() {
                     onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}
                     onSelectGroup={(groupId) => {
                       if (communitySelectionClears({
-                        nextDayKey: toLocalDateInputValue(selectedDate),
+                        nextDayKey: "mixed",
                         nextGroupId: groupId,
-                        previousDayKey: toLocalDateInputValue(selectedDate),
+                        previousDayKey: "mixed",
                         previousGroupId: selectedGroup.id,
                       })) clearPostSelection();
                       clearFeed(groupId);
@@ -677,52 +848,83 @@ export default function CommunityTabScreen() {
               </View>
             </View>
 
-            <View style={styles.dateNavigator}>
-              <Pressable
-                accessibilityLabel="Previous day"
-                accessibilityRole="button"
-                hitSlop={8}
-                onPress={() => selectDate(addLocalDays(selectedDate, -1))}
-                style={({ pressed }) => [styles.dateArrow, pressed && styles.pressed]}
-              >
-                <Feather color={colors.inkSoft} name="chevron-left" size={21} />
-              </Pressable>
-              <Pressable
-                accessibilityLabel={`Choose date, currently ${formatCommunityDayLabel(selectedDate, currentDay)}`}
-                accessibilityRole="button"
-                onPress={() => setDatePickerOpen(true)}
-                style={({ pressed }) => [styles.dateLabelButton, pressed && styles.pressed]}
-              >
-                <Text style={styles.dateLabel}>{formatCommunityDayLabel(selectedDate, currentDay)}</Text>
-              </Pressable>
-              <Pressable
-                accessibilityLabel="Next day"
-                accessibilityRole="button"
-                accessibilityState={{ disabled: isSameLocalDay(selectedDate, currentDay) }}
-                disabled={isSameLocalDay(selectedDate, currentDay)}
-                hitSlop={8}
-                onPress={() => selectDate(addLocalDays(selectedDate, 1))}
-                style={({ pressed }) => [styles.dateArrow, isSameLocalDay(selectedDate, currentDay) && styles.dateArrowDisabled, pressed && styles.pressed]}
-              >
-                <Feather color={colors.inkSoft} name="chevron-right" size={21} />
-              </Pressable>
-            </View>
-
             <Text style={styles.boardTitle}>Community Board</Text>
+            <Button
+              onPress={openNewPost}
+              style={styles.newPost}
+              variant="tonal"
+              labelColor={colors.brandPressed}
+            >
+              {generalPostCopy.newPost}
+            </Button>
 
             <View onLayout={handleBoardLayout} style={styles.boardArea}>
               {loading ? (
                 <View style={styles.feedState}><LoadingState message="Loading activity…" /></View>
               ) : error ? (
-                <View style={styles.feedState}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Activity unavailable" /></View>
-              ) : (board?.communityWorkouts.length ?? 0) > 0 ? (
-                boardHeight > 0 ? <CommunityFeed anchorKey={communityFeedAnchorKey} edgeToEdge mode="full" onWorkoutBlock={(workout) => moderation.askBlock(workout.userId, workout.displayName, { displayName: workout.displayName, hideId: workout.id, kind: "post", targetId: workout.communityPostId ?? workout.id, userId: workout.userId })} onWorkoutDelete={(workout) => { setDeleteError(null); setDeleteStage("choose"); setDeleteTarget(workout); }} onWorkoutEdit={editWorkout} onWorkoutRemoveGoalBadge={(workout) => void removeGoalBadge(workout)} onWorkoutRemovePrBadge={(workout) => void removePrBadge(workout)} onWorkoutPress={openWorkoutDetail} onWorkoutReport={(workout) => moderation.askReportPost(workout)} showCommentCount showReactionSummary viewerUserId={viewerUserId} viewportHeight={boardHeight} workouts={board?.communityWorkouts ?? []} /> : null
-              ) : isSameLocalDay(selectedDate, currentDay) ? (
-                <View style={styles.todayEmpty}>
-                  <CheckInEmptyContent onCheckIn={openWorkoutChooser} />
-                </View>
+                <View style={styles.feedState}><StateCard actionLabel={generalPostCopy.tryAgain} message={error} onAction={() => void loadCommunity()} title={generalPostCopy.loadErrorTitle} /></View>
+              ) : mixedFeed.length || pinnedPost ? (
+                boardHeight > 0 ? (
+                  <ScrollView style={{ height: boardHeight }} contentContainerStyle={styles.mixedFeed}>
+                    {offline ? <Text style={styles.offline}>{generalPostCopy.offline}</Text> : null}
+                    {pinnedPost ? (
+                      <GeneralPostSummaryCard
+                        isPinned
+                        menuItems={generalMenu(pinnedPost)}
+                        post={pinnedPost}
+                        showCommentCount
+                        showReactionSummary
+                        viewerUserId={viewerUserId}
+                      />
+                    ) : null}
+                    {mixedFeed.map((item) => {
+                      if (item.kind === "general") {
+                        const isOwn = isOwnPost(item.userId, viewerUserId);
+                        return (
+                          <Pressable
+                            accessibilityLabel={generalPostFeedCardLabel({ isOwn })}
+                            accessibilityRole="button"
+                            key={item.id}
+                            onPress={() => setGeneralDetail(item)}
+                          >
+                            <GeneralPostSummaryCard
+                              menuItems={generalMenu(item)}
+                              post={item}
+                              showCommentCount
+                              showReactionSummary
+                              viewerUserId={viewerUserId}
+                            />
+                          </Pressable>
+                        );
+                      }
+                      const workout = item;
+                      const isOwn = isOwnPost(workout.userId, viewerUserId);
+                      const title = workout.name?.trim() || workout.title;
+                      return (
+                        <Pressable
+                          accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
+                          accessibilityRole="button"
+                          key={workout.id}
+                          onPress={() => openWorkoutDetail(workout)}
+                        >
+                          <WorkoutSummaryCard
+                            isOwn={isOwn}
+                            menuItems={feedMenu(workout)}
+                            selected={false}
+                            showCommentCount
+                            showReactionSummary
+                            variant="full"
+                            workout={workout}
+                          />
+                        </Pressable>
+                      );
+                    })}
+                  </ScrollView>
+                ) : null
               ) : (
-                <View style={styles.historicalEmpty}><StateCard message="No workouts were logged this day." title="No workouts" /></View>
+                <View style={styles.todayEmpty}>
+                  <StateCard message="" title={formatEmptyBoard(selectedGroup.name)} />
+                </View>
               )}
             </View>
           </>
@@ -731,13 +933,6 @@ export default function CommunityTabScreen() {
         )}
       </View>
       </WideColumn>
-      <CommunityDatePicker
-        maximumDate={currentDay}
-        onChange={selectDate}
-        onDismiss={() => setDatePickerOpen(false)}
-        value={selectedDate}
-        visible={datePickerOpen}
-      />
       {moderation.ui}
       <WorkoutDetailModal
         key={detailTarget?.workout.id ?? "closed"}
@@ -783,6 +978,91 @@ export default function CommunityTabScreen() {
         pending={deletePending}
         stage={deleteStage}
         visible={deleteTarget !== null}
+      />
+      <ConfirmSheet
+        body={formatDeletePostBody(deleteCrewNames)}
+        confirmLabel={generalPostCopy.deleteAction}
+        onConfirm={() => {
+          void (async () => {
+            if (!generalDelete || !selectedGroup || !supabase) return;
+            const { data: auth } = await supabase.auth.getSession();
+            if (!auth.session) return;
+            await deleteGeneralPost({
+              accessToken: auth.session.access_token,
+              groupId: selectedGroup.id,
+              postId: generalDelete.id,
+            });
+            setGeneralDelete(null);
+            setDeleteCrewNames([]);
+            markWorkoutDataStale();
+            void loadCommunity();
+          })();
+        }}
+        onDismiss={() => {
+          setGeneralDelete(null);
+          setDeleteCrewNames([]);
+        }}
+        title={generalPostCopy.deleteTitle}
+        visible={generalDelete !== null}
+      />
+      <ConfirmSheet
+        body={replacePin
+          ? formatReplacePinBody(selectedGroup?.name ?? "this crew")
+          : formatPinBody(selectedGroup?.name ?? "this crew")}
+        confirmLabel={replacePin ? generalPostCopy.replacePinAction : generalPostCopy.pinAction}
+        confirmVariant="primary"
+        onConfirm={() => {
+          void (async () => {
+            if (!pinTarget || !selectedGroup || !supabase) return;
+            const { data: auth } = await supabase.auth.getSession();
+            if (!auth.session) return;
+            try {
+              await pinGeneralPost({
+                accessToken: auth.session.access_token,
+                groupId: selectedGroup.id,
+                postId: pinTarget.id,
+                replace: replacePin,
+              });
+              setPinTarget(null);
+              setReplacePin(false);
+              markWorkoutDataStale();
+              void loadCommunity();
+            } catch (pinError) {
+              const status = (pinError as { status?: number }).status;
+              if (status === 409 && !replacePin) {
+                setReplacePin(true);
+                return;
+              }
+              setPinTarget(null);
+            }
+          })();
+        }}
+        onDismiss={() => {
+          setPinTarget(null);
+          setReplacePin(false);
+        }}
+        title={replacePin ? generalPostCopy.replacePinTitle : generalPostCopy.pinTitle}
+        visible={pinTarget !== null}
+      />
+      {mode !== "twoPane" && generalDetail ? (
+        <View style={StyleSheet.absoluteFill}>
+          <GeneralPostDetailView
+            groupId={selectedGroup?.id ?? generalDetail.groupId}
+            onClose={() => setGeneralDetail(null)}
+            post={generalDetail}
+          />
+        </View>
+      ) : null}
+      <PrUndoToast
+        contained={mode === "twoPane"}
+        message={generalPostCopy.unpinToast}
+        onClear={() => setUnpinToast(null)}
+        onUndo={() => {
+          const item = unpinToast;
+          setUnpinToast(null);
+          if (item) restoreUnpinnedPost(item);
+        }}
+        visible={unpinToast !== null && !prToastVisible && !goalToastVisible}
       />
     </SafeAreaView>
     </View>
@@ -839,26 +1119,18 @@ function GroupActionsMenu({
 }
 
 function CommunityGroupControls({
-  currentDay,
   groupMenuView,
   groups,
-  onOpenDatePicker,
   onOpenGroup,
-  onSelectDate,
   onSelectGroup,
   onToggleMenu,
-  selectedDate,
   selectedGroup,
 }: {
-  currentDay: Date;
   groupMenuView: "actions" | "groups" | null;
   groups: GroupSummary[];
-  onOpenDatePicker: () => void;
   onOpenGroup: (groupId: string) => void;
-  onSelectDate: (date: Date) => void;
   onSelectGroup: (groupId: string) => void;
   onToggleMenu: (view: "actions" | "groups" | null) => void;
-  selectedDate: Date;
   selectedGroup: GroupSummary;
 }) {
   return (
@@ -885,25 +1157,6 @@ function CommunityGroupControls({
             />
           ) : null}
         </View>
-      </View>
-      <View style={styles.dateNavigator}>
-        <Pressable accessibilityLabel="Previous day" accessibilityRole="button" hitSlop={8} onPress={() => onSelectDate(addLocalDays(selectedDate, -1))} style={({ pressed }) => [styles.dateArrow, pressed && styles.pressed]}>
-          <Feather color={colors.inkSoft} name="chevron-left" size={21} />
-        </Pressable>
-        <Pressable accessibilityLabel={`Choose date, currently ${formatCommunityDayLabel(selectedDate, currentDay)}`} accessibilityRole="button" onPress={onOpenDatePicker} style={({ pressed }) => [styles.dateLabelButton, pressed && styles.pressed]}>
-          <Text style={styles.dateLabel}>{formatCommunityDayLabel(selectedDate, currentDay)}</Text>
-        </Pressable>
-        <Pressable
-          accessibilityLabel="Next day"
-          accessibilityRole="button"
-          accessibilityState={{ disabled: isSameLocalDay(selectedDate, currentDay) }}
-          disabled={isSameLocalDay(selectedDate, currentDay)}
-          hitSlop={8}
-          onPress={() => onSelectDate(addLocalDays(selectedDate, 1))}
-          style={({ pressed }) => [styles.dateArrow, isSameLocalDay(selectedDate, currentDay) && styles.dateArrowDisabled, pressed && styles.pressed]}
-        >
-          <Feather color={colors.inkSoft} name="chevron-right" size={21} />
-        </Pressable>
       </View>
     </>
   );
@@ -973,6 +1226,9 @@ const styles = StyleSheet.create({
   dateLabelButton: { alignItems: "center", justifyContent: "center", minHeight: size.hit, minWidth: 128, paddingHorizontal: spacing.md },
   dateLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
   boardTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.section.fontSize, lineHeight: type.section.lineHeight, marginBottom: spacing.sm, marginTop: spacing.sm },
+  newPost: { alignSelf: "stretch", borderColor: colors.boardBorder, borderWidth: 1, marginBottom: spacing.md, width: "100%" },
+  mixedFeed: { gap: spacing.md, padding: spacing.lg, paddingBottom: spacing.huge },
+  offline: { color: colors.muted, ...type.bodySmall },
   // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
   boardArea: { backgroundColor: colors.surfaceMuted, borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
   feedState: { flex: 1, justifyContent: "center", padding: spacing.xxl },
@@ -1016,6 +1272,7 @@ function layoutPreviewCommunity(): CommunityData {
       commentCount: 1,
       completedAt: occurredAt,
       createdAt: occurredAt,
+      kind: "workout",
       displayName,
       durationMinutes: null,
       effort,

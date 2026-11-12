@@ -91,6 +91,7 @@ export interface CrewNotificationState {
   crewWorkout: boolean;
   crewComment: boolean;
   crewReaction: boolean;
+  crewPost: boolean;
   summary: string;
 }
 
@@ -583,7 +584,46 @@ export interface PrDetectionResult {
   crewName: string | null;
 }
 
+export type CommunityFeedKind = "workout" | "general";
+
+export interface GeneralPostPhoto {
+  id: string;
+  path: string;
+  url?: string | null;
+  sortOrder: number;
+  contentType: string;
+}
+
+export interface GeneralPostLink {
+  url: string;
+  preview?: {
+    title?: string | null;
+    description?: string | null;
+    imageUrl?: string | null;
+  } | null;
+}
+
+export interface GeneralPostFeedItem {
+  kind: "general";
+  id: string;
+  publicationId: string;
+  userId: string;
+  groupId: string;
+  body: string | null;
+  photos: GeneralPostPhoto[];
+  links: GeneralPostLink[];
+  editedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  displayName: string;
+  reactionCounts?: CommunityReactionCounts;
+  commentCount?: number;
+  destinationCrewNames?: string[];
+  revision?: number;
+}
+
 export interface WorkoutFeedItem {
+  kind?: "workout";
   id: string;
   communityPostId?: string;
   userId: string;
@@ -685,10 +725,22 @@ export interface HomeData {
   communityWorkouts: WorkoutFeedItem[];
 }
 
+export type CommunityFeedItem = WorkoutFeedItem | GeneralPostFeedItem;
+
 export interface CommunityData {
   groups: GroupSummary[];
   selectedGroupId: string | null;
   communityWorkouts: WorkoutFeedItem[];
+  communityFeed?: CommunityFeedItem[];
+  pinnedPost?: GeneralPostFeedItem | null;
+  nextCursor?: string | null;
+  stale?: boolean;
+}
+
+export interface GeneralPostDetail extends GeneralPostFeedItem {
+  viewerRole?: GroupRole;
+  reactions: CommunityReactionSummary;
+  comments: CommunityPostComment[];
 }
 
 export interface ProfileData {

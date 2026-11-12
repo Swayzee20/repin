@@ -27,11 +27,15 @@ import {
   type DatabaseTransaction,
 } from "./connection";
 import {
-  dismissOpenReportsForComment,
   dismissOpenReportsForCommunityPost,
   visibleCommentCountSql,
   visibleReactionCountSql,
 } from "./moderation";
+import {
+  captureEvidenceForTargets,
+  evidenceRetainUntil,
+  markEvidenceAuthorErased,
+} from "./report-evidence";
 import {
   activeMembership,
   openGroup,
@@ -1205,6 +1209,7 @@ export async function createWorkoutForMember(input: {
         userId: input.userId,
         groupId: input.groupId,
         workoutSessionId: session.id,
+        kind: "workout",
         caption: input.caption,
         photoPath: input.photoPath,
         createdAt,
@@ -1602,12 +1607,14 @@ async function deleteRowsOwnedByUser(transaction: DatabaseTransaction, userId: s
       .from(schema.communityPostComments)
       .where(eq(schema.communityPostComments.userId, userId)),
   ]);
-  for (const post of ownedPosts) {
-    await dismissOpenReportsForCommunityPost(transaction, post.id);
-  }
-  for (const comment of ownedComments) {
-    await dismissOpenReportsForComment(transaction, comment.id);
-  }
+  const erasedAt = new Date();
+  await captureEvidenceForTargets(transaction, {
+    postIds: ownedPosts.map((post) => post.id),
+    commentIds: ownedComments.map((comment) => comment.id),
+    authorErasedAt: erasedAt,
+    retainUntil: evidenceRetainUntil(erasedAt),
+  });
+  await markEvidenceAuthorErased(transaction, userId);
   await transaction
     .delete(schema.userBlocks)
     .where(eq(schema.userBlocks.blockerId, userId));
@@ -1657,6 +1664,7 @@ export async function listRecentWorkoutsForAuthorizedGroup(input: {
   includeCommentCounts?: boolean;
   occurredAtStart?: Date;
   occurredAtEnd?: Date;
+  sessionIds?: string[];
 }) {
   if (!input.viewerUserId) throw new Error("A viewer is required to list workouts");
   return listRecentWorkouts({
@@ -1667,6 +1675,7 @@ export async function listRecentWorkoutsForAuthorizedGroup(input: {
     includeCommentCounts: input.includeCommentCounts,
     occurredAtStart: input.occurredAtStart,
     occurredAtEnd: input.occurredAtEnd,
+    sessionIds: input.sessionIds,
     verifyMembership: false,
   });
 }
@@ -1679,6 +1688,7 @@ async function listRecentWorkouts(input: {
   includeCommentCounts?: boolean;
   occurredAtStart?: Date;
   occurredAtEnd?: Date;
+  sessionIds?: string[];
   verifyMembership: boolean;
 }) {
   const database = getDatabase();
@@ -1755,6 +1765,9 @@ async function listRecentWorkouts(input: {
     .where(and(
       eq(schema.communityPosts.groupId, input.groupId),
       communityPostVisibleToSql(input.userId, schema.communityPosts.id),
+      input.sessionIds?.length
+        ? inArray(schema.workoutSessions.id, input.sessionIds)
+        : undefined,
       input.occurredAtStart ? gte(schema.workoutSessions.occurredAt, input.occurredAtStart) : undefined,
       input.occurredAtEnd ? lt(schema.workoutSessions.occurredAt, input.occurredAtEnd) : undefined,
     ))
@@ -1967,6 +1980,7 @@ async function listRecentWorkouts(input: {
   ]);
   return mapped.map((post) => ({
     ...post,
+    kind: "workout" as const,
     prBadges: post.communityPostId ? badgeMap.get(post.communityPostId) ?? [] : [],
     goalBadges: post.communityPostId ? goalBadgeMap.get(post.communityPostId) ?? [] : [],
   }));
@@ -2323,7 +2337,8 @@ export async function getWorkoutEditStateForOwner(input: {
 export async function setCommunityPostReactionForMember(input: {
   userId: string;
   groupId: string;
-  workoutSessionId: string;
+  workoutSessionId?: string;
+  postId?: string;
   reactionType: (typeof schema.communityPostReactionTypes)[number];
 }) {
   return getDatabase().transaction(async (transaction) => {
@@ -2361,7 +2376,8 @@ export async function setCommunityPostReactionForMember(input: {
 export async function removeCommunityPostReactionForMember(input: {
   userId: string;
   groupId: string;
-  workoutSessionId: string;
+  workoutSessionId?: string;
+  postId?: string;
 }) {
   return getDatabase().transaction(async (transaction) => {
     const post = await getAuthorizedCommunityPost(transaction, input);
@@ -2384,7 +2400,8 @@ export async function removeCommunityPostReactionForMember(input: {
 export async function listCommunityPostCommentsForMember(input: {
   userId: string;
   groupId: string;
-  workoutSessionId: string;
+  workoutSessionId?: string;
+  postId?: string;
 }) {
   const database = getDatabase();
   const post = await getAuthorizedCommunityPost(database, input);
@@ -2418,7 +2435,8 @@ export async function createCommunityPostCommentForMember(input: {
   userId: string;
   displayName: string;
   groupId: string;
-  workoutSessionId: string;
+  workoutSessionId?: string;
+  postId?: string;
   text: string;
 }) {
   return getDatabase().transaction(async (transaction) => {
@@ -2451,15 +2469,18 @@ export async function createCommunityPostCommentForMember(input: {
 
 async function getAuthorizedCommunityPost(
   database: Database | DatabaseTransaction,
-  input: { userId: string; groupId: string; workoutSessionId: string },
+  input: { userId: string; groupId: string; workoutSessionId?: string; postId?: string },
 ) {
+  if (!input.postId && !input.workoutSessionId) return null;
   const [post] = await database
     .select({ id: schema.communityPosts.id })
     .from(schema.communityPosts)
     .where(
       and(
         eq(schema.communityPosts.groupId, input.groupId),
-        eq(schema.communityPosts.workoutSessionId, input.workoutSessionId),
+        input.postId
+          ? eq(schema.communityPosts.id, input.postId)
+          : eq(schema.communityPosts.workoutSessionId, input.workoutSessionId!),
         communityPostVisibleToSql(input.userId, schema.communityPosts.id),
       ),
     )
@@ -2622,16 +2643,42 @@ export {
 } from "./crew";
 
 export {
+  claimPushDedupe,
   claimReactionPushSlot,
   countVisibleReactors,
   disableDevicePushTokens,
   listActivePushTokensForUsers,
+  listCrewPostPushRecipients,
   listCrewWorkoutPushRecipients,
   listPostAuthorPushRecipient,
   removeDevicePushToken,
   upsertDevicePushToken,
   type CrewPushRecipient,
 } from "./push";
+
+export {
+  completeGeneralPostPhotoReservation,
+  createGeneralPublicationDraft,
+  deleteGeneralPostForAuthor,
+  GeneralPostRequestError,
+  getAuthorizedGeneralPost,
+  getGeneralPostDetailForMember,
+  getGeneralPostPhotoReservation,
+  getPinnedGeneralPostForMember,
+  hydrateGeneralFeedItems,
+  listCommunityFeedForMember,
+  listDestinationCrewNamesForAuthor,
+  pinGeneralPostForOwner,
+  publishGeneralPost,
+  reserveGeneralPostPhoto,
+  unpinGeneralPostForOwner,
+  updateGeneralPostForAuthor,
+} from "./general-posts";
+export {
+  deleteExpiredReportEvidence,
+  evidenceRetainUntil,
+  markEvidenceAuthorErased,
+} from "./report-evidence";
 
 export {
   answerPersonalRecordPrompts,
@@ -2687,15 +2734,22 @@ export {
   communityPostPrs,
   communityPostReactions,
   communityPosts,
+  contentReportEvidence,
   contentReports,
+  crewPinnedPosts,
   crewNotificationPrefs,
   devicePushTokens,
   groupMembers,
   goalPeriods,
   goals,
+  generalPublicationLinks,
+  generalPublicationPhotos,
+  generalPublicationUploadReservations,
+  generalPublications,
   groups,
   movements,
   personalRecords,
+  pushNotificationDedupe,
   sessionMovementResults,
   setResults,
   userBlocks,
