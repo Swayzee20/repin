@@ -8,6 +8,7 @@ import {
   communitySelectionClears,
   newestWorkoutId,
   readCommunityPostParam,
+  resolveCommunityGeneralPost,
   resolveCommunitySelection,
 } from "./community-selection";
 
@@ -38,6 +39,34 @@ test("list order does not decide the newest post", () => {
   });
   assert.equal(selection.kind, "auto");
   if (selection.kind === "auto") assert.equal(selection.sessionId, "newer");
+});
+
+test("pinned general posts resolve for detail even when the mixed feed excludes them", () => {
+  const pinned = { id: "pin-1", kind: "general" as const };
+  const unpinned = { id: "g2", kind: "general" as const };
+  const workout = { id: "w1", kind: "workout" as const };
+  const feed = [unpinned, workout];
+
+  assert.equal(
+    resolveCommunityGeneralPost({ feed, pinnedPost: pinned, postId: "pin-1" }),
+    pinned,
+  );
+  assert.equal(
+    resolveCommunityGeneralPost({ feed, pinnedPost: pinned, postId: "g2" }),
+    unpinned,
+  );
+  assert.equal(
+    resolveCommunityGeneralPost({ feed, pinnedPost: pinned, postId: "w1" }),
+    undefined,
+  );
+  assert.equal(
+    resolveCommunityGeneralPost({ feed, pinnedPost: null, postId: "pin-1" }),
+    undefined,
+  );
+  assert.equal(
+    resolveCommunityGeneralPost({ feed, pinnedPost: pinned, postId: null }),
+    undefined,
+  );
 });
 
 test("a post param is an explicit selection, even when it is not in the feed", () => {

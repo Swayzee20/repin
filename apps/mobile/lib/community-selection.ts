@@ -53,6 +53,22 @@ export function resolveCommunitySelection(input: {
   return { kind: "auto", sessionId };
 }
 
+/** Pinned general posts live outside the mixed feed, so detail lookup must include them. */
+export function resolveCommunityGeneralPost<
+  TPinned extends { id: string },
+  TItem extends { id: string; kind?: string },
+>(input: {
+  feed: readonly TItem[];
+  pinnedPost: TPinned | null;
+  postId: string | null;
+}): TPinned | Extract<TItem, { kind: "general" }> | undefined {
+  if (!input.postId) return undefined;
+  if (input.pinnedPost?.id === input.postId) return input.pinnedPost;
+  return input.feed.find((item): item is Extract<TItem, { kind: "general" }> =>
+    item.kind === "general" && item.id === input.postId,
+  );
+}
+
 export function communitySelectionClears(input: {
   nextDayKey: string;
   nextGroupId: string | null;

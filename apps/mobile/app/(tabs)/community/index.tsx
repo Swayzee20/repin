@@ -35,6 +35,7 @@ import {
   communityFoldTransition,
   communitySelectionClears,
   readCommunityPostParam,
+  resolveCommunityGeneralPost,
   resolveCommunitySelection,
 } from "../../../lib/community-selection";
 import { generalPostFeedCardLabel, isOwnPost, workoutFeedCardLabel } from "../../../ui/community-feed-layout";
@@ -189,9 +190,11 @@ export default function CommunityTabScreen() {
     [board, selectedGroupId],
   );
   const requestedPostId = explicitOverride ?? postParam;
-  const generalFromParam = mixedFeed.find(
-    (item): item is GeneralPostFeedItem => item.kind === "general" && item.id === requestedPostId,
-  );
+  const generalFromParam = resolveCommunityGeneralPost({
+    feed: mixedFeed,
+    pinnedPost,
+    postId: requestedPostId,
+  });
   const baseSelection = resolveCommunitySelection({
     postParam: generalFromParam ? null : requestedPostId,
     workouts,
@@ -249,9 +252,13 @@ export default function CommunityTabScreen() {
 
   useEffect(() => {
     if (!postParam) return;
-    const item = mixedFeed.find((row): row is GeneralPostFeedItem => row.kind === "general" && row.id === postParam);
+    const item = resolveCommunityGeneralPost({
+      feed: mixedFeed,
+      pinnedPost,
+      postId: postParam,
+    });
     if (item) setGeneralDetail(item);
-  }, [mixedFeed, postParam]);
+  }, [mixedFeed, pinnedPost, postParam]);
 
   const clearPostSelection = useCallback(() => {
     setExplicitOverride(null);
@@ -620,16 +627,23 @@ export default function CommunityTabScreen() {
                   {generalPostCopy.newPost}
                 </Button>
                 {pinnedPost ? (
-                  <View style={styles.paneCardPress}>
+                  <Pressable
+                    accessibilityLabel={generalPostFeedCardLabel()}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: pinnedPost.id === (generalDetail?.id ?? openSessionId) }}
+                    onPress={() => openGeneralPostDetail(pinnedPost)}
+                    style={styles.paneCardPress}
+                  >
                     <GeneralPostSummaryCard
                       isPinned
                       menuItems={generalMenu(pinnedPost)}
                       post={pinnedPost}
+                      selected={pinnedPost.id === (generalDetail?.id ?? openSessionId)}
                       showCommentCount
                       showReactionSummary
                       viewerUserId={viewerUserId}
                     />
-                  </View>
+                  </Pressable>
                 ) : null}
                 {mixedFeed.length ? mixedFeed.map((item) => {
                   if (item.kind === "general") {
@@ -904,14 +918,20 @@ export default function CommunityTabScreen() {
                   <ScrollView style={{ height: boardHeight }} contentContainerStyle={styles.mixedFeed}>
                     {offline ? <Text style={styles.offline}>{generalPostCopy.offline}</Text> : null}
                     {pinnedPost ? (
-                      <GeneralPostSummaryCard
-                        isPinned
-                        menuItems={generalMenu(pinnedPost)}
-                        post={pinnedPost}
-                        showCommentCount
-                        showReactionSummary
-                        viewerUserId={viewerUserId}
-                      />
+                      <Pressable
+                        accessibilityLabel={generalPostFeedCardLabel()}
+                        accessibilityRole="button"
+                        onPress={() => openGeneralPostDetail(pinnedPost)}
+                      >
+                        <GeneralPostSummaryCard
+                          isPinned
+                          menuItems={generalMenu(pinnedPost)}
+                          post={pinnedPost}
+                          showCommentCount
+                          showReactionSummary
+                          viewerUserId={viewerUserId}
+                        />
+                      </Pressable>
                     ) : null}
                     {mixedFeed.map((item) => {
                       if (item.kind === "general") {
