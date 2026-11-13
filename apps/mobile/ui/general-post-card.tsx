@@ -8,12 +8,15 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-na
 
 import type { ContentMenuItem } from "../lib/content-menu";
 import { formatPostTimestamp } from "../lib/workout-date";
-import { isOwnPost, ownPostMarkerStyle, ownPostVoiceOverLabel } from "./community-feed-layout";
+import { isOwnPost, ownPostAuthorNameRowStyle, ownPostAuthorNameStyle } from "./community-feed-layout";
 import { Card, ContentOptionsMenu } from "./components";
+import { OwnPostYouTag } from "./own-post-you-tag";
 import { GeneralPostBody } from "./general-post-body";
 import { GeneralPostPhotoGrid } from "./general-post-photos";
 import { Icon } from "./icons";
 import { colors, fonts, radii, size, spacing, type } from "./theme";
+
+export { generalPostFeedCardLabel } from "./community-feed-layout";
 
 export function GeneralPostSummaryCard({
   isPinned = false,
@@ -54,10 +57,7 @@ export function GeneralPostSummaryCard({
   ];
 
   return (
-    <View
-      accessibilityLabel={isOwn ? ownPostVoiceOverLabel : undefined}
-      style={styles.wrap}
-    >
+    <View style={styles.wrap}>
       {isPinned ? (
         <View style={styles.pinEyebrow}>
           <Icon color={colors.brand} name="pin" size={size.icon.sm} />
@@ -70,7 +70,10 @@ export function GeneralPostSummaryCard({
             <Text style={styles.avatarText}>{getUserInitials({ displayName: post.displayName })}</Text>
           </View>
           <View style={styles.authorBlock}>
-            <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
+            <View style={styles.authorNameRow}>
+              <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
+              {isOwn ? <OwnPostYouTag /> : null}
+            </View>
             <Text style={styles.timestamp}>{formatPostTimestamp(post.createdAt, post.editedAt)}</Text>
           </View>
           <View style={styles.typePill}>
@@ -95,25 +98,12 @@ export function GeneralPostSummaryCard({
           </Text>
         ) : null}
       </Card>
-      {isOwn ? (
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          pointerEvents="none"
-          style={[styles.ownEdge, ownPostMarkerStyle()]}
-        />
-      ) : null}
     </View>
   );
 }
 
-export function generalPostFeedCardLabel({ isOwn }: { isOwn: boolean }) {
-  const details = "Open post details";
-  return isOwn ? `${ownPostVoiceOverLabel}. ${details}` : details;
-}
-
 const styles = StyleSheet.create({
-  wrap: { alignSelf: "stretch", position: "relative", width: "100%" },
+  wrap: { alignSelf: "stretch", width: "100%" },
   pinEyebrow: {
     alignItems: "center",
     flexDirection: "row",
@@ -133,17 +123,18 @@ const styles = StyleSheet.create({
     width: spacing.huge - spacing.xs,
   },
   avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: type.label.fontSize },
-  authorBlock: { flex: 1, marginLeft: spacing.md },
-  author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize },
+  authorBlock: { flex: 1, marginLeft: spacing.md, minWidth: 0 },
+  authorNameRow: ownPostAuthorNameRowStyle(),
+  author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, ...ownPostAuthorNameStyle() },
   timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: type.label.fontSize, marginTop: spacing.xs / 2 },
   typePill: {
     backgroundColor: colors.surfaceMuted,
     borderRadius: radii.sm,
+    flexShrink: 0,
     marginLeft: spacing.sm,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs,
   },
   typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.micro.fontSize },
   social: { color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, marginTop: spacing.md, textAlign: "right" },
-  ownEdge: { bottom: 0, left: 0, position: "absolute", top: 0 },
 });

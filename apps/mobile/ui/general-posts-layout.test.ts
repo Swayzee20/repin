@@ -55,7 +55,22 @@ test("cards never list other destination crews and pin slot is not sticky", () =
   assert.match(card, /pinEyebrow/);
   assert.equal(card.includes('position: "sticky"'), false);
   assert.match(card, /generalPostCopy\.typePill/);
-  assert.match(card, /ownPostMarkerStyle/);
+  assert.match(card, /OwnPostYouTag/);
+  assert.match(card, /isOwn \? <OwnPostYouTag \/> : null/);
+  assert.equal(card.includes("ownPostMarkerStyle"), false);
+  assert.equal(card.includes("ownEdge"), false);
+  assert.equal(card.includes("Your post"), false);
+  assert.equal(card.includes("ownPostVoiceOverLabel"), false);
+});
+
+test("general post card labels do not add Your post because the You tag is visible", () => {
+  const card = source("./general-post-card.tsx");
+  assert.match(card, /export \{ generalPostFeedCardLabel \}/);
+  assert.equal(card.includes("Your post"), false);
+  assert.equal(card.includes("ownPostVoiceOverLabel"), false);
+
+  const detail = source("./general-post-detail.tsx");
+  assert.match(detail, /viewerUserId=\{viewerUserId\}/);
 });
 
 test("notifications sheet leads with New posts from your crew", () => {

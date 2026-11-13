@@ -53,6 +53,8 @@ import {
   LoadingState,
   StateCard,
 } from "./components";
+import { isOwnPost, ownPostAuthorNameRowStyle, ownPostAuthorNameStyle } from "./community-feed-layout";
+import { OwnPostYouTag } from "./own-post-you-tag";
 import { PrBadgeRow } from "./pr-badges";
 import { prCopy } from "./pr-copy";
 import { PrUndoToast } from "./pr-undo-toast";
@@ -544,7 +546,7 @@ export function WorkoutDetailView({
   const canModerate = !fixture && Boolean(viewerUserId);
   const postName = resolveUserDisplayName({ displayName: workout.displayName });
   const postFirst = personFirstName(postName);
-  const isOwn = viewerUserId === workout.userId;
+  const isOwn = isOwnPost(workout.userId, viewerUserId);
   const canRemovePrBadge = isOwn && Boolean(workout.prBadges?.length) && !fixture;
   const canRemoveGoalBadge = isOwn && Boolean(workout.goalBadges?.length) && !fixture;
   const postItems = canModerate && !isOwn
@@ -621,6 +623,7 @@ export function WorkoutDetailView({
       reactionError={reactionError}
       reactionPending={reactionPending || loading}
       showComposer={!pinsComposer}
+      isOwn={isOwn}
       workout={workout}
     />
   );
@@ -799,6 +802,7 @@ export function WorkoutDetailContent({
   reactionError,
   reactionPending = false,
   showComposer = true,
+  isOwn = false,
   workout,
 }: {
   commentError?: string | null;
@@ -823,6 +827,7 @@ export function WorkoutDetailContent({
   reactionError?: string | null;
   reactionPending?: boolean;
   showComposer?: boolean;
+  isOwn?: boolean;
   workout: CommunityWorkoutDetail;
 }) {
   const displayName = resolveUserDisplayName({ displayName: workout.displayName });
@@ -960,7 +965,10 @@ export function WorkoutDetailContent({
           <Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text>
         </View>
         <View style={styles.authorCopy}>
-          <Text style={styles.author}>{displayName}</Text>
+          <View style={styles.authorNameRow}>
+            <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
+            {isOwn ? <OwnPostYouTag /> : null}
+          </View>
           <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
         {!isCommunityModal ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
@@ -1535,10 +1543,11 @@ const styles = StyleSheet.create({
   authorRow: { alignItems: "center", flexDirection: "row" },
   avatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 44, justifyContent: "center", width: 44 },
   avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: type.label.fontSize },
-  authorCopy: { flex: 1, marginLeft: spacing.md },
-  author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.body.fontSize },
+  authorCopy: { flex: 1, marginLeft: spacing.md, minWidth: 0 },
+  authorNameRow: ownPostAuthorNameRowStyle(),
+  author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.body.fontSize, ...ownPostAuthorNameStyle() },
   timestamp: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexShrink: 0, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.micro.fontSize },
   title: { color: colors.ink, marginTop: spacing.xxl },
   defaultTitle: { ...type.screenTitle },

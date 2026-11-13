@@ -1,12 +1,16 @@
-import { colors, radii } from "./theme";
-
-/** SPEC: 3 pt brand left edge on the viewer's own Community posts. */
-export const ownPostEdgeWidth = 3;
+import { colors, type } from "./theme";
 
 /** Existing unfolded selected ring. Stays a 2 pt inset, not the own-post marker. */
 export const selectedCardInsetWidth = 2;
 
-export const ownPostVoiceOverLabel = "Your post";
+export const ownPostYouTagLabel = "You";
+
+/** Feed-consistency SPEC §3 option 2: 18 pt pill, 6 pt pad, 6 pt gap from the name, radius 9. */
+export const ownPostYouTagHeight = 18;
+export const ownPostYouTagPadding = 6;
+export const ownPostYouTagGap = 6;
+export const ownPostYouTagRadius = 9;
+export const ownPostYouTagBorderWidth = 1;
 
 export function isOwnPost(
   userId: string | undefined,
@@ -15,15 +19,12 @@ export function isOwnPost(
   return Boolean(viewerUserId) && userId === viewerUserId;
 }
 
-export function workoutFeedCardLabel({
-  isOwn,
-  title,
-}: {
-  isOwn: boolean;
-  title: string;
-}): string {
-  const details = `Open ${title} workout details`;
-  return isOwn ? `${ownPostVoiceOverLabel}. ${details}` : details;
+export function workoutFeedCardLabel({ title }: { title: string }): string {
+  return `Open ${title} workout details`;
+}
+
+export function generalPostFeedCardLabel() {
+  return "Open post details";
 }
 
 export function communityFeedCardLayout() {
@@ -33,22 +34,54 @@ export function communityFeedCardLayout() {
   };
 }
 
-export function ownPostMarkerStyle() {
+export function ownPostYouTagStyle() {
   return {
-    backgroundColor: colors.brand,
-    borderBottomLeftRadius: radii.lg,
-    borderTopLeftRadius: radii.lg,
-    width: ownPostEdgeWidth,
+    alignItems: "center" as const,
+    alignSelf: "center" as const,
+    backgroundColor: colors.brandTint,
+    borderColor: colors.tonalEdge,
+    borderRadius: ownPostYouTagRadius,
+    borderWidth: ownPostYouTagBorderWidth,
+    flexShrink: 0,
+    height: ownPostYouTagHeight,
+    justifyContent: "center" as const,
+    marginLeft: ownPostYouTagGap,
+    paddingHorizontal: ownPostYouTagPadding,
   };
 }
 
-/** Own-post edge and selected inset ring stay different shapes when both apply. */
+export function ownPostYouTagTextStyle() {
+  return {
+    color: colors.brandPressed,
+    ...type.micro,
+  };
+}
+
+/** Name + You tag sit on one row, vertically centered. Long names truncate before the tag. */
+export function ownPostAuthorNameRowStyle() {
+  return {
+    alignItems: "center" as const,
+    flexDirection: "row" as const,
+    minWidth: 0,
+  };
+}
+
+export function ownPostAuthorNameStyle() {
+  return {
+    flexShrink: 1,
+    minWidth: 0,
+  };
+}
+
+/** Own-post You tag and selected inset ring stay different shapes when both apply. */
 export function ownPostAndSelectedMarkers() {
   return {
     own: {
-      color: colors.brand,
-      placement: "left-edge" as const,
-      width: ownPostEdgeWidth,
+      border: colors.tonalEdge,
+      color: colors.brandPressed,
+      fill: colors.brandTint,
+      label: ownPostYouTagLabel,
+      placement: "author-name-tag" as const,
     },
     selected: {
       color: colors.brand,

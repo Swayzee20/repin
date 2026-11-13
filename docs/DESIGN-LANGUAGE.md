@@ -40,6 +40,7 @@
 | ink / inkSoft / muted / subtle | #2B211C / #4A3B33 / #6B5B52 / #7A6A61 | `subtle` never for "Optional" or helper text |
 | border / borderStrong | #F0E4DA / #E3D5CB | card / input |
 | boardBorder | #F6E3D6 | kept (distinct value) |
+| **tonalEdge** (new) | #F6D9C6 | You-tag hairline (feed-consistency option 2); distinct from boardBorder |
 | **selection** (new) | #EBE7E1 | from the locked tab pill |
 | **glassFill** / **glassEdge** (new) | #FFFBF6 / #ECE3DB | glass controls |
 | **disabledFill** / **disabledText** (new) | #EFE5DC / #8C7B70 | |
