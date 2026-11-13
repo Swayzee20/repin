@@ -12,9 +12,10 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CommunityReactionSummary, GoalBadge, PrBadge, WorkoutFeedItem } from "@repin/types";
+import type { CommunityReactionSummary, GeneralPostFeedItem, GoalBadge, PrBadge, WorkoutFeedItem } from "@repin/types";
 
 import { clearComposerFocus } from "./composer-focus";
+import { GeneralPostDetailView } from "./general-post-detail";
 import { keyboardOverlapFromFrame, overlayBottomInset } from "./keyboard";
 import { CenteredCard } from "./layout";
 import { overlaySupportedOrientations } from "./overlay-state";
@@ -25,6 +26,7 @@ import { WorkoutDetailView, type WorkoutDetailFixture } from "./workout-detail";
 
 export function WorkoutDetailModal({
   fixture = null,
+  generalPost = null,
   groupId,
   groupName = null,
   initialWorkout,
@@ -37,9 +39,11 @@ export function WorkoutDetailModal({
   onReactionSummaryChange,
   onUserBlocked,
   sessionId,
+  viewerUserId,
   visible,
 }: {
   fixture?: WorkoutDetailFixture | null;
+  generalPost?: GeneralPostFeedItem | null;
   groupId: string | null;
   groupName?: string | null;
   initialWorkout?: WorkoutFeedItem | null;
@@ -52,6 +56,7 @@ export function WorkoutDetailModal({
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUserBlocked?: (userId: string) => void;
   sessionId: string | null;
+  viewerUserId?: string | null;
   visible: boolean;
 }) {
   const { height: viewportHeight } = useWindowDimensions();
@@ -175,7 +180,14 @@ export function WorkoutDetailModal({
                       ) : null}
                     </View>
                   </View>
-                  {groupId && sessionId ? (
+                  {groupId && generalPost ? (
+                    <GeneralPostDetailView
+                      groupId={groupId}
+                      post={generalPost}
+                      presentation="community-modal"
+                      viewerUserId={viewerUserId}
+                    />
+                  ) : groupId && sessionId ? (
                     <WorkoutDetailView
                       detailExpansionResetKey={`${sessionId}:${visible ? "open" : "closed"}`}
                       detailPhotoMaxHeight={panelMaxHeight * 0.4}
