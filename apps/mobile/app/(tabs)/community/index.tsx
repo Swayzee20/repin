@@ -37,10 +37,10 @@ import {
   readCommunityPostParam,
   resolveCommunitySelection,
 } from "../../../lib/community-selection";
-import { isOwnPost, workoutFeedCardLabel } from "../../../ui/community-feed-layout";
+import { generalPostFeedCardLabel, isOwnPost, workoutFeedCardLabel } from "../../../ui/community-feed-layout";
 import { BrandHeader, Button, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
 import { ConfirmSheet } from "../../../ui/crew-sheets";
-import { GeneralPostSummaryCard, generalPostFeedCardLabel } from "../../../ui/general-post-card";
+import { GeneralPostSummaryCard } from "../../../ui/general-post-card";
 import { GeneralPostDetailView } from "../../../ui/general-post-detail";
 import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
@@ -633,12 +633,11 @@ export default function CommunityTabScreen() {
                 ) : null}
                 {mixedFeed.length ? mixedFeed.map((item) => {
                   if (item.kind === "general") {
-                    const isOwn = isOwnPost(item.userId, viewerUserId);
                     const selected = item.id === (generalDetail?.id ?? openSessionId);
                     return (
                       <ScrollAnchor id={item.id} key={item.id}>
                         <Pressable
-                          accessibilityLabel={generalPostFeedCardLabel({ isOwn })}
+                          accessibilityLabel={generalPostFeedCardLabel()}
                           accessibilityRole="button"
                           accessibilityState={{ selected }}
                           onPress={() => openGeneralPostDetail(item)}
@@ -663,7 +662,7 @@ export default function CommunityTabScreen() {
                   return (
                     <ScrollAnchor id={workout.id} key={workout.id}>
                       <Pressable
-                        accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
+                        accessibilityLabel={workoutFeedCardLabel({ title })}
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                         onPress={() => openWorkoutDetail(workout)}
@@ -695,6 +694,7 @@ export default function CommunityTabScreen() {
                 )}
                 post={generalDetail}
                 presentation="community-pane"
+                viewerUserId={viewerUserId}
               />
             ) : openSessionId === null ? (
               <View style={[styles.paneEmpty, { paddingBottom: insets.bottom }]}>
@@ -915,10 +915,9 @@ export default function CommunityTabScreen() {
                     ) : null}
                     {mixedFeed.map((item) => {
                       if (item.kind === "general") {
-                        const isOwn = isOwnPost(item.userId, viewerUserId);
                         return (
                           <Pressable
-                            accessibilityLabel={generalPostFeedCardLabel({ isOwn })}
+                            accessibilityLabel={generalPostFeedCardLabel()}
                             accessibilityRole="button"
                             key={item.id}
                             onPress={() => openGeneralPostDetail(item)}
@@ -938,7 +937,7 @@ export default function CommunityTabScreen() {
                       const title = workout.name?.trim() || workout.title;
                       return (
                         <Pressable
-                          accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
+                          accessibilityLabel={workoutFeedCardLabel({ title })}
                           accessibilityRole="button"
                           key={workout.id}
                           onPress={() => openWorkoutDetail(workout)}
@@ -977,6 +976,7 @@ export default function CommunityTabScreen() {
         groupId={detailTarget?.groupId ?? selectedGroup?.id ?? generalDetail?.groupId ?? null}
         groupName={selectedGroup?.name ?? null}
         initialWorkout={detailTarget?.workout ?? null}
+        viewerUserId={viewerUserId}
         onCommentCountChange={updateFeedCommentCount}
         onEditWorkout={editWorkout}
         onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}

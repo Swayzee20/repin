@@ -35,11 +35,13 @@ export function GeneralPostDetailView({
   paneHeader = null,
   post,
   presentation = "community-pane",
+  viewerUserId,
 }: {
   groupId: string;
   paneHeader?: ReactNode;
   post: GeneralPostFeedItem;
   presentation?: "community-modal" | "community-pane";
+  viewerUserId?: string | null;
 }) {
   const insets = useSafeAreaInsets();
   const [detail, setDetail] = useState<GeneralPostDetail | null>(null);
@@ -124,7 +126,7 @@ export function GeneralPostDetailView({
         keyboardShouldPersistTaps="handled"
         style={isModal ? styles.modalScroller : styles.paneScroller}
       >
-        <GeneralPostSummaryCard post={current} showCommentCount showReactionSummary />
+        <GeneralPostSummaryCard post={current} showCommentCount showReactionSummary viewerUserId={viewerUserId} />
         <View style={styles.reactions}>
           {communityReactionTypes.map((reaction) => (
             <Pressable

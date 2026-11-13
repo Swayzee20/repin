@@ -39,6 +39,7 @@ export function WorkoutDetailModal({
   onReactionSummaryChange,
   onUserBlocked,
   sessionId,
+  viewerUserId,
   visible,
 }: {
   fixture?: WorkoutDetailFixture | null;
@@ -55,6 +56,7 @@ export function WorkoutDetailModal({
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUserBlocked?: (userId: string) => void;
   sessionId: string | null;
+  viewerUserId?: string | null;
   visible: boolean;
 }) {
   const { height: viewportHeight } = useWindowDimensions();
@@ -183,6 +185,7 @@ export function WorkoutDetailModal({
                       groupId={groupId}
                       post={generalPost}
                       presentation="community-modal"
+                      viewerUserId={viewerUserId}
                     />
                   ) : groupId && sessionId ? (
                     <WorkoutDetailView

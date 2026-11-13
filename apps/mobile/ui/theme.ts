@@ -22,6 +22,7 @@ export const colors = {
   danger: "#B42318",
   dangerSoft: "#FDECEA",
   boardBorder: "#F6E3D6",
+  tonalEdge: "#F6D9C6",
   boardTransparent: "rgba(255,247,240,0)",
   accent: "#F5B83D",
   accentCoral: "#F28C6B",

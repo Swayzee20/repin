@@ -20,6 +20,7 @@ import { useMainTabs } from "../../../ui/main-tabs-context";
 import { workoutMenuItems } from "../../../lib/content-menu";
 import { useGoalBadgeUndo } from "../../../lib/goal-badge-actions";
 import { usePrBadgeUndo } from "../../../lib/pr-badge-actions";
+import { isOwnPost } from "../../../ui/community-feed-layout";
 import { BrandHeader, Card, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
 import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
@@ -221,6 +222,7 @@ export default function HomeScreen() {
               homeError={homeError}
               homeLoading={homeLoading}
               latestWorkoutToday={mode === "twoPane" ? null : latestWorkoutToday}
+              viewerUserId={session?.user.id ?? dashboardData.user.id}
               menuFor={(workout) => workoutMenuItems({
                 onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
                   displayName: item.displayName,
@@ -339,6 +341,7 @@ function CrewZone({
   menuFor,
   onCheckIn,
   onViewAll,
+  viewerUserId,
   workouts,
 }: {
   compact: boolean;
@@ -349,6 +352,7 @@ function CrewZone({
   menuFor?: (workout: WorkoutFeedItem) => ReturnType<typeof workoutMenuItems>;
   onCheckIn?: () => void;
   onViewAll?: () => void;
+  viewerUserId?: string | null;
   workouts: WorkoutFeedItem[];
 }) {
   const showList = workouts.length > 0;
@@ -370,13 +374,23 @@ function CrewZone({
       {showList ? workouts.map((workout) => (
         <ScrollAnchor id={`home-workout-${workout.id}`} key={workout.id}>
           <View style={[styles.latestWorkout, compact && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard menuItems={menuFor?.(workout)} variant="compact" workout={workout} />
+            <WorkoutSummaryCard
+              isOwn={isOwnPost(workout.userId, viewerUserId)}
+              menuItems={menuFor?.(workout)}
+              variant="compact"
+              workout={workout}
+            />
           </View>
         </ScrollAnchor>
       )) : latestWorkoutToday ? (
         <ScrollAnchor id={`home-workout-${latestWorkoutToday.id}`}>
           <View style={[styles.latestWorkout, compact && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard menuItems={menuFor?.(latestWorkoutToday)} variant="compact" workout={latestWorkoutToday} />
+            <WorkoutSummaryCard
+              isOwn={isOwnPost(latestWorkoutToday.userId, viewerUserId)}
+              menuItems={menuFor?.(latestWorkoutToday)}
+              variant="compact"
+              workout={latestWorkoutToday}
+            />
           </View>
         </ScrollAnchor>
       ) : (

@@ -20,10 +20,11 @@ import { useVerticalBarEdge } from "./vertical-bar-edge";
 import {
   communityFeedCardLayout,
   isOwnPost,
-  ownPostMarkerStyle,
-  ownPostVoiceOverLabel,
+  ownPostAuthorNameRowStyle,
+  ownPostAuthorNameStyle,
   workoutFeedCardLabel,
 } from "./community-feed-layout";
+import { OwnPostYouTag } from "./own-post-you-tag";
 import { anchoredScrollOffset, topVisibleAnchor } from "./layout-math";
 import { readStoredScrollAnchor, writeStoredScrollAnchor } from "./scroll-anchor";
 
@@ -350,15 +351,15 @@ export function WorkoutSummaryCard({
   ];
 
   return (
-    <View
-      accessibilityLabel={isOwn ? ownPostVoiceOverLabel : undefined}
-      style={styles.workoutCardWrap}
-    >
+    <View style={styles.workoutCardWrap}>
       <Card selected={selected} style={[variant === "compact" ? styles.compactWorkoutCard : styles.fullWorkoutCard, style]}>
         <View style={styles.workoutTopline}>
           <View style={styles.avatar}><Text style={styles.avatarText}>{getUserInitials({ displayName: workout.displayName })}</Text></View>
           <View style={styles.workoutAuthor}>
-            <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
+            <View style={styles.authorNameRow}>
+              <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
+              {isOwn ? <OwnPostYouTag /> : null}
+            </View>
             <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
           </View>
           {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
@@ -385,14 +386,6 @@ export function WorkoutSummaryCard({
           </Text>
         ) : null}
       </Card>
-      {isOwn ? (
-        <View
-          accessibilityElementsHidden
-          importantForAccessibility="no"
-          pointerEvents="none"
-          style={styles.ownPostEdge}
-        />
-      ) : null}
     </View>
   );
 }
@@ -578,7 +571,7 @@ function CommunityFeedItem({
     >
       {onPress ? (
         <Pressable
-          accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
+          accessibilityLabel={workoutFeedCardLabel({ title })}
           accessibilityRole="button"
           onPress={onPress}
           style={({ pressed }) => pressed && styles.workoutCardPressed}
@@ -699,10 +692,11 @@ const styles = StyleSheet.create({
   fullWorkoutCard: { padding: spacing.lg },
   avatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: 38, justifyContent: "center", width: 38 },
   avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: type.label.fontSize },
-  workoutAuthor: { flex: 1, marginLeft: spacing.md },
-  author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize },
+  workoutAuthor: { flex: 1, marginLeft: spacing.md, minWidth: 0 },
+  authorNameRow: ownPostAuthorNameRowStyle(),
+  author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, ...ownPostAuthorNameStyle() },
   timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: type.label.fontSize, marginTop: 2 },
-  typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
+  typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexShrink: 0, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.micro.fontSize },
   postOptionsButton: { alignItems: "center", height: size.hit, justifyContent: "center", marginLeft: spacing.xs, width: size.hit },
   postMenuBackdrop: { flex: 1 },
@@ -716,14 +710,6 @@ const styles = StyleSheet.create({
   workoutCardPressed: { opacity: 0.94 },
   caption: { color: colors.inkSoft, ...type.bodySmall, marginTop: spacing.md },
   workoutCardWrap: communityFeedCardLayout(),
-  ownPostEdge: {
-    ...ownPostMarkerStyle(),
-    bottom: 0,
-    left: 0,
-    position: "absolute",
-    top: 0,
-    zIndex: 1,
-  },
   feedViewport: {
     alignSelf: "stretch",
     borderRadius: radii.md,
