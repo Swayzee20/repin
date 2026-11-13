@@ -42,15 +42,22 @@ const appTables = [
   "community_post_prs",
   "community_post_reactions",
   "community_posts",
+  "content_report_evidence",
   "content_reports",
   "crew_notification_prefs",
+  "crew_pinned_posts",
   "device_push_tokens",
+  "general_publication_links",
+  "general_publication_photos",
+  "general_publication_upload_reservations",
+  "general_publications",
   "goal_periods",
   "goals",
   "group_members",
   "groups",
   "movements",
   "personal_records",
+  "push_notification_dedupe",
   "session_movement_results",
   "set_results",
   "user_blocks",
@@ -73,6 +80,13 @@ const readOnlyTables = new Set([
   "goals",
   "goal_periods",
   "community_post_goals",
+  "content_report_evidence",
+  "crew_pinned_posts",
+  "general_publication_links",
+  "general_publication_photos",
+  "general_publication_upload_reservations",
+  "general_publications",
+  "push_notification_dedupe",
 ]);
 
 test("invite-only groups and row level security", async () => {
@@ -1320,7 +1334,7 @@ test("moderation reports, blocks, removal, and blocked feeds", async () => {
       targetType: "post",
       targetId: adaPost.id,
       reason: "harassment",
-    }), { ok: false, reason: "not_member" });
+    }), { ok: false, reason: "not_found" });
     assert.deepEqual(await db.createContentReportForMember({
       userId: cyrus.id,
       targetType: "other" in {} ? "post" : "post",
@@ -3063,6 +3077,7 @@ async function applySupabaseMigrations(client) {
     "20261109000000_personal_records.sql",
     "20261110000000_goals.sql",
     "20261111000000_workout_read_visibility.sql",
+    "20261112000000_general_posts.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");
@@ -3082,6 +3097,9 @@ async function createBypassRole(client) {
     grant execute on function private.community_post_visible_to(uuid, uuid) to repin_api;
     grant execute on function private.community_comment_visible_to(uuid, uuid) to repin_api;
     grant execute on function private.community_reaction_visible_to(uuid, uuid) to repin_api;
+    grant execute on function private.general_publication_visible_to(uuid, uuid) to repin_api;
+    grant execute on function private.can_access_general_publication(uuid) to repin_api;
+    grant execute on function private.cleanup_expired_report_evidence() to repin_api;
   `);
 }
 

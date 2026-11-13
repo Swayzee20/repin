@@ -16,6 +16,15 @@ export function newWorkoutPushBody(name: string, crew: string) {
   return `${name} posted a workout in ${crew}. Go cheer them on.`;
 }
 
+export function newPostPushTitle(name: string, crew: string) {
+  return `${name} posted in ${crew}`;
+}
+
+export function firstPostLine(body: string | null | undefined) {
+  const line = body?.trim().split(/\r?\n/)[0]?.trim() ?? "";
+  return line;
+}
+
 export function commentPushBody(name: string) {
   return `${name} commented on your workout.`;
 }

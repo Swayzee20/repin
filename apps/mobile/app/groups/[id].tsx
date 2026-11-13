@@ -431,7 +431,7 @@ export default function CrewPageScreen() {
             })();
           }}
           pending={pending}
-          prefs={page?.notifications ?? { muteAll: false, crewComment: true, crewReaction: true, crewWorkout: true }}
+          prefs={page?.notifications ?? { muteAll: false, crewComment: true, crewPost: true, crewReaction: true, crewWorkout: true }}
           visible={sheet === "notifications"}
         />
         <ConfirmSheet

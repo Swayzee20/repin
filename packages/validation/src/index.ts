@@ -146,7 +146,10 @@ export {
   commentPushBody,
   crewPushAlertTypes,
   crewPushBody,
+  crewPushTitle,
   crewPushHref,
+  firstPostLine,
+  newPostPushTitle,
   expoPushTokenPattern,
   isPushRecipientEligible,
   newWorkoutPushBody,
@@ -162,6 +165,37 @@ export {
   type CrewPushPayload,
   type PushPlatform,
 } from "./push";
+
+export {
+  communityFeedQuerySchema,
+  completeGeneralPostPhotoSchema,
+  createGeneralPostSchema,
+  decodeCommunityFeedCursor,
+  encodeCommunityFeedCursor,
+  extractPublicationUrls,
+  formatCharacterCounter,
+  formatDeletePostBody,
+  formatEmptyBoard,
+  formatPinBody,
+  formatPostedTo,
+  formatPostToCrews,
+  formatReplacePinBody,
+  GENERAL_POST_BODY_MAX,
+  GENERAL_POST_COUNTER_FROM,
+  GENERAL_POST_CREW_MAX,
+  GENERAL_POST_PHOTO_MAX,
+  GENERAL_POST_PHOTO_MAX_BYTES,
+  generalPostCopy,
+  generalPostDisabledReason,
+  generalPostHasContent,
+  generalPostPhotoContentTypes,
+  isGeneralPostPhotoPath,
+  pinGeneralPostSchema,
+  reserveGeneralPostPhotoSchema,
+  shouldShowCharacterCounter,
+  updateGeneralPostSchema,
+  type GeneralPostPhotoContentType,
+} from "./general-posts";
 
 function isWorkoutDistanceUnit(unit: string | null | undefined): unit is (typeof workoutDistanceUnits)[number] {
   return unit != null && (workoutDistanceUnits as readonly string[]).includes(unit);
@@ -568,6 +602,9 @@ export const movementLastSessionQuerySchema = z.object({
 
 export const homeQuerySchema = z.object({
   view: z.enum(["home", "community", "profile"]).optional(),
+  feed: z.enum(["day", "mixed"]).optional(),
+  cursor: z.string().trim().min(1).max(80).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
   groupId: z.uuid().optional(),
   timeZone: z.string().trim().min(1).max(64).optional().superRefine((value, context) => {
     if (value && !isValidTimeZone(value)) {
@@ -590,6 +627,7 @@ export const homeQuerySchema = z.object({
       path: ["timeZone"],
     });
   }
+  if (query.feed === "mixed") return;
   if (Boolean(query.start) !== Boolean(query.end)) {
     context.addIssue({ code: "custom", message: "Start and end must be supplied together", path: [query.start ? "end" : "start"] });
     return;

@@ -24,6 +24,7 @@ import {
 import { getDatabase, type DatabaseTransaction } from "./connection";
 import { activeMembership, openGroup } from "./membership";
 import * as schema from "./schema";
+import { clearPinsForAuthorLeave, clearPinsForCrew } from "./pins";
 import { communityPostVisibleToSql } from "./visibility";
 
 export {
@@ -204,6 +205,7 @@ export async function setCrewNotificationPrefs(input: {
 }) {
   const values = [
     { alertType: "mute_all" as const, enabled: input.prefs.muteAll },
+    { alertType: "crew_post" as const, enabled: input.prefs.crewPost ?? true },
     { alertType: "crew_workout" as const, enabled: input.prefs.crewWorkout },
     { alertType: "crew_comment" as const, enabled: input.prefs.crewComment },
     { alertType: "crew_reaction" as const, enabled: input.prefs.crewReaction },
@@ -410,6 +412,10 @@ export async function removeCrewMember(input: {
       userId: input.memberId,
       leftAt: now,
     });
+    await clearPinsForAuthorLeave(transaction, {
+      groupId: input.groupId,
+      userId: input.memberId,
+    });
 
     return { displayName: target.displayName };
   });
@@ -435,12 +441,17 @@ export async function leaveCrew(input: { userId: string; groupId: string }) {
       userId: input.userId,
       leftAt: now,
     });
+    await clearPinsForAuthorLeave(transaction, {
+      groupId: input.groupId,
+      userId: input.userId,
+    });
 
     if (membership.role === "owner" && memberCount <= 1) {
       await transaction
         .update(schema.groups)
         .set({ closedAt: now })
         .where(eq(schema.groups.id, input.groupId));
+      await clearPinsForCrew(transaction, input.groupId);
       return { closed: true as const };
     }
 

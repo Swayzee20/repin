@@ -183,7 +183,13 @@ export function NotificationsSheet({
           onValueChange={(value) => {
             setDraft((current) => (
               value
-                ? { muteAll: true, crewWorkout: false, crewComment: false, crewReaction: false }
+                ? {
+                    muteAll: true,
+                    crewPost: false,
+                    crewWorkout: false,
+                    crewComment: false,
+                    crewReaction: false,
+                  }
                 : { ...current, muteAll: false }
             ));
           }}
@@ -192,6 +198,12 @@ export function NotificationsSheet({
       </View>
       <Text style={styles.alertsEyebrow}>ALERTS</Text>
       <View style={styles.alerts}>
+        <AlertRow
+          disabled={muted}
+          label="New posts from your crew"
+          onValueChange={(value) => setAlert("crewPost", value)}
+          value={draft.crewPost}
+        />
         <AlertRow
           disabled={muted}
           label="New workouts from your crew"

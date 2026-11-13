@@ -93,6 +93,7 @@ test("mute summary states match All on, N off, and Muted", () => {
   assert.equal(
     notificationSummary({
       muteAll: false,
+      crewPost: true,
       crewWorkout: false,
       crewComment: false,
       crewReaction: true,
@@ -102,15 +103,17 @@ test("mute summary states match All on, N off, and Muted", () => {
   assert.equal(
     notificationSummary({
       muteAll: false,
+      crewPost: false,
       crewWorkout: false,
       crewComment: false,
       crewReaction: false,
     }),
-    "3 off",
+    "4 off",
   );
   assert.equal(
     notificationSummary({
       muteAll: true,
+      crewPost: false,
       crewWorkout: false,
       crewComment: false,
       crewReaction: false,
@@ -131,6 +134,18 @@ test("missing notification rows default to all on", () => {
   );
   assert.equal(
     crewAlertAllowed({ ...defaultCrewNotificationPrefs, crewReaction: false }, "crew_reaction"),
+    false,
+  );
+  assert.equal(
+    crewAlertAllowed(resolveCrewNotificationPrefs([]), "crew_post"),
+    true,
+  );
+  assert.equal(
+    crewAlertAllowed({ ...defaultCrewNotificationPrefs, crewPost: false }, "crew_post"),
+    false,
+  );
+  assert.equal(
+    crewAlertAllowed({ ...defaultCrewNotificationPrefs, muteAll: true, crewPost: true }, "crew_post"),
     false,
   );
 });

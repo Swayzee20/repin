@@ -7,16 +7,16 @@ import { alias } from "drizzle-orm/pg-core";
 
 import {
   getDatabase,
-  type Database,
   type DatabaseTransaction,
 } from "./connection";
 import * as schema from "./schema";
+import { captureReportEvidence, markEvidenceResolved } from "./report-evidence";
+import { clearCrewPinForPosts } from "./pins";
 import {
   communityCommentVisibleToSql,
+  communityPostVisibleToSql,
   communityReactionVisibleToSql,
 } from "./visibility";
-
-type Queryable = Database | DatabaseTransaction;
 
 export type ContentReportTargetType = (typeof schema.contentReportTargetTypes)[number];
 export type ContentReportReason = (typeof schema.contentReportReasons)[number];
@@ -105,6 +105,18 @@ async function resolveOpenReports(
         inArray(schema.contentReports.targetId, input.commentIds),
       ));
   }
+  const resolved = await transaction
+    .select({ id: schema.contentReports.id })
+    .from(schema.contentReports)
+    .where(and(
+      eq(schema.contentReports.status, input.status),
+      ...(input.postId
+        ? [eq(schema.contentReports.targetType, "post"), eq(schema.contentReports.targetId, input.postId)]
+        : input.commentIds?.length
+          ? [eq(schema.contentReports.targetType, "comment"), inArray(schema.contentReports.targetId, input.commentIds)]
+          : [sql`false`]),
+    ));
+  await markEvidenceResolved(transaction, resolved.map((row) => row.id), now);
 }
 
 /** Content deleted before anyone reviews it. The report stays, marked dismissed. */
@@ -176,6 +188,7 @@ export async function softRemoveCommunityPost(input: {
       .update(schema.communityPosts)
       .set({ removedAt: now, removedBy: input.actorId, updatedAt: now })
       .where(eq(schema.communityPosts.id, post.id));
+    await clearCrewPinForPosts(transaction, [post.id]);
     const comments = await transaction
       .select({ id: schema.communityPostComments.id })
       .from(schema.communityPostComments)
@@ -188,22 +201,6 @@ export async function softRemoveCommunityPost(input: {
     });
     return { postId: post.id };
   });
-}
-
-async function isGroupMember(
-  database: Queryable,
-  userId: string,
-  groupId: string,
-) {
-  const [membership] = await database
-    .select({ userId: schema.groupMembers.userId })
-    .from(schema.groupMembers)
-    .where(and(
-      eq(schema.groupMembers.groupId, groupId),
-      eq(schema.groupMembers.userId, userId),
-    ))
-    .limit(1);
-  return Boolean(membership);
 }
 
 export type ContentReportResult =
@@ -239,9 +236,6 @@ export async function createContentReportForMember(input: {
       ? await resolvePostTarget(transaction, input.userId, input.targetId)
       : await resolveCommentTarget(transaction, input.userId, input.targetId);
     if (!target) return { ok: false, reason: "not_found" };
-    if (!await isGroupMember(transaction, input.userId, target.groupId)) {
-      return { ok: false, reason: "not_member" };
-    }
     if (target.authorId === input.userId) return { ok: false, reason: "own_content" };
 
     const now = new Date();
@@ -277,6 +271,12 @@ export async function createContentReportForMember(input: {
       });
     const report = created ?? await existingReport(transaction, input.userId, input.targetType, target.targetId);
     if (!report) throw new Error("Content report could not be created");
+    await captureReportEvidence(transaction, {
+      reportId: report.id,
+      targetType: input.targetType,
+      targetId: target.targetId,
+      groupId: target.groupId,
+    });
     let blocked = false;
     if (input.alsoBlock) {
       blocked = await blockInside(transaction, input.userId, target.authorId);
@@ -326,9 +326,29 @@ async function blockInside(
   return true;
 }
 
+function reporterOwnsTarget(
+  userId: string,
+  targetType: ContentReportTargetType,
+  targetId: AnyColumn,
+) {
+  return sql`exists (
+    select 1 from ${schema.contentReports}
+    where ${schema.contentReports.reporterId} = ${userId}::uuid
+      and ${schema.contentReports.targetType} = ${targetType}
+      and ${schema.contentReports.targetId} = ${targetId}
+  )`;
+}
+
+function reporterCanSeePost(userId: string, postId: AnyColumn) {
+  return sql`(
+    ${communityPostVisibleToSql(userId, postId)}
+    or ${reporterOwnsTarget(userId, "post", postId)}
+  )`;
+}
+
 async function resolvePostTarget(
   transaction: DatabaseTransaction,
-  _userId: string,
+  userId: string,
   targetId: string,
 ) {
   const [byId] = await transaction
@@ -341,6 +361,7 @@ async function resolvePostTarget(
     .where(and(
       eq(schema.communityPosts.id, targetId),
       sql`${schema.communityPosts.removedAt} is null`,
+      reporterCanSeePost(userId, schema.communityPosts.id),
     ))
     .limit(1);
   if (byId) return byId;
@@ -354,6 +375,7 @@ async function resolvePostTarget(
     .where(and(
       eq(schema.communityPosts.workoutSessionId, targetId),
       sql`${schema.communityPosts.removedAt} is null`,
+      reporterCanSeePost(userId, schema.communityPosts.id),
     ))
     .limit(1);
   return bySession ?? null;
@@ -361,7 +383,7 @@ async function resolvePostTarget(
 
 async function resolveCommentTarget(
   transaction: DatabaseTransaction,
-  _userId: string,
+  userId: string,
   commentId: string,
 ) {
   const [comment] = await transaction
@@ -379,6 +401,10 @@ async function resolveCommentTarget(
       eq(schema.communityPostComments.id, commentId),
       sql`${schema.communityPostComments.removedAt} is null`,
       sql`${schema.communityPosts.removedAt} is null`,
+      sql`(
+        ${communityPostVisibleToSql(userId, schema.communityPosts.id)}
+        or ${reporterOwnsTarget(userId, "comment", schema.communityPostComments.id)}
+      )`,
     ))
     .limit(1);
   return comment ?? null;
@@ -533,6 +559,7 @@ export async function reviewContentReport(input: {
             .update(schema.communityPosts)
             .set({ removedAt: now, removedBy: input.actorId, updatedAt: now })
             .where(eq(schema.communityPosts.id, targetId));
+          await clearCrewPinForPosts(transaction, [targetId]);
         } else {
           await transaction
             .update(schema.communityPostComments)
@@ -662,14 +689,14 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
     })
     .from(schema.contentReports)
     .innerJoin(reporters, eq(reporters.id, schema.contentReports.reporterId))
-    .innerJoin(authors, eq(authors.id, schema.contentReports.targetUserId))
+    .leftJoin(authors, eq(authors.id, schema.contentReports.targetUserId))
     .innerJoin(schema.groups, eq(schema.groups.id, schema.contentReports.groupId))
     .leftJoin(resolvers, eq(resolvers.id, schema.contentReports.resolvedBy))
     .orderBy(asc(schema.contentReports.createdAt), asc(schema.contentReports.id));
 
   const postIds = [...new Set(rows.filter((row) => row.targetType === "post").map((row) => row.targetId))];
   const commentIds = [...new Set(rows.filter((row) => row.targetType === "comment").map((row) => row.targetId))];
-  const authorIds = [...new Set(rows.map((row) => row.targetUserId))];
+  const authorIds = [...new Set(rows.flatMap((row) => (row.targetUserId ? [row.targetUserId] : [])))];
 
   const [posts, comments, removedPosts, removedComments, memberships] = await Promise.all([
     postIds.length
@@ -680,11 +707,13 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
           photoPath: schema.communityPosts.photoPath,
           createdAt: schema.communityPosts.createdAt,
           removedAt: schema.communityPosts.removedAt,
+          kind: schema.communityPosts.kind,
+          publicationId: schema.communityPosts.publicationId,
           workoutName: schema.workoutSessions.name,
           workoutType: schema.workoutSessions.workoutType,
         })
         .from(schema.communityPosts)
-        .innerJoin(
+        .leftJoin(
           schema.workoutSessions,
           eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
         )
@@ -705,7 +734,7 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
           schema.communityPosts,
           eq(schema.communityPostComments.communityPostId, schema.communityPosts.id),
         )
-        .innerJoin(
+        .leftJoin(
           schema.workoutSessions,
           eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
         )
@@ -749,7 +778,23 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
       : Promise.resolve([]),
   ]);
 
-  const postsById = new Map(posts.map((post) => [post.id, post]));
+  const publicationIds = [
+    ...new Set(posts.flatMap((post) => (post.publicationId ? [post.publicationId] : []))),
+  ];
+  const publicationRows = publicationIds.length
+    ? await database
+      .select({
+        id: schema.generalPublications.id,
+        body: schema.generalPublications.body,
+      })
+      .from(schema.generalPublications)
+      .where(inArray(schema.generalPublications.id, publicationIds))
+    : [];
+  const bodyByPublication = new Map(publicationRows.map((row) => [row.id, row.body]));
+  const postsById = new Map(posts.map((post) => [post.id, {
+    ...post,
+    publicationBody: post.publicationId ? (bodyByPublication.get(post.publicationId) ?? null) : null,
+  }]));
   const commentsById = new Map(comments.map((comment) => [comment.id, comment]));
   const removedByAuthor = new Map<string, number>();
   for (const row of removedPosts) {
@@ -784,16 +829,20 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
         : "dismissed";
     const resolved = [...group].reverse().find((row) => row.resolvedAt);
     const workoutName = target && "workoutName" in target
-      ? (target.workoutName?.trim() || humanizeWorkoutType(target.workoutType))
+      ? (target.workoutName?.trim()
+        || (target.workoutType ? humanizeWorkoutType(target.workoutType) : null)
+        || ("kind" in target && target.kind === "general" ? "Post" : null))
       : null;
-    const removedTotal = removedByAuthor.get(first.targetUserId) ?? 0;
+    const removedTotal = first.targetUserId
+      ? (removedByAuthor.get(first.targetUserId) ?? 0)
+      : 0;
 
     items.push({
       id: first.id,
       targetType: first.targetType as ContentReportTargetType,
       targetId: first.targetId,
       reason: first.reason as ContentReportReason,
-      authorDisplayName: first.authorName,
+      authorDisplayName: first.authorName ?? "Deleted account",
       groupName: first.groupName,
       workoutName,
       reportCount: group.length,
@@ -804,7 +853,11 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
       contentRemoved,
       contentMissing: !target,
       contentText: target
-        ? ("text" in target ? target.text : target.caption)
+        ? ("text" in target
+          ? target.text
+          : ("publicationBody" in target && target.publicationBody != null
+            ? target.publicationBody
+            : target.caption))
         : null,
       photoPath: target && "photoPath" in target ? target.photoPath : null,
       contentCreatedAt: target?.createdAt ?? null,
@@ -816,9 +869,11 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
         createdAt: row.createdAt,
       })),
       authorHistory: {
-        displayName: first.authorName,
+        displayName: first.authorName ?? "Deleted account",
         removedCount: Math.max(0, removedTotal - (contentRemoved ? 1 : 0)),
-        groupCount: groupsByAuthor.get(first.targetUserId) ?? 0,
+        groupCount: first.targetUserId
+          ? (groupsByAuthor.get(first.targetUserId) ?? 0)
+          : 0,
       },
     });
   }

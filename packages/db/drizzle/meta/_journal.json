@@ -148,6 +148,13 @@
       "when": 1794372826189,
       "tag": "0020_workout_read_visibility",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1794454657181,
+      "tag": "0021_general_posts",
+      "breakpoints": true
     }
   ]
 }

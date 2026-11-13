@@ -8,6 +8,7 @@ import {
   commentPushBody,
   crewPushBody,
   crewPushHref,
+  crewPushTitle,
   isPushRecipientEligible,
   newWorkoutPushBody,
   parseCrewPushPayload,
@@ -57,6 +58,12 @@ test("push bodies have no emoji, no app name, and never say 1 people", () => {
       crewName: "Sunrise",
       reactionCount: 3,
     }),
+    crewPushBody({
+      type: "crew_post",
+      actorName: "Maya T.",
+      crewName: "Morning Crew",
+      firstLine: "Thursday track at 6 AM",
+    }),
   ];
 
   assert.equal(bodies[0], "Maya posted a workout in Sunrise. Go cheer them on.");
@@ -66,6 +73,11 @@ test("push bodies have no emoji, no app name, and never say 1 people", () => {
   assert.equal(bodies[4], "Alex reacted to your workout.");
   assert.equal(bodies[7], "Alex reacted to your workout.");
   assert.equal(bodies[8], "3 people reacted to your workout.");
+  assert.equal(bodies[9], "Thursday track at 6 AM");
+  assert.equal(
+    crewPushTitle({ type: "crew_post", actorName: "Maya T.", crewName: "Morning Crew" }),
+    "Maya T. posted in Morning Crew",
+  );
 
   for (const body of bodies) {
     assert.doesNotMatch(body, /[\u{1F300}-\u{1FAFF}]/u);
@@ -110,6 +122,22 @@ test("recipient selection drops self, muted, left, removed, closed, and hidden c
       ...allowed,
       alertType: "crew_comment",
       prefs: { ...defaultCrewNotificationPrefs, crewComment: false },
+    }),
+    false,
+  );
+  assert.equal(
+    isPushRecipientEligible({
+      ...allowed,
+      alertType: "crew_post",
+      prefs: defaultCrewNotificationPrefs,
+    }),
+    true,
+  );
+  assert.equal(
+    isPushRecipientEligible({
+      ...allowed,
+      alertType: "crew_post",
+      prefs: { ...defaultCrewNotificationPrefs, crewPost: false },
     }),
     false,
   );
@@ -176,12 +204,35 @@ test("payload routing opens the workout and falls back to the crew when the post
     crewPushHref({ ...payload, type: "crew_reaction" }, true).startsWith("/groups/"),
     true,
   );
+  const postPayload = {
+    type: "crew_post" as const,
+    groupId,
+    postId,
+  };
+  assert.deepEqual(parseCrewPushPayload(postPayload), postPayload);
+  assert.deepEqual(parseCrewPushPayload({ ...postPayload, sessionId }), postPayload);
+  assert.equal(
+    crewPushHref(postPayload).includes(`post=${postId}`),
+    true,
+  );
+  assert.equal(
+    crewPushHref(postPayload).includes("sessionId"),
+    false,
+  );
 });
 
 test("push token payloads require an Expo token and a platform", () => {
   const token = "ExponentPushToken[abc123]";
   assert.equal(
     registerPushTokenSchema.safeParse({ expoPushToken: token, platform: "ios" }).success,
+    true,
+  );
+  assert.equal(
+    registerPushTokenSchema.safeParse({
+      expoPushToken: token,
+      platform: "ios",
+      supportsPostTargets: true,
+    }).success,
     true,
   );
   assert.equal(

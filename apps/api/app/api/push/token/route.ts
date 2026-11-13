@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       userId: user.id,
       expoPushToken: input.data.expoPushToken,
       platform: input.data.platform,
+      supportsPostTargets: input.data.supportsPostTargets,
     });
 
     return NextResponse.json(

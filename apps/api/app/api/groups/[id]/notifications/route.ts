@@ -43,7 +43,12 @@ export async function GET(
     });
     const url = new URL(request.url);
     const alertType = url.searchParams.get("alertType");
-    if (alertType === "crew_workout" || alertType === "crew_comment" || alertType === "crew_reaction") {
+    if (
+      alertType === "crew_workout"
+      || alertType === "crew_comment"
+      || alertType === "crew_reaction"
+      || alertType === "crew_post"
+    ) {
       const enabled = await crewAlertEnabledForUser({
         userId: user.id,
         groupId: groupId.data,

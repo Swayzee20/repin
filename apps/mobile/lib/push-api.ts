@@ -19,6 +19,7 @@ export async function registerDevicePushToken(input: {
     body: JSON.stringify({
       expoPushToken: input.expoPushToken,
       platform: input.platform,
+      supportsPostTargets: true,
     }),
     signal: AbortSignal.timeout(7_500),
   });

@@ -99,6 +99,53 @@ export async function addAuthorizedWorkoutPhotoUrls<T extends WorkoutWithPhotoPa
 
 const storedPhotoPath = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\/[^/].*$/i;
 
+export async function signWorkoutPhotoPaths(photoPaths: string[]) {
+  const unique = [...new Set(photoPaths.filter((path) => storedPhotoPath.test(path) && !path.includes("..")))];
+  if (!unique.length) return new Map<string, string | null>();
+
+  const { client } = getStorageAdminClient();
+  const storage = client.storage.from("workout-photos");
+  if (unique.length === 1) {
+    const path = unique[0]!;
+    const { data, error } = await storage.createSignedUrl(path, SIGNED_URL_LIFETIME_SECONDS);
+    return new Map([[path, error ? null : data?.signedUrl?.trim() || null]]);
+  }
+  const { data } = await storage.createSignedUrls(unique, SIGNED_URL_LIFETIME_SECONDS);
+  const requested = new Set(unique);
+  return new Map(
+    (data ?? []).flatMap((result) => {
+      const path = result.path?.trim();
+      if (!path || !requested.has(path)) return [];
+      return [[path, result.error ? null : result.signedUrl?.trim() || null]] as const;
+    }),
+  );
+}
+
+export async function createWorkoutPhotoSignedUpload(path: string) {
+  if (!storedPhotoPath.test(path) || path.includes("..")) {
+    throw new Error("Photo path is invalid");
+  }
+  const { client } = getStorageAdminClient();
+  const { data, error } = await client.storage.from("workout-photos").createSignedUploadUrl(path);
+  if (error || !data?.signedUrl) {
+    throw new Error("A signed upload URL could not be created", { cause: error });
+  }
+  return { signedUrl: data.signedUrl, token: data.token, path };
+}
+
+export async function workoutPhotoObjectExists(path: string) {
+  if (!storedPhotoPath.test(path) || path.includes("..")) return false;
+  const { client } = getStorageAdminClient();
+  const folder = path.slice(0, path.lastIndexOf("/"));
+  const name = path.slice(path.lastIndexOf("/") + 1);
+  const { data, error } = await client.storage.from("workout-photos").list(folder, {
+    search: name,
+    limit: 1,
+  });
+  if (error) return false;
+  return (data ?? []).some((object) => object.name === name);
+}
+
 export async function deleteStoredWorkoutPhotos(photoPaths: string[]) {
   const paths = [...new Set(photoPaths.filter((path) => storedPhotoPath.test(path) && !path.includes("..")))];
   if (!paths.length) return;

@@ -7,12 +7,15 @@ import {
 } from "./crew";
 import {
   commentPushBody,
+  newPostPushTitle,
   newWorkoutPushBody,
   reactionPushBody,
 } from "./push-copy";
 
 export {
   commentPushBody,
+  firstPostLine,
+  newPostPushTitle,
   newWorkoutPushBody,
   pushCopy,
   reactionPushBody,
@@ -24,6 +27,7 @@ export const crewPushAlertTypes = [
   "crew_workout",
   "crew_comment",
   "crew_reaction",
+  "crew_post",
 ] as const;
 
 export type CrewPushAlertType = (typeof crewPushAlertTypes)[number];
@@ -37,6 +41,7 @@ export const registerPushTokenSchema = z
   .object({
     expoPushToken: z.string().regex(expoPushTokenPattern, "Invalid Expo push token"),
     platform: z.enum(pushPlatforms),
+    supportsPostTargets: z.boolean().optional(),
   })
   .strict();
 
@@ -49,7 +54,7 @@ export const unregisterPushTokenSchema = z
 export type CrewPushPayload = {
   type: CrewPushAlertType;
   groupId: string;
-  sessionId: string;
+  sessionId?: string;
   postId: string;
 };
 
@@ -63,13 +68,18 @@ export function parseCrewPushPayload(data: unknown): CrewPushPayload | null {
     type !== "crew_workout"
     && type !== "crew_comment"
     && type !== "crew_reaction"
+    && type !== "crew_post"
   ) {
     return null;
   }
   const groupId = readUuid(record.groupId);
-  const sessionId = readUuid(record.sessionId);
   const postId = readUuid(record.postId);
-  if (!groupId || !sessionId || !postId) return null;
+  if (!groupId || !postId) return null;
+  if (type === "crew_post") {
+    return { type, groupId, postId };
+  }
+  const sessionId = readUuid(record.sessionId);
+  if (!sessionId) return null;
   return { type, groupId, sessionId, postId };
 }
 
@@ -85,6 +95,10 @@ export function crewPushHref(payload: CrewPushPayload, postGone = false) {
     groupId: payload.groupId,
     fromPush: "1",
   });
+  if (payload.type === "crew_post") {
+    params.set("post", payload.postId);
+    return `/(tabs)/community?${params.toString()}`;
+  }
   return `/workouts/${payload.sessionId}?${params.toString()}`;
 }
 
@@ -110,12 +124,27 @@ export function isPushRecipientEligible(input: {
   return crewAlertAllowed(input.prefs, input.alertType);
 }
 
+export function crewPushTitle(input: {
+  type: CrewPushAlertType;
+  actorName: string;
+  crewName: string;
+}) {
+  if (input.type === "crew_post") {
+    return newPostPushTitle(input.actorName, input.crewName);
+  }
+  return undefined;
+}
+
 export function crewPushBody(input: {
   type: CrewPushAlertType;
   actorName: string;
   crewName: string;
   reactionCount?: number;
+  firstLine?: string;
 }) {
+  if (input.type === "crew_post") {
+    return input.firstLine?.trim() || newPostPushTitle(input.actorName, input.crewName);
+  }
   if (input.type === "crew_workout") {
     return newWorkoutPushBody(input.actorName, input.crewName);
   }

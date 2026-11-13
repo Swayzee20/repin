@@ -11,10 +11,11 @@ export type ExpoPushMessage = {
   body: string;
   sound: "default";
   channelId: "default";
+  title?: string;
   data: {
     type: CrewPushAlertType;
     groupId: string;
-    sessionId: string;
+    sessionId?: string;
     postId: string;
   };
 };
