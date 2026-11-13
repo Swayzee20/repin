@@ -82,6 +82,19 @@ test("notifications sheet leads with New posts from your crew", () => {
   assert.match(sheets, /crewPost: false/);
 });
 
+test("tapping a pinned general post opens the same detail as any other post", () => {
+  const community = source("../app/(tabs)/community/index.tsx");
+  const pinnedPresses = community.match(/onPress=\{\(\) => openGeneralPostDetail\(pinnedPost\)\}/g) ?? [];
+  assert.equal(pinnedPresses.length, 2);
+  assert.match(community, /resolveCommunityGeneralPost/);
+  assert.match(community, /pinnedPost,/);
+  assert.match(community, /generalPost=\{detailTarget \? null : generalDetail\}/);
+  assert.match(community, /visible=\{detailTarget !== null \|\| generalDetail !== null\}/);
+  assert.match(community, /right=\{generalDetail \?/);
+  assert.match(community, /presentation="community-pane"/);
+  assert.equal(community.includes("openWorkoutDetail(pinnedPost)"), false);
+});
+
 test("general post detail uses the workout modal on compact and the trailing pane when unfolded", () => {
   const community = source("../app/(tabs)/community/index.tsx");
   const modal = source("./workout-detail-modal.tsx");
