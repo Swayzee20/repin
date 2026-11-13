@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
+import { colors, fonts, spacing, type } from "./theme";
+
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
 function source(name: string) {
@@ -63,4 +65,97 @@ test("notifications sheet leads with New posts from your crew", () => {
   const alerts = sheets.slice(sheets.indexOf("ALERTS"));
   assert.ok(alerts.indexOf("New posts from your crew") < alerts.indexOf("New workouts from your crew"));
   assert.match(sheets, /crewPost: false/);
+});
+
+test("general post detail uses the workout modal on compact and the trailing pane when unfolded", () => {
+  const community = source("../app/(tabs)/community/index.tsx");
+  const modal = source("./workout-detail-modal.tsx");
+  const detail = source("./general-post-detail.tsx");
+
+  assert.match(community, /openGeneralPostDetail/);
+  assert.match(community, /onPress=\{\(\) => openGeneralPostDetail\(item\)\}/);
+  assert.match(community, /setExplicitOverride\(post\.id\)/);
+  assert.match(community, /router\.setParams\(\{ post: post\.id \}\)/);
+  assert.match(community, /generalPost=\{detailTarget \? null : generalDetail\}/);
+  assert.match(community, /visible=\{detailTarget !== null \|\| generalDetail !== null\}/);
+  assert.equal(community.includes("StyleSheet.absoluteFill"), false);
+  assert.match(community, /presentation="community-pane"/);
+  assert.match(community, /right=\{generalDetail \?/);
+
+  assert.match(modal, /presentationStyle="overFullScreen"/);
+  assert.match(modal, /CenteredCard/);
+  assert.match(modal, /<GeneralPostDetailView/);
+  assert.match(modal, /presentation="community-modal"/);
+  assert.match(modal, /kind="close"/);
+  const closeAt = modal.indexOf('kind="close"');
+  const titleAt = modal.indexOf(">Post<");
+  assert.ok(closeAt > 0 && titleAt > closeAt);
+
+  assert.match(detail, /presentation\?: "community-modal" \| "community-pane"/);
+  assert.equal(detail.includes('kind="back"'), false);
+  assert.equal(detail.includes("insets.top"), false);
+  assert.equal(detail.includes("RoundIconButton"), false);
+  assert.equal(detail.includes("groupHeaderRow"), false);
+  assert.equal(detail.includes("CommunityGroupControls"), false);
+});
+
+test("Comments label is shared, sentence case, ExtraBold 13, brandPressed, with 16/20 spacing", () => {
+  const label = source("./comments-section-label.tsx");
+  const workout = source("./workout-detail.tsx");
+  const general = source("./general-post-detail.tsx");
+
+  assert.equal(colors.brandPressed, "#9E3500");
+  assert.equal(type.label.fontSize, 13);
+  assert.equal(fonts.extrabold, "Nunito_800ExtraBold");
+  assert.equal(spacing.lg, 16);
+  assert.equal(spacing.xl, 20);
+
+  assert.match(label, /commentsSectionLabelCopy = "Comments"/);
+  assert.equal(label.includes("COMMENTS"), false);
+  assert.match(label, /color: colors.brandPressed/);
+  assert.match(label, /fontFamily: fonts.extrabold/);
+  assert.match(label, /fontSize: type.label.fontSize/);
+  assert.match(label, /letterSpacing: 0/);
+  assert.match(label, /afterPost: spacing.lg/);
+  assert.match(label, /beforeList: spacing.xl/);
+
+  assert.match(workout, /CommentsSectionLabel/);
+  assert.match(workout, /commentsSectionSpacing.afterPost/);
+  assert.match(workout, /commentsSectionSpacing.beforeList/);
+  assert.equal(workout.includes("commentsHeading"), false);
+  assert.equal(workout.includes('isCommunitySheet ? "Comments"'), false);
+
+  assert.match(general, /CommentsSectionLabel/);
+  assert.match(general, /commentsSectionSpacing.afterPost/);
+  assert.match(general, /commentsSectionSpacing.beforeList/);
+});
+
+test("crew switcher cannot paint over general post detail because the overlay path is gone", () => {
+  const community = source("../app/(tabs)/community/index.tsx");
+  const modal = source("./workout-detail-modal.tsx");
+  const detail = source("./general-post-detail.tsx");
+
+  assert.match(community, /groupHeaderRow: \{[^}]*zIndex: 20/);
+  assert.match(community, /selectorAnchor: \{[^}]*zIndex: 21/);
+  assert.equal(community.includes("StyleSheet.absoluteFill"), false);
+  assert.equal(community.includes("<GeneralPostDetailView"), true);
+  const overlayBlock = community.includes("mode !== \"twoPane\" && generalDetail");
+  assert.equal(overlayBlock, false);
+
+  assert.match(modal, /<Modal/);
+  assert.match(modal, /groupId && generalPost/);
+  assert.match(detail, /presentation === "community-modal"/);
+  assert.equal(detail.includes("zIndex"), false);
+});
+
+test("crew_post deep links still land on the community post param", () => {
+  const push = source("../../../packages/validation/src/push.ts");
+  const community = source("../app/(tabs)/community/index.tsx");
+  const host = source("./push-notifications-host.tsx");
+  assert.match(push, /params.set\("post", payload.postId\)/);
+  assert.match(push, /\/\(tabs\)\/community\?/);
+  assert.match(community, /readCommunityPostParam\(params.post\)/);
+  assert.match(community, /readCommunityPostParam\(params.groupId\)/);
+  assert.match(community, /if \(item\) setGeneralDetail\(item\)/);
+  assert.match(host, /crewPushHref\(payload\)/);
 });

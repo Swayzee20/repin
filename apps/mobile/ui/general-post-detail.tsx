@@ -7,7 +7,7 @@ import {
   type GeneralPostFeedItem,
 } from "@repin/types";
 import { generalPostCopy } from "@repin/validation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import {
   Pressable,
   ScrollView,
@@ -25,26 +25,27 @@ import {
   setGeneralPostReaction,
 } from "../lib/general-posts-api";
 import { supabase } from "../lib/supabase";
+import { CommentsSectionLabel, commentsSectionSpacing } from "./comments-section-label";
 import { GeneralPostSummaryCard } from "./general-post-card";
 import { Icon } from "./icons";
-import { RoundIconButton } from "./primitives";
 import { colors, radii, size, spacing, type } from "./theme";
 
 export function GeneralPostDetailView({
   groupId,
-  onClose,
+  paneHeader = null,
   post,
-  presentation = "modal",
+  presentation = "community-pane",
 }: {
   groupId: string;
-  onClose?: () => void;
+  paneHeader?: ReactNode;
   post: GeneralPostFeedItem;
-  presentation?: "community-pane" | "modal";
+  presentation?: "community-modal" | "community-pane";
 }) {
   const insets = useSafeAreaInsets();
   const [detail, setDetail] = useState<GeneralPostDetail | null>(null);
   const [commentText, setCommentText] = useState("");
   const [pending, setPending] = useState(false);
+  const isModal = presentation === "community-modal";
 
   const load = useCallback(async () => {
     if (!supabase) return;
@@ -113,17 +114,16 @@ export function GeneralPostDetailView({
     }
   };
 
+  const composerPaddingBottom = isModal ? spacing.lg : Math.max(insets.bottom, spacing.md);
+
   return (
-    <View style={styles.root}>
-      {presentation === "modal" ? (
-        <View style={[styles.header, { paddingTop: insets.top + spacing.sm }]}>
-          <RoundIconButton accessibilityLabel="Back" kind="back" onPress={onClose ?? (() => {})} />
-          <Text accessibilityRole="header" style={styles.title}>{generalPostCopy.detailTitle}</Text>
-        </View>
-      ) : (
-        <Text accessibilityRole="header" style={styles.paneTitle}>{generalPostCopy.detailTitle}</Text>
-      )}
-      <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+    <View style={isModal ? styles.modalBody : styles.pane}>
+      {isModal ? null : paneHeader}
+      <ScrollView
+        contentContainerStyle={isModal ? styles.modalScroll : styles.paneScroll}
+        keyboardShouldPersistTaps="handled"
+        style={isModal ? styles.modalScroller : styles.paneScroller}
+      >
         <GeneralPostSummaryCard post={current} showCommentCount showReactionSummary />
         <View style={styles.reactions}>
           {communityReactionTypes.map((reaction) => (
@@ -139,15 +139,21 @@ export function GeneralPostDetailView({
             </Pressable>
           ))}
         </View>
-        <Text style={styles.commentsTitle}>Comments</Text>
-        {current.comments.map((comment) => (
-          <View key={comment.id} style={styles.comment}>
-            <Text style={styles.commentAuthor}>{comment.displayName}</Text>
-            <Text style={styles.commentText}>{comment.text}</Text>
+        <View style={styles.commentsBlock}>
+          <CommentsSectionLabel />
+          <View style={styles.commentsAfterLabel}>
+            {current.comments.length ? current.comments.map((comment) => (
+              <View key={comment.id} style={styles.comment}>
+                <Text style={styles.commentAuthor}>{comment.displayName}</Text>
+                <Text style={styles.commentText}>{comment.text}</Text>
+              </View>
+            )) : (
+              <Text style={styles.commentEmpty}>No comments yet.</Text>
+            )}
           </View>
-        ))}
+        </View>
       </ScrollView>
-      <View style={[styles.composer, { paddingBottom: Math.max(insets.bottom, spacing.md) }]}>
+      <View style={[styles.composer, { paddingBottom: composerPaddingBottom }]}>
         <TextInput
           onChangeText={setCommentText}
           placeholder={generalPostCopy.addComment}
@@ -169,17 +175,16 @@ export function GeneralPostDetailView({
 }
 
 const styles = StyleSheet.create({
-  root: { backgroundColor: colors.background, flex: 1 },
-  header: {
-    alignItems: "center",
-    flexDirection: "row",
-    paddingHorizontal: spacing.xl,
-    paddingBottom: spacing.md,
-  },
-  title: { color: colors.ink, flex: 1, marginLeft: spacing.md, textAlign: "center", ...type.heading },
-  paneTitle: { color: colors.ink, marginBottom: spacing.lg, ...type.heading },
-  content: { gap: spacing.lg, paddingHorizontal: spacing.xl, paddingBottom: spacing.xxl },
-  reactions: { flexDirection: "row", gap: spacing.sm },
+  // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
+  pane: { flex: 1, minHeight: 0 },
+  // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
+  modalBody: { flexGrow: 0, flexShrink: 1, minHeight: 0 },
+  // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
+  paneScroller: { flex: 1, minHeight: 0 },
+  modalScroller: { flexGrow: 0, flexShrink: 1 },
+  paneScroll: { paddingBottom: spacing.xxl, paddingHorizontal: spacing.xl },
+  modalScroll: { paddingBottom: spacing.lg, paddingHorizontal: spacing.lg },
+  reactions: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   reaction: {
     alignItems: "center",
     borderRadius: radii.pill,
@@ -188,15 +193,17 @@ const styles = StyleSheet.create({
     width: size.hit,
   },
   reactionOn: { backgroundColor: colors.brandTint },
-  commentsTitle: { color: colors.brand, ...type.eyebrow },
+  commentsBlock: { marginTop: commentsSectionSpacing.afterPost },
+  commentsAfterLabel: { marginTop: commentsSectionSpacing.beforeList },
   comment: { gap: spacing.xs },
   commentAuthor: { color: colors.brand, ...type.label },
   commentText: { color: colors.ink, ...type.body },
+  commentEmpty: { color: colors.muted, ...type.bodySmall },
   composer: {
     alignItems: "center",
     flexDirection: "row",
     gap: spacing.sm,
-    paddingHorizontal: spacing.xl,
+    paddingHorizontal: spacing.lg,
     paddingTop: spacing.md,
   },
   input: {
