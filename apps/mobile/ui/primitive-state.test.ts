@@ -47,11 +47,18 @@ test("loading keeps the variant color and shows a spinner", () => {
   assert.equal(loading.height, 52);
 });
 
-test("primary, secondary, tonal, and danger buttons follow the variant spec", () => {
+test("primary, compact-primary, secondary, tonal, and danger buttons follow the variant spec", () => {
   const primary = buttonAppearance({ disabled: false, loading: false, pressed: false, variant: "primary" });
   assert.equal(primary.backgroundColor, colors.brand);
   assert.equal(primary.height, 52);
   assert.equal(buttonAppearance({ disabled: false, loading: false, pressed: true, variant: "primary" }).backgroundColor, colors.brandPressed);
+
+  const compact = buttonAppearance({ disabled: false, loading: false, pressed: false, variant: "compact-primary" });
+  assert.equal(compact.backgroundColor, colors.brand);
+  assert.equal(compact.color, colors.surface);
+  assert.equal(compact.borderWidth, 0);
+  assert.equal(compact.height, 44);
+  assert.equal(buttonAppearance({ disabled: false, loading: false, pressed: true, variant: "compact-primary" }).backgroundColor, colors.brandPressed);
 
   const secondary = buttonAppearance({ disabled: false, loading: false, pressed: false, variant: "secondary" });
   assert.equal(secondary.backgroundColor, colors.surface);

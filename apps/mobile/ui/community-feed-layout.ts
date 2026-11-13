@@ -1,4 +1,4 @@
-import { colors, type } from "./theme";
+import { colors, fonts, type } from "./theme";
 
 /** Existing unfolded selected ring. Stays a 2 pt inset, not the own-post marker. */
 export const selectedCardInsetWidth = 2;
@@ -10,7 +10,21 @@ export const ownPostYouTagHeight = 18;
 export const ownPostYouTagPadding = 6;
 export const ownPostYouTagGap = 6;
 export const ownPostYouTagRadius = 9;
-export const ownPostYouTagBorderWidth = 1;
+export const ownPostYouTagBorderWidth = 0;
+
+/** Shared 18 pt chip recipe: You, PR, +N, kind, Goal. Radius 9 is intentional (not radii.sm). */
+export const feedChipHeight = ownPostYouTagHeight;
+export const feedChipPadding = ownPostYouTagPadding;
+export const feedChipRadius = ownPostYouTagRadius;
+export const feedChipGap = ownPostYouTagGap;
+
+/** New post sits 14 pt below the eyebrow on compact, 12 pt on Duo / Split View. */
+export const communityNewPostGapCompact = 14;
+export const communityNewPostGapWide = 12;
+
+export function communityNewPostGap(mode: "compact" | "wide" | "twoPane") {
+  return mode === "compact" ? communityNewPostGapCompact : communityNewPostGapWide;
+}
 
 export function isOwnPost(
   userId: string | undefined,
@@ -19,12 +33,19 @@ export function isOwnPost(
   return Boolean(viewerUserId) && userId === viewerUserId;
 }
 
-export function workoutFeedCardLabel({ title }: { title: string }): string {
-  return `Open ${title} workout details`;
+export function workoutFeedCardLabel({
+  isOwn = false,
+  title,
+}: {
+  isOwn?: boolean;
+  title: string;
+}): string {
+  const action = `Open ${title} workout details`;
+  return isOwn ? `Your post. ${action}` : action;
 }
 
-export function generalPostFeedCardLabel() {
-  return "Open post details";
+export function generalPostFeedCardLabel(isOwn = false) {
+  return isOwn ? "Your post. Open post details" : "Open post details";
 }
 
 export function communityFeedCardLayout() {
@@ -34,19 +55,66 @@ export function communityFeedCardLayout() {
   };
 }
 
-export function ownPostYouTagStyle() {
+export function tonalFeedChipStyle() {
   return {
     alignItems: "center" as const,
-    alignSelf: "center" as const,
     backgroundColor: colors.brandTint,
-    borderColor: colors.tonalEdge,
-    borderRadius: ownPostYouTagRadius,
-    borderWidth: ownPostYouTagBorderWidth,
-    flexShrink: 0,
-    height: ownPostYouTagHeight,
+    borderRadius: feedChipRadius,
+    borderWidth: 0,
+    height: feedChipHeight,
     justifyContent: "center" as const,
+    paddingHorizontal: feedChipPadding,
+  };
+}
+
+export function goalFeedChipStyle() {
+  return {
+    alignItems: "center" as const,
+    backgroundColor: colors.surface,
+    borderColor: colors.brand,
+    borderRadius: feedChipRadius,
+    borderWidth: 2,
+    height: feedChipHeight,
+    justifyContent: "center" as const,
+    paddingHorizontal: feedChipPadding,
+  };
+}
+
+export function kindFeedChipStyle() {
+  return {
+    alignItems: "center" as const,
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: feedChipRadius,
+    flexShrink: 0,
+    height: feedChipHeight,
+    justifyContent: "center" as const,
+    marginLeft: feedChipGap,
+    paddingHorizontal: feedChipPadding,
+  };
+}
+
+export function kindFeedChipTextStyle() {
+  return {
+    color: colors.inkSoft,
+    fontFamily: fonts.semibold,
+    fontSize: type.micro.fontSize,
+    lineHeight: type.micro.lineHeight,
+  };
+}
+
+export function feedChipTextStyle() {
+  return {
+    color: colors.brandPressed,
+    ...type.micro,
+  };
+}
+
+export function ownPostYouTagStyle() {
+  return {
+    ...tonalFeedChipStyle(),
+    alignSelf: "center" as const,
+    flexShrink: 0,
     marginLeft: ownPostYouTagGap,
-    paddingHorizontal: ownPostYouTagPadding,
   };
 }
 
@@ -77,7 +145,7 @@ export function ownPostAuthorNameStyle() {
 export function ownPostAndSelectedMarkers() {
   return {
     own: {
-      border: colors.tonalEdge,
+      borderWidth: ownPostYouTagBorderWidth,
       color: colors.brandPressed,
       fill: colors.brandTint,
       label: ownPostYouTagLabel,

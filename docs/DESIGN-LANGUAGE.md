@@ -140,8 +140,9 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
   - Pushed screen: round ‹ top-left of the left pane / header.
   - The text `BackButton` (`ui/components.tsx:148-154`) is deleted (16 uses).
 - **Segmented control:** glass capsule, 48pt track, 4pt inset, `selection` thumb, `brandPressed` #9E3500 SemiBold text (D8). `size="sm"` is a 36pt track with hitSlop 4. It replaces 4 variants: `ui/quick-log-results.tsx` (36), exercises unitToggle (34), `ui/detailed-run-fields.tsx` subtypeToggle (38) and UnitToggle (38×38).
-- **Buttons** (52pt, `radii.md`, `type.button`):
+- **Buttons** (52pt default, `radii.md`, `type.button`):
   - primary: brand, pressed `brandPressed`
+  - compact primary (44pt): brand fill, white `type.button`, optional leading icon; pressed `brandPressed`. Used for inline page actions (New post). Does not replace the 52pt primary.
   - loading: spinner + verb ("Logging")
   - disabled: disabledFill / disabledText, plus a helper line saying why (never opacity)
   - secondary: surface + borderStrong
@@ -332,3 +333,6 @@ There is no width threshold and no platform check in this logic. Its only strip 
 - Whether the strip stays visible while a form modal is up. The X no longer depends on it: it is top-left either way (D7).
 - "Before (from code)" panels are reconstructed from main's style values. Josue's 4 screenshots are unmodified.
 - All estimates are Studio estimates.
+
+## Changelog
+- **Nov 13, 2026:** added compact 44 pt primary button, approved by Josue.

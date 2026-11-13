@@ -4,10 +4,15 @@ import { StyleSheet, Text, View } from "react-native";
 import type { GoalBadge, PrBadge } from "@repin/types";
 
 import {
+  feedChipGap,
+  feedChipTextStyle,
+  goalFeedChipStyle,
+  tonalFeedChipStyle,
+} from "./community-feed-layout";
+import {
   visibleMixedBadgeChips,
 } from "./pr-badge-chips";
 import { prCopy } from "./pr-copy";
-import { colors, radii, spacing, type } from "./theme";
 
 export {
   mixedBadgeAccessibilityLabel,
@@ -35,13 +40,17 @@ export function PrBadgeRow({
       style={[styles.row, style]}
     >
       {visible.chips.map((chip) => (
-        <View key={`${chip.type}:${chip.id}`} style={chip.type === "goal" ? styles.goalChip : styles.chip}>
-          <Text style={styles.chipText}>{chip.type === "goal" ? "Goal" : "PR"}</Text>
+        <View
+          accessibilityLabel={chip.type === "goal" ? "Goal reached" : "Personal record"}
+          key={`${chip.type}:${chip.id}`}
+          style={chip.type === "goal" ? goalFeedChipStyle() : tonalFeedChipStyle()}
+        >
+          <Text style={feedChipTextStyle()}>{chip.type === "goal" ? "Goal" : "PR"}</Text>
         </View>
       ))}
       {visible.overflow > 0 ? (
-        <View style={styles.chip}>
-          <Text style={styles.chipText}>{prCopy.overflow(visible.overflow)}</Text>
+        <View style={tonalFeedChipStyle()}>
+          <Text style={feedChipTextStyle()}>{prCopy.overflow(visible.overflow)}</Text>
         </View>
       ) : null}
     </View>
@@ -53,30 +62,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.xs,
-  },
-  chip: {
-    alignItems: "center",
-    backgroundColor: colors.brandTint,
-    borderColor: colors.boardBorder,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    height: spacing.xl,
-    justifyContent: "center",
-    paddingHorizontal: spacing.sm,
-  },
-  goalChip: {
-    alignItems: "center",
-    backgroundColor: colors.surface,
-    borderColor: colors.brand,
-    borderRadius: radii.sm,
-    borderWidth: 2,
-    height: spacing.xl,
-    justifyContent: "center",
-    paddingHorizontal: spacing.sm,
-  },
-  chipText: {
-    color: colors.brandPressed,
-    ...type.micro,
+    gap: feedChipGap,
   },
 });

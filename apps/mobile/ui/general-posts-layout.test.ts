@@ -13,13 +13,18 @@ function source(name: string) {
 test("Community drops the day stepper and keeps New post above the pin slot", () => {
   const community = source("../app/(tabs)/community/index.tsx");
   assert.match(community, /generalPostCopy\.newPost/);
-  assert.match(community, /variant="tonal"/);
-  assert.match(community, /labelColor=\{colors\.brandPressed\}/);
+  assert.match(community, /variant="compact-primary"/);
+  assert.match(community, /icon="pencil"/);
+  assert.match(community, /buildCommunityBoardRows/);
+  assert.match(community, /CommunityDayDivider/);
+  assert.equal(community.includes('variant="tonal"'), false);
+  assert.equal(community.includes("labelColor={colors.brandPressed}"), false);
   assert.match(community, /isPinned/);
   assert.equal(community.includes("CommunityDatePicker"), false);
   assert.equal(community.includes("onOpenDatePicker"), false);
   assert.equal(community.includes("formatCommunityDayLabel"), false);
   assert.equal(community.includes("compactDay"), false);
+  assert.equal(community.includes("SectionList"), false);
   assert.equal(community.includes('position: "sticky"'), false);
   assert.equal(community.includes("destinationCrewNames"), false);
   assert.match(community, /generalPostCopy\.loadErrorTitle/);
@@ -55,8 +60,10 @@ test("cards never list other destination crews and pin slot is not sticky", () =
   assert.equal(card.includes("destinationCrewNames"), false);
   assert.equal(card.includes("Posted to"), false);
   assert.match(card, /pinEyebrow/);
+  assert.match(card, /accessibilityRole="header"/);
+  assert.match(card, /accessibilityLabel=\{generalPostCopy\.pinEyebrow\}/);
   assert.equal(card.includes('position: "sticky"'), false);
-  assert.match(card, /generalPostCopy\.typePill/);
+  assert.match(card, /KindChip label=\{generalPostCopy\.typePill\}/);
   assert.match(card, /OwnPostYouTag/);
   assert.match(card, /isOwn \? <OwnPostYouTag \/> : null/);
   assert.equal(card.includes("ownPostMarkerStyle"), false);
@@ -82,6 +89,20 @@ test("notifications sheet leads with New posts from your crew", () => {
   assert.match(sheets, /crewPost: false/);
 });
 
+test("day dividers scroll with the feed and are not sticky controls", () => {
+  const divider = source("./community-day-divider.tsx");
+  const community = source("../app/(tabs)/community/index.tsx");
+  assert.match(divider, /accessibilityRole="header"/);
+  assert.match(divider, /pointerEvents="none"/);
+  assert.match(divider, /colors\.border/);
+  assert.match(divider, /type\.label/);
+  assert.equal(divider.includes("onPress"), false);
+  assert.equal(community.includes("SectionList"), false);
+  assert.equal(community.includes('position: "sticky"'), false);
+  assert.match(community, /buildCommunityBoardRows/);
+  assert.match(community, /formatCommunityPinnedTimestamp/);
+});
+
 test("tapping a pinned general post opens the same detail as any other post", () => {
   const community = source("../app/(tabs)/community/index.tsx");
   const pinnedPresses = community.match(/onPress=\{\(\) => openGeneralPostDetail\(pinnedPost\)\}/g) ?? [];
@@ -101,7 +122,7 @@ test("general post detail uses the workout modal on compact and the trailing pan
   const detail = source("./general-post-detail.tsx");
 
   assert.match(community, /openGeneralPostDetail/);
-  assert.match(community, /onPress=\{\(\) => openGeneralPostDetail\(item\)\}/);
+  assert.match(community, /onPress=\{\(\) => openGeneralPostDetail\(post\)\}/);
   assert.match(community, /setExplicitOverride\(post\.id\)/);
   assert.match(community, /router\.setParams\(\{ post: post\.id \}\)/);
   assert.match(community, /generalPost=\{detailTarget \? null : generalDetail\}/);

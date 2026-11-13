@@ -10,6 +10,7 @@ import type { ContentMenuItem } from "../lib/content-menu";
 import { formatPostTimestamp } from "../lib/workout-date";
 import { isOwnPost, ownPostAuthorNameRowStyle, ownPostAuthorNameStyle } from "./community-feed-layout";
 import { Card, ContentOptionsMenu } from "./components";
+import { KindChip } from "./kind-chip";
 import { OwnPostYouTag } from "./own-post-you-tag";
 import { GeneralPostBody } from "./general-post-body";
 import { GeneralPostPhotoGrid } from "./general-post-photos";
@@ -25,6 +26,7 @@ export function GeneralPostSummaryCard({
   showCommentCount = false,
   showReactionSummary = false,
   style,
+  timestamp,
   post,
   viewerUserId,
 }: {
@@ -34,6 +36,7 @@ export function GeneralPostSummaryCard({
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
   style?: StyleProp<ViewStyle>;
+  timestamp?: string;
   post: GeneralPostFeedItem;
   viewerUserId?: string | null;
 }) {
@@ -59,9 +62,20 @@ export function GeneralPostSummaryCard({
   return (
     <View style={styles.wrap}>
       {isPinned ? (
-        <View style={styles.pinEyebrow}>
+        <View
+          accessibilityLabel={generalPostCopy.pinEyebrow}
+          accessibilityRole="header"
+          accessible
+          style={styles.pinEyebrow}
+        >
           <Icon color={colors.brand} name="pin" size={size.icon.sm} />
-          <Text style={styles.pinLabel}>{generalPostCopy.pinEyebrow}</Text>
+          <Text
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            style={styles.pinLabel}
+          >
+            {generalPostCopy.pinEyebrow}
+          </Text>
         </View>
       ) : null}
       <Card selected={selected} style={[styles.card, style]}>
@@ -74,11 +88,9 @@ export function GeneralPostSummaryCard({
               <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
               {isOwn ? <OwnPostYouTag /> : null}
             </View>
-            <Text style={styles.timestamp}>{formatPostTimestamp(post.createdAt, post.editedAt)}</Text>
+            <Text style={styles.timestamp}>{timestamp ?? formatPostTimestamp(post.createdAt, post.editedAt)}</Text>
           </View>
-          <View style={styles.typePill}>
-            <Text style={styles.typeText}>{generalPostCopy.typePill}</Text>
-          </View>
+          <KindChip label={generalPostCopy.typePill} />
           {menuItems.length ? (
             <ContentOptionsMenu
               accessibilityLabel={`Options for ${displayName}'s post`}
@@ -127,14 +139,5 @@ const styles = StyleSheet.create({
   authorNameRow: ownPostAuthorNameRowStyle(),
   author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, ...ownPostAuthorNameStyle() },
   timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: type.label.fontSize, marginTop: spacing.xs / 2 },
-  typePill: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radii.sm,
-    flexShrink: 0,
-    marginLeft: spacing.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-  },
-  typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.micro.fontSize },
   social: { color: colors.muted, fontFamily: fonts.medium, fontSize: type.label.fontSize, marginTop: spacing.md, textAlign: "right" },
 });
