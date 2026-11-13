@@ -64,8 +64,9 @@ const layoutPreviewViewerUserId = "user-jordan";
 export default function CommunityTabScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ post?: string | string[] }>();
+  const params = useLocalSearchParams<{ groupId?: string | string[]; post?: string | string[] }>();
   const postParam = readCommunityPostParam(params.post);
+  const groupParam = readCommunityPostParam(params.groupId);
   const { mode } = useLayoutMode();
   const layoutPreview = __DEV__ && isLayoutPreview();
   const { openWorkoutChooser, selectedGroupId, setSelectedGroupId } = useMainTabs();
@@ -188,11 +189,16 @@ export default function CommunityTabScreen() {
     [board, selectedGroupId],
   );
   const requestedPostId = explicitOverride ?? postParam;
-  const generalFromParam = mixedFeed.find((item) => item.kind === "general" && item.id === requestedPostId);
+  const generalFromParam = mixedFeed.find(
+    (item): item is GeneralPostFeedItem => item.kind === "general" && item.id === requestedPostId,
+  );
   const baseSelection = resolveCommunitySelection({
     postParam: generalFromParam ? null : requestedPostId,
     workouts,
   });
+  const foldSelection = generalFromParam
+    ? { kind: "explicit" as const, sessionId: generalFromParam.id }
+    : baseSelection;
   let selection = baseSelection;
   let detail = detailTarget;
   if (modeRef.current !== mode) {
@@ -200,10 +206,10 @@ export default function CommunityTabScreen() {
     modeRef.current = mode;
     holdComposerFocus();
     const effect = communityFoldTransition({
-      modalSessionId: detailTarget?.workout.id ?? null,
+      modalSessionId: detailTarget?.workout.id ?? generalDetail?.id ?? null,
       nextMode: mode,
       previousMode,
-      selection: baseSelection,
+      selection: foldSelection,
     });
     if (effect.closeModalImmediately) detail = null;
     if (effect.openModalSessionId) {
@@ -237,6 +243,11 @@ export default function CommunityTabScreen() {
   }, [explicitOverride, postParam, router]);
 
   useEffect(() => {
+    if (!postParam || !groupParam || groupParam === selectedGroupId) return;
+    setSelectedGroupId(groupParam);
+  }, [groupParam, postParam, selectedGroupId, setSelectedGroupId]);
+
+  useEffect(() => {
     if (!postParam) return;
     const item = mixedFeed.find((row): row is GeneralPostFeedItem => row.kind === "general" && row.id === postParam);
     if (item) setGeneralDetail(item);
@@ -245,6 +256,7 @@ export default function CommunityTabScreen() {
   const clearPostSelection = useCallback(() => {
     setExplicitOverride(null);
     setDetailTarget(null);
+    setGeneralDetail(null);
     if (postParam) router.setParams({ post: "" });
   }, [postParam, router]);
 
@@ -299,12 +311,26 @@ export default function CommunityTabScreen() {
   const openWorkoutDetail = useCallback((workout: WorkoutFeedItem) => {
     if (!selectedGroup) return;
     setGroupMenuView(null);
+    setGeneralDetail(null);
     if (mode === "twoPane") {
       setExplicitOverride(workout.id);
       router.setParams({ post: workout.id });
       return;
     }
     setDetailTarget({ groupId: selectedGroup.id, workout });
+  }, [mode, router, selectedGroup]);
+
+  const openGeneralPostDetail = useCallback((post: GeneralPostFeedItem) => {
+    if (!selectedGroup) return;
+    setGroupMenuView(null);
+    setDetailTarget(null);
+    if (mode === "twoPane") {
+      setGeneralDetail(post);
+      setExplicitOverride(post.id);
+      router.setParams({ post: post.id });
+      return;
+    }
+    setGeneralDetail(post);
   }, [mode, router, selectedGroup]);
 
   const updateFeedReactionSummary = useCallback((sessionId: string, reactions: CommunityReactionSummary) => {
@@ -608,14 +634,14 @@ export default function CommunityTabScreen() {
                 {mixedFeed.length ? mixedFeed.map((item) => {
                   if (item.kind === "general") {
                     const isOwn = isOwnPost(item.userId, viewerUserId);
-                    const selected = item.id === openSessionId;
+                    const selected = item.id === (generalDetail?.id ?? openSessionId);
                     return (
                       <ScrollAnchor id={item.id} key={item.id}>
                         <Pressable
                           accessibilityLabel={generalPostFeedCardLabel({ isOwn })}
                           accessibilityRole="button"
                           accessibilityState={{ selected }}
-                          onPress={() => setGeneralDetail(item)}
+                          onPress={() => openGeneralPostDetail(item)}
                           style={styles.paneCardPress}
                         >
                           <GeneralPostSummaryCard
@@ -631,7 +657,7 @@ export default function CommunityTabScreen() {
                     );
                   }
                   const workout = item;
-                  const selected = workout.id === openSessionId;
+                  const selected = !generalDetail && workout.id === openSessionId;
                   const isOwn = isOwnPost(workout.userId, viewerUserId);
                   const title = workout.name?.trim() || workout.title;
                   return (
@@ -661,6 +687,12 @@ export default function CommunityTabScreen() {
             right={generalDetail ? (
               <GeneralPostDetailView
                 groupId={selectedGroup.id}
+                paneHeader={(
+                  <View style={styles.panePostHeader}>
+                    <Text style={styles.panePostTitle}>Post</Text>
+                    <Text style={styles.panePostFrom}>from {selectedGroup.name}</Text>
+                  </View>
+                )}
                 post={generalDetail}
                 presentation="community-pane"
               />
@@ -733,6 +765,10 @@ export default function CommunityTabScreen() {
               });
               setGeneralDelete(null);
               setDeleteCrewNames([]);
+              if (generalDetail?.id === generalDelete.id) {
+                setGeneralDetail(null);
+                if (postParam === generalDelete.id) router.setParams({ post: "" });
+              }
               markWorkoutDataStale();
               void loadCommunity();
             })();
@@ -885,7 +921,7 @@ export default function CommunityTabScreen() {
                             accessibilityLabel={generalPostFeedCardLabel({ isOwn })}
                             accessibilityRole="button"
                             key={item.id}
-                            onPress={() => setGeneralDetail(item)}
+                            onPress={() => openGeneralPostDetail(item)}
                           >
                             <GeneralPostSummaryCard
                               menuItems={generalMenu(item)}
@@ -935,9 +971,10 @@ export default function CommunityTabScreen() {
       </WideColumn>
       {moderation.ui}
       <WorkoutDetailModal
-        key={detailTarget?.workout.id ?? "closed"}
+        key={detailTarget?.workout.id ?? generalDetail?.id ?? "closed"}
         fixture={layoutPreview && detailTarget ? layoutPreviewDetail(detailTarget.workout.id) : null}
-        groupId={detailTarget?.groupId ?? null}
+        generalPost={detailTarget ? null : generalDetail}
+        groupId={detailTarget?.groupId ?? selectedGroup?.id ?? generalDetail?.groupId ?? null}
         groupName={selectedGroup?.name ?? null}
         initialWorkout={detailTarget?.workout ?? null}
         onCommentCountChange={updateFeedCommentCount}
@@ -949,11 +986,12 @@ export default function CommunityTabScreen() {
         onDismiss={() => {
           setDetailTarget(null);
           setExplicitOverride(null);
+          setGeneralDetail(null);
           if (postParam) router.setParams({ post: "" });
         }}
         onReactionSummaryChange={updateFeedReactionSummary}
         sessionId={detailTarget?.workout.id ?? null}
-        visible={detailTarget !== null}
+        visible={detailTarget !== null || generalDetail !== null}
       />
       <PrUndoToast
         message={goalToastVisible ? goalCopy.toast : prCopy.toast}
@@ -994,6 +1032,10 @@ export default function CommunityTabScreen() {
             });
             setGeneralDelete(null);
             setDeleteCrewNames([]);
+            if (generalDetail?.id === generalDelete.id) {
+              setGeneralDetail(null);
+              if (postParam === generalDelete.id) router.setParams({ post: "" });
+            }
             markWorkoutDataStale();
             void loadCommunity();
           })();
@@ -1044,15 +1086,6 @@ export default function CommunityTabScreen() {
         title={replacePin ? generalPostCopy.replacePinTitle : generalPostCopy.pinTitle}
         visible={pinTarget !== null}
       />
-      {mode !== "twoPane" && generalDetail ? (
-        <View style={StyleSheet.absoluteFill}>
-          <GeneralPostDetailView
-            groupId={selectedGroup?.id ?? generalDetail.groupId}
-            onClose={() => setGeneralDetail(null)}
-            post={generalDetail}
-          />
-        </View>
-      ) : null}
       <PrUndoToast
         contained={mode === "twoPane"}
         message={generalPostCopy.unpinToast}
@@ -1290,12 +1323,31 @@ function layoutPreviewCommunity(): CommunityData {
       workoutType,
     };
   };
+  const occurredAt = atLocalTime(8, 5);
+  const generalPost: GeneralPostFeedItem = {
+    body: "Recovery day thoughts.",
+    commentCount: 1,
+    createdAt: occurredAt,
+    displayName: "Maya L.",
+    editedAt: null,
+    groupId: "group-1",
+    id: "g1",
+    kind: "general",
+    links: [],
+    photos: [],
+    publicationId: "pub-1",
+    reactionCounts: reactions,
+    updatedAt: occurredAt,
+    userId: "user-maya",
+  };
+  const communityWorkouts = [
+    workout("w1", "Maya L.", "user-maya", "Easy shakeout", "run", 7, 12, 4, "Legs felt great today", "5 km Run"),
+    workout("w2", "Jordan P.", "user-jordan", "Push day", "strength_training", 6, 40, 4, null, "45 min Strength Training"),
+    workout("w3", "Sam R.", "user-sam", "Hill repeats", "run", 6, 5, 4, null, "8 km Run"),
+  ];
   return {
-    communityWorkouts: [
-      workout("w1", "Maya L.", "user-maya", "Easy shakeout", "run", 7, 12, 4, "Legs felt great today", "5 km Run"),
-      workout("w2", "Jordan P.", "user-jordan", "Push day", "strength_training", 6, 40, 4, null, "45 min Strength Training"),
-      workout("w3", "Sam R.", "user-sam", "Hill repeats", "run", 6, 5, 4, null, "8 km Run"),
-    ],
+    communityFeed: [generalPost, ...communityWorkouts],
+    communityWorkouts,
     groups: [{
       createdAt: "2026-01-01T00:00:00.000Z",
       id: "group-1",

@@ -46,6 +46,7 @@ import {
   writeWorkoutCommentsCache,
   writeWorkoutDetailCache,
 } from "../lib/workout-detail-cache";
+import { CommentsSectionLabel, commentsSectionSpacing } from "./comments-section-label";
 import {
   Card,
   ContentOptionsMenu,
@@ -1069,17 +1070,21 @@ export function WorkoutDetailContent({
 
       {part !== "post" ? (
       <ScrollAnchor id={`detail-comments:${workout.id}`}>
-      <View style={[styles.commentsSection, isCommunitySheet && styles.modalCommentsSection, part === "comments" && styles.splitCommentsSection]}>
-        <Text style={isCommunitySheet ? styles.commentsHeading : styles.sectionEyebrow}>{isCommunitySheet ? "Comments" : "COMMENTS"}</Text>
+      <View style={[
+        isCommunitySheet ? styles.sharedCommentsSection : styles.commentsSection,
+        part === "comments" && styles.splitCommentsSection,
+      ]}>
+        {isCommunitySheet ? <CommentsSectionLabel /> : <Text style={styles.sectionEyebrow}>COMMENTS</Text>}
+        <View style={isCommunitySheet ? styles.commentsAfterLabel : undefined}>
         {commentsLoading && !comments.length ? (
-          <View style={styles.commentsLoading}>
+          <View style={[styles.commentsLoading, isCommunitySheet && styles.commentsLoadingFlush]}>
             <ActivityIndicator color={colors.brand} size="small" />
             <Text style={styles.commentMuted}>Loading comments…</Text>
           </View>
         ) : comments.length ? (
-          <View style={styles.commentList}>
+          <View style={isCommunitySheet ? undefined : styles.commentList}>
             {isCommunitySheet ? groupCommentsByLocalDate(comments).map((group, groupIndex) => (
-              <View key={group.key} style={[styles.commentDateGroup, groupIndex === 0 && styles.firstCommentDateGroup]}>
+              <View key={group.key} style={groupIndex > 0 ? styles.commentDateGroup : undefined}>
                 <Text style={styles.commentDateLabel}>{group.label}</Text>
                 {group.comments.map((comment) => (
                   <ScrollAnchor id={`comment:${comment.id}`} key={comment.id}>
@@ -1113,8 +1118,9 @@ export function WorkoutDetailContent({
             ))}
           </View>
         ) : (
-          <Text style={styles.commentEmpty}>No comments yet.</Text>
+          <Text style={isCommunitySheet ? styles.commentEmptyFlush : styles.commentEmpty}>No comments yet.</Text>
         )}
+        </View>
 
         {showComposer && onCommentChange && onCommentSubmit ? (
           <CommentComposer
@@ -1618,14 +1624,14 @@ const styles = StyleSheet.create({
   reactionPickerCircleSelected: { backgroundColor: colors.surfaceMuted, borderColor: colors.brand },
   reactionPickerEmoji: { fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight },
   commentsSection: { marginTop: spacing.xxxl },
-  modalCommentsSection: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth, marginTop: spacing.lg, paddingTop: spacing.lg },
+  sharedCommentsSection: { marginTop: commentsSectionSpacing.afterPost },
+  commentsAfterLabel: { marginTop: commentsSectionSpacing.beforeList },
   splitCommentsSection: { borderTopWidth: 0, marginTop: 0, paddingTop: 0 },
-  commentsHeading: { color: colors.ink, ...type.heading },
   commentsLoading: { alignItems: "center", flexDirection: "row", gap: spacing.sm, marginTop: spacing.md, minHeight: size.hit },
+  commentsLoadingFlush: { marginTop: 0 },
   commentMuted: { color: colors.muted, ...type.bodySmall },
   commentList: { marginTop: spacing.sm },
   commentDateGroup: { marginTop: spacing.md },
-  firstCommentDateGroup: { marginTop: spacing.xs },
   commentDateLabel: { color: colors.subtle, ...type.bodySmall, textAlign: "center" },
   commentRow: { paddingVertical: spacing.md },
   commentHeader: { alignItems: "center", flexDirection: "row", gap: spacing.sm },
@@ -1639,6 +1645,7 @@ const styles = StyleSheet.create({
   commentBody: { color: colors.inkSoft, ...type.body, marginTop: spacing.xs },
   modalCommentBody: { color: colors.ink, marginTop: 2 },
   commentEmpty: { color: colors.muted, ...type.bodySmall, marginTop: spacing.md },
+  commentEmptyFlush: { color: colors.muted, ...type.bodySmall },
   composer: { alignItems: "flex-end", flexDirection: "row", gap: spacing.sm, marginTop: spacing.lg },
   commentInput: { ...type.body, backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, color: colors.ink, flex: 1, maxHeight: commentFieldMaxHeight, minHeight: size.hit, paddingHorizontal: spacing.lg, paddingVertical: spacing.sm },
   sendButton: { alignItems: "center", borderRadius: radii.pill, height: size.hit, justifyContent: "center", width: size.hit },
