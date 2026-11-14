@@ -6,7 +6,7 @@
     "build": "next build",
     "dev": "next dev",
     "start": "next start",
-    "test": "pnpm --dir ../mobile exec tsx --test ../api/lib/sentry-config.test.ts ../api/lib/admin-auth.test.ts ../api/lib/admin-review.test.ts ../api/lib/profile-dashboard-route.test.ts",
+    "test": "pnpm --dir ../mobile exec tsx --test ../api/lib/sentry-config.test.ts ../api/lib/admin-auth.test.ts ../api/lib/admin-review.test.ts ../api/lib/profile-dashboard-route.test.ts ../api/lib/application-user.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

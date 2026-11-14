@@ -363,6 +363,155 @@ test("general posts: visibility, CRUD, pins, photos, reports, alerts, and mixed 
   }
 });
 
+test("account deletion reassigns crewmate pins and stays idempotent", async () => {
+  const testUrl = await recreateDatabase("repin_account_pin_delete_test");
+  process.env.DATABASE_URL = testUrl;
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+    const db = await import("../src/index.ts");
+
+    const owner = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Owner" });
+    const mate = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Mate" });
+    const extra = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Extra" });
+    const shared = await db.createGroup({ ownerId: owner.id, name: "Shared Crew" });
+    await db.joinGroup({ userId: mate.id, groupId: shared.id, inviteCode: shared.inviteCode });
+    await db.joinGroup({ userId: extra.id, groupId: shared.id, inviteCode: shared.inviteCode });
+    await client.query(
+      "update group_members set joined_at = $1 where group_id = $2 and user_id = $3",
+      ["2019-01-01T00:00:00.000Z", shared.id, mate.id],
+    );
+    await client.query(
+      "update group_members set joined_at = $1 where group_id = $2 and user_id = $3",
+      ["2024-01-01T00:00:00.000Z", shared.id, extra.id],
+    );
+
+    const crewmatePost = await publishPost(db, mate, [shared.id], "Mate's crew post");
+    await db.pinGeneralPostForOwner({ actorId: owner.id, postId: crewmatePost.posts[0].id });
+
+    const ownCrew = await db.createGroup({ ownerId: owner.id, name: "Own Pin Crew" });
+    await db.joinGroup({ userId: extra.id, groupId: ownCrew.id, inviteCode: ownCrew.inviteCode });
+    const ownPost = await publishPost(db, owner, [ownCrew.id], "Owner's own post");
+    await db.pinGeneralPostForOwner({ actorId: owner.id, postId: ownPost.posts[0].id });
+
+    const removedOwner = await db.deleteUserAccount(owner.id);
+    assert.equal(removedOwner.deletedUser, true);
+    assert.equal(
+      removedOwner.transferredGroups.some((row) => row.groupId === shared.id && row.newOwnerId === mate.id),
+      true,
+    );
+    assert.equal(await db.getUser(owner.id), null);
+    const pinAfterOwner = await client.query(
+      "select post_id, pinned_by from crew_pinned_posts where group_id = $1",
+      [shared.id],
+    );
+    assert.equal(pinAfterOwner.rows.length, 1);
+    assert.equal(pinAfterOwner.rows[0].post_id, crewmatePost.posts[0].id);
+    assert.equal(pinAfterOwner.rows[0].pinned_by, mate.id);
+    const shown = await db.getPinnedGeneralPostForMember({
+      viewerUserId: mate.id,
+      groupId: shared.id,
+    });
+    assert.equal(shown?.id, crewmatePost.posts[0].id);
+    assert.equal(shown?.userId, mate.id);
+    assert.equal(
+      await client.query("select 1 from crew_pinned_posts where group_id = $1", [ownCrew.id]).then((r) => r.rowCount),
+      0,
+    );
+    assert.equal(
+      await client.query("select 1 from community_posts where id = $1", [ownPost.posts[0].id]).then((r) => r.rowCount),
+      0,
+    );
+
+    const former = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Former" });
+    const keeper = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Keeper" });
+    const handed = await db.createGroup({ ownerId: former.id, name: "Handed Crew" });
+    await db.joinGroup({ userId: keeper.id, groupId: handed.id, inviteCode: handed.inviteCode });
+    const keeperPost = await publishPost(db, keeper, [handed.id], "Keeper's post");
+    await db.pinGeneralPostForOwner({ actorId: former.id, postId: keeperPost.posts[0].id });
+    await db.transferCrewOwnership({
+      userId: former.id,
+      groupId: handed.id,
+      newOwnerId: keeper.id,
+    });
+    const pinBeforeFormerDelete = await client.query(
+      "select pinned_by from crew_pinned_posts where group_id = $1",
+      [handed.id],
+    );
+    assert.equal(pinBeforeFormerDelete.rows[0].pinned_by, former.id);
+
+    const removedFormer = await db.deleteUserAccount(former.id);
+    assert.equal(removedFormer.deletedUser, true);
+    assert.deepEqual(removedFormer.transferredGroups, []);
+    const pinAfterFormer = await client.query(
+      "select post_id, pinned_by from crew_pinned_posts where group_id = $1",
+      [handed.id],
+    );
+    assert.equal(pinAfterFormer.rows.length, 1);
+    assert.equal(pinAfterFormer.rows[0].post_id, keeperPost.posts[0].id);
+    assert.equal(pinAfterFormer.rows[0].pinned_by, keeper.id);
+    const shownAfterFormer = await db.getPinnedGeneralPostForMember({
+      viewerUserId: keeper.id,
+      groupId: handed.id,
+    });
+    assert.equal(shownAfterFormer?.id, keeperPost.posts[0].id);
+
+    const sole = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Sole" });
+    const leftover = await db.getOrCreateUser({ id: crypto.randomUUID(), displayName: "Leftover" });
+    const solo = await db.createGroup({ ownerId: sole.id, name: "Solo Crew" });
+    await db.joinGroup({ userId: leftover.id, groupId: solo.id, inviteCode: solo.inviteCode });
+    const leftoverPost = await publishPost(db, leftover, [solo.id], "Leftover pin target");
+    await db.pinGeneralPostForOwner({ actorId: sole.id, postId: leftoverPost.posts[0].id });
+    await client.query(
+      "delete from group_members where group_id = $1 and user_id = $2",
+      [solo.id, leftover.id],
+    );
+
+    const removedSole = await db.deleteUserAccount(sole.id);
+    assert.equal(removedSole.deletedUser, true);
+    assert.deepEqual(removedSole.deletedGroupIds, [solo.id]);
+    assert.equal(await db.getUser(sole.id), null);
+    assert.equal(await client.query("select 1 from groups where id = $1", [solo.id]).then((r) => r.rowCount), 0);
+    assert.equal(
+      await client.query("select 1 from crew_pinned_posts where group_id = $1", [solo.id]).then((r) => r.rowCount),
+      0,
+    );
+
+    assert.deepEqual(await db.deleteUserAccount(owner.id), {
+      deletedUser: false,
+      deletedGroupIds: [],
+      transferredGroups: [],
+    });
+    assert.deepEqual(await db.deleteUserAccount(former.id), {
+      deletedUser: false,
+      deletedGroupIds: [],
+      transferredGroups: [],
+    });
+    assert.deepEqual(await db.deleteUserAccount(sole.id), {
+      deletedUser: false,
+      deletedGroupIds: [],
+      transferredGroups: [],
+    });
+    const pinAfterRetry = await client.query(
+      "select pinned_by from crew_pinned_posts where group_id = $1",
+      [shared.id],
+    );
+    assert.equal(pinAfterRetry.rows[0].pinned_by, mate.id);
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
 async function publishPost(db, user, groupIds, body) {
   const draft = await db.createGeneralPublicationDraft({ authorId: user.id });
   return db.publishGeneralPost({
@@ -397,17 +546,17 @@ async function loggedWorkout(db, user, groupId, title) {
   });
 }
 
-async function recreateDatabase() {
+async function recreateDatabase(database = "repin_general_posts_test") {
   assertLocalDatabaseUrl(sourceUrl);
   const admin = new Client({ connectionString: withDatabase(sourceUrl, "postgres") });
   await admin.connect();
   try {
-    await admin.query("drop database if exists repin_general_posts_test with (force)");
-    await admin.query("create database repin_general_posts_test");
+    await admin.query(`drop database if exists ${database} with (force)`);
+    await admin.query(`create database ${database}`);
   } finally {
     await admin.end();
   }
-  return withDatabase(sourceUrl, "repin_general_posts_test");
+  return withDatabase(sourceUrl, database);
 }
 
 function withDatabase(connectionString, database) {
