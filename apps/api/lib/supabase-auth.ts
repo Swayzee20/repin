@@ -1,11 +1,13 @@
 import "server-only";
 
-import { getOrCreateUser } from "@repin/db";
+import { getOrCreateUser, getUser } from "@repin/db";
 import { resolveUserDisplayName } from "@repin/types";
 import { createClient } from "@supabase/supabase-js";
 
+import { provisionApplicationUser } from "./application-user";
 import type { ServerTiming } from "./server-timing";
 import { setApiSentryUser } from "./sentry";
+import { getSupabaseAdminClient } from "./supabase-admin";
 
 export class AuthenticationError extends Error {
   constructor(message = "Unauthorized") {
@@ -123,14 +125,51 @@ export async function requireAuthenticatedUser(
   return timing ? timing.measure("auth", authenticate) : authenticate();
 }
 
+export function findApplicationUser(
+  identity: Awaited<ReturnType<typeof requireAuthenticatedUser>>,
+  timing?: ServerTiming,
+) {
+  const resolveUser = () => getUser(identity.id);
+  return timing ? timing.measure("user", resolveUser) : resolveUser();
+}
+
+async function authUserExists(userId: string): Promise<boolean | null> {
+  let admin;
+  try {
+    admin = getSupabaseAdminClient();
+  } catch {
+    // Local/dev without a server secret still needs first-sign-in provisioning.
+    return null;
+  }
+
+  const { data, error } = await admin.client.auth.admin.getUserById(userId);
+  if (error) {
+    const code = error.code?.toLowerCase() ?? "";
+    const message = error.message.toLowerCase();
+    if (error.status === 404 || code === "user_not_found" || message.includes("not found")) {
+      return false;
+    }
+    throw new Error("Auth user could not be verified", { cause: error });
+  }
+
+  return Boolean(data.user);
+}
+
 export function ensureApplicationUser(
   identity: Awaited<ReturnType<typeof requireAuthenticatedUser>>,
   timing?: ServerTiming,
 ) {
-  const resolveUser = () => getOrCreateUser({
-    id: identity.id,
-    displayName: identity.suggestedDisplayName,
-  });
+  const resolveUser = async () => {
+    const user = await provisionApplicationUser({
+      id: identity.id,
+      displayName: identity.suggestedDisplayName,
+      findUser: getUser,
+      createUser: getOrCreateUser,
+      authUserExists,
+    });
+    if (!user) throw new AuthenticationError();
+    return user;
+  };
 
   return timing ? timing.measure("user", resolveUser) : resolveUser();
 }
