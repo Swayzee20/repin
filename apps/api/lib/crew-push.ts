@@ -132,6 +132,41 @@ export async function notifyCrewReaction(input: {
   });
 }
 
+export async function notifyCrewOwnerHandover(
+  targets: Array<{
+    groupId: string;
+    newOwnerId: string;
+    groupName: string;
+    muteAll: boolean;
+  }>,
+) {
+  const eligible = targets.filter((target) => !target.muteAll);
+  if (!eligible.length) return;
+  const tokens = await listActivePushTokensForUsers(
+    eligible.map((target) => target.newOwnerId),
+  );
+  if (!tokens.length) return;
+
+  const targetByOwner = new Map(eligible.map((target) => [target.newOwnerId, target]));
+  const messages: ExpoPushMessage[] = [];
+  for (const token of tokens) {
+    const target = targetByOwner.get(token.userId);
+    if (!target) continue;
+    messages.push({
+      to: token.expoPushToken,
+      title: `You're now the owner of ${target.groupName}.`,
+      body: `You're now the owner of ${target.groupName}.`,
+      sound: "default",
+      channelId: "default",
+      data: {
+        type: "crew_owner",
+        groupId: target.groupId,
+      },
+    });
+  }
+  await sendExpoPushMessages(messages);
+}
+
 async function deliverPush(input: {
   actorDisplayName: string;
   firstLine?: string;

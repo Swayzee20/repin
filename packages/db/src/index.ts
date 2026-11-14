@@ -32,10 +32,9 @@ import {
   visibleReactionCountSql,
 } from "./moderation";
 import {
-  captureEvidenceForTargets,
-  evidenceRetainUntil,
-  markEvidenceAuthorErased,
-} from "./report-evidence";
+  captureOwnedContentEvidence,
+  findOwnershipSuccessor,
+} from "./account-deletion";
 import {
   activeMembership,
   openGroup,
@@ -827,7 +826,7 @@ export async function createGroup(input: { ownerId: string; name: string }) {
           })
           .returning();
 
-        if (!group) throw new Error("Group could not be created");
+        if (!group) throw new Error("Crew could not be created");
 
         await transaction.insert(schema.groupMembers).values({
           groupId: group.id,
@@ -1108,6 +1107,7 @@ export async function getGroupForMember(input: {
       createdAt: schema.groups.createdAt,
       role: schema.groupMembers.role,
       photoPath: schema.groups.photoPath,
+      ownerNoticeAt: schema.groupMembers.ownerNoticeAt,
     })
     .from(schema.groupMembers)
     .innerJoin(schema.groups, eq(schema.groupMembers.groupId, schema.groups.id))
@@ -1524,6 +1524,7 @@ export type AccountDeletionResult = {
 // cascade from the user's workout sessions.
 export async function deleteUserAccount(userId: string): Promise<AccountDeletionResult> {
   return getDatabase().transaction(async (transaction) => {
+    await lockUserGoals(transaction, userId);
     const [existingUser] = await transaction
       .select({ id: schema.users.id })
       .from(schema.users)
@@ -1556,16 +1557,7 @@ async function releaseOwnedGroups(
   const transferredGroups: AccountDeletionResult["transferredGroups"] = [];
 
   for (const group of ownedGroups) {
-    const [successor] = await transaction
-      .select({ userId: schema.groupMembers.userId })
-      .from(schema.groupMembers)
-      .where(and(
-        eq(schema.groupMembers.groupId, group.id),
-        ne(schema.groupMembers.userId, userId),
-        activeMembership,
-      ))
-      .orderBy(asc(schema.groupMembers.joinedAt), asc(schema.groupMembers.userId))
-      .limit(1);
+    const successor = await findOwnershipSuccessor(transaction, group.id, userId);
 
     if (!successor) {
       await transaction.delete(schema.groups).where(eq(schema.groups.id, group.id));
@@ -1575,7 +1567,7 @@ async function releaseOwnedGroups(
 
     await transaction
       .update(schema.groupMembers)
-      .set({ role: "owner" })
+      .set({ role: "owner", ownerNoticeAt: new Date() })
       .where(and(
         eq(schema.groupMembers.groupId, group.id),
         eq(schema.groupMembers.userId, successor.userId),
@@ -1597,33 +1589,13 @@ async function releaseOwnedGroups(
 }
 
 async function deleteRowsOwnedByUser(transaction: DatabaseTransaction, userId: string) {
-  const [ownedPosts, ownedComments] = await Promise.all([
-    transaction
-      .select({ id: schema.communityPosts.id })
-      .from(schema.communityPosts)
-      .where(eq(schema.communityPosts.userId, userId)),
-    transaction
-      .select({ id: schema.communityPostComments.id })
-      .from(schema.communityPostComments)
-      .where(eq(schema.communityPostComments.userId, userId)),
-  ]);
-  const erasedAt = new Date();
-  await captureEvidenceForTargets(transaction, {
-    postIds: ownedPosts.map((post) => post.id),
-    commentIds: ownedComments.map((comment) => comment.id),
-    authorErasedAt: erasedAt,
-    retainUntil: evidenceRetainUntil(erasedAt),
-  });
-  await markEvidenceAuthorErased(transaction, userId);
+  await captureOwnedContentEvidence(transaction, userId);
   await transaction
     .delete(schema.userBlocks)
     .where(eq(schema.userBlocks.blockerId, userId));
   await transaction
     .delete(schema.userBlocks)
     .where(eq(schema.userBlocks.blockedId, userId));
-  await transaction
-    .delete(schema.contentReports)
-    .where(eq(schema.contentReports.reporterId, userId));
   await transaction
     .delete(schema.communityPostReactions)
     .where(eq(schema.communityPostReactions.userId, userId));
@@ -2675,10 +2647,25 @@ export {
   updateGeneralPostForAuthor,
 } from "./general-posts";
 export {
+  cleanupExpiredReportEvidence,
   deleteExpiredReportEvidence,
   evidenceRetainUntil,
+  listLiveMediaPaths,
+  listProtectedMediaPaths,
   markEvidenceAuthorErased,
+  unresolvedEvidenceCutoff,
 } from "./report-evidence";
+export {
+  captureOwnedContentEvidence,
+  dismissOwnerNotice,
+  listAccountDeletionStoragePlan,
+  listNewOwnerHandoverTargets,
+  previewAccountDeletion,
+} from "./account-deletion";
+export type {
+  AccountDeletionPreviewCrew,
+  AccountDeletionStoragePlan,
+} from "./account-deletion";
 
 export {
   answerPersonalRecordPrompts,

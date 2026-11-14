@@ -21,7 +21,7 @@ export async function GET(request: Request) {
       { headers: { "Cache-Control": "no-store" } },
     );
   } catch (error) {
-    return handleRouteError(error, "Groups could not be loaded");
+    return handleRouteError(error, "Crews could not be loaded");
   }
 }
 
@@ -33,7 +33,7 @@ export async function POST(request: Request) {
 
     if (!input.success) {
       return NextResponse.json(
-        { error: "Group name must be between 1 and 80 characters" },
+        { error: "Crew name must be between 1 and 80 characters" },
         { status: 400 },
       );
     }
@@ -48,7 +48,7 @@ export async function POST(request: Request) {
       },
     );
   } catch (error) {
-    return handleRouteError(error, "Group could not be created");
+    return handleRouteError(error, "Crew could not be created");
   }
 }
 

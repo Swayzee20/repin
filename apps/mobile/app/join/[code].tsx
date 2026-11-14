@@ -122,7 +122,7 @@ export default function GroupInviteScreen() {
         return;
       }
       if (!response.ok || !body.group) {
-        throw new Error(body.error ?? "Group could not be joined.");
+        throw new Error(body.error ?? "Crew could not be joined.");
       }
 
       if (body.alreadyMember) {
@@ -133,7 +133,7 @@ export default function GroupInviteScreen() {
       }
     } catch (joinError) {
       setError(
-        joinError instanceof Error ? joinError.message : "Group could not be joined.",
+        joinError instanceof Error ? joinError.message : "Crew could not be joined.",
       );
     } finally {
       setJoining(false);
@@ -149,7 +149,7 @@ export default function GroupInviteScreen() {
       <InviteScreen>
         <StateCard
           actionLabel="Go to Home"
-          message="This invite code isn’t valid. Ask the group for a new code and try again."
+          message="This invite code isn’t valid. Ask the crew for a new code and try again."
           onAction={() => router.replace("/")}
           title="Invalid invite"
         />
@@ -178,7 +178,7 @@ export default function GroupInviteScreen() {
         <Text style={styles.eyebrow}>YOU’RE INVITED</Text>
         <Text style={styles.title}>Join your repin crew</Text>
         <Text style={styles.intro}>
-          Sign in or create an account to view this group and accept the invite.
+          Sign in or create an account to view this crew and accept the invite.
         </Text>
         <Card style={styles.codeCard}>
           <Text style={styles.codeLabel}>INVITE CODE</Text>
@@ -189,7 +189,7 @@ export default function GroupInviteScreen() {
   }
 
   if (inviteLoading && !preview) {
-    return <InviteScreen><LoadingState message="Loading group invite…" /></InviteScreen>;
+    return <InviteScreen><LoadingState message="Loading crew invite…" /></InviteScreen>;
   }
 
   if (error && !preview) {
@@ -215,7 +215,7 @@ export default function GroupInviteScreen() {
           {preview.isMember ? (
             <>
               <Button onPress={() => router.replace(`/groups/${preview.id}`)}>
-                Continue to Group
+                Continue to Crew
               </Button>
               <Button onPress={() => router.replace("/")} variant="secondary">
                 Go to Home
@@ -223,18 +223,18 @@ export default function GroupInviteScreen() {
             </>
           ) : (
             <Button loading={joining} loadingLabel="Joining" onPress={() => void joinGroup()}>
-              Join Group
+              Join Crew
             </Button>
           )}
         </View>
       )}
     >
-      <Text style={styles.eyebrow}>GROUP INVITE</Text>
+      <Text style={styles.eyebrow}>CREW INVITE</Text>
       <Text style={styles.title}>{preview.name}</Text>
       <Text style={styles.intro}>
         {preview.isMember
-          ? "You’re already part of this repin group."
-          : "You’ve been invited to join this repin group."}
+          ? "You’re already part of this repin crew."
+          : "You’ve been invited to join this repin crew."}
       </Text>
       <Card style={styles.groupCard}>
         <View style={styles.groupMark}>

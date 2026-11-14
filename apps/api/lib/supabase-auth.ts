@@ -46,6 +46,7 @@ export async function verifyAccessToken(token: string) {
     id: data.claims.sub,
     email: typeof data.claims.email === "string" ? data.claims.email : "",
     suggestedDisplayName: getSuggestedDisplayName(data.claims),
+    amr: data.claims.amr,
   };
 }
 

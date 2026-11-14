@@ -9,8 +9,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export const metadata: Metadata = {
-  title: "Group invite | repin",
-  description: "Open a group invite in repin.",
+  title: "Crew invite | repin",
+  description: "Open a crew invite in repin.",
 };
 
 export default async function GroupInviteLandingPage({
@@ -28,10 +28,10 @@ export default async function GroupInviteLandingPage({
     return (
       <InvitePage>
         <BrandWordmark />
-        <p className={styles.eyebrow}>GROUP INVITE</p>
+        <p className={styles.eyebrow}>CREW INVITE</p>
         <h1 className={styles.title}>This invite is no longer available</h1>
         <p className={styles.body}>
-          The invite code may be incorrect or unavailable. Ask the group for a
+          The invite code may be incorrect or unavailable. Ask the crew for a
           current repin invite and try again.
         </p>
         <a className={styles.secondaryAction} href="/">
@@ -49,7 +49,7 @@ export default async function GroupInviteLandingPage({
       <p className={styles.eyebrow}>YOU’VE BEEN INVITED TO JOIN</p>
       <h1 className={styles.title}>{invite.name}</h1>
       <p className={styles.body}>
-        Open this invite in repin to sign in and join the group. You can also
+        Open this invite in repin to sign in and join the crew. You can also
         enter the invite code manually in the app.
       </p>
       <div className={styles.codePanel}>

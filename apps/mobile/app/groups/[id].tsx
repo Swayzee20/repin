@@ -16,6 +16,7 @@ import { Image, Platform, Pressable, Share, StyleSheet, Text, View } from "react
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
+  dismissOwnerNoticeRequest,
   fetchCrewPage,
   leaveCrewRequest,
   removeCrewMemberRequest,
@@ -26,6 +27,8 @@ import {
 } from "../../lib/crew-api";
 import { supabase } from "../../lib/supabase";
 import { Button, Card, LoadingState, StateCard } from "../../ui/components";
+import { NoticeBanner } from "../../ui/notice-banner";
+import { OWNER_NOTICE_ACTION, OWNER_NOTICE_BODY } from "../../ui/notice-banner-copy";
 import {
   ConfirmSheet,
   EditCrewSheet,
@@ -274,6 +277,37 @@ export default function CrewPageScreen() {
     }
   }, [loadCrew, page, pendingMember, showToast, withSession]);
 
+  const dismissOwnerNotice = useCallback(async () => {
+    if (!page?.group.ownerNoticeAt) return;
+    const previous = page.group.ownerNoticeAt;
+    setPage((current) => current
+      ? { ...current, group: { ...current.group, ownerNoticeAt: null } }
+      : current);
+    try {
+      await withSession(async (accessToken) => {
+        await dismissOwnerNoticeRequest({ accessToken, groupId: page.group.id });
+      });
+    } catch (dismissError) {
+      setPage((current) => current
+        ? { ...current, group: { ...current.group, ownerNoticeAt: previous } }
+        : current);
+      setError(dismissError instanceof Error ? dismissError.message : "Couldn't dismiss this notice.");
+    }
+  }, [page, withSession]);
+
+  const scrollToOwnerTools = useCallback(() => {
+    if (Platform.OS !== "web") return;
+    const doc = (globalThis as {
+      document?: {
+        getElementById?: (id: string) => { scrollIntoView: (options: { behavior: "smooth"; block: "start" }) => void } | null;
+      };
+    }).document;
+    doc?.getElementById?.("crew-owner-tools")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, []);
+
   const confirmLeave = useCallback(async () => {
     if (!page) return;
     setPending(true);
@@ -348,6 +382,16 @@ export default function CrewPageScreen() {
                   <>
                     {error ? <Text style={styles.refreshError}>{error}</Text> : null}
                     <CrewHeader group={group} />
+                    {group.ownerNoticeAt ? (
+                      <View style={styles.noticeWrap}>
+                        <NoticeBanner
+                          actionLabel={OWNER_NOTICE_ACTION}
+                          body={OWNER_NOTICE_BODY}
+                          onAction={scrollToOwnerTools}
+                          onDismiss={() => void dismissOwnerNotice()}
+                        />
+                      </View>
+                    ) : null}
                     {group.inviteCode ? (
                       <InviteCard
                         inviteCode={group.inviteCode}
@@ -355,7 +399,7 @@ export default function CrewPageScreen() {
                         onShare={() => void shareInvite()}
                       />
                     ) : null}
-                    {twoPane ? <View style={styles.settingsWrap}>{settings}</View> : null}
+                    {twoPane ? <View nativeID="crew-owner-tools" style={styles.settingsWrap}>{settings}</View> : null}
                   </>
                 ) : null}
               </View>
@@ -368,7 +412,7 @@ export default function CrewPageScreen() {
                   onOpenMenu={(member) => setMenuMember(member)}
                   twoPane={twoPane}
                 />
-                {twoPane ? null : <View style={styles.settingsWrap}>{settings}</View>}
+                {twoPane ? null : <View nativeID="crew-owner-tools" style={styles.settingsWrap}>{settings}</View>}
               </View>
             ) : (
               <View />
@@ -681,6 +725,7 @@ const styles = StyleSheet.create({
   titleRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, marginBottom: spacing.lg },
   screenTitle: { color: colors.ink, ...type.screenTitle },
   refreshError: { color: colors.danger, ...type.bodySmall, marginBottom: spacing.md },
+  noticeWrap: { marginTop: spacing.lg },
   hero: { alignItems: "center", flexDirection: "row" },
   groupMark: {
     alignItems: "center",

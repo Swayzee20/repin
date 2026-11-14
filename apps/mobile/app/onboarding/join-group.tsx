@@ -49,7 +49,7 @@ export default function JoinFirstGroupScreen() {
       return;
     }
     if (!session) {
-      setError("Your session has ended. Sign in again to join a group.");
+      setError("Your session has ended. Sign in again to join a crew.");
       return;
     }
 
@@ -68,13 +68,13 @@ export default function JoinFirstGroupScreen() {
 
       if (response.status === 401) {
         setSession(null);
-        throw new Error("Your session has ended. Sign in again to join a group.");
+        throw new Error("Your session has ended. Sign in again to join a crew.");
       }
       if (!response.ok || !body.group) {
         throw new Error(
           response.status === 404
             ? "That invite code isn’t valid. Check the code and try again."
-            : (body.error ?? "Group could not be joined."),
+            : (body.error ?? "Crew could not be joined."),
         );
       }
 
@@ -87,7 +87,7 @@ export default function JoinFirstGroupScreen() {
       router.replace("/");
     } catch (joinError) {
       setError(
-        joinError instanceof Error ? joinError.message : "Group could not be joined.",
+        joinError instanceof Error ? joinError.message : "Crew could not be joined.",
       );
     } finally {
       setSubmitting(false);
@@ -158,16 +158,16 @@ export default function JoinFirstGroupScreen() {
             loadingLabel="Joining"
             onPress={() => void joinGroup()}
           >
-            Join Group
+            Join Crew
           </Button>
         </Card>
       )}
     >
       <RoundIconButton accessibilityLabel="Get Started" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
       <Text style={styles.eyebrow}>JOIN YOUR CREW</Text>
-      <Text style={styles.title}>Join a group</Text>
+      <Text style={styles.title}>Join a crew</Text>
       <Text style={styles.intro}>
-        Enter the invite code a group member shared with you.
+        Enter the invite code a crew member shared with you.
       </Text>
     </FlowFrame>
   );

@@ -21,7 +21,7 @@ export async function POST(
     const groupId = groupIdSchema.safeParse(id);
 
     if (!groupId.success) {
-      return NextResponse.json({ error: "Invalid group ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid crew ID" }, { status: 400 });
     }
 
     const body: unknown = await request.json().catch(() => null);
@@ -56,9 +56,9 @@ export async function POST(
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    reportUnexpectedRouteError("Group could not be joined", error);
+    reportUnexpectedRouteError("Crew could not be joined", error);
     return NextResponse.json(
-      { error: "Group could not be joined" },
+      { error: "Crew could not be joined" },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }

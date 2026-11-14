@@ -219,6 +219,9 @@ test("payload routing opens the workout and falls back to the crew when the post
     crewPushHref(postPayload).includes("sessionId"),
     false,
   );
+  const ownerPayload = { type: "crew_owner" as const, groupId };
+  assert.deepEqual(parseCrewPushPayload(ownerPayload), ownerPayload);
+  assert.equal(crewPushHref(ownerPayload), `/groups/${groupId}`);
 });
 
 test("push token payloads require an Expo token and a platform", () => {

@@ -147,3 +147,19 @@ export async function saveCrewNotifications(input: {
   }
   return body.notifications;
 }
+
+export async function dismissOwnerNoticeRequest(input: {
+  accessToken: string;
+  groupId: string;
+}) {
+  const response = await fetch(
+    `${apiUrl}/api/groups/${encodeURIComponent(input.groupId)}/owner-notice/dismiss`,
+    {
+      method: "POST",
+      headers: authHeaders(input.accessToken),
+      signal: AbortSignal.timeout(7_500),
+    },
+  );
+  const { body, ok } = await readJson<{ dismissed?: boolean; error?: string }>(response);
+  if (!ok || !body.dismissed) throw new Error(body.error ?? "Owner notice could not be dismissed.");
+}

@@ -51,7 +51,7 @@ export default function GroupOnboardingScreen() {
       <View style={styles.intro}>
         <Text style={styles.eyebrow}>WELCOME TO REPIN</Text>
         <Text style={styles.title}>How do you want to get started?</Text>
-        <Text style={styles.subtitle}>Choose the path that fits your crew. You can always join more groups later.</Text>
+        <Text style={styles.subtitle}>Choose the path that fits your crew. You can always join more crews later.</Text>
       </View>
     </View>
   );
@@ -63,13 +63,13 @@ export default function GroupOnboardingScreen() {
           icon="person.2"
           onPress={() => router.push("./join-group")}
           subtitle="Enter an invite code or use a link from your crew."
-          title="Join a Group"
+          title="Join a Crew"
         />
         <OptionCard
           icon="plus"
           onPress={() => router.push("./create-group")}
-          subtitle="Start a new group and invite your people."
-          title="Create a Group"
+          subtitle="Start a new crew and invite your people."
+          title="Create a Crew"
         />
       </View>
     </View>

@@ -94,7 +94,7 @@ export function BlockSheet({
       {request?.mode === "block" && step === "confirm" ? (
         <View style={styles.stack}>
           <Text style={styles.body}>You won't see each other's posts, comments, or reactions.</Text>
-          <Text style={styles.body}>You both stay in the groups you share.</Text>
+          <Text style={styles.body}>You both stay in the crews you share.</Text>
           <Text style={styles.body}>{first} won't be told. You can unblock anytime in Settings.</Text>
           {error ? <Text accessibilityLiveRegion="polite" style={styles.error}>{error}</Text> : null}
           <Button
