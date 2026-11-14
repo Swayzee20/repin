@@ -1,37 +1,10 @@
 import type { CommunityPostComment, CommunityReactionSummary, GeneralPostDetail } from "@repin/types";
 import type { GeneralPostPhotoContentType } from "@repin/validation";
 
-const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
-
-async function request<T>(
-  path: string,
-  accessToken: string,
-  init: RequestInit = {},
-) {
-  const response = await fetch(`${apiUrl}${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-      ...(init.body ? { "Content-Type": "application/json" } : {}),
-      ...(init.headers ?? {}),
-    },
-    signal: AbortSignal.timeout(12_000),
-  });
-  const body = (await response.json().catch(() => null)) as T & { error?: string; code?: string };
-  if (!response.ok) {
-    const error = new Error(body?.error ?? "Request failed") as Error & {
-      status: number;
-      code?: string;
-    };
-    error.status = response.status;
-    error.code = body?.code;
-    throw error;
-  }
-  return body;
-}
+import { apiRequest } from "./api";
 
 export async function createGeneralPostDraft(accessToken: string) {
-  return request<{ publicationId: string }>("/api/posts/draft", accessToken, {
+  return apiRequest<{ publicationId: string }>("/api/posts/draft", accessToken, {
     method: "POST",
   });
 }
@@ -42,7 +15,7 @@ export async function reserveGeneralPostPhoto(input: {
   contentType: GeneralPostPhotoContentType;
   byteSize: number;
 }) {
-  return request<{
+  return apiRequest<{
     reservationId: string;
     publicationId: string;
     storagePath: string;
@@ -62,7 +35,7 @@ export async function completeGeneralPostPhoto(input: {
   accessToken: string;
   reservationId: string;
 }) {
-  return request<{
+  return apiRequest<{
     reservationId: string;
     publicationId: string;
     status: string;
@@ -80,7 +53,7 @@ export async function publishGeneralPost(input: {
   groupIds: string[];
   photoIds: string[];
 }) {
-  return request<{ publicationId: string; posts: Array<{ id: string; groupId: string }> }>(
+  return apiRequest<{ publicationId: string; posts: Array<{ id: string; groupId: string }> }>(
     "/api/posts",
     input.accessToken,
     {
@@ -104,7 +77,7 @@ export async function fetchGeneralPostDetail(input: {
   groupId: string;
   postId: string;
 }) {
-  const body = await request<{ post: GeneralPostDetail }>(
+  const body = await apiRequest<{ post: GeneralPostDetail }>(
     `/api/groups/${encodeURIComponent(input.groupId)}/posts/${encodeURIComponent(input.postId)}`,
     input.accessToken,
   );
@@ -119,7 +92,7 @@ export async function saveGeneralPost(input: {
   body: string | null;
   photoIds?: string[];
 }) {
-  return request<{ post: GeneralPostDetail; revision: number }>(
+  return apiRequest<{ post: GeneralPostDetail; revision: number }>(
     `/api/groups/${encodeURIComponent(input.groupId)}/posts/${encodeURIComponent(input.postId)}`,
     input.accessToken,
     {
@@ -138,7 +111,7 @@ export async function deleteGeneralPost(input: {
   groupId: string;
   postId: string;
 }) {
-  return request<{ deleted: true }>(
+  return apiRequest<{ deleted: true }>(
     `/api/groups/${encodeURIComponent(input.groupId)}/posts/${encodeURIComponent(input.postId)}`,
     input.accessToken,
     { method: "DELETE" },
@@ -151,7 +124,7 @@ export async function pinGeneralPost(input: {
   postId: string;
   replace?: boolean;
 }) {
-  return request<{ pinned?: true; needsReplaceConfirm?: true }>(
+  return apiRequest<{ pinned?: true; needsReplaceConfirm?: true }>(
     `/api/groups/${encodeURIComponent(input.groupId)}/posts/${encodeURIComponent(input.postId)}/pin`,
     input.accessToken,
     {
@@ -166,7 +139,7 @@ export async function unpinGeneralPost(input: {
   groupId: string;
   postId: string;
 }) {
-  return request<{ unpinned: true }>(
+  return apiRequest<{ unpinned: true }>(
     `/api/groups/${encodeURIComponent(input.groupId)}/posts/${encodeURIComponent(input.postId)}/pin`,
     input.accessToken,
     { method: "DELETE" },
@@ -179,7 +152,7 @@ export async function setGeneralPostReaction(input: {
   postId: string;
   reactionType: "fire" | "strong" | "clap";
 }) {
-  const body = await request<{ reactions: CommunityReactionSummary }>(
+  const body = await apiRequest<{ reactions: CommunityReactionSummary }>(
     `/api/groups/${encodeURIComponent(input.groupId)}/posts/${encodeURIComponent(input.postId)}/reaction`,
     input.accessToken,
     {
@@ -195,7 +168,7 @@ export async function removeGeneralPostReaction(input: {
   groupId: string;
   postId: string;
 }) {
-  const body = await request<{ reactions: CommunityReactionSummary }>(
+  const body = await apiRequest<{ reactions: CommunityReactionSummary }>(
     `/api/groups/${encodeURIComponent(input.groupId)}/posts/${encodeURIComponent(input.postId)}/reaction`,
     input.accessToken,
     { method: "DELETE" },
@@ -209,7 +182,7 @@ export async function createGeneralPostComment(input: {
   postId: string;
   text: string;
 }) {
-  const body = await request<{ comment: CommunityPostComment }>(
+  const body = await apiRequest<{ comment: CommunityPostComment }>(
     `/api/groups/${encodeURIComponent(input.groupId)}/posts/${encodeURIComponent(input.postId)}/comments`,
     input.accessToken,
     {

@@ -38,7 +38,10 @@ test("general post copy matches the locked SPEC", () => {
     generalPostCopy.pickerEmpty,
     "You're not in a crew yet. Join or create a crew to post.",
   );
+  assert.equal(generalPostCopy.pickerLoading, "Loading crews…");
+  assert.equal(generalPostCopy.pickerLoadErrorTitle, "Couldn't load your crews.");
   assert.equal(generalPostCopy.loadErrorTitle, "Couldn't load the board");
+  assert.equal(generalPostCopy.tryAgain, "Try again");
   assert.equal(generalPostCopy.offline, "You're offline. Showing what we have.");
   assert.equal(generalPostCopy.postFailed, "Couldn't post. Try again.");
   assert.equal(generalPostCopy.deleteTitle, "Delete post from all crews?");

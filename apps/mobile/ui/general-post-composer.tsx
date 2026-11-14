@@ -27,12 +27,13 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
+import { crewPickerViewState } from "../lib/crew-picker-state";
 import {
   completeGeneralPostPhoto,
   reserveGeneralPostPhoto,
 } from "../lib/general-posts-api";
 import { supabase } from "../lib/supabase";
-import { Button } from "./components";
+import { Button, LoadingState, StateCard } from "./components";
 import { TextArea } from "./form-fields";
 import { photoDismissChrome, photoTileChrome } from "./form-field-state";
 import { Icon } from "./icons";
@@ -55,11 +56,14 @@ export function GeneralPostComposer({
   destinationNames = [],
   error,
   groups,
+  groupsError = null,
+  groupsLoading = false,
   modeTitle,
   onBodyChange,
   onClose,
   onPhotosChange,
   onPublicationIdChange,
+  onRetryGroups,
   onSelectedGroupIdsChange,
   onSubmit,
   photos,
@@ -73,11 +77,14 @@ export function GeneralPostComposer({
   destinationNames?: string[];
   error?: string | null;
   groups: GroupSummary[];
+  groupsError?: string | null;
+  groupsLoading?: boolean;
   modeTitle: string;
   onBodyChange: (value: string) => void;
   onClose: () => void;
   onPhotosChange: (photos: DraftPhoto[]) => void;
   onPublicationIdChange?: (id: string) => void;
+  onRetryGroups?: () => void;
   onSelectedGroupIdsChange: (ids: string[]) => void;
   onSubmit: () => void;
   photos: DraftPhoto[];
@@ -189,8 +196,11 @@ export function GeneralPostComposer({
             <View style={styles.pane}>
               {pickerOpen && !destinationLocked ? (
                 <CrewPickerPane
+                  error={groupsError}
                   groups={groups}
+                  loading={groupsLoading}
                   onChange={onSelectedGroupIdsChange}
+                  onRetry={onRetryGroups}
                   selectedGroupIds={selectedGroupIds}
                 />
               ) : (
@@ -228,8 +238,11 @@ export function GeneralPostComposer({
           visible={!twoPane && pickerOpen}
         >
           <CrewPickerPane
+            error={groupsError}
             groups={groups}
+            loading={groupsLoading}
             onChange={onSelectedGroupIdsChange}
+            onRetry={onRetryGroups}
             selectedGroupIds={selectedGroupIds}
           />
         </BottomSheet>
@@ -239,18 +252,42 @@ export function GeneralPostComposer({
 }
 
 function CrewPickerPane({
+  error,
   groups,
+  loading,
   onChange,
+  onRetry,
   selectedGroupIds,
 }: {
+  error?: string | null;
   groups: GroupSummary[];
+  loading: boolean;
   onChange: (ids: string[]) => void;
+  onRetry?: () => void;
   selectedGroupIds: string[];
 }) {
-  const atLimit = selectedGroupIds.length >= GENERAL_POST_CREW_MAX;
-  if (!groups.length) {
+  const view = crewPickerViewState({
+    error,
+    groupCount: groups.length,
+    loading,
+  });
+  if (view === "loading") {
+    return <LoadingState message={generalPostCopy.pickerLoading} />;
+  }
+  if (view === "error") {
+    return (
+      <StateCard
+        actionLabel={generalPostCopy.tryAgain}
+        message={error ?? ""}
+        onAction={onRetry}
+        title={generalPostCopy.pickerLoadErrorTitle}
+      />
+    );
+  }
+  if (view === "empty") {
     return <Text style={styles.pickerEmpty}>{generalPostCopy.pickerEmpty}</Text>;
   }
+  const atLimit = selectedGroupIds.length >= GENERAL_POST_CREW_MAX;
   return (
     <View style={styles.picker}>
       <Text style={styles.pickerIntro}>{generalPostCopy.pickerIntro}</Text>

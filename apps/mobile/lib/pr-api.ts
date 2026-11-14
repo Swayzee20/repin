@@ -1,5 +1,6 @@
 import type { DetectedPr, PrBadge, PrDetectionResult, PrPrompt } from "@repin/types";
 
+import { apiErrorMessage } from "./api";
 import { supabase } from "./supabase";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -92,9 +93,7 @@ async function prRequest(
     body = {};
   }
   if (!response.ok) {
-    throw new Error(typeof body.error === "string" && body.error
-      ? body.error
-      : "Request failed.");
+    throw new Error(apiErrorMessage(response.status, body));
   }
   return body;
 }
