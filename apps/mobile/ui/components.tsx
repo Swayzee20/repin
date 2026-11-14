@@ -24,6 +24,7 @@ import {
   ownPostAuthorNameStyle,
   workoutFeedCardLabel,
 } from "./community-feed-layout";
+import { KindChip } from "./kind-chip";
 import { OwnPostYouTag } from "./own-post-you-tag";
 import { anchoredScrollOffset, topVisibleAnchor } from "./layout-math";
 import { readStoredScrollAnchor, writeStoredScrollAnchor } from "./scroll-anchor";
@@ -153,9 +154,11 @@ export function Screen({
 }
 
 export function Button({
+  accessibilityLabel,
   children,
   disabled = false,
   disabledReason,
+  icon,
   labelColor,
   loading = false,
   loadingLabel,
@@ -163,9 +166,11 @@ export function Button({
   variant = "primary",
   style,
 }: {
+  accessibilityLabel?: string;
   children: string;
   disabled?: boolean;
   disabledReason?: string;
+  icon?: IconName;
   /** Enabled-label override. Disabled and loading keep the variant colour. */
   labelColor?: string;
   loading?: boolean;
@@ -179,9 +184,10 @@ export function Button({
   const textColor = !disabled && !loading && labelColor ? labelColor : resting.color;
   const label = loading ? (loadingLabel ?? children) : children;
   return (
-    <View>
+    <View style={variant === "compact-primary" ? styles.compactPrimaryWrap : undefined}>
       <Pressable
         accessibilityHint={showHelper ? disabledReason : undefined}
+        accessibilityLabel={accessibilityLabel ?? label}
         accessibilityRole="button"
         accessibilityState={{ busy: loading, disabled: disabled || loading }}
         disabled={disabled || loading}
@@ -209,6 +215,8 @@ export function Button({
               color={textColor}
               importantForAccessibility="no-hide-descendants"
             />
+          ) : icon ? (
+            <Icon color={textColor} name={icon} size={size.icon.sm} />
           ) : null}
           <Text style={[styles.buttonText, { color: textColor }]}>{label}</Text>
         </View>
@@ -304,6 +312,7 @@ export function WorkoutSummaryCard({
   showCommentCount = false,
   showReactionSummary = false,
   style,
+  timestamp,
   variant = "full",
   workout,
 }: {
@@ -315,6 +324,7 @@ export function WorkoutSummaryCard({
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
   style?: StyleProp<ViewStyle>;
+  timestamp?: string;
   variant?: "compact" | "full";
   workout: WorkoutFeedItem;
 }) {
@@ -360,9 +370,9 @@ export function WorkoutSummaryCard({
               <Text numberOfLines={1} style={styles.author}>{displayName}</Text>
               {isOwn ? <OwnPostYouTag /> : null}
             </View>
-            <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
+            <Text style={styles.timestamp}>{timestamp ?? formatWorkoutDate(workout)}</Text>
           </View>
-          {showTypeChip ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
+          {showTypeChip ? <KindChip label={typeLabel} /> : null}
           {resolvedMenuItems.length ? (
             <ContentOptionsMenu
               accessibilityLabel={`Options for ${displayName}'s post`}
@@ -670,6 +680,7 @@ const styles = StyleSheet.create({
   screenContent: { flexGrow: 1, padding: spacing.xxl, paddingBottom: 72 },
   transformedScreenContent: { overflow: "visible", paddingBottom: 96 },
   overflowVisible: { overflow: "visible" },
+  compactPrimaryWrap: { alignSelf: "stretch", width: "100%" },
   button: { alignItems: "center", borderRadius: radii.md, justifyContent: "center", paddingHorizontal: spacing.lg },
   buttonContent: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "center" },
   buttonText: { ...type.button, flexShrink: 1, textAlign: "center" },
@@ -696,8 +707,6 @@ const styles = StyleSheet.create({
   authorNameRow: ownPostAuthorNameRowStyle(),
   author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, ...ownPostAuthorNameStyle() },
   timestamp: { color: colors.muted, fontFamily: fonts.regular, fontSize: type.label.fontSize, marginTop: 2 },
-  typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexShrink: 0, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.micro.fontSize },
   postOptionsButton: { alignItems: "center", height: size.hit, justifyContent: "center", marginLeft: spacing.xs, width: size.hit },
   postMenuBackdrop: { flex: 1 },
   postMenu: { position: "absolute", width: menuPopoverWidth },

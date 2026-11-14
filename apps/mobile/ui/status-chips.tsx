@@ -2,7 +2,15 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { profileDashboardCopy } from "@repin/validation";
 
-import { colors, radii, spacing, type } from "./theme";
+import {
+  feedChipGap,
+  feedChipHeight,
+  feedChipPadding,
+  feedChipTextStyle,
+  goalFeedChipStyle,
+  tonalFeedChipStyle,
+} from "./community-feed-layout";
+import { colors, radii, type } from "./theme";
 
 export type StatusChipKind = "goal" | "pr" | "starting-best";
 
@@ -18,13 +26,10 @@ export function StatusChip({ kind }: { kind: StatusChipKind }) {
       accessibilityLabel={accessibilityLabel}
       accessibilityRole="text"
       style={[
-        styles.chip,
-        kind === "goal" && styles.goal,
-        kind === "pr" && styles.pr,
-        kind === "starting-best" && styles.starting,
+        kind === "goal" ? goalFeedChipStyle() : kind === "pr" ? tonalFeedChipStyle() : styles.starting,
       ]}
     >
-      <Text style={[styles.text, kind === "starting-best" && styles.startingText]}>{label}</Text>
+      <Text style={kind === "starting-best" ? styles.startingText : feedChipTextStyle()}>{label}</Text>
     </View>
   );
 }
@@ -53,35 +58,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     flexWrap: "wrap",
-    gap: spacing.xs,
-  },
-  chip: {
-    alignItems: "center",
-    borderRadius: radii.sm,
-    height: spacing.xl,
-    justifyContent: "center",
-    paddingHorizontal: spacing.sm,
-  },
-  goal: {
-    backgroundColor: colors.surface,
-    borderColor: colors.brand,
-    borderWidth: 2,
-  },
-  pr: {
-    backgroundColor: colors.brandTint,
-    borderColor: colors.boardBorder,
-    borderWidth: 1,
+    gap: feedChipGap,
   },
   starting: {
+    alignItems: "center",
     backgroundColor: colors.surfaceMuted,
     borderColor: colors.border,
+    borderRadius: radii.sm,
     borderWidth: 1,
-  },
-  text: {
-    color: colors.brandPressed,
-    ...type.micro,
+    height: feedChipHeight,
+    justifyContent: "center",
+    paddingHorizontal: feedChipPadding,
   },
   startingText: {
     color: colors.muted,
+    ...type.micro,
   },
 });

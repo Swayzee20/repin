@@ -55,6 +55,7 @@ import {
   StateCard,
 } from "./components";
 import { isOwnPost, ownPostAuthorNameRowStyle, ownPostAuthorNameStyle } from "./community-feed-layout";
+import { KindChip } from "./kind-chip";
 import { OwnPostYouTag } from "./own-post-you-tag";
 import { PrBadgeRow } from "./pr-badges";
 import { prCopy } from "./pr-copy";
@@ -972,7 +973,7 @@ export function WorkoutDetailContent({
           </View>
           <Text style={styles.timestamp}>{formatWorkoutDate(workout)}</Text>
         </View>
-        {!isCommunityModal ? <View style={styles.typePill}><Text style={styles.typeText}>{typeLabel}</Text></View> : null}
+        {!isCommunityModal ? <KindChip label={typeLabel} /> : null}
         {postMenu}
       </View>
 
@@ -1553,8 +1554,6 @@ const styles = StyleSheet.create({
   authorNameRow: ownPostAuthorNameRowStyle(),
   author: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.body.fontSize, ...ownPostAuthorNameStyle() },
   timestamp: { color: colors.muted, ...type.bodySmall, marginTop: spacing.xs },
-  typePill: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, flexShrink: 0, marginLeft: spacing.sm, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
-  typeText: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.micro.fontSize },
   title: { color: colors.ink, marginTop: spacing.xxl },
   defaultTitle: { ...type.screenTitle },
   sheetTitle: { ...type.cardTitle, marginTop: spacing.lg },

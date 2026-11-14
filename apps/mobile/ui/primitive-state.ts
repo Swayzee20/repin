@@ -1,6 +1,6 @@
 import { colors, elevation, size, spacing } from "./theme";
 
-export type ButtonVariant = "primary" | "secondary" | "tonal" | "danger";
+export type ButtonVariant = "primary" | "compact-primary" | "secondary" | "tonal" | "danger";
 export type RoundIconKind = "back" | "close" | "plus";
 export type RoundIconLook = "glass" | "photo";
 export type SegmentedSize = "md" | "sm";
@@ -31,7 +31,7 @@ export function buttonAppearance({
   pressed: boolean;
   variant: ButtonVariant;
 }): ButtonAppearance {
-  const height = variant === "tonal" ? size.hit : size.primary;
+  const height = variant === "tonal" || variant === "compact-primary" ? size.hit : size.primary;
   if (loading) {
     return { ...enabledButton(variant, false), height, showSpinner: true };
   }
@@ -55,6 +55,7 @@ export function buttonShowsDisabledReason(disabled: boolean, loading: boolean, r
 function enabledButton(variant: ButtonVariant, pressed: boolean): Omit<ButtonAppearance, "height" | "showSpinner"> {
   switch (variant) {
     case "primary":
+    case "compact-primary":
       return {
         backgroundColor: pressed ? colors.brandPressed : colors.brand,
         borderColor: pressed ? colors.brandPressed : colors.brand,

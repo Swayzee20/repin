@@ -19,9 +19,10 @@ test("PR chips stay on brandTint and use combined VoiceOver copy", () => {
 
   const badges = readFileSync(new URL("pr-badges.tsx", import.meta.url), "utf8");
   const chips = readFileSync(new URL("pr-badge-chips.ts", import.meta.url), "utf8");
-  assert.match(badges, /colors\.brandTint/);
-  assert.match(badges, /colors\.brandPressed/);
-  assert.match(badges, /colors\.boardBorder/);
+  assert.match(badges, /tonalFeedChipStyle/);
+  assert.match(badges, /goalFeedChipStyle/);
+  assert.match(badges, /Personal record/);
+  assert.equal(badges.includes("colors.boardBorder"), false);
   assert.match(chips, /prCopy\.personalRecordChip/);
   assert.match(chips, /personal records/);
   assert.equal(badges.includes("gold"), false);
@@ -65,8 +66,9 @@ test("mixed Goal and PR chips show one of each then +N, and Goal uses an outline
   assert.equal(goalsOnly.chips.every((chip) => chip.type === "goal"), true);
 
   const badges = readFileSync(new URL("pr-badges.tsx", import.meta.url), "utf8");
-  assert.match(badges, /styles\.goalChip/);
-  assert.match(badges, /colors\.brand/);
-  assert.match(badges, /borderWidth: 2/);
+  const layout = readFileSync(new URL("community-feed-layout.ts", import.meta.url), "utf8");
+  assert.match(badges, /goalFeedChipStyle/);
+  assert.match(layout, /borderWidth: 2/);
+  assert.match(layout, /feedChipHeight = ownPostYouTagHeight/);
   assert.equal(badges.includes("gold"), false);
 });

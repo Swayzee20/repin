@@ -38,8 +38,20 @@ import {
   resolveCommunityGeneralPost,
   resolveCommunitySelection,
 } from "../../../lib/community-selection";
-import { generalPostFeedCardLabel, isOwnPost, workoutFeedCardLabel } from "../../../ui/community-feed-layout";
+import {
+  buildCommunityBoardRows,
+  communityDeviceTimeZone,
+  communityItemCreatedAt,
+  formatCommunityPinnedTimestamp,
+} from "../../../lib/community-feed-days";
+import {
+  communityNewPostGap,
+  generalPostFeedCardLabel,
+  isOwnPost,
+  workoutFeedCardLabel,
+} from "../../../ui/community-feed-layout";
 import { BrandHeader, Button, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { CommunityDayDivider } from "../../../ui/community-day-divider";
 import { ConfirmSheet } from "../../../ui/crew-sheets";
 import { GeneralPostSummaryCard } from "../../../ui/general-post-card";
 import { GeneralPostDetailView } from "../../../ui/general-post-detail";
@@ -185,6 +197,24 @@ export default function CommunityTabScreen() {
     [board, workouts],
   );
   const pinnedPost = board?.pinnedPost ?? null;
+  const timeZone = communityDeviceTimeZone();
+  const boardRows = useMemo(
+    () => buildCommunityBoardRows({
+      items: mixedFeed,
+      now: new Date(),
+      pinnedPostId: pinnedPost?.id ?? null,
+      timeZone,
+    }),
+    [mixedFeed, pinnedPost?.id, timeZone],
+  );
+  const pinnedTimestamp = useMemo(() => {
+    if (!pinnedPost) return null;
+    const created = communityItemCreatedAt(pinnedPost);
+    return created
+      ? formatCommunityPinnedTimestamp(created, timeZone, pinnedPost.editedAt)
+      : "Date unavailable";
+  }, [pinnedPost, timeZone]);
+  const newPostGap = communityNewPostGap(mode);
   const selectedGroup = useMemo(
     () => board?.groups.find((group) => group.id === (selectedGroupId ?? board.selectedGroupId)) ?? null,
     [board, selectedGroupId],
@@ -618,21 +648,13 @@ export default function CommunityTabScreen() {
                   />
                 </ScrollAnchor>
                 <Text style={styles.boardTitle}>Community Board</Text>
-                <Button
-                  onPress={openNewPost}
-                  style={styles.newPost}
-                  variant="tonal"
-                  labelColor={colors.brandPressed}
-                >
-                  {generalPostCopy.newPost}
-                </Button>
+                <CommunityNewPostButton gap={newPostGap} onPress={openNewPost} />
                 {pinnedPost ? (
                   <Pressable
-                    accessibilityLabel={generalPostFeedCardLabel()}
+                    accessibilityLabel={generalPostFeedCardLabel(isOwnPost(pinnedPost.userId, viewerUserId))}
                     accessibilityRole="button"
                     accessibilityState={{ selected: pinnedPost.id === (generalDetail?.id ?? openSessionId) }}
                     onPress={() => openGeneralPostDetail(pinnedPost)}
-                    style={styles.paneCardPress}
                   >
                     <GeneralPostSummaryCard
                       isPinned
@@ -641,46 +663,61 @@ export default function CommunityTabScreen() {
                       selected={pinnedPost.id === (generalDetail?.id ?? openSessionId)}
                       showCommentCount
                       showReactionSummary
+                      timestamp={pinnedTimestamp ?? undefined}
                       viewerUserId={viewerUserId}
                     />
                   </Pressable>
                 ) : null}
-                {mixedFeed.length ? mixedFeed.map((item) => {
-                  if (item.kind === "general") {
-                    const selected = item.id === (generalDetail?.id ?? openSessionId);
+                {boardRows.map((row, index) => {
+                  if (row.type === "day") {
                     return (
-                      <ScrollAnchor id={item.id} key={item.id}>
+                      <CommunityDayDivider
+                        accessibilityLabel={row.accessibilityLabel}
+                        first={index === 0 && !pinnedPost}
+                        key={row.key}
+                        label={row.label}
+                      />
+                    );
+                  }
+                  const previous = boardRows[index - 1];
+                  const cardStyle = previous?.type === "day" ? undefined : styles.paneCardPress;
+                  if (row.item.kind === "general") {
+                    const post = row.item;
+                    const selected = post.id === (generalDetail?.id ?? openSessionId);
+                    return (
+                      <ScrollAnchor id={post.id} key={row.key}>
                         <Pressable
-                          accessibilityLabel={generalPostFeedCardLabel()}
+                          accessibilityLabel={generalPostFeedCardLabel(isOwnPost(post.userId, viewerUserId))}
                           accessibilityRole="button"
                           accessibilityState={{ selected }}
-                          onPress={() => openGeneralPostDetail(item)}
-                          style={styles.paneCardPress}
+                          onPress={() => openGeneralPostDetail(post)}
+                          style={cardStyle}
                         >
                           <GeneralPostSummaryCard
-                            menuItems={generalMenu(item)}
-                            post={item}
+                            menuItems={generalMenu(post)}
+                            post={post}
                             selected={selected}
                             showCommentCount
                             showReactionSummary
+                            timestamp={row.timestamp}
                             viewerUserId={viewerUserId}
                           />
                         </Pressable>
                       </ScrollAnchor>
                     );
                   }
-                  const workout = item;
+                  const workout = row.item;
                   const selected = !generalDetail && workout.id === openSessionId;
                   const isOwn = isOwnPost(workout.userId, viewerUserId);
                   const title = workout.name?.trim() || workout.title;
                   return (
-                    <ScrollAnchor id={workout.id} key={workout.id}>
+                    <ScrollAnchor id={workout.id} key={row.key}>
                       <Pressable
-                        accessibilityLabel={workoutFeedCardLabel({ title })}
+                        accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
                         accessibilityRole="button"
                         accessibilityState={{ selected }}
                         onPress={() => openWorkoutDetail(workout)}
-                        style={styles.paneCardPress}
+                        style={cardStyle}
                       >
                         <WorkoutSummaryCard
                           isOwn={isOwn}
@@ -688,13 +725,14 @@ export default function CommunityTabScreen() {
                           selected={selected}
                           showCommentCount
                           showReactionSummary
+                          timestamp={row.timestamp}
                           variant="full"
                           workout={workout}
                         />
                       </Pressable>
                     </ScrollAnchor>
                   );
-                }) : null}
+                })}
               </View>
             )}
             right={generalDetail ? (
@@ -899,14 +937,7 @@ export default function CommunityTabScreen() {
             </View>
 
             <Text style={styles.boardTitle}>Community Board</Text>
-            <Button
-              onPress={openNewPost}
-              style={styles.newPost}
-              variant="tonal"
-              labelColor={colors.brandPressed}
-            >
-              {generalPostCopy.newPost}
-            </Button>
+            <CommunityNewPostButton gap={newPostGap} onPress={openNewPost} />
 
             <View onLayout={handleBoardLayout} style={styles.boardArea}>
               {loading ? (
@@ -919,7 +950,7 @@ export default function CommunityTabScreen() {
                     {offline ? <Text style={styles.offline}>{generalPostCopy.offline}</Text> : null}
                     {pinnedPost ? (
                       <Pressable
-                        accessibilityLabel={generalPostFeedCardLabel()}
+                        accessibilityLabel={generalPostFeedCardLabel(isOwnPost(pinnedPost.userId, viewerUserId))}
                         accessibilityRole="button"
                         onPress={() => openGeneralPostDetail(pinnedPost)}
                       >
@@ -929,38 +960,54 @@ export default function CommunityTabScreen() {
                           post={pinnedPost}
                           showCommentCount
                           showReactionSummary
+                          timestamp={pinnedTimestamp ?? undefined}
                           viewerUserId={viewerUserId}
                         />
                       </Pressable>
                     ) : null}
-                    {mixedFeed.map((item) => {
-                      if (item.kind === "general") {
+                    {boardRows.map((row, index) => {
+                      if (row.type === "day") {
+                        return (
+                          <CommunityDayDivider
+                            accessibilityLabel={row.accessibilityLabel}
+                            first={index === 0 && !pinnedPost}
+                            key={row.key}
+                            label={row.label}
+                          />
+                        );
+                      }
+                      const previous = boardRows[index - 1];
+                      if (row.item.kind === "general") {
+                        const post = row.item;
                         return (
                           <Pressable
-                            accessibilityLabel={generalPostFeedCardLabel()}
+                            accessibilityLabel={generalPostFeedCardLabel(isOwnPost(post.userId, viewerUserId))}
                             accessibilityRole="button"
-                            key={item.id}
-                            onPress={() => openGeneralPostDetail(item)}
+                            key={row.key}
+                            onPress={() => openGeneralPostDetail(post)}
+                            style={previous?.type === "day" ? undefined : styles.feedPost}
                           >
                             <GeneralPostSummaryCard
-                              menuItems={generalMenu(item)}
-                              post={item}
+                              menuItems={generalMenu(post)}
+                              post={post}
                               showCommentCount
                               showReactionSummary
+                              timestamp={row.timestamp}
                               viewerUserId={viewerUserId}
                             />
                           </Pressable>
                         );
                       }
-                      const workout = item;
+                      const workout = row.item;
                       const isOwn = isOwnPost(workout.userId, viewerUserId);
                       const title = workout.name?.trim() || workout.title;
                       return (
                         <Pressable
-                          accessibilityLabel={workoutFeedCardLabel({ title })}
+                          accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
                           accessibilityRole="button"
-                          key={workout.id}
+                          key={row.key}
                           onPress={() => openWorkoutDetail(workout)}
+                          style={previous?.type === "day" ? undefined : styles.feedPost}
                         >
                           <WorkoutSummaryCard
                             isOwn={isOwn}
@@ -968,6 +1015,7 @@ export default function CommunityTabScreen() {
                             selected={false}
                             showCommentCount
                             showReactionSummary
+                            timestamp={row.timestamp}
                             variant="full"
                             workout={workout}
                           />
@@ -1119,6 +1167,20 @@ export default function CommunityTabScreen() {
       />
     </SafeAreaView>
     </View>
+  );
+}
+
+function CommunityNewPostButton({ gap, onPress }: { gap: number; onPress: () => void }) {
+  return (
+    <Button
+      accessibilityLabel={generalPostCopy.newPost}
+      icon="pencil"
+      onPress={onPress}
+      style={{ ...styles.newPost, marginBottom: gap, marginTop: gap }}
+      variant="compact-primary"
+    >
+      {generalPostCopy.newPost}
+    </Button>
   );
 }
 
@@ -1278,9 +1340,10 @@ const styles = StyleSheet.create({
   dateArrowDisabled: { opacity: 0.28 },
   dateLabelButton: { alignItems: "center", justifyContent: "center", minHeight: size.hit, minWidth: 128, paddingHorizontal: spacing.md },
   dateLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
-  boardTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.section.fontSize, lineHeight: type.section.lineHeight, marginBottom: spacing.sm, marginTop: spacing.sm },
-  newPost: { alignSelf: "stretch", borderColor: colors.boardBorder, borderWidth: 1, marginBottom: spacing.md, width: "100%" },
-  mixedFeed: { gap: spacing.md, padding: spacing.lg, paddingBottom: spacing.huge },
+  boardTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.section.fontSize, lineHeight: type.section.lineHeight, marginBottom: 0, marginTop: spacing.sm },
+  newPost: { alignSelf: "stretch", width: "100%" },
+  mixedFeed: { paddingBottom: spacing.huge, paddingHorizontal: spacing.lg, paddingTop: 0 },
+  feedPost: { marginTop: spacing.md },
   offline: { color: colors.muted, ...type.bodySmall },
   // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
   boardArea: { backgroundColor: colors.surfaceMuted, borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
@@ -1299,8 +1362,9 @@ const styles = StyleSheet.create({
   panePostFrom: { color: colors.muted, ...type.bodySmall },
 });
 
-function atLocalTime(hours: number, minutes: number) {
+function atLocalTime(hours: number, minutes: number, daysAgo = 0) {
   const date = new Date();
+  date.setDate(date.getDate() - daysAgo);
   date.setHours(hours, minutes, 0, 0);
   return date.toISOString();
 }
@@ -1318,8 +1382,9 @@ function layoutPreviewCommunity(): CommunityData {
     effort: number,
     caption: string | null,
     resultSummary: string,
+    daysAgo = 0,
   ): WorkoutFeedItem => {
-    const occurredAt = atLocalTime(hours, minutes);
+    const occurredAt = atLocalTime(hours, minutes, daysAgo);
     return {
       caption,
       commentCount: 1,
@@ -1344,6 +1409,7 @@ function layoutPreviewCommunity(): CommunityData {
     };
   };
   const occurredAt = atLocalTime(8, 5);
+  const pinnedAt = atLocalTime(19, 40, 1);
   const generalPost: GeneralPostFeedItem = {
     body: "Recovery day thoughts.",
     commentCount: 1,
@@ -1360,13 +1426,30 @@ function layoutPreviewCommunity(): CommunityData {
     updatedAt: occurredAt,
     userId: "user-maya",
   };
+  const pinnedPost: GeneralPostFeedItem = {
+    body: "Crew dinner this Friday.",
+    commentCount: 2,
+    createdAt: pinnedAt,
+    displayName: "Jordan P.",
+    editedAt: null,
+    groupId: "group-1",
+    id: "g-pin",
+    kind: "general",
+    links: [],
+    photos: [],
+    publicationId: "pub-pin",
+    reactionCounts: reactions,
+    updatedAt: pinnedAt,
+    userId: "user-jordan",
+  };
   const communityWorkouts = [
     workout("w1", "Maya L.", "user-maya", "Easy shakeout", "run", 7, 12, 4, "Legs felt great today", "5 km Run"),
     workout("w2", "Jordan P.", "user-jordan", "Push day", "strength_training", 6, 40, 4, null, "45 min Strength Training"),
-    workout("w3", "Sam R.", "user-sam", "Hill repeats", "run", 6, 5, 4, null, "8 km Run"),
+    workout("w3", "Sam R.", "user-sam", "Hill repeats", "run", 6, 5, 4, null, "8 km Run", 2),
   ];
   return {
     communityFeed: [generalPost, ...communityWorkouts],
+    pinnedPost,
     communityWorkouts,
     groups: [{
       createdAt: "2026-01-01T00:00:00.000Z",
