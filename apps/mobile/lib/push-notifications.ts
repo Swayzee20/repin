@@ -1,16 +1,16 @@
 import Constants from "expo-constants";
-import AsyncStorage from "expo-sqlite/kv-store";
 import { Platform } from "react-native";
 
 import type { PushPlatform } from "@repin/validation";
 
 import { supabase } from "./supabase";
 import { registerDevicePushToken, unregisterDevicePushToken } from "./push-api";
+import { pushUnregisterLog, resolvePushUnregisterToken } from "./push-unregister";
 import {
-  PENDING_PUSH_UNREGISTER_KEY,
-  pushUnregisterLog,
-  resolvePushUnregisterToken,
-} from "./push-unregister";
+  clearPendingPushUnregisterToken,
+  readPendingPushUnregisterToken,
+  writePendingPushUnregisterToken,
+} from "./push-unregister-store";
 
 let cachedToken: string | null = null;
 
@@ -77,37 +77,6 @@ export async function syncPushTokenForSession() {
   }
 }
 
-let memoryPendingUnregister: string | null = null;
-
-async function readPendingUnregisterToken() {
-  if (memoryPendingUnregister) return memoryPendingUnregister;
-  try {
-    const stored = await AsyncStorage.getItemAsync(PENDING_PUSH_UNREGISTER_KEY);
-    memoryPendingUnregister = stored || null;
-    return memoryPendingUnregister;
-  } catch {
-    return memoryPendingUnregister;
-  }
-}
-
-async function writePendingUnregisterToken(token: string) {
-  memoryPendingUnregister = token;
-  try {
-    await AsyncStorage.setItemAsync(PENDING_PUSH_UNREGISTER_KEY, token);
-  } catch {
-    // Keep the in-memory token so this session still retries.
-  }
-}
-
-async function clearPendingUnregisterToken() {
-  memoryPendingUnregister = null;
-  try {
-    await AsyncStorage.removeItemAsync(PENDING_PUSH_UNREGISTER_KEY);
-  } catch {
-    // Memory is already cleared.
-  }
-}
-
 async function unregisterStoredToken(
   token: string,
   accessToken: string,
@@ -118,20 +87,20 @@ async function unregisterStoredToken(
       accessToken,
       expoPushToken: token,
     });
-    await clearPendingUnregisterToken();
+    await clearPendingPushUnregisterToken();
   } catch {
-    await writePendingUnregisterToken(token);
+    await writePendingPushUnregisterToken(token);
     console.info(pushUnregisterLog(kind));
   }
 }
 
 export async function removePushTokenForSession(accessToken?: string | null) {
-  const pending = await readPendingUnregisterToken();
+  const pending = await readPendingPushUnregisterToken();
   const token = resolvePushUnregisterToken(cachedToken, pending);
   cachedToken = null;
   if (!token) return;
   if (!accessToken) {
-    await writePendingUnregisterToken(token);
+    await writePendingPushUnregisterToken(token);
     console.info(pushUnregisterLog("deferred"));
     return;
   }
@@ -139,7 +108,7 @@ export async function removePushTokenForSession(accessToken?: string | null) {
 }
 
 export async function retryPendingPushTokenRemoval(accessToken?: string | null) {
-  const token = await readPendingUnregisterToken();
+  const token = await readPendingPushUnregisterToken();
   if (!token || !accessToken) return;
   await unregisterStoredToken(token, accessToken, "retry-failed");
 }
