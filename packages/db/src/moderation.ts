@@ -2,6 +2,7 @@ import "server-only";
 
 import { randomUUID } from "node:crypto";
 
+import { DELETED_ACCOUNT_LABEL } from "@repin/types";
 import { and, asc, count, eq, inArray, sql, type AnyColumn } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -688,7 +689,7 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
       resolvedByName: resolvers.displayName,
     })
     .from(schema.contentReports)
-    .innerJoin(reporters, eq(reporters.id, schema.contentReports.reporterId))
+    .leftJoin(reporters, eq(reporters.id, schema.contentReports.reporterId))
     .leftJoin(authors, eq(authors.id, schema.contentReports.targetUserId))
     .innerJoin(schema.groups, eq(schema.groups.id, schema.contentReports.groupId))
     .leftJoin(resolvers, eq(resolvers.id, schema.contentReports.resolvedBy))
@@ -863,13 +864,13 @@ export async function listAdminReportQueue(): Promise<AdminReportQueueItem[]> {
       contentCreatedAt: target?.createdAt ?? null,
       reports: group.map((row) => ({
         id: row.id,
-        reporterDisplayName: row.reporterName,
+        reporterDisplayName: row.reporterName ?? DELETED_ACCOUNT_LABEL,
         reason: row.reason as ContentReportReason,
         details: row.details,
         createdAt: row.createdAt,
       })),
       authorHistory: {
-        displayName: first.authorName ?? "Deleted account",
+        displayName: first.authorName ?? DELETED_ACCOUNT_LABEL,
         removedCount: Math.max(0, removedTotal - (contentRemoved ? 1 : 0)),
         groupCount: first.targetUserId
           ? (groupsByAuthor.get(first.targetUserId) ?? 0)

@@ -82,6 +82,15 @@ test("primary, compact-primary, secondary, tonal, and danger buttons follow the 
   const danger = buttonAppearance({ disabled: false, loading: false, pressed: false, variant: "danger" });
   assert.equal(danger.backgroundColor, colors.danger);
   assert.equal(danger.color, colors.surface);
+  assert.equal(danger.height, 52);
+  assert.equal(
+    buttonAppearance({ disabled: false, loading: false, pressed: true, variant: "danger" }).backgroundColor,
+    colors.danger,
+  );
+  const dangerLoading = buttonAppearance({ disabled: false, loading: true, pressed: false, variant: "danger" });
+  assert.equal(dangerLoading.backgroundColor, colors.danger);
+  assert.equal(dangerLoading.color, colors.surface);
+  assert.equal(dangerLoading.showSpinner, true);
 });
 
 test("segmented selection changes value and can clear", () => {

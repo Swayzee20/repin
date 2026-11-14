@@ -38,7 +38,7 @@ export async function GET(
     const groupId = groupIdSchema.safeParse(id);
 
     if (!groupId.success) {
-      return NextResponse.json({ error: "Invalid group ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid crew ID" }, { status: 400 });
     }
 
     const url = new URL(request.url);
@@ -86,6 +86,7 @@ export async function GET(
           photoPath: group.photoPath,
           photoUrl,
           memberCount: members.length,
+          ownerNoticeAt: group.ownerNoticeAt?.toISOString() ?? null,
         },
         members: members.map((member) => {
           const named = withResolvedDisplayName(member);
@@ -130,7 +131,7 @@ export async function PATCH(
     const { id } = await context.params;
     const groupId = groupIdSchema.safeParse(id);
     if (!groupId.success) {
-      return NextResponse.json({ error: "Invalid group ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid crew ID" }, { status: 400 });
     }
 
     const body: unknown = await request.json().catch(() => null);

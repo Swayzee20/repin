@@ -34,7 +34,7 @@ export async function GET(request: Request, context: RouteContext) {
     const groupId = await readGroupId(context);
 
     if (!groupId) {
-      return timedJson(timing, { error: "Invalid group ID" }, { status: 400 });
+      return timedJson(timing, { error: "Invalid crew ID" }, { status: 400 });
     }
 
     const workouts = await timing.measure("db", () =>
@@ -44,7 +44,7 @@ export async function GET(request: Request, context: RouteContext) {
       }));
 
     if (!workouts) {
-      return timedJson(timing, { error: "Group not found" }, { status: 404 });
+      return timedJson(timing, { error: "Crew not found" }, { status: 404 });
     }
 
     const workoutsWithPhotoUrls = await timing.measure("photo", () =>
@@ -68,7 +68,7 @@ export async function POST(request: Request, context: RouteContext) {
     const groupId = await readGroupId(context);
 
     if (!groupId) {
-      return NextResponse.json({ error: "Invalid group ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid crew ID" }, { status: 400 });
     }
 
     const body: unknown = await request.json().catch(() => null);
@@ -104,7 +104,7 @@ export async function POST(request: Request, context: RouteContext) {
     });
 
     if (!created) {
-      return NextResponse.json({ error: "Group not found" }, { status: 404 });
+      return NextResponse.json({ error: "Crew not found" }, { status: 404 });
     }
 
     const { pr, goals, ...workout } = created;

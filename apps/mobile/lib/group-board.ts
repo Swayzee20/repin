@@ -34,7 +34,7 @@ export async function fetchGroupBoard(input: {
   };
 
   if (!groupResponse.ok || !groupBody.group) {
-    throw new Error(groupBody.error ?? "Group could not be loaded.");
+    throw new Error(groupBody.error ?? "Crew could not be loaded.");
   }
   if (!workoutsResponse.ok || !workoutsBody.workouts) {
     throw new Error(

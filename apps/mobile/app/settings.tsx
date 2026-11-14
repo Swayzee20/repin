@@ -3,12 +3,19 @@ import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { fetchDeletionPreview } from "../lib/delete-account";
 import { listBlockedUsers } from "../lib/moderation-api";
+import { removePushTokenForSession } from "../lib/push-notifications";
 import { isSentryTestActionVisible, sendSentryTestError } from "../lib/sentry";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
-import { Button, Card, TextField } from "../ui/components";
-import { singleFieldReturn } from "../ui/keyboard";
+import { Button, Card } from "../ui/components";
+import {
+  DANGER_FAILED,
+  DANGER_WRONG_PASSWORD,
+  DangerZoneCard,
+} from "../ui/danger-zone";
+import type { DeletionPreviewCrew } from "../ui/danger-zone-copy";
 import { TwoPane, useLayoutMode } from "../ui/layout";
 import { ListRow, RoundIconButton, roundNavButtonStyle } from "../ui/primitives";
 import {
@@ -33,9 +40,15 @@ export default function SettingsScreen() {
   const twoPane = mode === "twoPane";
   const [signingOut, setSigningOut] = useState(false);
   const [confirmation, setConfirmation] = useState("");
+  const [password, setPassword] = useState("");
   const [deleting, setDeleting] = useState(false);
   const [accountError, setAccountError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [preview, setPreview] = useState<DeletionPreviewCrew[] | null>(null);
+  const [previewLoading, setPreviewLoading] = useState(true);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [crewsExpanded, setCrewsExpanded] = useState(false);
   const [blockedCount, setBlockedCount] = useState(0);
   const [testStatus, setTestStatus] = useState<"sent" | "disabled" | null>(null);
   const showSentryTest = isSentryTestActionVisible();
@@ -51,12 +64,35 @@ export default function SettingsScreen() {
     };
   }, []));
   const email = session?.user.email?.trim();
-  const confirmed = confirmation.trim() === "DELETE";
+
+  const loadPreview = useCallback(async () => {
+    if (!supabase) return;
+    setPreviewLoading(true);
+    setPreviewError(null);
+    try {
+      const { data, error: sessionError } = await supabase.auth.getSession();
+      if (sessionError || !data.session) {
+        throw new Error("Sign in again before deleting your account.");
+      }
+      setPreview(await fetchDeletionPreview(data.session.access_token));
+    } catch {
+      setPreview(null);
+      setPreviewError("Couldn't load your crews. Retry.");
+    } finally {
+      setPreviewLoading(false);
+    }
+  }, []);
+
+  useFocusEffect(useCallback(() => {
+    void loadPreview();
+  }, [loadPreview]));
 
   const signOut = async () => {
     if (!supabase) return;
     setSigningOut(true);
     setAccountError(null);
+    const { data } = await supabase.auth.getSession();
+    await removePushTokenForSession(data.session?.access_token);
     const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
     setSigningOut(false);
     if (signOutError) setAccountError(signOutError.message);
@@ -64,9 +100,10 @@ export default function SettingsScreen() {
   };
 
   const deleteAccount = async () => {
-    if (!confirmed || !supabase) return;
+    if (!supabase) return;
     setDeleting(true);
     setDeleteError(null);
+    setPasswordError(null);
     try {
       const { data, error: sessionError } = await supabase.auth.getSession();
       if (sessionError || !data.session) {
@@ -74,22 +111,35 @@ export default function SettingsScreen() {
       }
       const response = await fetch(`${apiUrl}/api/account`, {
         method: "DELETE",
-        headers: { Authorization: `Bearer ${data.session.access_token}` },
+        headers: {
+          Authorization: `Bearer ${data.session.access_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ password }),
         signal: AbortSignal.timeout(30_000),
       });
-      const body = (await response.json().catch(() => null)) as { error?: string } | null;
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        code?: string;
+      } | null;
       if (!response.ok) {
+        if (body?.code === "wrong_password" || (response.status === 403 && body?.error === DANGER_WRONG_PASSWORD)) {
+          setPasswordError(DANGER_WRONG_PASSWORD);
+          setDeleting(false);
+          return;
+        }
         throw new Error(
           response.status === 401
             ? "Sign in again before deleting your account."
-            : body?.error ?? "Account could not be deleted.",
+            : DANGER_FAILED,
         );
       }
+      await removePushTokenForSession(data.session.access_token);
       await supabase.auth.signOut({ scope: "local" });
       router.replace("/");
-    } catch (deleteFailure) {
+    } catch {
       setDeleting(false);
-      setDeleteError(deleteFailure instanceof Error ? deleteFailure.message : "Account could not be deleted.");
+      setDeleteError(DANGER_FAILED);
     }
   };
 
@@ -144,37 +194,27 @@ export default function SettingsScreen() {
             )}
             right={(
               <View style={twoPane ? (roundBack ? [styles.actionSplit, styles.actionSplitOffset] : styles.actionSplit) : styles.actionStack}>
-                <Card style={styles.dangerCard}>
-                  <Text style={styles.dangerTitle}>Danger zone</Text>
-                  <Text style={styles.dangerCopy}>
-                    This permanently deletes your profile, workouts, comments, reactions, and photos. It can’t be undone.
-                  </Text>
-                  <Text style={styles.dangerCopy}>
-                    If you own a group, the member who has been there the longest becomes the owner. A group with no other members is deleted, including its invite code and posts.
-                  </Text>
-                  <TextField
-                    autoCapitalize="characters"
-                    autoComplete="off"
-                    autoCorrect={false}
-                    disabled={deleting}
-                    label="Type DELETE to confirm"
-                    onChangeText={setConfirmation}
-                    placeholder="DELETE"
-                    value={confirmation}
-                    {...singleFieldReturn("done")}
-                  />
-                  {deleteError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{deleteError}</Text> : null}
-                  <Button
-                    disabled={!confirmed}
-                    disabledReason={confirmed ? undefined : "Type DELETE to confirm."}
-                    loading={deleting}
-                    loadingLabel="Deleting"
-                    onPress={() => void deleteAccount()}
-                    variant="danger"
-                  >
-                    Delete account
-                  </Button>
-                </Card>
+                <DangerZoneCard
+                  confirmation={confirmation}
+                  crewsExpanded={crewsExpanded}
+                  deleteError={deleteError}
+                  deleting={deleting}
+                  onChangeConfirmation={setConfirmation}
+                  onChangePassword={(value) => {
+                    setPassword(value);
+                    setPasswordError(null);
+                    setDeleteError(null);
+                  }}
+                  onDelete={() => void deleteAccount()}
+                  onForgotPassword={() => router.push("/forgot-password")}
+                  onRetryPreview={() => void loadPreview()}
+                  onToggleCrews={() => setCrewsExpanded((open) => !open)}
+                  password={password}
+                  passwordError={passwordError}
+                  preview={preview}
+                  previewError={previewError}
+                  previewLoading={previewLoading}
+                />
               </View>
             )}
           />
@@ -203,12 +243,4 @@ const styles = StyleSheet.create({
   actionSplit: { maxWidth: layout.formMax, width: "100%" },
   actionSplitOffset: { paddingTop: size.hit + spacing.xl },
   actionStack: { marginTop: spacing.xxl, maxWidth: layout.formMax, width: "100%" },
-  dangerCard: {
-    backgroundColor: colors.dangerSoft,
-    borderColor: colors.dangerSoft,
-    gap: spacing.lg,
-    padding: spacing.xl,
-  },
-  dangerTitle: { color: colors.danger, ...type.heading },
-  dangerCopy: { color: colors.inkSoft, ...type.bodySmall },
 });

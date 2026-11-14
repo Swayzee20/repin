@@ -13,10 +13,10 @@ export type ExpoPushMessage = {
   channelId: "default";
   title?: string;
   data: {
-    type: CrewPushAlertType;
+    type: CrewPushAlertType | "crew_owner";
     groupId: string;
     sessionId?: string;
-    postId: string;
+    postId?: string;
   };
 };
 

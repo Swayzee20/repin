@@ -5,6 +5,12 @@ import type { PushPlatform } from "@repin/validation";
 
 import { supabase } from "./supabase";
 import { registerDevicePushToken, unregisterDevicePushToken } from "./push-api";
+import { pushUnregisterLog, resolvePushUnregisterToken } from "./push-unregister";
+import {
+  clearPendingPushUnregisterToken,
+  readPendingPushUnregisterToken,
+  writePendingPushUnregisterToken,
+} from "./push-unregister-store";
 
 let cachedToken: string | null = null;
 
@@ -71,18 +77,40 @@ export async function syncPushTokenForSession() {
   }
 }
 
-export async function removePushTokenForSession(accessToken?: string | null) {
-  const token = cachedToken;
-  cachedToken = null;
-  if (!token || !accessToken) return;
+async function unregisterStoredToken(
+  token: string,
+  accessToken: string,
+  kind: "failed" | "retry-failed",
+) {
   try {
     await unregisterDevicePushToken({
       accessToken,
       expoPushToken: token,
     });
-  } catch (error) {
-    console.info("[push] token removal skipped", error);
+    await clearPendingPushUnregisterToken();
+  } catch {
+    await writePendingPushUnregisterToken(token);
+    console.info(pushUnregisterLog(kind));
   }
+}
+
+export async function removePushTokenForSession(accessToken?: string | null) {
+  const pending = await readPendingPushUnregisterToken();
+  const token = resolvePushUnregisterToken(cachedToken, pending);
+  cachedToken = null;
+  if (!token) return;
+  if (!accessToken) {
+    await writePendingPushUnregisterToken(token);
+    console.info(pushUnregisterLog("deferred"));
+    return;
+  }
+  await unregisterStoredToken(token, accessToken, "failed");
+}
+
+export async function retryPendingPushTokenRemoval(accessToken?: string | null) {
+  const token = await readPendingPushUnregisterToken();
+  if (!token || !accessToken) return;
+  await unregisterStoredToken(token, accessToken, "retry-failed");
 }
 
 export function readCachedPushToken() {

@@ -1,6 +1,6 @@
 "use client";
 
-import { contentReportReasonLabels } from "@repin/types";
+import { contentReportReasonLabels, DELETED_ACCOUNT_LABEL } from "@repin/types";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
@@ -273,7 +273,11 @@ function DetailPane({
           <li className={styles.reportRow} key={report.id}>
             <div className={styles.reportCopy}>
               <p className={styles.reportWho}>
-                {report.reporterDisplayName} · {contentReportReasonLabels[report.reason]}
+                {report.reporterDisplayName === DELETED_ACCOUNT_LABEL ? (
+                  <span className={styles.deletedAccount}>{DELETED_ACCOUNT_LABEL}</span>
+                ) : report.reporterDisplayName}
+                {" · "}
+                {contentReportReasonLabels[report.reason]}
               </p>
               <p className={styles.reportDetails}>{report.details?.trim() || "No details"}</p>
             </div>
@@ -290,7 +294,7 @@ function DetailPane({
         {" · "}
         {item.authorHistory.removedCount} removed before
         {" · "}
-        in {item.authorHistory.groupCount} {item.authorHistory.groupCount === 1 ? "group" : "groups"}
+        in {item.authorHistory.groupCount} {item.authorHistory.groupCount === 1 ? "crew" : "crews"}
       </p>
 
       <div className={styles.detailFooter}>
