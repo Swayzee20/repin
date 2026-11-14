@@ -114,6 +114,8 @@ export const generalPostCopy = {
   pickerIntro: "Pick 1 to 10 crews. Crews can't be changed after you post.",
   pickerLimit: "You can post to 10 crews at a time.",
   pickerEmpty: "You're not in a crew yet. Join or create a crew to post.",
+  pickerLoading: "Loading crews…",
+  pickerLoadErrorTitle: "Couldn't load your crews.",
   loadErrorTitle: "Couldn't load the board",
   tryAgain: "Try again",
   offline: "You're offline. Showing what we have.",

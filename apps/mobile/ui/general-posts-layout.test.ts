@@ -51,6 +51,13 @@ test("composer copy, disabled helpers, and Duo trailing pane match the SPEC", ()
   assert.match(composer, /twoPane/);
   assert.match(composer, /generalPostCopy\.postedTo/);
   assert.match(composer, /generalPostCopy\.crewsLocked/);
+  assert.match(composer, /crewPickerViewState/);
+  assert.match(composer, /StateCard/);
+  assert.match(composer, /LoadingState/);
+  assert.match(composer, /generalPostCopy\.pickerLoadErrorTitle/);
+  assert.match(composer, /generalPostCopy\.tryAgain/);
+  assert.match(composer, /view === "empty"/);
+  assert.equal(composer.includes("if (!groups.length)"), false);
   assert.equal(composer.includes("Post to groups"), false);
   assert.equal(composer.includes("Choose groups"), false);
 });

@@ -1,9 +1,10 @@
 import type { GroupSummary } from "@repin/types";
 import { generalPostCopy } from "@repin/validation";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { View } from "react-native";
 
+import { apiRequest } from "../../../lib/api";
 import { markWorkoutDataStale } from "../../../lib/data-freshness";
 import {
   createGeneralPostDraft,
@@ -12,8 +13,6 @@ import {
 import { supabase } from "../../../lib/supabase";
 import { GeneralPostComposer } from "../../../ui/general-post-composer";
 import { colors } from "../../../ui/theme";
-
-const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
 export default function NewPostScreen() {
   const router = useRouter();
@@ -28,27 +27,42 @@ export default function NewPostScreen() {
   }>>([]);
   const [publicationId, setPublicationId] = useState<string | null>(null);
   const [groups, setGroups] = useState<GroupSummary[]>([]);
+  const [groupsError, setGroupsError] = useState<string | null>(null);
+  const [groupsLoading, setGroupsLoading] = useState(true);
   const [selectedGroupIds, setSelectedGroupIds] = useState<string[]>(groupId ? [groupId] : []);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    void (async () => {
-      if (!supabase) return;
+  const loadCrews = useCallback(async () => {
+    setGroupsLoading(true);
+    setGroupsError(null);
+    try {
+      if (!supabase) throw new Error("Sign in to choose crews.");
       const { data: auth } = await supabase.auth.getSession();
-      if (!auth.session) return;
+      if (!auth.session) throw new Error("Sign in to choose crews.");
       const search = new URLSearchParams({
         view: "community",
         feed: "mixed",
         timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
       });
-      const response = await fetch(`${apiUrl}/api/home?${search.toString()}`, {
-        headers: { Authorization: `Bearer ${auth.session.access_token}` },
-      });
-      const payload = (await response.json()) as { groups?: GroupSummary[] };
-      if (Array.isArray(payload.groups)) setGroups(payload.groups);
-    })();
+      const payload = await apiRequest<{ groups?: GroupSummary[] }>(
+        `/api/home?${search.toString()}`,
+        auth.session.access_token,
+      );
+      setGroups(Array.isArray(payload.groups) ? payload.groups : []);
+    } catch (loadError) {
+      setGroups([]);
+      setGroupsError(
+        loadError instanceof Error ? loadError.message : generalPostCopy.pickerLoadErrorTitle,
+      );
+    } finally {
+      setGroupsLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    void loadCrews();
+  }, [loadCrews]);
 
   return (
     <View style={{ backgroundColor: colors.background, flex: 1 }}>
@@ -56,11 +70,14 @@ export default function NewPostScreen() {
         body={body}
         error={error}
         groups={groups}
+        groupsError={groupsError}
+        groupsLoading={groupsLoading}
         modeTitle={generalPostCopy.newPost}
         onBodyChange={setBody}
         onClose={() => router.back()}
         onPhotosChange={setPhotos}
         onPublicationIdChange={setPublicationId}
+        onRetryGroups={() => void loadCrews()}
         onSelectedGroupIdsChange={setSelectedGroupIds}
         onSubmit={() => {
           void (async () => {

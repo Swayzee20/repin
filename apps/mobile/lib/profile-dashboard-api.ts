@@ -7,6 +7,7 @@ import type {
 } from "@repin/types";
 import type { DashboardDistanceUnit } from "@repin/validation";
 
+import { apiErrorMessage } from "./api";
 import { supabase } from "./supabase";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -31,7 +32,7 @@ async function authHeader() {
 
 async function readJson<T>(response: Response) {
   const body = (await response.json()) as T & { error?: string };
-  if (!response.ok) throw new Error(body.error ?? "Request failed");
+  if (!response.ok) throw new Error(apiErrorMessage(response.status, body));
   return body;
 }
 
