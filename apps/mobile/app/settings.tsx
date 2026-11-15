@@ -3,6 +3,7 @@ import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { signOutAfterAccountDeleted } from "../lib/account-deletion";
 import { fetchDeletionPreview } from "../lib/delete-account";
 import { listBlockedUsers } from "../lib/moderation-api";
 import { removePushTokenForSession } from "../lib/push-notifications";
@@ -134,8 +135,12 @@ export default function SettingsScreen() {
             : DANGER_FAILED,
         );
       }
-      await removePushTokenForSession(data.session.access_token);
-      await supabase.auth.signOut({ scope: "local" });
+      const client = supabase;
+      await signOutAfterAccountDeleted({
+        accessToken: data.session.access_token,
+        unregisterPushToken: removePushTokenForSession,
+        signOut: () => client.auth.signOut({ scope: "local" }),
+      });
       router.replace("/");
     } catch {
       setDeleting(false);

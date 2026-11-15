@@ -5,10 +5,15 @@ import {
 } from "@repin/validation";
 import { NextResponse } from "next/server";
 
+import {
+  registerPushTokenForExistingUser,
+  unregisterPushTokenForExistingUser,
+} from "../../../../lib/application-user";
 import { reportUnexpectedRouteError } from "../../../../lib/sentry";
 import {
   AuthenticationError,
-  requireApplicationUser,
+  findApplicationUser,
+  requireAuthenticatedUser,
 } from "../../../../lib/supabase-auth";
 
 export const dynamic = "force-dynamic";
@@ -16,7 +21,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: Request) {
   try {
-    const user = await requireApplicationUser(request);
+    const identity = await requireAuthenticatedUser(request);
     const body: unknown = await request.json().catch(() => null);
     const input = registerPushTokenSchema.safeParse(body);
     if (!input.success) {
@@ -26,12 +31,20 @@ export async function POST(request: Request) {
       );
     }
 
-    await upsertDevicePushToken({
-      userId: user.id,
+    const result = await registerPushTokenForExistingUser({
+      userId: identity.id,
       expoPushToken: input.data.expoPushToken,
       platform: input.data.platform,
       supportsPostTargets: input.data.supportsPostTargets,
+      findUser: () => findApplicationUser(identity),
+      upsertToken: upsertDevicePushToken,
     });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: "Unauthorized" },
+        { status: result.status, headers: { "Cache-Control": "no-store" } },
+      );
+    }
 
     return NextResponse.json(
       { registered: true },
@@ -44,7 +57,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const user = await requireApplicationUser(request);
+    const identity = await requireAuthenticatedUser(request);
     const body: unknown = await request.json().catch(() => null);
     const input = unregisterPushTokenSchema.safeParse(body);
     if (!input.success) {
@@ -54,9 +67,11 @@ export async function DELETE(request: Request) {
       );
     }
 
-    await removeDevicePushToken({
-      userId: user.id,
+    await unregisterPushTokenForExistingUser({
+      userId: identity.id,
       expoPushToken: input.data.expoPushToken,
+      findUser: () => findApplicationUser(identity),
+      removeToken: removeDevicePushToken,
     });
 
     return NextResponse.json(
