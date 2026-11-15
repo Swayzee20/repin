@@ -31,6 +31,7 @@ import {
   visibleCommentCountSql,
   visibleReactionCountSql,
 } from "./moderation";
+import { clearPinsForCrew, reassignOrClearPinsByUser } from "./pins";
 import {
   captureEvidenceForTargets,
   evidenceRetainUntil,
@@ -93,22 +94,27 @@ export class WorkoutRequestError extends Error {
   }
 }
 
+export async function getUser(id: string) {
+  const [existingUser] = await getDatabase()
+    .select()
+    .from(schema.users)
+    .where(eq(schema.users.id, id))
+    .limit(1);
+
+  return existingUser ?? null;
+}
+
 export async function getOrCreateUser(input: {
   id: string;
   displayName: string;
 }) {
-  const database = getDatabase();
-  const [existingUser] = await database
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.id, input.id))
-    .limit(1);
+  const existingUser = await getUser(input.id);
 
   if (existingUser) {
     return existingUser;
   }
 
-  const [createdUser] = await database
+  const [createdUser] = await getDatabase()
     .insert(schema.users)
     .values(input)
     .onConflictDoNothing({ target: schema.users.id })
@@ -120,11 +126,7 @@ export async function getOrCreateUser(input: {
 
   // Another request may have provisioned the same authenticated user after
   // the read above. Resolve that canonical row instead of failing the request.
-  const [concurrentlyCreatedUser] = await database
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.id, input.id))
-    .limit(1);
+  const concurrentlyCreatedUser = await getUser(input.id);
 
   if (!concurrentlyCreatedUser) {
     throw new Error("Application user could not be loaded");
@@ -1536,6 +1538,10 @@ export async function deleteUserAccount(userId: string): Promise<AccountDeletion
     }
 
     const ownership = await releaseOwnedGroups(transaction, userId);
+    // Handover (or crew close) must finish before pin rows are rewritten so
+    // pinned_by can move to the successor. Own-post pins are left for the
+    // post delete that follows.
+    await reassignOrClearPinsByUser(transaction, userId);
     await deleteRowsOwnedByUser(transaction, userId);
     return { deletedUser: true, ...ownership };
   });
@@ -1568,6 +1574,7 @@ async function releaseOwnedGroups(
       .limit(1);
 
     if (!successor) {
+      await clearPinsForCrew(transaction, group.id);
       await transaction.delete(schema.groups).where(eq(schema.groups.id, group.id));
       deletedGroupIds.push(group.id);
       continue;

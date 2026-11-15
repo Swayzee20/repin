@@ -3,7 +3,9 @@ import { useCallback, useState } from "react";
 import { KeyboardAvoidingView, Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+import { signOutAfterAccountDeleted } from "../lib/account-deletion";
 import { listBlockedUsers } from "../lib/moderation-api";
+import { removePushTokenForSession } from "../lib/push-notifications";
 import { isSentryTestActionVisible, sendSentryTestError } from "../lib/sentry";
 import { useAuthSession } from "../lib/use-auth-session";
 import { supabase } from "../lib/supabase";
@@ -85,7 +87,12 @@ export default function SettingsScreen() {
             : body?.error ?? "Account could not be deleted.",
         );
       }
-      await supabase.auth.signOut({ scope: "local" });
+      const client = supabase;
+      await signOutAfterAccountDeleted({
+        accessToken: data.session.access_token,
+        unregisterPushToken: removePushTokenForSession,
+        signOut: () => client.auth.signOut({ scope: "local" }),
+      });
       router.replace("/");
     } catch (deleteFailure) {
       setDeleting(false);
