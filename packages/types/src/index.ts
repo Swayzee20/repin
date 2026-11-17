@@ -13,6 +13,7 @@ export interface UserDisplayNameInput {
 const namePartPattern = /^[\p{L}\p{M}][\p{L}\p{M}\p{N}'’-]*$/u;
 
 export const PLACEHOLDER_DISPLAY_NAME = "repin member";
+export const DELETED_ACCOUNT_LABEL = "Deleted account";
 const LEGACY_PLACEHOLDER_DISPLAY_NAMES = ["RepIn member"];
 
 export function isPlaceholderDisplayName(value: string | null | undefined) {
@@ -100,6 +101,7 @@ export interface CrewPage {
     photoPath: string | null;
     photoUrl: string | null;
     memberCount: number;
+    ownerNoticeAt: string | null;
   };
   members: CrewMemberSummary[];
   notifications: CrewNotificationState;

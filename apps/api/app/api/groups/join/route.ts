@@ -47,7 +47,7 @@ export async function POST(request: Request) {
 
     reportUnexpectedRouteError("Group could not be joined by invite code", error);
     return NextResponse.json(
-      { error: "Group could not be joined" },
+      { error: "Crew could not be joined" },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }

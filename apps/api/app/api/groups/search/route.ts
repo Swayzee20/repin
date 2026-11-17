@@ -41,9 +41,9 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    reportUnexpectedRouteError("Groups could not be searched", error);
+    reportUnexpectedRouteError("Crews could not be searched", error);
     return NextResponse.json(
-      { error: "Groups could not be searched" },
+      { error: "Crews could not be searched" },
       { status: 503, headers: { "Cache-Control": "no-store" } },
     );
   }

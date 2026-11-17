@@ -26,7 +26,7 @@ export async function GET(
     const { id } = await context.params;
     const groupId = groupIdSchema.safeParse(id);
     if (!groupId.success) {
-      return NextResponse.json({ error: "Invalid group ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid crew ID" }, { status: 400 });
     }
 
     const group = await getGroupForMember({
@@ -78,7 +78,7 @@ export async function PUT(
     const { id } = await context.params;
     const groupId = groupIdSchema.safeParse(id);
     if (!groupId.success) {
-      return NextResponse.json({ error: "Invalid group ID" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid crew ID" }, { status: 400 });
     }
 
     const group = await getGroupForMember({

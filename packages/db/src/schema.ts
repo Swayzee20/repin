@@ -135,6 +135,7 @@ export const groupMembers = pgTable(
     contentVisibleAfter: timestamp("content_visible_after", { withTimezone: true })
       .default(sql`'-infinity'`)
       .notNull(),
+    ownerNoticeAt: timestamp("owner_notice_at", { withTimezone: true }),
   },
   (table) => [
     primaryKey({ columns: [table.groupId, table.userId] }),
@@ -1205,8 +1206,7 @@ export const contentReports = pgTable(
   {
     id: uuid().defaultRandom().primaryKey(),
     reporterId: uuid("reporter_id")
-      .notNull()
-      .references(() => users.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "set null" }),
     groupId: uuid("group_id")
       .notNull()
       .references(() => groups.id, { onDelete: "cascade" }),

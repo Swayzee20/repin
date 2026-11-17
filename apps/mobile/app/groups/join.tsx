@@ -99,7 +99,7 @@ export default function JoinGroupScreen() {
       });
       const body = (await response.json()) as JoinGroupResponse & { error?: string };
       if (!response.ok || !body.group) {
-        throw new Error(body.error ?? "Group could not be joined.");
+        throw new Error(body.error ?? "Crew could not be joined.");
       }
       if (!body.alreadyMember) promptAfterJoiningCrew();
       if (params.onboarding === "1") {
@@ -109,7 +109,7 @@ export default function JoinGroupScreen() {
       }
     } catch (error) {
       setJoinError(
-        error instanceof Error ? error.message : "Group could not be joined.",
+        error instanceof Error ? error.message : "Crew could not be joined.",
       );
     } finally {
       setJoining(false);
@@ -130,7 +130,7 @@ export default function JoinGroupScreen() {
         {roundBack ? <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} /> : null}
         <StateCard
           actionLabel="Back to Home"
-          message="Sign in from Home before joining a group."
+          message="Sign in from Home before joining a crew."
           onAction={() => router.back()}
           title="Sign in required"
         />
@@ -171,18 +171,18 @@ export default function JoinGroupScreen() {
           </Card>
           {preview ? (
             <Card style={styles.previewCard}>
-              <Text style={styles.previewLabel}>GROUP PREVIEW</Text>
+              <Text style={styles.previewLabel}>CREW PREVIEW</Text>
               <Text style={styles.previewName}>{preview.name}</Text>
               <Text style={styles.muted}>{memberLabel(preview.memberCount)}</Text>
               <Button
                 disabled={joining || preview.isMember}
-                disabledReason={preview.isMember ? "You’re already in this group." : undefined}
+                disabledReason={preview.isMember ? "You’re already in this crew." : undefined}
                 loading={joining}
                 loadingLabel="Joining"
                 onPress={() => void join()}
                 variant={preview.isMember ? "secondary" : "primary"}
               >
-                {preview.isMember ? "Already joined" : "Join Group"}
+                {preview.isMember ? "Already joined" : "Join Crew"}
               </Button>
               {joinError ? <Text accessibilityLiveRegion="polite" style={styles.error}>{joinError}</Text> : null}
             </Card>
@@ -192,7 +192,7 @@ export default function JoinGroupScreen() {
     >
       {roundBack ? <RoundIconButton kind="back" onPress={() => router.back()} style={roundNavButtonStyle} /> : null}
       <Text style={styles.eyebrow}>FIND YOUR CREW</Text>
-      <Text style={styles.title}>Join a group</Text>
+      <Text style={styles.title}>Join a crew</Text>
       <Text style={styles.intro}>
         Enter the invite code a member shared with you, or open their invite link.
       </Text>

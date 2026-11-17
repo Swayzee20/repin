@@ -1,5 +1,10 @@
 import type { ContentReportReason, ContentReportTargetType } from "@repin/types";
-import { resolveUserDisplayName } from "@repin/types";
+import { DELETED_ACCOUNT_LABEL, resolveUserDisplayName } from "@repin/types";
+
+function adminDisplayName(name: string) {
+  if (name === DELETED_ACCOUNT_LABEL) return DELETED_ACCOUNT_LABEL;
+  return resolveUserDisplayName({ displayName: name });
+}
 
 export type AdminQueueStatus = "open" | "removed" | "dismissed";
 
@@ -75,7 +80,7 @@ export function serializeAdminQueueItem(
     targetType: item.targetType,
     targetId: item.targetId,
     reason: item.reason,
-    authorDisplayName: resolveUserDisplayName({ displayName: item.authorDisplayName }),
+    authorDisplayName: adminDisplayName(item.authorDisplayName),
     groupName: item.groupName,
     workoutName: item.workoutName,
     reportCount: item.reportCount,
@@ -92,13 +97,13 @@ export function serializeAdminQueueItem(
     contentCreatedAt: item.contentCreatedAt?.toISOString() ?? null,
     reports: item.reports.map((report) => ({
       id: report.id,
-      reporterDisplayName: resolveUserDisplayName({ displayName: report.reporterDisplayName }),
+      reporterDisplayName: adminDisplayName(report.reporterDisplayName),
       reason: report.reason,
       details: report.details,
       createdAt: report.createdAt.toISOString(),
     })),
     authorHistory: {
-      displayName: resolveUserDisplayName({ displayName: item.authorHistory.displayName }),
+      displayName: adminDisplayName(item.authorHistory.displayName),
       removedCount: item.authorHistory.removedCount,
       groupCount: item.authorHistory.groupCount,
     },

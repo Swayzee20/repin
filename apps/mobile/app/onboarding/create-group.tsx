@@ -24,12 +24,12 @@ export default function CreateFirstGroupScreen() {
   const createGroup = useCallback(async () => {
     const groupName = name.trim();
     setError(null);
-    if (!groupName) { setError("Enter a group name."); return; }
+    if (!groupName) { setError("Enter a crew name."); return; }
     if (!supabase) { setError("Supabase is not configured."); return; }
     setSubmitting(true);
     try {
       const { data, error: sessionError } = await supabase.auth.getSession();
-      if (sessionError || !data.session) throw new Error("Sign in to create a group.");
+      if (sessionError || !data.session) throw new Error("Sign in to create a crew.");
       const response = await fetch(`${apiUrl}/api/groups`, {
         method: "POST",
         headers: { Authorization: `Bearer ${data.session.access_token}`, "Content-Type": "application/json" },
@@ -37,11 +37,11 @@ export default function CreateFirstGroupScreen() {
         signal: AbortSignal.timeout(7_500),
       });
       const body = (await response.json()) as { error?: string; group?: { id: string } };
-      if (!response.ok || !body.group) throw new Error(body.error ?? "Group could not be created.");
+      if (!response.ok || !body.group) throw new Error(body.error ?? "Crew could not be created.");
       promptAfterJoiningCrew();
       router.replace("/");
     } catch (createError) {
-      setError(createError instanceof Error ? createError.message : "Group could not be created.");
+      setError(createError instanceof Error ? createError.message : "Crew could not be created.");
     } finally { setSubmitting(false); }
   }, [name, router]);
 
@@ -57,7 +57,7 @@ export default function CreateFirstGroupScreen() {
             <View style={styles.pane}>
               <RoundIconButton accessibilityLabel="Get Started" kind="back" onPress={() => router.back()} style={roundNavButtonStyle} />
               <Text style={styles.eyebrow}>BUILD YOUR CREW</Text>
-              <Text style={styles.title}>Create a group</Text>
+              <Text style={styles.title}>Create a crew</Text>
               <Text style={styles.intro}>Give your community a name. You’ll become the owner automatically.</Text>
             </View>
           )}
@@ -67,7 +67,7 @@ export default function CreateFirstGroupScreen() {
                 <TextField
                   autoFocus
                   error={error}
-                  label="Group name"
+                  label="Crew name"
                   maxLength={80}
                   onChangeText={setName}
                   placeholder="Sunday Strength Club"
@@ -76,12 +76,12 @@ export default function CreateFirstGroupScreen() {
                 />
                 <Button
                   disabled={!name.trim()}
-                  disabledReason={name.trim() ? undefined : "Enter a group name."}
+                  disabledReason={name.trim() ? undefined : "Enter a crew name."}
                   loading={submitting}
-                  loadingLabel="Creating group"
+                  loadingLabel="Creating crew"
                   onPress={() => void createGroup()}
                 >
-                  Create Group
+                  Create Crew
                 </Button>
               </Card>
             </View>

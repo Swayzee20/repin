@@ -10,6 +10,7 @@ import {
   getPushPermissionStatus,
   removePushTokenForSession,
   requestPushPermission,
+  retryPendingPushTokenRemoval,
   syncPushTokenForSession,
 } from "../lib/push-notifications";
 import {
@@ -219,6 +220,7 @@ export function PushNotificationsHost({
       unlockPrompt();
     }
     if (session) {
+      void retryPendingPushTokenRemoval(session.access_token);
       void syncPushTokenForSession();
       flushPendingHref();
     } else {

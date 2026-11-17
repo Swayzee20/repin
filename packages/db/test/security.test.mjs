@@ -1235,6 +1235,200 @@ test("account deletion transfers ownership and deletes an empty group", async ()
   }
 });
 
+test("account deletion keeps filed reports, owner notice, preview, goals lock, and evidence windows", async () => {
+  const testUrl = await recreateDatabase();
+  process.env.DATABASE_URL = testUrl;
+  const client = new Client({ connectionString: testUrl });
+  await client.connect();
+
+  try {
+    await prepareDatabase(client);
+    await runDrizzleMigrate(testUrl);
+    await applySupabaseMigrations(client);
+    await createBypassRole(client);
+    const db = await import("../src/index.ts");
+
+    const owner = await db.getOrCreateUser({
+      id: "50000000-0000-4000-8000-000000000001",
+      displayName: "Owner Name",
+    });
+    const member = await db.getOrCreateUser({
+      id: "50000000-0000-4000-8000-000000000002",
+      displayName: "Sam Rivera",
+    });
+    const extra = await db.getOrCreateUser({
+      id: "50000000-0000-4000-8000-000000000003",
+      displayName: "Extra",
+    });
+
+    const shared = await db.createGroup({ ownerId: owner.id, name: "Morning Run" });
+    await db.joinGroup({ userId: member.id, groupId: shared.id, inviteCode: shared.inviteCode });
+    await db.joinGroup({ userId: extra.id, groupId: shared.id, inviteCode: shared.inviteCode });
+    const empty = await db.createGroup({ ownerId: owner.id, name: "Track Crew" });
+    await client.query("update groups set photo_path = $1 where id = $2", [
+      `${empty.id}/cover.jpg`,
+      empty.id,
+    ]);
+
+    const memberPost = await loggedWorkout(db, member, shared.id, "Member workout");
+    const ownerPost = await loggedWorkout(db, owner, shared.id, "Owner workout");
+    assert.ok(memberPost && ownerPost);
+    await client.query(
+      "update community_posts set photo_path = $1 where workout_session_id = $2",
+      [`${owner.id}/reported.jpg`, ownerPost.id],
+    );
+
+    const filed = await db.createContentReportForMember({
+      userId: owner.id,
+      targetType: "post",
+      targetId: memberPost.communityPostId ?? (await scalar(
+        client,
+        "postgres",
+        null,
+        "select id from community_posts where workout_session_id = $1",
+        [memberPost.id],
+      )),
+      reason: "harassment",
+      details: "Kept after the reporter is gone",
+    });
+    assert.equal(filed.ok, true);
+    const memberReport = await db.createContentReportForMember({
+      userId: member.id,
+      targetType: "post",
+      targetId: ownerPost.communityPostId ?? (await scalar(
+        client,
+        "postgres",
+        null,
+        "select id from community_posts where workout_session_id = $1",
+        [ownerPost.id],
+      )),
+      reason: "harassment",
+    });
+    assert.equal(memberReport.ok, true);
+    const extraReport = await db.createContentReportForMember({
+      userId: extra.id,
+      targetType: "post",
+      targetId: memberPost.communityPostId ?? (await scalar(
+        client,
+        "postgres",
+        null,
+        "select id from community_posts where workout_session_id = $1",
+        [memberPost.id],
+      )),
+      reason: "spam",
+    });
+    assert.equal(extraReport.ok, true);
+
+    const preview = await db.previewAccountDeletion(owner.id);
+    assert.deepEqual(
+      preview.crews.map((crew) => ({
+        name: crew.name,
+        closes: crew.closes,
+        successorDisplayName: crew.successorDisplayName,
+      })),
+      [
+        { name: "Morning Run", closes: false, successorDisplayName: "Sam R." },
+        { name: "Track Crew", closes: true, successorDisplayName: null },
+      ],
+    );
+
+    const plan = await db.listAccountDeletionStoragePlan(owner.id);
+    assert.deepEqual(plan.closedCrewIds, [empty.id]);
+    assert.ok(plan.closedCrewPhotoPaths.includes(`${empty.id}/cover.jpg`));
+    assert.ok(plan.protectedMediaPaths.includes(`${owner.id}/reported.jpg`));
+
+    await client.query("begin");
+    await client.query(
+      "select pg_advisory_xact_lock($1::int, hashtext($2::text))",
+      [1_819_242_348, owner.id],
+    );
+    const pendingDelete = db.deleteUserAccount(owner.id);
+    let waiting = false;
+    for (let attempt = 0; attempt < 40; attempt += 1) {
+      const locks = await client.query(
+        "select 1 from pg_locks where locktype = 'advisory' and granted = false",
+      );
+      if ((locks.rowCount ?? 0) > 0) {
+        waiting = true;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+    assert.equal(waiting, true, "deletion should wait on the goals lock");
+    await client.query("commit");
+    const removed = await pendingDelete;
+    assert.equal(removed.deletedUser, true);
+    assert.deepEqual(removed.deletedGroupIds, [empty.id]);
+    assert.deepEqual(removed.transferredGroups, [{
+      groupId: shared.id,
+      newOwnerId: member.id,
+    }]);
+
+    assert.equal(await countRows(client, "content_reports", "id = $1", [filed.report.id]), 1);
+    assert.equal(
+      await scalar(client, "postgres", null, "select reporter_id from content_reports where id = $1", [filed.report.id]),
+      null,
+    );
+    const queue = await db.listAdminReportQueue();
+    const filedItem = queue.find((item) => item.reports.some((report) => report.id === filed.report.id));
+    assert.ok(filedItem);
+    assert.equal(
+      filedItem.reports.find((report) => report.id === filed.report.id)?.reporterDisplayName,
+      "Deleted account",
+    );
+
+    assert.equal(
+      await scalar(
+        client,
+        "postgres",
+        null,
+        "select owner_notice_at is not null from group_members where group_id = $1 and user_id = $2",
+        [shared.id, member.id],
+      ),
+      true,
+    );
+    assert.equal(await db.dismissOwnerNotice({ userId: member.id, groupId: shared.id }), true);
+    assert.equal(
+      await scalar(
+        client,
+        "postgres",
+        null,
+        "select owner_notice_at from group_members where group_id = $1 and user_id = $2",
+        [shared.id, member.id],
+      ),
+      null,
+    );
+
+    await client.query(
+      "update content_report_evidence set created_at = now() - interval '91 days', retain_until = null, media_paths = array[$2] where report_id = $1",
+      [filed.report.id, "stale/photo.jpg"],
+    );
+    await client.query(
+      "update content_report_evidence set retain_until = now() - interval '1 day', media_paths = array[$2] where report_id = $1",
+      [memberReport.report.id, "resolved/photo.jpg"],
+    );
+
+    const cleanup = await db.cleanupExpiredReportEvidence();
+    assert.ok(cleanup.deletedCount >= 2);
+    assert.ok(cleanup.mediaPathsToDelete.includes("stale/photo.jpg"));
+    assert.ok(cleanup.mediaPathsToDelete.includes("resolved/photo.jpg"));
+    assert.equal(await countRows(client, "content_report_evidence", "report_id = $1", [extraReport.report.id]), 1);
+
+    const verifySql = await readFile(
+      path.join(dbPackageRoot, "drizzle/verify_account_deletion.sql"),
+      "utf8",
+    );
+    await client.query(verifySql);
+  } finally {
+    await client.end();
+    if (globalThis.repinPool) {
+      await globalThis.repinPool.end();
+      globalThis.repinPool = undefined;
+      globalThis.repinDatabase = undefined;
+    }
+  }
+});
+
 test("moderation reports, blocks, removal, and blocked feeds", async () => {
   const testUrl = await recreateDatabase();
   process.env.DATABASE_URL = testUrl;
@@ -3078,6 +3272,7 @@ async function applySupabaseMigrations(client) {
     "20261110000000_goals.sql",
     "20261111000000_workout_read_visibility.sql",
     "20261112000000_general_posts.sql",
+    "20261114180000_account_deletion.sql",
   ]);
   for (const file of files) {
     const sql = await readFile(path.join(directory, file), "utf8");

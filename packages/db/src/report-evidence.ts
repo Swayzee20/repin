@@ -1,13 +1,13 @@
 import "server-only";
 
-import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, lte, or, sql } from "drizzle-orm";
 
-import { getDatabase, type DatabaseTransaction } from "./connection";
+import { getDatabase, type Database, type DatabaseTransaction } from "./connection";
 import * as schema from "./schema";
 
 const EVIDENCE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 
-type Queryable = typeof getDatabase extends () => infer T ? T : never;
+type Queryable = Database | DatabaseTransaction;
 
 export function evidenceRetainUntil(from = new Date()) {
   return new Date(from.getTime() + EVIDENCE_RETENTION_MS);
@@ -246,18 +246,79 @@ export async function markEvidenceAuthorErased(
     ));
 }
 
-export async function deleteExpiredReportEvidence(now = new Date()) {
-  const deleted = await getDatabase()
-    .delete(schema.contentReportEvidence)
-    .where(and(
-      lte(schema.contentReportEvidence.retainUntil, now),
-    ))
-    .returning({ id: schema.contentReportEvidence.id });
-  return deleted.length;
+const UNRESOLVED_EVIDENCE_RETENTION_MS = 90 * 24 * 60 * 60 * 1000;
+
+export function unresolvedEvidenceCutoff(now = new Date()) {
+  return new Date(now.getTime() - UNRESOLVED_EVIDENCE_RETENTION_MS);
 }
 
-export async function listProtectedMediaPaths(transaction: DatabaseTransaction) {
-  const rows = await transaction
+export function dueReportEvidenceFilter(now = new Date()) {
+  const unresolvedCutoff = unresolvedEvidenceCutoff(now);
+  return or(
+    and(
+      isNotNull(schema.contentReportEvidence.retainUntil),
+      lte(schema.contentReportEvidence.retainUntil, now),
+    ),
+    and(
+      isNull(schema.contentReportEvidence.retainUntil),
+      lte(schema.contentReportEvidence.createdAt, unresolvedCutoff),
+    ),
+  );
+}
+
+export async function cleanupExpiredReportEvidence(now = new Date()) {
+  const database = getDatabase();
+  const due = await database
+    .select({
+      id: schema.contentReportEvidence.id,
+      mediaPaths: schema.contentReportEvidence.mediaPaths,
+    })
+    .from(schema.contentReportEvidence)
+    .where(dueReportEvidenceFilter(now));
+
+  if (due.length) {
+    await database
+      .delete(schema.contentReportEvidence)
+      .where(inArray(
+        schema.contentReportEvidence.id,
+        due.map((row) => row.id),
+      ));
+  }
+
+  const remainingProtected = await listProtectedMediaPaths(database);
+  const liveMedia = await listLiveMediaPaths(database);
+  const mediaPathsToDelete = [...new Set(due.flatMap((row) => row.mediaPaths ?? []))]
+    .filter((path) => !remainingProtected.has(path) && !liveMedia.has(path));
+
+  return {
+    deletedCount: due.length,
+    mediaPathsToDelete,
+  };
+}
+
+export async function deleteExpiredReportEvidence(now = new Date()) {
+  const result = await cleanupExpiredReportEvidence(now);
+  return result.deletedCount;
+}
+
+export async function listLiveMediaPaths(queryable: Queryable = getDatabase()) {
+  const [postPhotos, publicationPhotos] = await Promise.all([
+    queryable
+      .select({ photoPath: schema.communityPosts.photoPath })
+      .from(schema.communityPosts)
+      .where(isNotNull(schema.communityPosts.photoPath)),
+    queryable
+      .select({ storagePath: schema.generalPublicationPhotos.storagePath })
+      .from(schema.generalPublicationPhotos),
+  ]);
+  return new Set([
+    ...postPhotos.flatMap((row) => (row.photoPath ? [row.photoPath] : [])),
+    ...publicationPhotos.map((row) => row.storagePath),
+  ]);
+}
+
+export async function listProtectedMediaPaths(queryable: Queryable = getDatabase()) {
+  const rows = await queryable
     .select({ mediaPaths: schema.contentReportEvidence.mediaPaths })
     .from(schema.contentReportEvidence)
     .where(sql`(

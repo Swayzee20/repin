@@ -184,7 +184,8 @@ test("Settings keeps the labeled Sign out button and adds no strip action", () =
   assert.equal(code.includes("<Stack.Toolbar"), false);
   assert.equal(code.includes("rectangle.portrait.and.arrow.right"), false);
   assert.equal(code.includes(">Sign out<"), true);
-  assert.equal(code.includes("Delete account"), true);
+  assert.equal(code.includes("DangerZoneCard"), true);
+  assert.equal(sourceOf("./danger-zone.tsx").includes("Delete account"), true);
   assert.equal(code.includes('variant="prominent"'), false);
 });
 
@@ -261,7 +262,7 @@ test("join by code uses the native back button and no strip action", () => {
   assert.equal(code.includes("pushedHeaderScreenOptions"), true);
   assert.equal(code.includes("<Stack.Toolbar"), false);
   assert.match(code, /\n\s+Find\n/);
-  assert.equal(code.includes("Join Group"), true);
+  assert.equal(code.includes("Join Crew"), true);
   assert.equal(code.split("roundBack ?").length - 1, 3);
 });
 

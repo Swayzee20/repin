@@ -208,7 +208,7 @@ test("crew_post deep links still land on the community post param", () => {
   const push = source("../../../packages/validation/src/push.ts");
   const community = source("../app/(tabs)/community/index.tsx");
   const host = source("./push-notifications-host.tsx");
-  assert.match(push, /params.set\("post", payload.postId\)/);
+  assert.match(push, /params.set\("post", payload.postId/);
   assert.match(push, /\/\(tabs\)\/community\?/);
   assert.match(community, /readCommunityPostParam\(params.post\)/);
   assert.match(community, /readCommunityPostParam\(params.groupId\)/);

@@ -1,10 +1,22 @@
-import { deleteUserAccount } from "@repin/db";
+import {
+  deleteUserAccount,
+  listAccountDeletionStoragePlan,
+  listNewOwnerHandoverTargets,
+} from "@repin/db";
 import { NextResponse } from "next/server";
 
-import { deleteAuthUser, deleteUserWorkoutPhotos } from "../../../lib/account-deletion";
+import {
+  deleteAuthUser,
+  deleteClosedCrewStorage,
+  deleteUserWorkoutPhotos,
+} from "../../../lib/account-deletion";
+import { scheduleCrewPush, notifyCrewOwnerHandover } from "../../../lib/crew-push";
+import { PasswordReauthError, readDeletePassword, runAccountDeletion } from "../../../lib/delete-account";
+import { passwordReauthStatus } from "../../../lib/password-reauth";
 import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
   AuthenticationError,
+  getSupabaseAuthClient,
   requireAuthenticatedUser,
 } from "../../../lib/supabase-auth";
 
@@ -14,13 +26,31 @@ export const runtime = "nodejs";
 export async function DELETE(request: Request) {
   try {
     const identity = await requireAuthenticatedUser(request);
-    // Photos first, application rows second, and the auth user last. Listing
-    // storage and deleting rows are safe to repeat, and the caller can still
-    // sign in to retry until the auth user is gone. Removing auth first would
-    // strand any rows left behind a failed database delete.
-    await deleteUserWorkoutPhotos(identity.id);
-    await deleteUserAccount(identity.id);
-    await deleteAuthUser(identity.id);
+    const body: unknown = await request.json().catch(() => null);
+    const password = readDeletePassword(body);
+
+    await runAccountDeletion({
+      userId: identity.id,
+      email: identity.email,
+      amr: identity.amr,
+      password,
+      verifyPassword: async (email, value) => {
+        const { error } = await getSupabaseAuthClient().auth.signInWithPassword({
+          email,
+          password: value,
+        });
+        return !error;
+      },
+      prepareStorage: listAccountDeletionStoragePlan,
+      deleteUserPhotos: deleteUserWorkoutPhotos,
+      deleteAccount: deleteUserAccount,
+      deleteClosedCrewStorage,
+      notifyNewOwners: async (transfers) => {
+        const targets = await listNewOwnerHandoverTargets(transfers);
+        scheduleCrewPush(() => notifyCrewOwnerHandover(targets));
+      },
+      deleteAuthUser,
+    });
 
     return NextResponse.json(
       { deleted: true },
@@ -32,6 +62,13 @@ export async function DELETE(request: Request) {
         { error: "Unauthorized" },
         { status: 401, headers: { "Cache-Control": "no-store" } },
       );
+    }
+    if (error instanceof PasswordReauthError) {
+      const result = passwordReauthStatus(error);
+      return NextResponse.json(result.body, {
+        status: result.status,
+        headers: { "Cache-Control": "no-store" },
+      });
     }
 
     reportUnexpectedRouteError("Account could not be deleted", error);

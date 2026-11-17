@@ -52,10 +52,10 @@ export const unregisterPushTokenSchema = z
   .strict();
 
 export type CrewPushPayload = {
-  type: CrewPushAlertType;
+  type: CrewPushAlertType | "crew_owner";
   groupId: string;
   sessionId?: string;
-  postId: string;
+  postId?: string;
 };
 
 const uuidString = z.uuid();
@@ -69,12 +69,17 @@ export function parseCrewPushPayload(data: unknown): CrewPushPayload | null {
     && type !== "crew_comment"
     && type !== "crew_reaction"
     && type !== "crew_post"
+    && type !== "crew_owner"
   ) {
     return null;
   }
   const groupId = readUuid(record.groupId);
+  if (!groupId) return null;
+  if (type === "crew_owner") {
+    return { type, groupId };
+  }
   const postId = readUuid(record.postId);
-  if (!groupId || !postId) return null;
+  if (!postId) return null;
   if (type === "crew_post") {
     return { type, groupId, postId };
   }
@@ -90,13 +95,13 @@ function readUuid(value: unknown) {
 }
 
 export function crewPushHref(payload: CrewPushPayload, postGone = false) {
-  if (postGone) return `/groups/${payload.groupId}`;
+  if (payload.type === "crew_owner" || postGone) return `/groups/${payload.groupId}`;
   const params = new URLSearchParams({
     groupId: payload.groupId,
     fromPush: "1",
   });
   if (payload.type === "crew_post") {
-    params.set("post", payload.postId);
+    params.set("post", payload.postId ?? "");
     return `/(tabs)/community?${params.toString()}`;
   }
   return `/workouts/${payload.sessionId}?${params.toString()}`;

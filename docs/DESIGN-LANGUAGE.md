@@ -147,11 +147,12 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
   - disabled: disabledFill / disabledText, plus a helper line saying why (never opacity)
   - secondary: surface + borderStrong
   - tonal (44pt): brandTint + `brandPressed` #9E3500 text (D8; inline "Done"; green is never a button)
-  - danger: destructive confirm only
+  - danger: destructive confirm only. 52 pt, radii.md, type.button, danger #B42318 fill, white label (6.57:1). Pressed keeps the same fill (no new darker token). Disabled uses disabledFill / disabledText plus a helper, never opacity alone. Loading keeps the danger fill and a white spinner.
 - **ListRow:** 52pt, label left, value + chevron icon right, pressed = `selection`. No ‹/› text glyphs.
 - **Sheets:** top `radii.lg`, grabber, 44pt X, rows ≥48. No text "Cancel" row.
 - **Modals:** e3, `radii.lg`, own 56pt header row with a RoundIconButton X. The composer is pinned.
 - **Empty / error / loading:** `StateCard` (`ui/components.tsx:270-283`) = Card + optional 36pt icon + heading + bodySmall + optional 48pt secondary action.
+- **Notice banner** (new): a `surface` card, `radii.lg`, 1 pt `border`, card shadow. Body is `body` / 14 Semibold `ink`. Optional text action (`brand`, 14 Bold, 44 pt hit) and a **Dismiss** text button (`ink`, 14 Bold, 44 pt hit). Not a toast, not a modal, no grabber, no X (D7's X stays on modals and sheets). It stays until Dismissed. Used for the new-owner notice on the crew page. It must never include a deleted person's name.
 - **Icons:** one set (SF Symbols on iOS via NativeTabs / expo-symbols; one vector set on web). No ✓ ⌂ ‹ › text glyphs.
 
 ### 3.1 Form components (board 10)
@@ -336,3 +337,4 @@ There is no width threshold and no platform check in this logic. Its only strip 
 
 ## Changelog
 - **Nov 13, 2026:** added compact 44 pt primary button, approved by Josue.
+- **Nov 14, 2026:** added Notice banner component and danger button recipe, approved by Josue.

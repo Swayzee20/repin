@@ -621,7 +621,7 @@ export default function CommunityTabScreen() {
               <View style={styles.paneColumn}>
                 {groupMenuView ? (
                   <Pressable
-                    accessibilityLabel="Close group menu"
+                    accessibilityLabel="Close crew menu"
                     accessibilityRole="button"
                     onPress={() => setGroupMenuView(null)}
                     style={styles.pickerBackdrop}
@@ -897,7 +897,7 @@ export default function CommunityTabScreen() {
           <>
             {groupMenuView ? (
               <Pressable
-                accessibilityLabel="Close group menu"
+                accessibilityLabel="Close crew menu"
                 accessibilityRole="button"
                 onPress={() => setGroupMenuView(null)}
                 style={styles.pickerBackdrop}
@@ -906,7 +906,7 @@ export default function CommunityTabScreen() {
             <View style={styles.groupHeaderRow}>
               <View style={styles.selectorAnchor}>
                 <Pressable
-                  accessibilityLabel={`Selected group: ${selectedGroup.name}. Open group menu`}
+                  accessibilityLabel={`Selected crew: ${selectedGroup.name}. Open crew menu`}
                   accessibilityRole="button"
                   onPress={() => setGroupMenuView((view) => view ? null : "actions")}
                   style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
@@ -1032,7 +1032,7 @@ export default function CommunityTabScreen() {
             </View>
           </>
         ) : (
-          <StateCard actionLabel="Join a group" message="Join or create a group to start training with your community." onAction={() => router.push("/groups/join")} title="Find your crew" />
+          <StateCard actionLabel="Join a crew" message="Join or create a crew to start training with your community." onAction={() => router.push("/groups/join")} title="Find your crew" />
         )}
       </View>
       </WideColumn>
@@ -1203,10 +1203,10 @@ function GroupActionsMenu({
     <Menu style={styles.groupDrawer}>
       {groupMenuView === "actions" ? (
         <>
-          <MenuItem icon="arrow.triangle.2.circlepath" label="Switch group" onPress={() => onToggleMenu("groups")} showChevron />
+          <MenuItem icon="arrow.triangle.2.circlepath" label="Switch crew" onPress={() => onToggleMenu("groups")} showChevron />
           <MenuItem
             icon="person.2"
-            label="View group"
+            label="View crew"
             onPress={() => {
               onToggleMenu(null);
               onOpenGroup(selectedGroupId);
@@ -1215,7 +1215,7 @@ function GroupActionsMenu({
         </>
       ) : (
         <>
-          <MenuItem accessibilityLabel="Back to group menu" icon="chevron.left" label="Switch group" onPress={() => onToggleMenu("actions")} />
+          <MenuItem accessibilityLabel="Back to crew menu" icon="chevron.left" label="Switch crew" onPress={() => onToggleMenu("actions")} />
           {groups.map((group) => (
             <MenuItem
               key={group.id}
@@ -1253,7 +1253,7 @@ function CommunityGroupControls({
       <View style={styles.groupHeaderRow}>
         <View style={styles.selectorAnchor}>
           <Pressable
-            accessibilityLabel={`Selected group: ${selectedGroup.name}. Open group menu`}
+            accessibilityLabel={`Selected crew: ${selectedGroup.name}. Open crew menu`}
             accessibilityRole="button"
             onPress={() => onToggleMenu(groupMenuView ? null : "actions")}
             style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
@@ -1301,7 +1301,7 @@ function DeleteWorkoutModal({
       {stage === "choose" ? (
         <>
           <MenuItem
-            detail="Remove this rep-in from the group. Your workout will stay in your history."
+            detail="Remove this rep-in from the crew. Your workout will stay in your history."
             disabled={pending}
             label="Delete post only"
             onPress={onDeletePost}
