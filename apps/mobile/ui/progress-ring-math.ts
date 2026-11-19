@@ -1,28 +1,49 @@
-import { progressRing } from "./theme";
+/** SVG Goal progress ring geometry. Centerline radius is (diameter − fill stroke) / 2. */
 
-export function ringTickOnFill(index: number, tickCount: number, sweepDeg: number) {
-  if (sweepDeg <= 0) return false;
-  if (sweepDeg >= 360) return true;
-  const deg = (index / tickCount) * 360;
-  return deg <= sweepDeg;
+export function ringCenterlineRadius(diameter: number, fillStroke: number) {
+  return (diameter - fillStroke) / 2;
 }
 
-export function ringCapPoint(diameter: number, stroke: number, deg: number) {
-  const radius = (diameter - stroke) / 2;
-  const rad = ((deg - 90) * Math.PI) / 180;
-  return {
-    x: diameter / 2 + radius * Math.cos(rad) - stroke / 2,
-    y: diameter / 2 + radius * Math.sin(rad) - stroke / 2,
-  };
+export function ringCircumference(radius: number) {
+  return 2 * Math.PI * radius;
 }
 
-export function ringTickTransform(diameter: number, stroke: number, deg: number) {
-  const offset = diameter / 2 - stroke / 2;
-  return [
-    { translateY: offset },
-    { rotate: `${deg}deg` },
-    { translateY: -offset },
-  ];
+/** SVG circles start at 3 o'clock; −90° puts 0° at 12 o'clock, clockwise. */
+export function ringStartRotationDeg() {
+  return -90;
 }
 
-export const ringTickCount = progressRing.tickCount;
+export function ringFillDashLength(sweepDeg: number, circumference: number) {
+  if (sweepDeg <= 0) return 0;
+  if (sweepDeg >= 360) return circumference;
+  return (sweepDeg / 360) * circumference;
+}
+
+export function ringFillDashOffset() {
+  return 0;
+}
+
+export function ringGapDashLength(gapDeg: number, circumference: number) {
+  return (Math.min(360, Math.max(0, gapDeg)) / 360) * circumference;
+}
+
+/** Place the surface gap just after the fill so brand and muted do not butt. */
+export function ringGapDashOffset(fillDashLength: number) {
+  return -fillDashLength;
+}
+
+export function ringStrokeDasharray(dashLength: number, circumference: number) {
+  return `${dashLength} ${circumference}`;
+}
+
+export function ringShowsTrack(reached: boolean) {
+  return !reached;
+}
+
+export function ringShowsFill(sweepDeg: number, reached: boolean) {
+  return reached || sweepDeg > 0;
+}
+
+export function ringShowsGap(sweepDeg: number, reached: boolean) {
+  return !reached && sweepDeg > 0 && sweepDeg < 360;
+}

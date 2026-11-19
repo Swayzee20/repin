@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -26,7 +26,20 @@ import {
   homeIsShortScreen,
   homePromptLimit,
 } from "./home-layout";
-import { ringTickOnFill } from "./progress-ring-math";
+import {
+  ringCenterlineRadius,
+  ringCircumference,
+  ringFillDashLength,
+  ringFillDashOffset,
+  ringGapDashLength,
+  ringGapDashOffset,
+  ringShowsFill,
+  ringShowsGap,
+  ringShowsTrack,
+  ringStartRotationDeg,
+  ringStrokeDasharray,
+} from "./progress-ring-math";
+import { progressRing } from "./theme";
 
 const homeScreen = readFileSync(new URL("../app/(tabs)/(home)/index.tsx", import.meta.url), "utf8");
 const homeUi = readFileSync(new URL("./home.tsx", import.meta.url), "utf8");
@@ -63,6 +76,9 @@ test("Home uses the Goal progress ring, not a bar, and keeps the empty crew plus
   assert.match(homeUi, /GoalProgressRing/);
   assert.match(ring, /useReducedMotion/);
   assert.match(ring, /progressRing\.diameter/);
+  assert.match(ring, /from "react-native-svg"/);
+  assert.match(ring, /strokeLinecap="round"/);
+  assert.equal(ring.includes("ringTickOnFill"), false);
   assert.match(homeUi, /homeCopy\.emptyCrewTitle/);
   assert.equal(homeUi.includes("CheckInEmptyContent"), false);
   assert.equal(homeUi.includes("Log a workout"), false);
@@ -79,12 +95,36 @@ test("goal mutations bump Home freshness", () => {
   assert.equal(goalsApi.split("markWorkoutDataStale()").length > 5, true);
 });
 
-test("ring ticks fill to the sweep and leave a gap while in progress", () => {
-  const sweep = ringFillSweepDeg(0.5, 8);
-  assert.equal(ringTickOnFill(0, 90, sweep), true);
-  assert.equal(ringTickOnFill(89, 90, sweep), false);
-  assert.equal(ringTickOnFill(0, 90, 0), false);
-  assert.equal(ringTickOnFill(0, 90, 360), true);
+test("ring SVG dash length, offset, gap, and reached state follow the spec geometry", () => {
+  const radius = ringCenterlineRadius(progressRing.diameter, progressRing.fillStroke);
+  assert.equal(radius, 18);
+  const circumference = ringCircumference(radius);
+  const sweep = ringFillSweepDeg(0.5, progressRing.gapDeg);
+  assert.equal(sweep, 172);
+  const fillDash = ringFillDashLength(sweep, circumference);
+  assert.equal(fillDash, (172 / 360) * circumference);
+  assert.equal(ringFillDashOffset(), 0);
+  assert.equal(ringStartRotationDeg(), -90);
+  assert.equal(ringGapDashLength(progressRing.gapDeg, circumference), (8 / 360) * circumference);
+  assert.equal(ringGapDashOffset(fillDash), -fillDash);
+  assert.equal(ringStrokeDasharray(fillDash, circumference), `${fillDash} ${circumference}`);
+  assert.equal(ringFillDashLength(0, circumference), 0);
+  assert.equal(ringFillDashLength(360, circumference), circumference);
+  assert.equal(ringShowsTrack(false), true);
+  assert.equal(ringShowsTrack(true), false);
+  assert.equal(ringShowsFill(0, false), false);
+  assert.equal(ringShowsFill(172, false), true);
+  assert.equal(ringShowsFill(0, true), true);
+  assert.equal(ringShowsGap(172, false), true);
+  assert.equal(ringShowsGap(0, false), false);
+  assert.equal(ringShowsGap(360, false), false);
+  assert.equal(ringShowsGap(172, true), false);
+});
+
+test("react-native-svg provides a Metro web entry so the ring can render on Vercel", () => {
+  const webEntry = fileURLToPath(new URL("../node_modules/react-native-svg/src/ReactNativeSVG.web.ts", import.meta.url));
+  assert.equal(existsSync(webEntry), true);
+  assert.match(ring, /from "react-native-svg"/);
 });
 
 test("Home layout file exists next to the screen", () => {
