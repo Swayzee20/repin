@@ -1,16 +1,31 @@
-import { getUserInitials, resolveUserDisplayName, type GoalBadge, type HomeData, type PrBadge, type WorkoutFeedItem } from "@repin/types";
-import { goalCopy } from "@repin/validation";
+import {
+  personFirstName,
+  resolveUserDisplayName,
+  type GoalBadge,
+  type HomeCrewHighlights,
+  type HomeData,
+  type HomeGoalSnapshot,
+  type PrBadge,
+  type WorkoutFeedItem,
+} from "@repin/types";
+import {
+  goalCopy,
+  highlightRows,
+  homeComingUp,
+  homeCopy,
+  homeGoalRowModel,
+  selectHomeGoals,
+} from "@repin/validation";
 import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useVerticalBarEdge } from "../../../ui/vertical-bar-edge";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
 import { normalizeInviteRedirect } from "../../../lib/invite-route";
 import { isLayoutPreview } from "../../../lib/layout-preview";
-import { resolveWorkoutDate } from "../../../lib/workout-date";
 import {
   getWorkoutDataRevision,
   isFresh,
@@ -20,16 +35,34 @@ import { useMainTabs } from "../../../ui/main-tabs-context";
 import { workoutMenuItems } from "../../../lib/content-menu";
 import { useGoalBadgeUndo } from "../../../lib/goal-badge-actions";
 import { usePrBadgeUndo } from "../../../lib/pr-badge-actions";
-import { isOwnPost } from "../../../ui/community-feed-layout";
-import { BrandHeader, Card, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { LoadingState } from "../../../ui/components";
 import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { useModeration } from "../../../ui/moderation";
-import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
-import { Icon } from "../../../ui/icons";
+import {
+  HomeActivity,
+  HomeComingUpCard,
+  HomeCrewEyebrow,
+  HomeErrorCards,
+  HomeGreeting,
+  HomeHighlights,
+  HomeLoadingSkeleton,
+  HomeSnapshotCard,
+  HomeThisWeekCard,
+  HomeViewGoals,
+  StaleBanner,
+} from "../../../ui/home";
+import {
+  homeComingUpInCard,
+  homeGoalLimit,
+  homeHighlightLimit,
+  homeIsShortScreen,
+  homePromptLimit,
+} from "../../../ui/home-layout";
 import { TwoPane, useLayoutMode } from "../../../ui/layout";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
-import { colors, fonts, radii, size, spacing, type } from "../../../ui/theme";
+import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
+import { colors, spacing, type } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -39,7 +72,7 @@ export default function HomeScreen() {
   const { mode } = useLayoutMode();
   const insets = useSafeAreaInsets();
   const verticalBarEdge = useVerticalBarEdge();
-  const { openWorkoutChooser, setSelectedGroupId: setTabGroupId } = useMainTabs();
+  const { setSelectedGroupId: setTabGroupId } = useMainTabs();
   const params = useLocalSearchParams<{ redirect?: string | string[] }>();
   const layoutPreview = __DEV__ && isLayoutPreview();
   const inviteRedirect = normalizeInviteRedirect(params.redirect);
@@ -49,7 +82,9 @@ export default function HomeScreen() {
   const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const [homeLoading, setHomeLoading] = useState(false);
   const [homeError, setHomeError] = useState<string | null>(null);
-  const [localDayKey, setLocalDayKey] = useState(() => getLocalDateKey(new Date()));
+  const [staleAt, setStaleAt] = useState<string | null>(null);
+  const [localDayKey, setLocalDayKey] = useState(() => localDateKey(new Date()));
+  const [detailWorkout, setDetailWorkout] = useState<WorkoutFeedItem | null>(null);
   const homeDataRef = useRef<HomeData | null>(null);
   const lastSuccessfulLoad = useRef<FreshnessRecord | null>(null);
   const inFlightRequests = useRef(new Map<string, Promise<void>>());
@@ -66,6 +101,7 @@ export default function HomeScreen() {
       setSession(nextSession); setAuthLoading(false); setHomeData(null); setSelectedGroupId(null);
       homeDataRef.current = null;
       lastSuccessfulLoad.current = null;
+      setStaleAt(null);
       if (nextSession && inviteRedirect) router.replace(inviteRedirect);
     });
     return () => subscription.subscription.unsubscribe();
@@ -112,9 +148,13 @@ export default function HomeScreen() {
         workoutRevision,
       };
       setHomeData(body); setSelectedGroupId(body.selectedGroupId); setTabGroupId(body.selectedGroupId);
+      setStaleAt(null);
       } catch (error) {
         if (latestRequestKey.current === requestKey) {
           setHomeError(error instanceof Error ? error.message : "Home could not be loaded.");
+          if (homeDataRef.current) {
+            setStaleAt(new Date().toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }));
+          }
         }
       } finally {
         if (latestRequestKey.current === requestKey) setHomeLoading(false);
@@ -135,20 +175,29 @@ export default function HomeScreen() {
     const nextLocalDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
     const timeout = setTimeout(() => {
       lastSuccessfulLoad.current = null;
-      setLocalDayKey(getLocalDateKey(new Date()));
+      setLocalDayKey(localDateKey(new Date()));
       void loadHome();
     }, nextLocalDay.getTime() - now.getTime() + 1_000);
     return () => clearTimeout(timeout);
   }, [loadHome, localDayKey]);
 
   const dashboardData = __DEV__ && layoutPreview ? layoutPreviewHome() : homeData;
-  const selectedGroup = useMemo(() => dashboardData?.groups.find((group) => group.id === dashboardData.selectedGroupId), [dashboardData]);
+  const selectedGroup = useMemo(
+    () => dashboardData?.groups.find((group) => group.id === dashboardData.selectedGroupId),
+    [dashboardData],
+  );
   const hideHomeWorkouts = useCallback((matches: (workout: WorkoutFeedItem) => boolean) => {
     setHomeData((current) => {
       if (!current) return current;
+      const nextWorkouts = current.communityWorkouts.filter((workout) => !matches(workout));
+      const hiddenIds = new Set(
+        current.communityWorkouts.filter(matches).map((workout) => workout.userId),
+      );
+      const nextHighlights = filterHighlights(current.crewHighlights, (person) => !hiddenIds.has(person.userId));
       const next = {
         ...current,
-        communityWorkouts: current.communityWorkouts.filter((workout) => !matches(workout)),
+        communityWorkouts: nextWorkouts,
+        crewHighlights: nextHighlights,
       };
       homeDataRef.current = next;
       return next;
@@ -187,18 +236,40 @@ export default function HomeScreen() {
     onUserBlocked: (userId) => hideHomeWorkouts((workout) => workout.userId === userId),
   });
   const dashboardBottomPadding = verticalBarEdge !== null ? insets.bottom + spacing.xxl : 160;
+  const twoPane = mode === "twoPane";
+  const shortScreen = homeIsShortScreen(mode, windowHeight);
+  const now = new Date();
+  const greetingName = greetingFirstName(
+    dashboardData?.user.displayName
+      ?? (typeof session?.user.user_metadata?.display_name === "string" ? session.user.user_metadata.display_name : ""),
+  );
+
   if (!layoutPreview && authLoading && !session) return <Shell><LoadingState message="Checking your account…" /></Shell>;
   if (!layoutPreview && !session) return null;
-  if (!layoutPreview && homeLoading && !homeData) return <Shell><LoadingState message="Loading your community…" /></Shell>;
-  if (!layoutPreview && homeError && !homeData) return <Shell><StateCard actionLabel="Try again" message={homeError} onAction={() => void loadHome()} title="Home unavailable" /></Shell>;
-  if (!dashboardData) return null;
-  const latestCommunityWorkout = dashboardData.communityWorkouts[0] ?? null;
-  const latestWorkoutToday = dashboardData.communityWorkouts.find(isWorkoutFromToday) ?? null;
-  const highlights = deriveWeeklyHighlights(dashboardData.communityWorkouts, latestCommunityWorkout);
-  const compactDashboard = mode === "compact" && windowHeight < 760;
-  const standaloneIosWeb = isStandaloneIosWebApp();
-  const visibleHighlights = highlights.slice(0, mode === "twoPane" || windowHeight >= 850 ? 3 : 2);
-  const crewWorkouts = mode === "twoPane" ? newestFirst(dashboardData.communityWorkouts) : [];
+
+  const firstLoad = !dashboardData;
+  const showSkeletons = firstLoad && homeLoading;
+  const showError = firstLoad && Boolean(homeError);
+  const errors = HomeErrorCards({ onRetry: () => void loadHome(), showCrewAction: false });
+  const skeletons = HomeLoadingSkeleton({ twoPane });
+  const goals = dashboardData?.goals ?? [];
+  const visibleGoals = selectHomeGoals(goals, now, homeGoalLimit(mode, shortScreen)).map((goal) =>
+    homeGoalRowModel(goal, now),
+  );
+  const comingUp = homeComingUp({
+    goals,
+    displayed: visibleGoals,
+    now,
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+  });
+  const highlightLimit = homeHighlightLimit(shortScreen);
+  const highlightItems = highlightRows({
+    firstToRepInToday: dashboardData?.crewHighlights?.firstToRepInToday ?? null,
+    weekly: dashboardData?.crewHighlights?.weekly ?? [],
+    limit: highlightLimit,
+  });
+  const prompts = (dashboardData?.communityWorkouts ?? []).slice(0, homePromptLimit(mode, shortScreen));
+  const comingUpCard = homeComingUpInCard(mode);
 
   return (
     <View style={[styles.safeArea, styles.homeSafeArea]}>
@@ -208,46 +279,113 @@ export default function HomeScreen() {
           contentPaddingBottom={dashboardBottomPadding}
           fallback="stack"
           left={(
-            <PersonalZone
-              compact={compactDashboard}
-              highlights={mode === "twoPane" ? visibleHighlights : null}
-              homeData={dashboardData}
-              standaloneIosWeb={standaloneIosWeb}
-            />
+            <View style={styles.personalZone}>
+              <ScrollAnchor id="home-greeting">
+                <View style={styles.header}>
+                  <HomeGreeting name={greetingName} />
+                </View>
+              </ScrollAnchor>
+              {staleAt ? <StaleBanner onRetry={() => void loadHome()} time={staleAt} /> : null}
+              {showError ? errors.personal : showSkeletons ? skeletons.snapshot : dashboardData ? (
+                <>
+                  <ScrollAnchor id="home-snapshot">
+                    {twoPane ? (
+                      <HomeThisWeekCard
+                        goals={visibleGoals}
+                        occurredAt={dashboardData.snapshot.workoutOccurredAtThisWeek}
+                        onOpenGoal={(id) => router.push(`/goals/${id}`)}
+                        onSetGoal={() => router.push("/goals/new")}
+                        weekCount={dashboardData.snapshot.workoutsThisWeek}
+                        weeks={dashboardData.streak?.weeks ?? 0}
+                      />
+                    ) : (
+                      <HomeSnapshotCard
+                        comingUp={comingUp}
+                        goals={visibleGoals}
+                        occurredAt={dashboardData.snapshot.workoutOccurredAtThisWeek}
+                        onOpenGoal={(id) => router.push(`/goals/${id}`)}
+                        onSetGoal={() => router.push("/goals/new")}
+                        weekCount={dashboardData.snapshot.workoutsThisWeek}
+                        weeks={dashboardData.streak?.weeks ?? 0}
+                      />
+                    )}
+                  </ScrollAnchor>
+                  {goals.length ? (
+                    <HomeViewGoals onPress={() => router.navigate("/profile")} />
+                  ) : null}
+                  {comingUpCard ? (
+                    <ScrollAnchor id="home-coming-up">
+                      <View style={styles.comingUp}>
+                        <HomeComingUpCard
+                          comingUp={comingUp}
+                          onOpenGoal={(id) => router.push(`/goals/${id}`)}
+                        />
+                      </View>
+                    </ScrollAnchor>
+                  ) : null}
+                </>
+              ) : null}
+            </View>
           )}
           right={(
-            <CrewZone
-              compact={compactDashboard}
-              highlights={mode === "twoPane" ? null : visibleHighlights}
-              homeError={homeError}
-              homeLoading={homeLoading}
-              latestWorkoutToday={mode === "twoPane" ? null : latestWorkoutToday}
-              viewerUserId={session?.user.id ?? dashboardData.user.id}
-              menuFor={(workout) => workoutMenuItems({
-                onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
-                  displayName: item.displayName,
-                  hideId: item.id,
-                  kind: "post",
-                  targetId: item.communityPostId ?? item.id,
-                  userId: item.userId,
-                }),
-                onRemoveGoalBadge: (item) => void goalUndo.remove(item),
-                onRemovePrBadge: (item) => void prUndo.remove(item),
-                onReport: (item) => moderation.askReportPost(item),
-                viewerUserId: session?.user.id ?? dashboardData.user.id,
-                workout,
-              })}
-              onCheckIn={selectedGroup ? openWorkoutChooser : undefined}
-              onViewAll={selectedGroup ? () => {
-                setTabGroupId(selectedGroup.id);
-                router.navigate("/community");
-              } : undefined}
-              workouts={crewWorkouts}
-            />
+            <View style={styles.communityZone}>
+              <ScrollAnchor id="home-crew">
+                <HomeCrewEyebrow name={selectedGroup?.name ?? null} />
+              </ScrollAnchor>
+              {showError ? errors.crew : showSkeletons ? (
+                <>
+                  <Text style={styles.highlightsTitle}>{homeCopy.highlights}</Text>
+                  {skeletons.highlights}
+                  <Text style={styles.activityTitle}>{homeCopy.activity}</Text>
+                  {skeletons.activity}
+                </>
+              ) : dashboardData ? (
+                <>
+                  <HomeHighlights rows={highlightItems} />
+                  <HomeActivity
+                    menuFor={(workout) => workoutMenuItems({
+                      onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {
+                        displayName: item.displayName,
+                        hideId: item.id,
+                        kind: "post",
+                        targetId: item.communityPostId ?? item.id,
+                        userId: item.userId,
+                      }),
+                      onRemoveGoalBadge: (item) => void goalUndo.remove(item),
+                      onRemovePrBadge: (item) => void prUndo.remove(item),
+                      onReport: (item) => moderation.askReportPost(item),
+                      viewerUserId: session?.user.id ?? dashboardData.user.id,
+                      workout,
+                    })}
+                    now={now}
+                    onOpen={setDetailWorkout}
+                    onViewAll={selectedGroup ? () => {
+                      setTabGroupId(selectedGroup.id);
+                      router.navigate("/community");
+                    } : undefined}
+                    workouts={prompts}
+                  />
+                </>
+              ) : null}
+            </View>
           )}
         />
       </SafeAreaView>
       {moderation.ui}
+      <WorkoutDetailModal
+        key={detailWorkout?.id ?? "closed"}
+        groupId={selectedGroup?.id ?? detailWorkout?.groupId ?? null}
+        groupName={selectedGroup?.name ?? null}
+        initialWorkout={detailWorkout}
+        onDismiss={() => setDetailWorkout(null)}
+        onGoalBadgesChange={applyHomeGoalBadges}
+        onPostHidden={(sessionId) => hideHomeWorkouts((workout) => workout.id === sessionId)}
+        onPrBadgesChange={applyHomePrBadges}
+        onUserBlocked={(userId) => hideHomeWorkouts((workout) => workout.userId === userId)}
+        sessionId={detailWorkout?.id ?? null}
+        viewerUserId={session?.user.id ?? dashboardData?.user.id ?? null}
+        visible={detailWorkout !== null}
+      />
       <PrUndoToast
         message={goalUndo.visible ? goalCopy.toast : prCopy.toast}
         onClear={goalUndo.visible ? goalUndo.clear : prUndo.clear}
@@ -256,181 +394,6 @@ export default function HomeScreen() {
         visible={prUndo.visible || goalUndo.visible}
       />
     </View>
-  );
-}
-
-function PersonalZone({
-  compact,
-  highlights,
-  homeData,
-  standaloneIosWeb,
-}: {
-  compact: boolean;
-  highlights: ReturnType<typeof deriveWeeklyHighlights> | null;
-  homeData: HomeData;
-  standaloneIosWeb: boolean;
-}) {
-  const consistencyDays = buildWeeklyConsistencyDays(homeData.snapshot.workoutOccurredAtThisWeek);
-  return (
-    <View style={[styles.personalZone, compact && styles.personalZoneCompact, standaloneIosWeb && styles.personalZoneStandalone]}>
-      <ScrollAnchor id="home-greeting">
-        <View style={[styles.header, compact && styles.headerCompact]}>
-          <View style={styles.headerCopy}><BrandHeader /><Text numberOfLines={1} style={styles.greeting}>Hey, {getGreetingFirstName(homeData.user.displayName)}</Text></View>
-        </View>
-      </ScrollAnchor>
-
-      <ScrollAnchor id="home-snapshot">
-        <Card style={[styles.snapshot, compact && styles.snapshotCompact]}>
-          <View style={styles.snapshotTop}>
-            <View style={styles.statusIcon}>
-              {homeData.snapshot.hasWorkoutToday ? (
-                <Icon color={colors.brand} name="checkmark" size={size.icon.md} />
-              ) : (
-                <View style={styles.pendingMark} />
-              )}
-            </View>
-            <View style={styles.snapshotCopy}>
-              <Text style={styles.snapshotStatus}>{homeData.snapshot.hasWorkoutToday ? "You repped in today" : "Ready when you are"}</Text>
-              <Text numberOfLines={2} style={styles.snapshotMessage}>{homeData.snapshot.message}</Text>
-            </View>
-            <View style={styles.weekStat}><Text style={styles.weekNumber}>{homeData.snapshot.workoutsThisWeek}</Text><Text style={styles.weekLabel}>THIS WEEK</Text></View>
-          </View>
-          {homeData.snapshot.mostRecentWorkoutToday ? <Text numberOfLines={1} style={styles.latestLine}>Latest: {homeData.snapshot.mostRecentWorkoutToday.title}{homeData.snapshot.mostRecentWorkoutToday.durationMinutes ? ` · ${homeData.snapshot.mostRecentWorkoutToday.durationMinutes} min` : ""}</Text> : null}
-        </Card>
-      </ScrollAnchor>
-
-      <ScrollAnchor id="home-week">
-        <Card accessibilityRole="list" style={styles.consistencyRow}>
-          {consistencyDays.map((day) => (
-            <View
-              accessibilityLabel={day.accessibilityLabel}
-              accessible
-              key={day.key}
-              style={styles.consistencyDay}
-            >
-              <Text style={[styles.consistencyWeekday, day.isToday && styles.consistencyWeekdayToday]}>{day.weekday}</Text>
-              <View style={styles.consistencyMarker}>
-                <View style={[
-                  styles.consistencyCircle,
-                  day.completed
-                    ? styles.consistencyCircleCompleted
-                    : day.isFuture
-                      ? styles.consistencyCircleFuture
-                      : day.isToday
-                        ? styles.consistencyCircleToday
-                        : styles.consistencyCirclePast,
-                ]}>
-                  {day.completed ? <Icon color={colors.surface} name="checkmark" size={size.icon.sm} /> : null}
-                </View>
-              </View>
-            </View>
-          ))}
-        </Card>
-      </ScrollAnchor>
-      {highlights ? <Highlights compact={compact} highlights={highlights} /> : null}
-    </View>
-  );
-}
-
-function CrewZone({
-  compact,
-  highlights,
-  homeError,
-  homeLoading,
-  latestWorkoutToday,
-  menuFor,
-  onCheckIn,
-  onViewAll,
-  viewerUserId,
-  workouts,
-}: {
-  compact: boolean;
-  highlights: ReturnType<typeof deriveWeeklyHighlights> | null;
-  homeError: string | null;
-  homeLoading: boolean;
-  latestWorkoutToday: WorkoutFeedItem | null;
-  menuFor?: (workout: WorkoutFeedItem) => ReturnType<typeof workoutMenuItems>;
-  onCheckIn?: () => void;
-  onViewAll?: () => void;
-  viewerUserId?: string | null;
-  workouts: WorkoutFeedItem[];
-}) {
-  const showList = workouts.length > 0;
-  return (
-    <View style={[styles.communityZone, compact && styles.communityZoneCompact]}>
-      <ScrollAnchor id="home-crew">
-        <Text style={styles.crewEyebrow}>YOUR CREW</Text>
-        <View style={[styles.sectionHeader, compact && styles.sectionHeaderCompact]}>
-          <Text style={styles.subsectionTitle}>Activity</Text>
-          {onViewAll ? (
-            <Pressable accessibilityRole="button" hitSlop={8} onPress={onViewAll}>
-              <Text style={styles.sectionAction}>View all</Text>
-            </Pressable>
-          ) : null}
-        </View>
-      </ScrollAnchor>
-      {homeLoading ? <ActivityIndicator color={colors.brand} style={styles.refreshing} /> : null}
-      {homeError ? <Text style={styles.error}>{homeError}</Text> : null}
-      {showList ? workouts.map((workout) => (
-        <ScrollAnchor id={`home-workout-${workout.id}`} key={workout.id}>
-          <View style={[styles.latestWorkout, compact && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard
-              isOwn={isOwnPost(workout.userId, viewerUserId)}
-              menuItems={menuFor?.(workout)}
-              variant="compact"
-              workout={workout}
-            />
-          </View>
-        </ScrollAnchor>
-      )) : latestWorkoutToday ? (
-        <ScrollAnchor id={`home-workout-${latestWorkoutToday.id}`}>
-          <View style={[styles.latestWorkout, compact && styles.latestWorkoutCompact]}>
-            <WorkoutSummaryCard
-              isOwn={isOwnPost(latestWorkoutToday.userId, viewerUserId)}
-              menuItems={menuFor?.(latestWorkoutToday)}
-              variant="compact"
-              workout={latestWorkoutToday}
-            />
-          </View>
-        </ScrollAnchor>
-      ) : (
-        <ScrollAnchor id="home-empty">
-          <Card style={[styles.emptySnapshot, compact && styles.emptySnapshotCompact]}>
-            <CheckInEmptyContent onCheckIn={onCheckIn} />
-          </Card>
-        </ScrollAnchor>
-      )}
-      {highlights ? <Highlights compact={compact} highlights={highlights} /> : null}
-    </View>
-  );
-}
-
-function Highlights({
-  compact,
-  highlights,
-}: {
-  compact: boolean;
-  highlights: ReturnType<typeof deriveWeeklyHighlights>;
-}) {
-  return (
-    <ScrollAnchor id="home-highlights">
-      <Text style={[styles.subsectionTitle, styles.highlightsTitle, compact && styles.highlightsTitleCompact]}>Highlights</Text>
-      <Card style={[styles.highlightsCard, compact && styles.highlightsCardCompact]}>
-        {highlights.length ? (
-          highlights.map((highlight, index) => (
-            <View key={highlight.userId} style={[styles.highlightRow, compact && styles.highlightRowCompact, index < highlights.length - 1 && styles.highlightDivider]}>
-              <View style={styles.highlightAvatar}><Text style={styles.highlightAvatarText}>{getUserInitials({ displayName: highlight.displayName })}</Text></View>
-              <Text style={styles.highlightMessage}>
-                <Text style={styles.highlightName}>{resolveUserDisplayName({ displayName: highlight.displayName })}</Text>
-                {` repped in at least ${highlight.count} times this week`}
-              </Text>
-            </View>
-          ))
-        ) : (
-          <Text style={styles.noHighlights}>No highlights yet. Keep getting those reps in.</Text>
-        )}
-      </Card>
-    </ScrollAnchor>
   );
 }
 
@@ -444,88 +407,142 @@ function Shell({ children }: { children: ReactNode }) {
   );
 }
 
-function deriveWeeklyHighlights(
-  workouts: WorkoutFeedItem[],
-  latestWorkout: WorkoutFeedItem | null,
-) {
-  const now = new Date();
-  const weekStart = new Date(now);
-  weekStart.setHours(0, 0, 0, 0);
-  weekStart.setDate(weekStart.getDate() - ((weekStart.getDay() + 6) % 7));
-  const counts = new Map<string, { count: number; displayName: string; userId: string }>();
+function greetingFirstName(displayName: string) {
+  if (!displayName.trim()) return "";
+  return personFirstName(resolveUserDisplayName({ displayName }));
+}
 
-  workouts.forEach((workout) => {
-    const occurredAt = resolveWorkoutDate(workout);
-    if (!occurredAt) return;
-    if (occurredAt < weekStart || occurredAt > now) return;
-    const current = counts.get(workout.userId);
-    counts.set(workout.userId, {
-      count: (current?.count ?? 0) + 1,
-      displayName: workout.displayName,
-      userId: workout.userId,
-    });
-  });
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
 
-  return [...counts.values()]
-    .filter((highlight) => highlight.count >= 2)
-    .sort((left, right) => {
-      const leftIsLatest = left.userId === latestWorkout?.userId ? 1 : 0;
-      const rightIsLatest = right.userId === latestWorkout?.userId ? 1 : 0;
-      return leftIsLatest - rightIsLatest || right.count - left.count;
-    })
-    .slice(0, 3);
+function filterHighlights(
+  highlights: HomeCrewHighlights | undefined,
+  keep: (person: { userId: string }) => boolean,
+): HomeCrewHighlights | undefined {
+  if (!highlights) return highlights;
+  return {
+    firstToRepInToday: highlights.firstToRepInToday && keep(highlights.firstToRepInToday)
+      ? highlights.firstToRepInToday
+      : null,
+    weekly: highlights.weekly.filter(keep),
+  };
 }
 
 function layoutPreviewHome(): HomeData {
   if (!__DEV__) {
     throw new Error("Home layout preview is development-only.");
   }
-  const maya = "Maya L.";
-  const jordan = "Jordan P.";
-  const sam = "Sam R.";
+  const occurredAt = "2026-11-18T19:41:00.000Z";
   const workout = (
     id: string,
     displayName: string,
     userId: string,
     title: string,
     workoutType: string,
-    occurredAt: string,
-    durationMinutes: number | null,
-    effort: number,
-    caption: string | null,
+    at: string,
+    resultSummary: string,
   ): WorkoutFeedItem => ({
-    caption,
-    completedAt: occurredAt,
-    createdAt: occurredAt,
+    caption: null,
+    completedAt: at,
+    createdAt: at,
     displayName,
-    durationMinutes,
-    effort,
+    durationMinutes: 32,
+    effort: 3,
     groupId: "group-1",
     id,
     name: title,
-    notes: caption,
-    occurredAt,
+    notes: null,
+    occurredAt: at,
     photoPath: null,
+    resultSummary,
     title,
-    updatedAt: occurredAt,
+    updatedAt: at,
     userId,
     workoutType,
   });
   const communityWorkouts = [
-    workout("w1", maya, "user-maya", "Easy shakeout", "run", "2026-10-30T12:12:00.000Z", 32, 3, "Legs felt great today"),
-    workout("w2", jordan, "user-jordan", "Push day", "strength_training", "2026-10-30T11:40:00.000Z", 45, 4, null),
-    workout("w3", sam, "user-sam", "Hill repeats", "run", "2026-10-30T11:05:00.000Z", null, 4, null),
-    workout("w4", maya, "user-maya", "Easy shakeout", "run", "2026-10-29T12:00:00.000Z", 30, 2, null),
-    workout("w5", maya, "user-maya", "Easy shakeout", "run", "2026-10-28T12:00:00.000Z", 28, 2, null),
-    workout("w6", jordan, "user-jordan", "Push day", "strength_training", "2026-10-28T11:00:00.000Z", 40, 3, null),
+    workout("w1", "Maya L.", "user-maya", "Easy shakeout", "run", occurredAt, "4.0 mi"),
+    workout("w2", "Sam R.", "user-sam", "Lift", "strength_training", "2026-11-18T16:41:00.000Z", "45 min"),
+    workout("w3", "Alex P.", "user-alex", "Easy 3", "run", "2026-11-17T21:41:00.000Z", "an easy 3 mi"),
+    workout("w4", "Jordan P.", "user-jordan", "Ride", "cycling", "2026-11-17T21:41:00.000Z", "a 40 min"),
+    workout("w5", "Riley K.", "user-riley", "Run", "run", "2026-11-16T21:41:00.000Z", "5.2 mi"),
   ];
+  const runs: HomeGoalSnapshot = {
+    id: "goal-runs",
+    title: "4 runs this week",
+    kind: "volume",
+    metric: "workout_count",
+    schedule: "weekly",
+    displayUnit: "count",
+    targetValue: 4,
+    timeZone: "America/Chicago",
+    deadlineAt: null,
+    progress: {
+      current: 1,
+      target: 4,
+      ratio: 0.25,
+      label: "1 of 4",
+      periodLabel: null,
+      lastQualifyingLabel: null,
+    },
+    currentDisplay: 1,
+    targetDisplay: 4,
+  };
+  const miles: HomeGoalSnapshot = {
+    id: "goal-miles",
+    title: "20 miles this week",
+    kind: "volume",
+    metric: "distance",
+    schedule: "weekly",
+    displayUnit: "mi",
+    targetValue: 20 * 1_609.344,
+    timeZone: "America/Chicago",
+    deadlineAt: null,
+    progress: {
+      current: 8 * 1_609.344,
+      target: 20 * 1_609.344,
+      ratio: 0.4,
+      label: "8 of 20 mi",
+      periodLabel: null,
+      lastQualifyingLabel: null,
+    },
+    currentDisplay: 8,
+    targetDisplay: 20,
+  };
+  const race: HomeGoalSnapshot = {
+    id: "goal-race",
+    title: "5K race",
+    kind: "time",
+    metric: "time",
+    schedule: "one_time",
+    displayUnit: null,
+    targetValue: 1500,
+    timeZone: "America/Chicago",
+    deadlineAt: "2026-11-21T06:00:00.000Z",
+    progress: {
+      current: 0,
+      target: 1500,
+      ratio: 0,
+      label: "0%",
+      periodLabel: null,
+      lastQualifyingLabel: null,
+    },
+    currentDisplay: 0,
+    targetDisplay: 1500,
+  };
   return {
     communityWorkouts,
+    crewHighlights: {
+      firstToRepInToday: { displayName: "Maya L.", userId: "user-maya" },
+      weekly: [{ count: 3, displayName: "Maya L.", userId: "user-maya" }],
+    },
+    goals: [runs, miles, race],
     groups: [{
       createdAt: "2026-01-01T00:00:00.000Z",
       id: "group-1",
-      name: "Morning Crew",
-      ownerId: "user-maya",
+      name: "Strong Boys",
+      ownerId: "user-josue",
       role: "owner",
     }],
     selectedGroupId: "group-1",
@@ -534,135 +551,29 @@ function layoutPreviewHome(): HomeData {
       message: "Three sessions already this week.",
       mostRecentWorkoutToday: communityWorkouts[0] ?? null,
       workoutOccurredAtThisWeek: [
-        "2026-10-28T12:00:00.000Z",
-        "2026-10-29T12:00:00.000Z",
-        "2026-10-30T12:12:00.000Z",
+        "2026-11-15T12:00:00.000Z",
+        "2026-11-16T12:00:00.000Z",
+        "2026-11-17T12:00:00.000Z",
       ],
       workoutsThisWeek: 3,
     },
+    streak: { weeks: 4 },
     user: {
       createdAt: "2026-01-01T00:00:00.000Z",
-      displayName: maya,
-      id: "user-maya",
+      displayName: "Josue",
+      id: "user-josue",
     },
   };
-}
-
-function newestFirst(workouts: WorkoutFeedItem[]) {
-  return [...workouts].sort((left, right) => {
-    const leftTime = resolveWorkoutDate(left)?.getTime() ?? 0;
-    const rightTime = resolveWorkoutDate(right)?.getTime() ?? 0;
-    return rightTime - leftTime || right.updatedAt.localeCompare(left.updatedAt);
-  });
-}
-
-function getGreetingFirstName(displayName: string) {
-  return resolveUserDisplayName({ displayName }).split(/\s+/)[0];
-}
-
-function isWorkoutFromToday(workout: WorkoutFeedItem) {
-  const occurredAt = resolveWorkoutDate(workout);
-  if (!occurredAt) return false;
-  const today = new Date();
-  return occurredAt.getFullYear() === today.getFullYear()
-    && occurredAt.getMonth() === today.getMonth()
-    && occurredAt.getDate() === today.getDate();
-}
-
-function buildWeeklyConsistencyDays(workoutOccurredAtThisWeek: string[]) {
-  const now = new Date();
-  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const sunday = new Date(todayStart);
-  sunday.setDate(sunday.getDate() - sunday.getDay());
-  const completedDateKeys = new Set(
-    workoutOccurredAtThisWeek
-      .map((value) => new Date(value))
-      .filter((date) => !Number.isNaN(date.getTime()))
-      .map(getLocalDateKey),
-  );
-
-  return Array.from({ length: 7 }, (_, index) => {
-    const date = new Date(sunday);
-    date.setDate(sunday.getDate() + index);
-    const key = getLocalDateKey(date);
-    const completed = completedDateKeys.has(key);
-    const isToday = date.getTime() === todayStart.getTime();
-    const isFuture = date.getTime() > todayStart.getTime();
-    const temporalStatus = isToday ? "today, " : isFuture ? "future day, " : "";
-    const status = `${temporalStatus}${completed ? "workout completed" : "no workout logged"}`;
-
-    return {
-      accessibilityLabel: `${new Intl.DateTimeFormat(undefined, {
-        day: "numeric",
-        month: "long",
-        weekday: "long",
-      }).format(date)}, ${status}`,
-      completed,
-      isFuture,
-      isToday,
-      key,
-      weekday: new Intl.DateTimeFormat(undefined, { weekday: "short" }).format(date).toLocaleUpperCase(),
-    };
-  });
-}
-
-function getLocalDateKey(date: Date) {
-  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
-}
-
-function isStandaloneIosWebApp() {
-  if (Platform.OS !== "web" || typeof window === "undefined") return false;
-  return (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
 }
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   flex: { flex: 1 },
   homeSafeArea: { backgroundColor: colors.background, ...Platform.select({ web: { paddingBottom: 0 } }) },
-  personalZone: { backgroundColor: colors.background, paddingBottom: spacing.xxl, paddingTop: spacing.lg },
-  personalZoneCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
-  personalZoneStandalone: { paddingTop: spacing.xxl },
-  header: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.xxl }, headerCopy: { flex: 1, marginRight: spacing.lg },
-  headerCompact: { marginBottom: spacing.sm },
-  greeting: { color: colors.ink, ...type.display, marginTop: spacing.xs },
-  snapshot: { padding: spacing.lg }, snapshotTop: { alignItems: "center", flexDirection: "row" }, statusIcon: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, height: 40, justifyContent: "center", width: 40 },
-  snapshotCompact: { padding: spacing.md },
-  pendingMark: { backgroundColor: colors.brand, borderRadius: radii.pill, height: spacing.sm, width: spacing.sm },
-  snapshotCopy: { flex: 1, marginLeft: spacing.md }, snapshotStatus: { color: colors.ink, ...type.bodySmall, fontFamily: fonts.semibold }, snapshotMessage: { color: colors.muted, ...type.label, fontFamily: fonts.regular, marginTop: spacing.xs },
-  weekStat: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.md, marginLeft: spacing.md, minWidth: 72, paddingHorizontal: spacing.md, paddingVertical: spacing.sm }, weekNumber: { color: colors.brand, ...type.title }, weekLabel: { color: colors.brandPressed, ...type.micro, letterSpacing: 0.8 },
-  latestLine: { borderTopColor: colors.border, borderTopWidth: 1, color: colors.inkSoft, ...type.label, fontFamily: fonts.medium, marginTop: spacing.md, paddingTop: spacing.md },
-  consistencyRow: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md, paddingHorizontal: spacing.xs, paddingVertical: spacing.sm },
-  consistencyDay: { alignItems: "center", flex: 1 },
-  consistencyWeekday: { color: colors.muted, ...type.micro, letterSpacing: 0.6 },
-  consistencyWeekdayToday: { color: colors.inkSoft },
-  consistencyMarker: { alignItems: "center", height: 34, justifyContent: "center", marginTop: spacing.xs, width: 34 },
-  consistencyCircle: { alignItems: "center", borderRadius: radii.pill, borderWidth: 1, height: 26, justifyContent: "center", width: 26 },
-  consistencyCircleCompleted: { backgroundColor: colors.brand, borderColor: colors.brand },
-  consistencyCircleToday: { backgroundColor: colors.surfaceMuted, borderColor: colors.inkSoft },
-  consistencyCirclePast: { backgroundColor: colors.borderStrong, borderColor: colors.borderStrong },
-  consistencyCircleFuture: { backgroundColor: colors.surface, borderColor: colors.border },
+  personalZone: { backgroundColor: colors.background, paddingBottom: spacing.md, paddingTop: spacing.lg },
+  header: { marginBottom: spacing.lg },
+  comingUp: { marginTop: spacing.md },
   communityZone: { backgroundColor: colors.background, paddingTop: spacing.sm },
-  communityZoneCompact: { paddingTop: spacing.xs },
-  crewEyebrow: { color: colors.brand, ...type.heading },
-  sectionHeader: { alignItems: "center", flexDirection: "row", justifyContent: "space-between", marginTop: spacing.xs },
-  sectionHeaderCompact: { marginTop: 0 },
-  subsectionTitle: { color: colors.ink, ...type.section },
-  sectionAction: { color: colors.brand, ...type.label },
-  latestWorkout: { marginTop: spacing.lg },
-  latestWorkoutCompact: { marginTop: spacing.sm },
-  emptySnapshot: { alignItems: "center", marginTop: spacing.lg, padding: spacing.lg },
-  emptySnapshotCompact: { paddingBottom: spacing.md, paddingTop: spacing.sm },
-  highlightsTitle: { marginTop: spacing.xl },
-  highlightsTitleCompact: { marginTop: spacing.xs },
-  highlightsCard: { marginTop: spacing.md },
-  highlightsCardCompact: { marginTop: spacing.xs },
-  highlightRow: { alignItems: "center", flexDirection: "row", paddingVertical: spacing.xs },
-  highlightRowCompact: { paddingVertical: 0 },
-  highlightDivider: { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth },
-  highlightAvatar: { alignItems: "center", backgroundColor: colors.surfaceMuted, borderRadius: radii.pill, height: size.avatars.sm, justifyContent: "center", width: size.avatars.sm },
-  highlightAvatarText: { color: colors.brand, ...type.micro },
-  highlightMessage: { color: colors.inkSoft, flex: 1, ...type.bodySmall, marginLeft: spacing.md },
-  highlightName: { color: colors.ink, fontFamily: fonts.semibold },
-  noHighlights: { color: colors.muted, ...type.bodySmall },
-  refreshing: { marginTop: spacing.md }, error: { color: colors.danger, ...type.bodySmall, marginTop: spacing.md },
+  highlightsTitle: { color: colors.brand, marginBottom: spacing.sm, marginTop: spacing.lg, ...type.section },
+  activityTitle: { color: colors.ink, marginTop: spacing.lg, ...type.section },
 });

@@ -14,6 +14,7 @@ import type {
   GoalState,
   GoalSummary,
   GoalsListResponse,
+  HomeGoalSnapshot,
   WorkoutType,
 } from "@repin/types";
 import { MAX_ACTIVE_GOALS } from "@repin/types";
@@ -56,6 +57,7 @@ import {
   formatLiftDisplay,
   formatMinutesDisplay,
   formatTimeTarget,
+  metersToDisplay,
   liftGoalTitle,
   nextActiveSlot,
   qualifyingLiftCandidate,
@@ -143,6 +145,56 @@ export async function listGoalsForUser(userId: string, now = new Date()): Promis
     activeCount: active.length,
     cap: MAX_ACTIVE_GOALS,
   };
+}
+
+/** Home-weight read: active goals only, no settlement, no origin lookups. */
+export async function listActiveGoalSnapshotsForHome(
+  userId: string,
+  now = new Date(),
+): Promise<HomeGoalSnapshot[]> {
+  const database = getDatabase();
+  const rows = await database
+    .select()
+    .from(schema.goals)
+    .where(and(eq(schema.goals.userId, userId), eq(schema.goals.state, "active")))
+    .orderBy(asc(schema.goals.createdAt));
+  if (!rows.length) return [];
+  const periods = await database
+    .select()
+    .from(schema.goalPeriods)
+    .where(inArray(schema.goalPeriods.goalId, rows.map((goal) => goal.id)));
+  const periodByGoal = groupPeriods(periods);
+  const snapshots: HomeGoalSnapshot[] = [];
+  for (const goal of rows) {
+    if (goal.schedule === "one_time" && goal.deadlineAt && now >= goal.deadlineAt) {
+      continue;
+    }
+    const current = pickCurrentPeriod(goal, periodByGoal.get(goal.id) ?? [], now);
+    const progress = await progressFor(database, goal, current, now);
+    snapshots.push({
+      id: goal.id,
+      title: goal.title,
+      kind: goal.kind as GoalKind,
+      metric: goal.metric as GoalMetric,
+      schedule: goal.schedule as GoalSchedule,
+      displayUnit: goal.displayUnit,
+      targetValue: goal.targetValue,
+      timeZone: goal.timeZone,
+      deadlineAt: goal.deadlineAt?.toISOString() ?? null,
+      progress,
+      currentDisplay: displayAmount(goal, progress.current),
+      targetDisplay: displayAmount(goal, progress.target),
+    });
+  }
+  return snapshots;
+}
+
+function displayAmount(goal: GoalRow, canonical: number) {
+  if (goal.metric === "distance") {
+    return Math.round(metersToDisplay(canonical, goal.displayUnit) * 10) / 10;
+  }
+  if (goal.metric === "minutes") return Math.round(canonical / 60);
+  return canonical;
 }
 
 export async function getGoalForUser(

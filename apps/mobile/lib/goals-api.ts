@@ -1,6 +1,7 @@
 import type { GoalDetail, GoalBadge, GoalsListResponse } from "@repin/types";
 
 import { apiErrorMessage } from "./api";
+import { markWorkoutDataStale } from "./data-freshness";
 import { supabase } from "./supabase";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
@@ -43,6 +44,7 @@ export async function createGoal(payload: Record<string, unknown>): Promise<Goal
     signal: AbortSignal.timeout(10_000),
   });
   const body = await readJson<{ goal: GoalDetail }>(response);
+  markWorkoutDataStale();
   return body.goal;
 }
 
@@ -55,6 +57,7 @@ export async function updateGoal(goalId: string, payload: Record<string, unknown
     signal: AbortSignal.timeout(10_000),
   });
   const body = await readJson<{ goal: GoalDetail }>(response);
+  markWorkoutDataStale();
   return body.goal;
 }
 
@@ -66,6 +69,7 @@ export async function archiveGoal(goalId: string): Promise<GoalDetail> {
     signal: AbortSignal.timeout(10_000),
   });
   const body = await readJson<{ goal: GoalDetail }>(response);
+  markWorkoutDataStale();
   return body.goal;
 }
 
@@ -77,6 +81,7 @@ export async function deleteGoal(goalId: string) {
     signal: AbortSignal.timeout(10_000),
   });
   await readJson<{ ok: boolean }>(response);
+  markWorkoutDataStale();
 }
 
 export async function markGoalDone(goalId: string): Promise<GoalDetail> {
@@ -87,6 +92,7 @@ export async function markGoalDone(goalId: string): Promise<GoalDetail> {
     signal: AbortSignal.timeout(10_000),
   });
   const body = await readJson<{ goal: GoalDetail }>(response);
+  markWorkoutDataStale();
   return body.goal;
 }
 
@@ -98,6 +104,7 @@ export async function reopenGoal(goalId: string): Promise<GoalDetail> {
     signal: AbortSignal.timeout(10_000),
   });
   const body = await readJson<{ goal: GoalDetail }>(response);
+  markWorkoutDataStale();
   return body.goal;
 }
 
