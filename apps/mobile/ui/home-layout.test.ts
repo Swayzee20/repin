@@ -39,7 +39,7 @@ import {
   ringStartRotationDeg,
   ringStrokeDasharray,
 } from "./progress-ring-math";
-import { progressRing } from "./theme";
+import { colors, fonts, progressRing, size, type } from "./theme";
 
 const homeScreen = readFileSync(new URL("../app/(tabs)/(home)/index.tsx", import.meta.url), "utf8");
 const homeUi = readFileSync(new URL("./home.tsx", import.meta.url), "utf8");
@@ -129,4 +129,44 @@ test("react-native-svg provides a Metro web entry so the ring can render on Verc
 
 test("Home layout file exists next to the screen", () => {
   assert.equal(fileURLToPath(new URL("./home-layout.ts", import.meta.url)).includes("home-layout.ts"), true);
+});
+
+test("Highlights and Activity share the same brand Bold 13 section-label style", () => {
+  const label = readFileSync(new URL("./section-label.tsx", import.meta.url), "utf8");
+
+  assert.equal(colors.brand, "#C94300");
+  assert.equal(fonts.bold, "Nunito_700Bold");
+  assert.equal(type.eyebrow.fontSize, 13);
+  assert.equal(type.label.fontSize, 13);
+  assert.equal(type.eyebrow.lineHeight, 18);
+  assert.equal(size.hit, 44);
+
+  assert.match(label, /export const sectionLabelStyle: TextStyle = \{/);
+  assert.match(label, /color: colors.brand/);
+  assert.match(label, /fontFamily: fonts.bold/);
+  assert.match(label, /fontSize: type.eyebrow.fontSize/);
+  assert.match(label, /letterSpacing: 0/);
+  assert.match(label, /lineHeight: type.eyebrow.lineHeight/);
+  assert.match(label, /textAlign: "left"/);
+  assert.match(label, /export function SectionLabel/);
+  assert.match(label, /style=\{\[sectionLabelStyle, style\]\}/);
+
+  assert.match(homeUi, /import \{ SectionLabel \} from "\.\/section-label"/);
+  assert.match(homeUi, /<SectionLabel style=\{styles.highlightsLabel\}>\{homeCopy\.highlights\}/);
+  assert.match(homeUi, /<SectionLabel>\{homeCopy\.activity\}/);
+  assert.match(homeUi, /<SectionLabel style=\{styles.sectionLabel\}>\{homeCopy\.thisWeek\}/);
+  assert.match(homeUi, /<SectionLabel style=\{styles.sectionLabel\}>\{homeCopy\.comingUp\}/);
+  assert.match(homeUi, /HomeLoadingSkeleton[\s\S]*homeCopy\.highlights[\s\S]*homeCopy\.activity/);
+  assert.equal(homeUi.includes("highlightsTitle"), false);
+  assert.equal(homeUi.includes("activityTitle"), false);
+  assert.equal(homeUi.includes("sectionEyebrow"), false);
+  assert.equal(homeUi.includes("...type.section"), false);
+  assert.match(homeUi, /viewAllHit: \{ justifyContent: "center", minHeight: size.hit \}/);
+  assert.match(homeUi, /homeCopy\.viewAll/);
+
+  assert.equal(homeScreen.includes("highlightsTitle"), false);
+  assert.equal(homeScreen.includes("activityTitle"), false);
+  assert.equal(homeScreen.includes("type.section"), false);
+  assert.match(homeScreen, /HomeHighlights/);
+  assert.match(homeScreen, /HomeActivity/);
 });

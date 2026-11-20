@@ -12,7 +12,6 @@ import {
   goalCopy,
   highlightRows,
   homeComingUp,
-  homeCopy,
   homeGoalRowModel,
   selectHomeGoals,
 } from "@repin/validation";
@@ -20,7 +19,7 @@ import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useVerticalBarEdge } from "../../../ui/vertical-bar-edge";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
@@ -62,7 +61,7 @@ import {
 import { TwoPane, useLayoutMode } from "../../../ui/layout";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
 import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
-import { colors, spacing, type } from "../../../ui/theme";
+import { colors, spacing } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -334,9 +333,7 @@ export default function HomeScreen() {
               </ScrollAnchor>
               {showError ? errors.crew : showSkeletons ? (
                 <>
-                  <Text style={styles.highlightsTitle}>{homeCopy.highlights}</Text>
                   {skeletons.highlights}
-                  <Text style={styles.activityTitle}>{homeCopy.activity}</Text>
                   {skeletons.activity}
                 </>
               ) : dashboardData ? (
@@ -574,6 +571,4 @@ const styles = StyleSheet.create({
   header: { marginBottom: spacing.lg },
   comingUp: { marginTop: spacing.md },
   communityZone: { backgroundColor: colors.background, paddingTop: spacing.sm },
-  highlightsTitle: { color: colors.brand, marginBottom: spacing.sm, marginTop: spacing.lg, ...type.section },
-  activityTitle: { color: colors.ink, marginTop: spacing.lg, ...type.section },
 });
