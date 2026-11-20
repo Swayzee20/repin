@@ -121,6 +121,16 @@ test("user-visible account-deletion and crew screens say crew, not group", () =>
       forbidden: ['? "group" : "groups"'],
       required: ['? "crew" : "crews"', "DELETED_ACCOUNT_LABEL"],
     },
+    {
+      file: "packages/validation/src/home.ts",
+      forbidden: ["YOUR GROUP", "No one's repped in the group", "Couldn't load group"],
+      required: ["YOUR CREW", "No one's repped in yet", "Couldn't load crew"],
+    },
+    {
+      file: "apps/mobile/ui/home.tsx",
+      forbidden: ["YOUR GROUP", "Be the first to log in your group"],
+      required: ["homeCopy.yourCrew", "homeCopy.emptyCrewTitle"],
+    },
   ];
 
   for (const check of checks) {

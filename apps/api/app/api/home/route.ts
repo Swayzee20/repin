@@ -1,13 +1,21 @@
 import {
   getPinnedGeneralPostForMember,
+  getUserWeeklyStreak,
   getUserWorkoutSnapshot,
   hydrateGeneralFeedItems,
+  listActiveGoalSnapshotsForHome,
   listCommunityFeedForMember,
+  listCrewHighlightsForHome,
   listGroupsForUser,
   listRecentWorkoutsForAuthorizedGroup,
 } from "@repin/db";
-import type { CommunityFeedItem, GeneralPostFeedItem, WorkoutFeedItem } from "@repin/types";
-import { homeLocalBounds, homeQuerySchema } from "@repin/validation";
+import type {
+  CommunityFeedItem,
+  GeneralPostFeedItem,
+  HomeCrewHighlights,
+  WorkoutFeedItem,
+} from "@repin/types";
+import { HOME_ACTIVITY_LIMIT, homeLocalBounds, homeQuerySchema } from "@repin/validation";
 
 import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
@@ -88,16 +96,23 @@ export async function GET(request: Request) {
       });
     }
 
+    const now = new Date();
+    const bounds = homeLocalBounds(now, query.data);
+    const homeFeed = view === "home";
     const authorizedCommunityWorkouts = selectedGroup
       ? ((await timing.measure("db", () =>
           listRecentWorkoutsForAuthorizedGroup({
             groupId: selectedGroup.id,
             viewerUserId: identity.id,
-            limit: 20,
+            limit: homeFeed ? HOME_ACTIVITY_LIMIT : 20,
             includeReactionCounts: view === "community",
             includeCommentCounts: view === "community",
-            occurredAtStart: query.data.start ? new Date(query.data.start) : undefined,
-            occurredAtEnd: query.data.end ? new Date(query.data.end) : undefined,
+            occurredAtStart: homeFeed
+              ? bounds.weekStart
+              : query.data.start ? new Date(query.data.start) : undefined,
+            occurredAtEnd: homeFeed
+              ? bounds.weekEnd
+              : query.data.end ? new Date(query.data.end) : undefined,
           }))) ?? [])
       : [];
     const workoutsWithPhotos = view === "community"
@@ -133,6 +148,21 @@ export async function GET(request: Request) {
     const workoutSnapshot = await workoutSnapshotPromise!;
     if (!user) throw new Error("Application user was not provisioned");
 
+    const timeZone = query.data.timeZone ?? "UTC";
+    const [goals, streak, crewHighlights] = await Promise.all([
+      timing.measure("db", () => listActiveGoalSnapshotsForHome(identity.id, now)),
+      timing.measure("db", () => getUserWeeklyStreak({ userId: identity.id, timeZone, now })),
+      selectedGroup
+        ? timing.measure("db", () => listCrewHighlightsForHome({
+          groupId: selectedGroup.id,
+          viewerUserId: identity.id,
+          todayStart: bounds.todayStart,
+          weekStart: bounds.weekStart,
+          now,
+        }))
+        : Promise.resolve({ firstToRepInToday: null, weekly: [] } satisfies HomeCrewHighlights),
+    ]);
+
     return jsonNoStore(timing, {
       user: withResolvedDisplayName(user),
       snapshot: timing.measureSync("enrichment", () =>
@@ -140,6 +170,9 @@ export async function GET(request: Request) {
       groups,
       selectedGroupId: selectedGroup?.id ?? null,
       communityWorkouts,
+      goals,
+      streak,
+      crewHighlights: namedCrewHighlights(crewHighlights),
     });
   } catch (error) {
     if (error instanceof AuthenticationError) {
@@ -289,6 +322,15 @@ async function signGeneralPostPhotos(items: GeneralPostFeedItem[]) {
       url: urls.get(photo.path) ?? null,
     })),
   }));
+}
+
+function namedCrewHighlights(highlights: HomeCrewHighlights): HomeCrewHighlights {
+  return {
+    firstToRepInToday: highlights.firstToRepInToday
+      ? withResolvedDisplayName(highlights.firstToRepInToday)
+      : null,
+    weekly: highlights.weekly.map(withResolvedDisplayName),
+  };
 }
 
 function jsonNoStore(timing: ServerTiming, body: unknown) {

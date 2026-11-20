@@ -709,6 +709,39 @@ export interface CommunityWorkoutDetail extends WorkoutFeedItem {
   reactions: CommunityReactionSummary;
 }
 
+export interface HomeGoalSnapshot {
+  id: string;
+  title: string;
+  kind: GoalKind;
+  metric: GoalMetric;
+  schedule: GoalSchedule;
+  displayUnit: string | null;
+  targetValue: number;
+  timeZone: string;
+  deadlineAt: string | null;
+  progress: GoalProgress;
+  currentDisplay: number;
+  targetDisplay: number;
+}
+
+export interface HomeStreak {
+  weeks: number;
+}
+
+export interface HomeCrewHighlightPerson {
+  userId: string;
+  displayName: string;
+}
+
+export interface HomeCrewHighlightCount extends HomeCrewHighlightPerson {
+  count: number;
+}
+
+export interface HomeCrewHighlights {
+  firstToRepInToday: HomeCrewHighlightPerson | null;
+  weekly: HomeCrewHighlightCount[];
+}
+
 export interface HomeData {
   user: {
     id: string;
@@ -725,6 +758,9 @@ export interface HomeData {
   groups: GroupSummary[];
   selectedGroupId: string | null;
   communityWorkouts: WorkoutFeedItem[];
+  goals?: HomeGoalSnapshot[];
+  streak?: HomeStreak;
+  crewHighlights?: HomeCrewHighlights;
 }
 
 export type CommunityFeedItem = WorkoutFeedItem | GeneralPostFeedItem;

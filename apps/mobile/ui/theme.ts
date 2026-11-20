@@ -74,6 +74,18 @@ export const calendar = {
   dayRing: 1.5,
 } as const;
 
+/** Home Goal progress ring (DESIGN-LANGUAGE.md §3). Same size on every layout. */
+export const progressRing = {
+  diameter: spacing.huge,
+  fillStroke: 4,
+  trackStroke: 2,
+  gapPt: 2,
+  gapDeg: 8,
+  tickCount: 90,
+  rowHeight: 68,
+  titleGap: spacing.md,
+} as const;
+
 export const size = {
   hit: 44,
   control: 48,
@@ -85,6 +97,7 @@ export const size = {
     md: 44,
     lg: 64,
   },
+  highlightBadge: 28,
   icon: {
     md: 20,
     sm: 16,
@@ -116,6 +129,7 @@ export const type = {
   bodyMedium: { fontFamily: fonts.medium, fontSize: 16, lineHeight: 23 },
   bodySmall: { fontFamily: fonts.regular, fontSize: 14, lineHeight: 20 },
   label: { fontFamily: fonts.semibold, fontSize: 13, lineHeight: 18 },
+  ringLabel: { fontFamily: fonts.display, fontSize: 13, lineHeight: 16 },
   eyebrow: { fontFamily: fonts.extrabold, fontSize: 13, letterSpacing: 1.1, lineHeight: 18 },
   /** Weekday letters. ExtraBold 12; the shared steps jump from micro 11 to label 13. */
   calendarWeekday: { fontFamily: fonts.extrabold, fontSize: 12, lineHeight: 18 },

@@ -153,6 +153,7 @@ Panes come from `TwoPane` / `useLayoutMode()` (`ui/layout.tsx`). On compact, fol
 - **Modals:** e3, `radii.lg`, own 56pt header row with a RoundIconButton X. The composer is pinned.
 - **Empty / error / loading:** `StateCard` (`ui/components.tsx:270-283`) = Card + optional 36pt icon + heading + bodySmall + optional 48pt secondary action.
 - **Notice banner** (new): a `surface` card, `radii.lg`, 1 pt `border`, card shadow. Body is `body` / 14 Semibold `ink`. Optional text action (`brand`, 14 Bold, 44 pt hit) and a **Dismiss** text button (`ink`, 14 Bold, 44 pt hit). Not a toast, not a modal, no grabber, no X (D7's X stays on modals and sheets). It stays until Dismissed. Used for the new-owner notice on the crew page. It must never include a deleted person's name.
+- **Goal progress ring** (new): 40 pt visual diameter on iPhone, folded Duo, and unfolded Duo (same size so it doesn’t jump on fold). Fill is a 4 pt arc with round caps, `brand` #C94300 while in progress (4.90:1 on `surface`) and `success` #2E7D5B when reached (5.00:1; status only). Track is a 2 pt `muted` #6B5B52 circle (6.47:1 on `surface`); hidden when reached. A 2 pt `surface` gap sits at the join (`brand` vs `muted` is 1.32:1 if they butt). Center label is Fredoka 13 / 700 `ink` (“3/4” or “72%,” 15.71:1). If that label would be longer than 4 characters (for example “10/20”), show the percent in the ring (“50%”) and keep the full number in the nudge line (for example “10 of 20 mi, 10 to go”). Time and lift goals show a percent and have no nudge. Used in the Home goal row (Nunito 16 / 700 title, Nunito 13 / 600 `inkSoft` nudge). The whole row is the 44 pt hit and opens `/goals/{id}`. No gold. No fill animation when Reduce Motion is on; the ring draws at its final value.
 - **Icons:** one set (SF Symbols on iOS via NativeTabs / expo-symbols; one vector set on web). No ✓ ⌂ ‹ › text glyphs.
 
 ### 3.1 Form components (board 10)
@@ -338,3 +339,4 @@ There is no width threshold and no platform check in this logic. Its only strip 
 ## Changelog
 - **Nov 13, 2026:** added compact 44 pt primary button, approved by Josue.
 - **Nov 14, 2026:** added Notice banner component and danger button recipe, approved by Josue.
+- **Nov 19, 2026:** added Progress ring component, approved by Josue.

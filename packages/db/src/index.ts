@@ -2696,6 +2696,11 @@ export {
 export type { DashboardSessionContribution } from "./profile-dashboard-stats";
 
 export {
+  getUserWeeklyStreak,
+  listCrewHighlightsForHome,
+} from "./home";
+
+export {
   archiveGoalForUser,
   createGoalForUser,
   deleteGoalForUser,
@@ -2709,6 +2714,7 @@ export {
   GOAL_TIMEZONE_LOCKED_MESSAGE,
   GOAL_TIMEZONE_MESSAGE,
   GoalRequestError,
+  listActiveGoalSnapshotsForHome,
   listGoalBadgesForPosts,
   listGoalsForUser,
   lockUserGoals,
