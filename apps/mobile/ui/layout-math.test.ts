@@ -1,9 +1,21 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { test } from "node:test";
 
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
-import { activeDivisionFromRegions, anchoredScrollOffset, centeredCardFrame, formPresentation, resolveLayout, topVisibleAnchor, workoutFormTwoPane } from "./layout-math";
+import {
+  activeDivisionFromRegions,
+  anchoredScrollOffset,
+  centeredCardFrame,
+  formPresentation,
+  resolveLayout,
+  tabScreenTopGap,
+  tabScreenTopInset,
+  tabScreenTopStyle,
+  topVisibleAnchor,
+  workoutFormTwoPane,
+} from "./layout-math";
 import type { ReservedRegion } from "./reserved-regions-availability";
 import { layout, spacing } from "./theme";
 
@@ -253,4 +265,38 @@ test("scroll anchors restore the top visible item", () => {
   assert.deepEqual(topVisibleAnchor(items, 0), { id: "greeting", offset: 0 });
   assert.deepEqual(topVisibleAnchor(items, 100), { id: "snapshot", offset: 20 });
   assert.equal(topVisibleAnchor([], 0), null);
+});
+
+test("tab screens share Profile's safe-area top inset with no extra gap", () => {
+  assert.equal(tabScreenTopGap, 0);
+  assert.equal(tabScreenTopInset(0), 0);
+  assert.equal(tabScreenTopInset(-8), 0);
+  assert.equal(tabScreenTopStyle(47).paddingTop, 47);
+
+  const postures = [
+    { name: "phone", safeTop: 59 },
+    { name: "folded-duo", safeTop: 59 },
+    { name: "unfolded-duo", safeTop: 21 },
+    { name: "split-view", safeTop: 47 },
+  ] as const;
+  for (const posture of postures) {
+    assert.equal(tabScreenTopInset(posture.safeTop), posture.safeTop, posture.name);
+    assert.equal(tabScreenTopStyle(posture.safeTop).paddingTop, posture.safeTop, posture.name);
+  }
+
+  const home = readFileSync(new URL("../app/(tabs)/(home)/index.tsx", import.meta.url), "utf8");
+  const community = readFileSync(new URL("../app/(tabs)/community/index.tsx", import.meta.url), "utf8");
+  const profile = readFileSync(new URL("../app/(tabs)/profile/index.tsx", import.meta.url), "utf8");
+  for (const [name, source] of [["Home", home], ["Community", community], ["Profile", profile]] as const) {
+    assert.match(source, /tabScreenTopStyle\(insets\.top\)/, `${name} missing shared top inset`);
+    assert.equal(source.includes("paddingTop: spacing.lg"), false, `${name} still has extra lg top padding`);
+    assert.equal(source.includes("paddingTop: spacing.xxl"), false, `${name} still has extra xxl top padding`);
+    assert.equal(source.includes("StatusBar.currentHeight"), false, `${name} hardcodes a status-bar height`);
+  }
+  assert.equal((home.match(/tabScreenTopStyle\(insets\.top\)/g) ?? []).length >= 2, true);
+  assert.equal((community.match(/tabScreenTopStyle\(insets\.top\)/g) ?? []).length >= 4, true);
+  assert.equal((profile.match(/tabScreenTopStyle\(insets\.top\)/g) ?? []).length >= 3, true);
+  assert.equal(home.includes('edges={["top"]}'), false);
+  assert.equal(community.includes('edges={["top"]}'), false);
+  assert.equal(profile.includes('edges={["top"]}'), false);
 });

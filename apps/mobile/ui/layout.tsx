@@ -21,6 +21,7 @@ import { keyboardScrollProps } from "./keyboard";
 import { colors, layout, spacing } from "./theme";
 
 export type { LayoutMode, LayoutSnapshot, LayoutSplit } from "./layout-math";
+export { tabScreenTopGap, tabScreenTopInset, tabScreenTopStyle } from "./layout-math";
 
 function useActiveDivision(): ActiveDivision | null {
   const regions = useReservedRegions();

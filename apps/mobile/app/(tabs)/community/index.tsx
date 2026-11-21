@@ -59,7 +59,7 @@ import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { Dialog } from "../../../ui/dialog";
 import { Chevron } from "../../../ui/icons";
-import { TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
+import { tabScreenTopStyle, TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
 import { Menu, MenuItem } from "../../../ui/menu";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { useMainTabs } from "../../../ui/main-tabs-context";
@@ -601,8 +601,28 @@ export default function CommunityTabScreen() {
     }
   }, [clearPostSelection, deleteTarget, detailTarget?.workout.id, explicitOverride, postParam, selectedGroup]);
 
-  if (!layoutPreview && loading && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><WideColumn fill><LoadingState message="Loading Community…" /></WideColumn></SafeAreaView>;
-  if (!layoutPreview && error && !data) return <SafeAreaView edges={["top", "left", "right"]} style={styles.safeArea}><WideColumn fill><View style={styles.state}><StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" /></View></WideColumn></SafeAreaView>;
+  if (!layoutPreview && loading && !data) {
+    return (
+      <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+        <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn fill><LoadingState message="Loading Community…" /></WideColumn>
+        </SafeAreaView>
+      </View>
+    );
+  }
+  if (!layoutPreview && error && !data) {
+    return (
+      <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+        <SafeAreaView edges={["left", "right"]} style={styles.flex}>
+          <WideColumn fill>
+            <View style={styles.state}>
+              <StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" />
+            </View>
+          </WideColumn>
+        </SafeAreaView>
+      </View>
+    );
+  }
 
   const previewFixture = layoutPreview && selection.kind !== "none" ? layoutPreviewDetail(selection.sessionId) : null;
   const openSessionId = selection.kind === "none" ? null : selection.sessionId;
@@ -610,8 +630,8 @@ export default function CommunityTabScreen() {
 
   if (mode === "twoPane" && selectedGroup) {
     return (
-      <View style={styles.safeArea}>
-        <SafeAreaView edges={["top"]} style={styles.flex}>
+      <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+        <View style={styles.flex}>
           <TwoPane
             fallback="hide-right"
             keyboardShouldPersistTaps="handled"
@@ -776,7 +796,7 @@ export default function CommunityTabScreen() {
               />
             )}
           />
-        </SafeAreaView>
+        </View>
         {moderation.ui}
         <PrUndoToast
           message={goalToastVisible ? goalCopy.toast : prCopy.toast}
@@ -887,8 +907,8 @@ export default function CommunityTabScreen() {
   }
 
   return (
-    <View style={styles.safeArea}>
-    <SafeAreaView edges={["top", "left", "right"]} style={styles.flex}>
+    <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+    <SafeAreaView edges={["left", "right"]} style={styles.flex}>
       <WideColumn fill>
       <View style={styles.content}>
         <BrandHeader />
@@ -1326,7 +1346,7 @@ function DeleteWorkoutModal({
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1, overflow: "hidden" },
   flex: { flex: 1 },
-  content: { flex: 1, paddingHorizontal: spacing.xxl, paddingTop: spacing.xxl },
+  content: { flex: 1, paddingHorizontal: spacing.xxl },
   state: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   pickerBackdrop: { bottom: 0, left: 0, position: "absolute", right: 0, top: 0, zIndex: 10 },
   groupHeaderRow: { alignItems: "center", flexDirection: "row", marginTop: spacing.xs, minHeight: size.control, zIndex: 20 },
@@ -1354,7 +1374,7 @@ const styles = StyleSheet.create({
   deleteMessage: { color: colors.muted, ...type.bodySmall },
   deleteError: { color: colors.danger, ...type.bodySmall },
   pressed: { opacity: 0.72 },
-  paneColumn: { flexGrow: 1, paddingBottom: spacing.xxl, paddingTop: spacing.lg },
+  paneColumn: { flexGrow: 1, paddingBottom: spacing.xxl },
   paneCardPress: { marginTop: spacing.md },
   paneEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
   panePostHeader: { alignItems: "baseline", flexDirection: "row", justifyContent: "space-between", marginBottom: spacing.lg },

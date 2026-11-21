@@ -4,7 +4,7 @@ import { formatTotalsTime, profileDashboardCopy, type DashboardDistanceUnit } fr
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useMemo, useRef, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
-import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { listGoals } from "../../../lib/goals-api";
 import { isLayoutPreview } from "../../../lib/layout-preview";
@@ -22,7 +22,7 @@ import {
 } from "../../../lib/data-freshness";
 import { BrandHeader, Card, LoadingState, StateCard } from "../../../ui/components";
 import { GoalsSection } from "../../../ui/goals";
-import { TwoPane, useLayoutMode } from "../../../ui/layout";
+import { tabScreenTopStyle, TwoPane, useLayoutMode } from "../../../ui/layout";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { ListRow } from "../../../ui/primitives";
 import {
@@ -232,29 +232,25 @@ export default function ProfileTabScreen() {
 
   if (loading && !data) {
     return (
-      <View style={styles.safeArea}>
-        <SafeAreaView edges={["top"]} style={styles.flex}>
-          <TwoPane column="readable" fallback="hide-right" left={<LoadingState message="Loading profile…" />} right={<View />} />
-        </SafeAreaView>
+      <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+        <TwoPane column="readable" fallback="hide-right" left={<LoadingState message="Loading profile…" />} right={<View />} />
       </View>
     );
   }
 
   if (error && !data) {
     return (
-      <View style={styles.safeArea}>
-        <SafeAreaView edges={["top"]} style={styles.flex}>
-          <TwoPane
-            column="readable"
-            fallback="hide-right"
-            left={(
-              <View style={styles.state}>
-                <StateCard actionLabel="Try again" message={error} onAction={refreshAll} title="Profile unavailable" />
-              </View>
-            )}
-            right={<View />}
-          />
-        </SafeAreaView>
+      <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+        <TwoPane
+          column="readable"
+          fallback="hide-right"
+          left={(
+            <View style={styles.state}>
+              <StateCard actionLabel="Try again" message={error} onAction={refreshAll} title="Profile unavailable" />
+            </View>
+          )}
+          right={<View />}
+        />
       </View>
     );
   }
@@ -341,16 +337,14 @@ export default function ProfileTabScreen() {
   );
 
   return (
-    <View style={styles.safeArea}>
-      <SafeAreaView edges={["top"]} style={styles.flex}>
-        <TwoPane
-          column="readable"
-          contentPaddingBottom={contentPaddingBottom}
-          fallback="stack"
-          left={identity}
-          right={dashboard}
-        />
-      </SafeAreaView>
+    <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+      <TwoPane
+        column="readable"
+        contentPaddingBottom={contentPaddingBottom}
+        fallback="stack"
+        left={identity}
+        right={dashboard}
+      />
       <TotalsHelpSheet
         onDismiss={() => setHelpOpen(false)}
         timeZoneLabel={stats?.timeZoneLabel ?? "your time zone"}
@@ -376,7 +370,6 @@ export default function ProfileTabScreen() {
 
 const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
-  flex: { flex: 1 },
   state: { flexGrow: 1, justifyContent: "center" },
   identityPane: { flexGrow: 1, gap: spacing.lg },
   identity: { alignItems: "center", flexDirection: "row" },

@@ -62,6 +62,21 @@ function nonNegative(value: number) {
   return Math.max(0, finite(value));
 }
 
+/**
+ * Extra padding below the safe-area top on Home, Community, and Profile.
+ * Profile has none; the other tabs share that so the first content lines up.
+ */
+export const tabScreenTopGap = 0;
+
+/** Profile's tab-root top inset: safe-area top plus {@link tabScreenTopGap}. */
+export function tabScreenTopInset(safeTop: number) {
+  return nonNegative(safeTop) + tabScreenTopGap;
+}
+
+export function tabScreenTopStyle(safeTop: number) {
+  return { paddingTop: tabScreenTopInset(safeTop) };
+}
+
 function safeDivision(division: ActiveDivision | null | undefined): ActiveDivision | null {
   if (!division) return null;
   const centerX = finite(division.centerX, Number.NaN);

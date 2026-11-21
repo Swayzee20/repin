@@ -58,7 +58,7 @@ import {
   homeIsShortScreen,
   homePromptLimit,
 } from "../../../ui/home-layout";
-import { TwoPane, useLayoutMode } from "../../../ui/layout";
+import { tabScreenTopStyle, TwoPane, useLayoutMode } from "../../../ui/layout";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
 import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
 import { colors, spacing } from "../../../ui/theme";
@@ -271,8 +271,8 @@ export default function HomeScreen() {
   const comingUpCard = homeComingUpInCard(mode);
 
   return (
-    <View style={[styles.safeArea, styles.homeSafeArea]}>
-      <SafeAreaView edges={["top"]} style={styles.flex}>
+    <View style={[styles.safeArea, styles.homeSafeArea, tabScreenTopStyle(insets.top)]}>
+      <View style={styles.flex}>
         <TwoPane
           column="readable"
           contentPaddingBottom={dashboardBottomPadding}
@@ -367,7 +367,7 @@ export default function HomeScreen() {
             </View>
           )}
         />
-      </SafeAreaView>
+      </View>
       {moderation.ui}
       <WorkoutDetailModal
         key={detailWorkout?.id ?? "closed"}
@@ -395,9 +395,10 @@ export default function HomeScreen() {
 }
 
 function Shell({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.safeArea}>
-      <SafeAreaView edges={["top", "bottom"]} style={styles.flex}>
+    <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+      <SafeAreaView edges={["bottom"]} style={styles.flex}>
         <SafeAreaView edges={["left", "right"]} style={styles.flex}>{children}</SafeAreaView>
       </SafeAreaView>
     </View>
@@ -567,7 +568,7 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   flex: { flex: 1 },
   homeSafeArea: { backgroundColor: colors.background, ...Platform.select({ web: { paddingBottom: 0 } }) },
-  personalZone: { backgroundColor: colors.background, paddingBottom: spacing.md, paddingTop: spacing.lg },
+  personalZone: { backgroundColor: colors.background, paddingBottom: spacing.md },
   header: { marginBottom: spacing.lg },
   comingUp: { marginTop: spacing.md },
   communityZone: { backgroundColor: colors.background, paddingTop: spacing.sm },
