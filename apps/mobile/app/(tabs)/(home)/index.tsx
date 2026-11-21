@@ -12,7 +12,6 @@ import {
   goalCopy,
   highlightRows,
   homeComingUp,
-  homeCopy,
   homeGoalRowModel,
   selectHomeGoals,
 } from "@repin/validation";
@@ -20,7 +19,7 @@ import type { Session } from "@supabase/supabase-js";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useVerticalBarEdge } from "../../../ui/vertical-bar-edge";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Platform, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
@@ -59,10 +58,10 @@ import {
   homeIsShortScreen,
   homePromptLimit,
 } from "../../../ui/home-layout";
-import { TwoPane, useLayoutMode } from "../../../ui/layout";
+import { tabScreenTopStyle, TwoPane, useLayoutMode } from "../../../ui/layout";
 import { ScrollAnchor } from "../../../ui/scroll-anchor";
 import { WorkoutDetailModal } from "../../../ui/workout-detail-modal";
-import { colors, spacing, type } from "../../../ui/theme";
+import { colors, spacing } from "../../../ui/theme";
 
 const apiUrl = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:3000").replace(/\/$/, "");
 
@@ -272,8 +271,8 @@ export default function HomeScreen() {
   const comingUpCard = homeComingUpInCard(mode);
 
   return (
-    <View style={[styles.safeArea, styles.homeSafeArea]}>
-      <SafeAreaView edges={["top"]} style={styles.flex}>
+    <View style={[styles.safeArea, styles.homeSafeArea, tabScreenTopStyle(insets.top)]}>
+      <View style={styles.flex}>
         <TwoPane
           column="readable"
           contentPaddingBottom={dashboardBottomPadding}
@@ -334,9 +333,7 @@ export default function HomeScreen() {
               </ScrollAnchor>
               {showError ? errors.crew : showSkeletons ? (
                 <>
-                  <Text style={styles.highlightsTitle}>{homeCopy.highlights}</Text>
                   {skeletons.highlights}
-                  <Text style={styles.activityTitle}>{homeCopy.activity}</Text>
                   {skeletons.activity}
                 </>
               ) : dashboardData ? (
@@ -370,7 +367,7 @@ export default function HomeScreen() {
             </View>
           )}
         />
-      </SafeAreaView>
+      </View>
       {moderation.ui}
       <WorkoutDetailModal
         key={detailWorkout?.id ?? "closed"}
@@ -398,9 +395,10 @@ export default function HomeScreen() {
 }
 
 function Shell({ children }: { children: ReactNode }) {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.safeArea}>
-      <SafeAreaView edges={["top", "bottom"]} style={styles.flex}>
+    <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
+      <SafeAreaView edges={["bottom"]} style={styles.flex}>
         <SafeAreaView edges={["left", "right"]} style={styles.flex}>{children}</SafeAreaView>
       </SafeAreaView>
     </View>
@@ -570,10 +568,8 @@ const styles = StyleSheet.create({
   safeArea: { backgroundColor: colors.background, flex: 1 },
   flex: { flex: 1 },
   homeSafeArea: { backgroundColor: colors.background, ...Platform.select({ web: { paddingBottom: 0 } }) },
-  personalZone: { backgroundColor: colors.background, paddingBottom: spacing.md, paddingTop: spacing.lg },
+  personalZone: { backgroundColor: colors.background, paddingBottom: spacing.md },
   header: { marginBottom: spacing.lg },
   comingUp: { marginTop: spacing.md },
   communityZone: { backgroundColor: colors.background, paddingTop: spacing.sm },
-  highlightsTitle: { color: colors.brand, marginBottom: spacing.sm, marginTop: spacing.lg, ...type.section },
-  activityTitle: { color: colors.ink, marginTop: spacing.lg, ...type.section },
 });

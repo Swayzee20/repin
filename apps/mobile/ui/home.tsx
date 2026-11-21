@@ -21,6 +21,7 @@ import { Icon } from "./icons";
 import { GoalProgressRing } from "./progress-ring";
 import { ListRow } from "./primitives";
 import { StaleBanner } from "./profile-dashboard";
+import { SectionLabel } from "./section-label";
 import { colors, fonts, progressRing, radii, size, spacing, type } from "./theme";
 
 export { StaleBanner };
@@ -176,7 +177,7 @@ export function HomeThisWeekCard({
 }) {
   return (
     <View>
-      <Text style={styles.sectionEyebrow}>{homeCopy.thisWeek}</Text>
+      <SectionLabel style={styles.sectionLabel}>{homeCopy.thisWeek}</SectionLabel>
       <Card>
         {goals.length ? goals.map((row, index) => (
           <View key={row.id} style={index > 0 ? styles.goalDivider : undefined}>
@@ -207,7 +208,7 @@ export function HomeComingUpCard({
   const deadline = comingUp.deadline;
   return (
     <View>
-      <Text style={styles.sectionEyebrow}>{homeCopy.comingUp}</Text>
+      <SectionLabel style={styles.sectionLabel}>{homeCopy.comingUp}</SectionLabel>
       <Card style={styles.comingUpCard}>
         {deadline ? (
           <ListRow
@@ -257,7 +258,7 @@ export function HomeHighlights({
   if (!rows.length) return null;
   return (
     <View>
-      <Text style={styles.highlightsTitle}>{homeCopy.highlights}</Text>
+      <SectionLabel style={styles.highlightsLabel}>{homeCopy.highlights}</SectionLabel>
       <Card>
         {rows.map((row, index) => (
           <View key={`${row.kind}-${row.userId}`} style={[styles.highlightRow, index > 0 && styles.highlightDivider]}>
@@ -301,9 +302,14 @@ export function HomeActivity({
   return (
     <View>
       <View style={styles.activityHeader}>
-        <Text style={styles.activityTitle}>{homeCopy.activity}</Text>
+        <SectionLabel>{homeCopy.activity}</SectionLabel>
         {onViewAll && workouts.length ? (
-          <Pressable accessibilityRole="button" hitSlop={8} onPress={onViewAll}>
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onViewAll}
+            style={(state) => [styles.viewAllHit, webFocusRing(pressableFocused(state))]}
+          >
             <Text style={styles.viewAll}>{homeCopy.viewAll}</Text>
           </Pressable>
         ) : null}
@@ -360,33 +366,39 @@ export function HomeLoadingSkeleton({ twoPane }: { twoPane: boolean }) {
     </Card>
   );
   const highlights = (
-    <Card>
-      <View style={styles.skelRow}>
-        <View style={styles.skelAvatar} />
-        <View style={styles.skelCopy}>
-          <View style={styles.skelLine} />
-          <View style={[styles.skelLine, styles.skelShort]} />
+    <View>
+      <SectionLabel style={styles.highlightsLabel}>{homeCopy.highlights}</SectionLabel>
+      <Card>
+        <View style={styles.skelRow}>
+          <View style={styles.skelAvatar} />
+          <View style={styles.skelCopy}>
+            <View style={styles.skelLine} />
+            <View style={[styles.skelLine, styles.skelShort]} />
+          </View>
         </View>
-      </View>
-      <View style={styles.skelRow}>
-        <View style={styles.skelAvatar} />
-        <View style={styles.skelCopy}>
-          <View style={styles.skelLine} />
-        </View>
-      </View>
-    </Card>
-  );
-  const activity = (
-    <Card>
-      {Array.from({ length: twoPane ? 3 : 2 }, (_, index) => (
-        <View key={index} style={styles.skelRow}>
+        <View style={styles.skelRow}>
           <View style={styles.skelAvatar} />
           <View style={styles.skelCopy}>
             <View style={styles.skelLine} />
           </View>
         </View>
-      ))}
-    </Card>
+      </Card>
+    </View>
+  );
+  const activity = (
+    <View>
+      <SectionLabel style={styles.activityLabel}>{homeCopy.activity}</SectionLabel>
+      <Card>
+        {Array.from({ length: twoPane ? 3 : 2 }, (_, index) => (
+          <View key={index} style={styles.skelRow}>
+            <View style={styles.skelAvatar} />
+            <View style={styles.skelCopy}>
+              <View style={styles.skelLine} />
+            </View>
+          </View>
+        ))}
+      </Card>
+    </View>
   );
   return { snapshot, highlights, activity };
 }
@@ -465,7 +477,7 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: "row", justifyContent: "space-between", gap: spacing.md },
   footerLeft: { color: colors.inkSoft, flex: 1, ...type.bodySmall },
   footerRight: { color: colors.inkSoft, ...type.bodySmall },
-  sectionEyebrow: { color: colors.brand, marginBottom: spacing.sm, ...type.section },
+  sectionLabel: { marginBottom: spacing.sm },
   comingUpCard: { paddingHorizontal: 0, paddingVertical: spacing.xs },
   comingUpWeek: { color: colors.inkSoft, paddingHorizontal: spacing.lg, paddingVertical: spacing.md, ...type.bodySmall },
   comingUpWeekAfter: {
@@ -476,7 +488,8 @@ const styles = StyleSheet.create({
   viewGoalsText: { color: colors.brand, ...type.label },
   crewEyebrow: { color: colors.brand, ...type.heading },
   crewName: { color: colors.inkSoft, ...type.bodySmall, fontFamily: fonts.semibold },
-  highlightsTitle: { color: colors.brand, marginBottom: spacing.sm, marginTop: spacing.lg, ...type.section },
+  highlightsLabel: { marginBottom: spacing.sm, marginTop: spacing.lg },
+  activityLabel: { marginBottom: spacing.sm, marginTop: spacing.lg },
   highlightRow: { alignItems: "center", flexDirection: "row", minHeight: size.hit, paddingVertical: spacing.sm },
   highlightDivider: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
   badge: {
@@ -505,11 +518,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "space-between",
+    marginBottom: spacing.sm,
     marginTop: spacing.lg,
   },
-  activityTitle: { color: colors.ink, ...type.section },
+  viewAllHit: { justifyContent: "center", minHeight: size.hit },
   viewAll: { color: colors.brand, ...type.label },
-  activityCard: { marginTop: spacing.sm, paddingVertical: spacing.xs },
+  activityCard: { paddingVertical: spacing.xs },
   promptRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -518,7 +532,7 @@ const styles = StyleSheet.create({
   },
   promptDivider: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
   promptText: { color: colors.ink, flex: 1, marginLeft: spacing.md, ...type.bodySmall },
-  emptyCrew: { alignItems: "center", marginTop: spacing.sm, paddingVertical: spacing.xxl },
+  emptyCrew: { alignItems: "center", paddingVertical: spacing.xxl },
   emptyTitle: { color: colors.ink, textAlign: "center", ...type.heading },
   emptyBody: { color: colors.muted, marginTop: spacing.sm, textAlign: "center", ...type.bodySmall },
   skelRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },
