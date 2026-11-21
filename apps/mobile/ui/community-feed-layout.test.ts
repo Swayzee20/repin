@@ -185,3 +185,18 @@ test("own-post VoiceOver uses the visible You text and selected stays a 2 pt rin
   assert.match(community, /workoutFeedCardLabel\(\{[\s\S]*isOwn/);
   assert.equal(community.includes("ownPostVoiceOverLabel"), false);
 });
+
+test("Community board pages the mixed feed and keeps communityFeed as the only board source", () => {
+  const community = source("../app/(tabs)/community/index.tsx");
+  assert.match(community, /COMMUNITY_FEED_CLIENT_VERSION/);
+  assert.match(community, /COMMUNITY_FEED_PAGE_SIZE/);
+  assert.match(community, /cursor,/);
+  assert.match(community, /generalPostCopy\.endOfBoard/);
+  assert.match(community, /reduceCommunityFeed/);
+  assert.match(community, /type: "hide"/);
+  assert.match(community, /type: "reset"/);
+  assert.match(community, /leftAnchorKey=\{communityFeedAnchorKey\}/);
+  assert.match(community, /useScrollAnchor\(`\$\{mode\}:\$\{windowWidth\}:\$\{windowHeight\}`, communityFeedAnchorKey\)/);
+  assert.equal(community.includes("communityWorkouts.map"), false);
+  assert.equal(community.includes("communityWorkouts: current.communityWorkouts"), false);
+});

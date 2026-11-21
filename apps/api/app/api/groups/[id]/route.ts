@@ -59,13 +59,15 @@ export async function GET(
       return NextResponse.json({ error: "Crew not found" }, { status: 404 });
     }
 
-    const { weekStart, weekEnd } = crewSundayWeekBounds(new Date(), query.data);
+    const now = new Date();
+    const { weekStart, weekEnd } = crewSundayWeekBounds(now, query.data);
     const [members, notifications, photoUrl] = await Promise.all([
       listCrewMembers({
         groupId: group.id,
         viewerUserId: user.id,
         weekStart,
         weekEnd,
+        now,
       }),
       getCrewNotificationPrefs({ userId: user.id, groupId: group.id }),
       signCrewPhotoUrl(group.photoPath).catch((error) => {

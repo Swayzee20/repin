@@ -353,6 +353,73 @@ test("general posts: visibility, CRUD, pins, photos, reports, alerts, and mixed 
     });
     assert.ok(page2.items.some((item) => item.kind === "general"));
     assert.ok(page2.items.every((item) => item.id !== mixed.items[0].id && item.id !== mixed.items[1].id));
+
+    const tiedAt = new Date(Date.now() + 120_000);
+    const tieA = await publishPost(db, ada, [morning.id], "Tie A");
+    const tieB = await publishPost(db, ada, [morning.id], "Tie B");
+    const tieC = await publishPost(db, ada, [morning.id], "Tie C");
+    const tieIds = [tieA.posts[0].id, tieB.posts[0].id, tieC.posts[0].id].sort();
+    await client.query(
+      "update community_posts set created_at = $2 where id = any($1::uuid[])",
+      [tieIds, tiedAt],
+    );
+    const tiePage1 = await db.listCommunityFeedForMember({
+      viewerUserId: ada.id,
+      groupId: morning.id,
+      limit: 1,
+    });
+    assert.equal(tiePage1.items.length, 1);
+    assert.ok(tiePage1.nextCursor);
+    const tiePage2 = await db.listCommunityFeedForMember({
+      viewerUserId: ada.id,
+      groupId: morning.id,
+      cursor: tiePage1.nextCursor,
+      limit: 1,
+    });
+    assert.equal(tiePage2.items.length, 1);
+    assert.notEqual(tiePage2.items[0].id, tiePage1.items[0].id);
+    const tiePage3 = await db.listCommunityFeedForMember({
+      viewerUserId: ada.id,
+      groupId: morning.id,
+      cursor: tiePage2.nextCursor,
+      limit: 1,
+    });
+    const tieSeen = new Set([tiePage1.items[0].id, tiePage2.items[0].id, tiePage3.items[0].id]);
+    assert.equal(tieIds.every((id) => tieSeen.has(id)), true);
+
+    const oldPin = await publishPost(db, ada, [morning.id], "Old pin");
+    const oldPinAt = new Date("2019-01-01T12:00:00.000Z");
+    await client.query(
+      "update community_posts set created_at = $2 where id = $1",
+      [oldPin.posts[0].id, oldPinAt],
+    );
+    await db.pinGeneralPostForOwner({ actorId: ada.id, postId: oldPin.posts[0].id });
+    const pinnedPage1 = await db.listCommunityFeedForMember({
+      viewerUserId: ada.id,
+      groupId: morning.id,
+      limit: 2,
+    });
+    assert.equal(pinnedPage1.pinnedPostId, oldPin.posts[0].id);
+    assert.equal(pinnedPage1.items.some((item) => item.id === oldPin.posts[0].id), false);
+    let cursor = pinnedPage1.nextCursor;
+    let sawPinnedInFeed = false;
+    let pages = 0;
+    while (cursor && pages < 20) {
+      const page = await db.listCommunityFeedForMember({
+        viewerUserId: ada.id,
+        groupId: morning.id,
+        cursor,
+        limit: 2,
+      });
+      if (page.items.some((item) => item.id === oldPin.posts[0].id)) sawPinnedInFeed = true;
+      cursor = page.nextCursor;
+      pages += 1;
+      if (!page.nextCursor) {
+        assert.equal(page.nextCursor, null);
+      }
+    }
+    assert.equal(sawPinnedInFeed, false);
+    assert.equal(cursor, null);
   } finally {
     await client.end();
     if (globalThis.repinPool) {

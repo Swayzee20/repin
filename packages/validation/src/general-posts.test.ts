@@ -4,6 +4,8 @@ import { test } from "node:test";
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
 import {
+  COMMUNITY_FEED_CLIENT_VERSION,
+  COMMUNITY_FEED_PAGE_SIZE,
   createGeneralPostSchema,
   extractPublicationUrls,
   formatCharacterCounter,
@@ -41,6 +43,9 @@ test("general post copy matches the locked SPEC", () => {
   assert.equal(generalPostCopy.pickerLoading, "Loading crews…");
   assert.equal(generalPostCopy.pickerLoadErrorTitle, "Couldn't load your crews.");
   assert.equal(generalPostCopy.loadErrorTitle, "Couldn't load the board");
+  assert.equal(generalPostCopy.loadingMore, "Loading more…");
+  assert.equal(generalPostCopy.loadMoreErrorTitle, "Couldn't load more posts");
+  assert.equal(generalPostCopy.endOfBoard, "You're all caught up");
   assert.equal(generalPostCopy.tryAgain, "Try again");
   assert.equal(generalPostCopy.offline, "You're offline. Showing what we have.");
   assert.equal(generalPostCopy.postFailed, "Couldn't post. Try again.");
@@ -53,6 +58,8 @@ test("general post copy matches the locked SPEC", () => {
   assert.equal(generalPostCopy.unpinToast, "Post unpinned.");
   assert.equal(generalPostCopy.newPostsToggle, "New posts from your crew");
   assert.equal(generalPostCopy.plusChooserTitle, "Log a workout");
+  assert.equal(COMMUNITY_FEED_PAGE_SIZE, 20);
+  assert.equal(COMMUNITY_FEED_CLIENT_VERSION, 2);
   assert.equal(
     formatEmptyBoard("Morning Crew"),
     "No posts yet. Be the first to share with Morning Crew.",

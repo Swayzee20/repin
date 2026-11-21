@@ -1,5 +1,7 @@
 import type { CommunityData, CommunityFeedItem, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GeneralPostFeedItem, GoalBadge, GroupSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
 import {
+  COMMUNITY_FEED_CLIENT_VERSION,
+  COMMUNITY_FEED_PAGE_SIZE,
   formatDeletePostBody,
   formatEmptyBoard,
   formatPinBody,
@@ -9,7 +11,16 @@ import {
 } from "@repin/validation";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from "react-native";
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+  type LayoutChangeEvent,
+  type NativeScrollEvent,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
@@ -31,6 +42,13 @@ import {
 import { useGoalBadgeUndo } from "../../../lib/goal-badge-actions";
 import { usePrBadgeUndo } from "../../../lib/pr-badge-actions";
 import { isLayoutPreview } from "../../../lib/layout-preview";
+import {
+  communityFeedItemMatchesId,
+  communityFeedNearEnd,
+  reduceCommunityFeed,
+  workoutsFromCommunityFeed,
+  type CommunityFeedAction,
+} from "../../../lib/community-feed-state";
 import {
   communityFoldTransition,
   communitySelectionClears,
@@ -63,7 +81,7 @@ import { tabScreenTopStyle, TwoPane, useLayoutMode, WideColumn } from "../../../
 import { Menu, MenuItem } from "../../../ui/menu";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { useMainTabs } from "../../../ui/main-tabs-context";
-import { ScrollAnchor } from "../../../ui/scroll-anchor";
+import { readStoredScrollAnchor, ScrollAnchor, ScrollAnchorProvider, useScrollAnchor } from "../../../ui/scroll-anchor";
 import { colors, fonts, size, spacing, type } from "../../../ui/theme";
 import { holdComposerFocus, releaseComposerFocus, WorkoutDetailView, type WorkoutDetailFixture } from "../../../ui/workout-detail";
 import { useModeration } from "../../../ui/moderation";
@@ -81,10 +99,14 @@ export default function CommunityTabScreen() {
   const postParam = readCommunityPostParam(params.post);
   const groupParam = readCommunityPostParam(params.groupId);
   const { mode } = useLayoutMode();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
+  const compactScroll = useScrollAnchor(`${mode}:${windowWidth}:${windowHeight}`, communityFeedAnchorKey);
   const layoutPreview = __DEV__ && isLayoutPreview();
   const { openWorkoutChooser, selectedGroupId, setSelectedGroupId } = useMainTabs();
   const [data, setData] = useState<CommunityData | null>(null);
   const [loading, setLoading] = useState(!layoutPreview);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [groupMenuView, setGroupMenuView] = useState<"actions" | "groups" | null>(null);
   const [boardHeight, setBoardHeight] = useState(0);
@@ -111,6 +133,8 @@ export default function CommunityTabScreen() {
   const inFlightRequests = useRef(new Map<string, Promise<void>>());
   const latestRequestKey = useRef<string | null>(null);
   const loadedUserId = useRef<string | null>(null);
+  const feedGeneration = useRef(0);
+  const loadingMoreRef = useRef(false);
 
   const loadCommunity = useCallback(async () => {
     if (!supabase) {
@@ -150,8 +174,11 @@ export default function CommunityTabScreen() {
         timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
         view: "community",
         feed: "mixed",
+        v: String(COMMUNITY_FEED_CLIENT_VERSION),
+        limit: String(COMMUNITY_FEED_PAGE_SIZE),
       });
       if (selectedGroupId) search.set("groupId", selectedGroupId);
+      const generation = feedGeneration.current;
       const response = await fetch(`${apiUrl}/api/home?${search.toString()}`, {
         headers: { Authorization: `Bearer ${auth.session.access_token}` },
         signal: AbortSignal.timeout(7_500),
@@ -159,15 +186,18 @@ export default function CommunityTabScreen() {
       const body = (await response.json()) as CommunityData & { error?: string };
       if (!response.ok) throw new Error(generalPostCopy.loadErrorTitle);
       setOffline(false);
+      if (feedGeneration.current !== generation) return;
       if (latestRequestKey.current !== requestKey) return;
-      dataRef.current = body;
+      const next = reduceCommunityFeed(null, { type: "replace", data: body });
+      dataRef.current = next;
       loadedUserId.current = auth.session.user.id;
       lastSuccessfulLoad.current = {
         key: `community:${auth.session.user.id}:${body.selectedGroupId ?? "none"}:mixed`,
         loadedAt: Date.now(),
         workoutRevision,
       };
-      setData(body);
+      setLoadMoreError(null);
+      setData(next);
       setSelectedGroupId(body.selectedGroupId);
       } catch (loadError) {
         if (latestRequestKey.current === requestKey) {
@@ -189,13 +219,81 @@ export default function CommunityTabScreen() {
     return request;
   }, [selectedGroupId, setSelectedGroupId]);
 
+  const applyFeed = useCallback((action: CommunityFeedAction) => {
+    setData((current) => {
+      const next = reduceCommunityFeed(current, action);
+      dataRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const loadMoreCommunity = useCallback(async () => {
+    const cursor = dataRef.current?.nextCursor;
+    if (!cursor || !supabase || loadingMoreRef.current) return;
+    const { data: auth, error: sessionError } = await supabase.auth.getSession();
+    if (sessionError || !auth.session) return;
+    loadingMoreRef.current = true;
+    setLoadingMore(true);
+    setLoadMoreError(null);
+    const generation = feedGeneration.current;
+    try {
+      const search = new URLSearchParams({
+        timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
+        view: "community",
+        feed: "mixed",
+        v: String(COMMUNITY_FEED_CLIENT_VERSION),
+        limit: String(COMMUNITY_FEED_PAGE_SIZE),
+        cursor,
+      });
+      const groupId = selectedGroupId ?? dataRef.current?.selectedGroupId;
+      if (groupId) search.set("groupId", groupId);
+      const response = await fetch(`${apiUrl}/api/home?${search.toString()}`, {
+        headers: { Authorization: `Bearer ${auth.session.access_token}` },
+        signal: AbortSignal.timeout(7_500),
+      });
+      const body = (await response.json()) as CommunityData & { error?: string };
+      if (!response.ok) throw new Error(generalPostCopy.loadMoreErrorTitle);
+      if (feedGeneration.current !== generation) return;
+      applyFeed({
+        type: "append",
+        items: body.communityFeed ?? [],
+        nextCursor: body.nextCursor ?? null,
+      });
+    } catch (loadError) {
+      if (feedGeneration.current === generation) {
+        setLoadMoreError(loadError instanceof Error ? loadError.message : generalPostCopy.loadMoreErrorTitle);
+      }
+    } finally {
+      if (feedGeneration.current === generation) {
+        loadingMoreRef.current = false;
+        setLoadingMore(false);
+      }
+    }
+  }, [applyFeed, selectedGroupId]);
+
+  const handleBoardScroll = useCallback((event: { nativeEvent: NativeScrollEvent }) => {
+    if (loadingMoreRef.current || loadMoreError) return;
+    if (!dataRef.current?.nextCursor) return;
+    if (communityFeedNearEnd(event.nativeEvent)) void loadMoreCommunity();
+  }, [loadMoreCommunity, loadMoreError]);
+
+  const compactAnchorRef = compactScroll.anchorRef;
+  const restoreCompactScroll = compactScroll.requestRestore;
+  useEffect(() => {
+    if (mode === "twoPane") return;
+    const stored = readStoredScrollAnchor(communityFeedAnchorKey);
+    if (!stored) return;
+    compactAnchorRef.current = stored;
+    restoreCompactScroll();
+  }, [compactAnchorRef, mode, restoreCompactScroll]);
+
   const previewBoard = useMemo(() => (layoutPreview ? layoutPreviewCommunity() : null), [layoutPreview]);
   const board = previewBoard ?? data;
-  const workouts = useMemo(() => board?.communityWorkouts ?? [], [board]);
   const mixedFeed = useMemo<CommunityFeedItem[]>(
-    () => board?.communityFeed ?? workouts.map((workout) => ({ ...workout, kind: "workout" as const })),
-    [board, workouts],
+    () => board?.communityFeed ?? [],
+    [board],
   );
+  const workouts = useMemo(() => workoutsFromCommunityFeed(mixedFeed), [mixedFeed]);
   const pinnedPost = board?.pinnedPost ?? null;
   const timeZone = communityDeviceTimeZone();
   const boardRows = useMemo(
@@ -297,43 +395,36 @@ export default function CommunityTabScreen() {
     if (postParam) router.setParams({ post: "" });
   }, [postParam, router]);
 
-  const hideWorkouts = useCallback((matches: (workout: WorkoutFeedItem) => boolean) => {
-    setData((current) => {
-      if (!current) return current;
-      const next = {
-        ...current,
-        communityWorkouts: current.communityWorkouts.filter((workout) => !matches(workout)),
-      };
-      dataRef.current = next;
-      return next;
-    });
+  const hideFeedItems = useCallback((matches: (item: CommunityFeedItem) => boolean) => {
+    applyFeed({ type: "hide", matches });
     setDetailTarget((current) => {
       if (!current || !matches(current.workout)) return current;
       setExplicitOverride(null);
       if (postParam) router.setParams({ post: "" });
       return null;
     });
-  }, [postParam, router]);
+    setGeneralDetail((current) => {
+      if (!current || !matches(current)) return current;
+      setExplicitOverride(null);
+      if (postParam) router.setParams({ post: "" });
+      return null;
+    });
+  }, [applyFeed, postParam, router]);
 
   const moderation = useModeration({
-    onPostHidden: (sessionId) => hideWorkouts((workout) => workout.id === sessionId),
-    onUserBlocked: (userId) => hideWorkouts((workout) => workout.userId === userId),
+    onPostHidden: (hideId) => hideFeedItems((item) => communityFeedItemMatchesId(item, hideId)),
+    onUserBlocked: (userId) => hideFeedItems((item) => item.userId === userId),
   });
 
   const clearFeed = useCallback((nextGroupId?: string | null) => {
-    latestRequestKey.current = null;
+    feedGeneration.current += 1;
+    latestRequestKey.current = `reset:${feedGeneration.current}`;
+    loadingMoreRef.current = false;
+    setLoadingMore(false);
+    setLoadMoreError(null);
     setError(null);
-    setData((current) => {
-      if (!current) return current;
-      const next = {
-        ...current,
-        selectedGroupId: nextGroupId === undefined ? current.selectedGroupId : nextGroupId,
-        communityWorkouts: [],
-      };
-      dataRef.current = next;
-      return next;
-    });
-  }, []);
+    applyFeed({ type: "reset", selectedGroupId: nextGroupId });
+  }, [applyFeed]);
 
   useFocusEffect(useCallback(() => {
     if (layoutPreview) return;
@@ -371,49 +462,19 @@ export default function CommunityTabScreen() {
   }, [mode, router, selectedGroup]);
 
   const updateFeedReactionSummary = useCallback((sessionId: string, reactions: CommunityReactionSummary) => {
-    setData((current) => {
-      if (!current) return current;
-      const next = {
-        ...current,
-        communityWorkouts: current.communityWorkouts.map((workout) =>
-          workout.id === sessionId ? { ...workout, reactionCounts: reactions.counts } : workout,
-        ),
-      };
-      dataRef.current = next;
-      return next;
-    });
-  }, []);
+    applyFeed({ type: "updateReaction", id: sessionId, counts: reactions.counts });
+  }, [applyFeed]);
 
   const updateFeedCommentCount = useCallback((sessionId: string, commentCount: number) => {
-    setData((current) => {
-      if (!current) return current;
-      const next = {
-        ...current,
-        communityWorkouts: current.communityWorkouts.map((workout) =>
-          workout.id === sessionId ? { ...workout, commentCount } : workout,
-        ),
-      };
-      dataRef.current = next;
-      return next;
-    });
-  }, []);
+    applyFeed({ type: "updateCommentCount", id: sessionId, commentCount });
+  }, [applyFeed]);
 
   const updateFeedPrBadges = useCallback((sessionId: string, prBadges: PrBadge[]) => {
-    setData((current) => {
-      if (!current) return current;
-      const next = {
-        ...current,
-        communityWorkouts: current.communityWorkouts.map((workout) =>
-          workout.id === sessionId ? { ...workout, prBadges } : workout,
-        ),
-      };
-      dataRef.current = next;
-      return next;
-    });
+    applyFeed({ type: "updatePrBadges", id: sessionId, prBadges });
     setDetailTarget((current) => current?.workout.id === sessionId
       ? { ...current, workout: { ...current.workout, prBadges } }
       : current);
-  }, []);
+  }, [applyFeed]);
   const {
     clear: clearPrToast,
     remove: removePrBadge,
@@ -422,21 +483,11 @@ export default function CommunityTabScreen() {
   } = usePrBadgeUndo(updateFeedPrBadges);
 
   const updateFeedGoalBadges = useCallback((sessionId: string, goalBadges: GoalBadge[]) => {
-    setData((current) => {
-      if (!current) return current;
-      const next = {
-        ...current,
-        communityWorkouts: current.communityWorkouts.map((workout) =>
-          workout.id === sessionId ? { ...workout, goalBadges } : workout,
-        ),
-      };
-      dataRef.current = next;
-      return next;
-    });
+    applyFeed({ type: "updateGoalBadges", id: sessionId, goalBadges });
     setDetailTarget((current) => current?.workout.id === sessionId
       ? { ...current, workout: { ...current.workout, goalBadges } }
       : current);
-  }, []);
+  }, [applyFeed]);
   const {
     clear: clearGoalToast,
     remove: removeGoalBadge,
@@ -586,12 +637,7 @@ export default function CommunityTabScreen() {
       if (postParam === deleteTarget.id || explicitOverride === deleteTarget.id || detailTarget?.workout.id === deleteTarget.id) {
         clearPostSelection();
       }
-      setData((current) => {
-        if (!current) return current;
-        const next = { ...current, communityWorkouts: current.communityWorkouts.filter((workout) => workout.id !== deleteTarget.id) };
-        dataRef.current = next;
-        return next;
-      });
+      hideFeedItems((item) => communityFeedItemMatchesId(item, deleteTarget.id));
       setDeleteTarget(null);
       setDeleteStage("choose");
     } catch (deleteFailure) {
@@ -599,7 +645,7 @@ export default function CommunityTabScreen() {
     } finally {
       setDeletePending(false);
     }
-  }, [clearPostSelection, deleteTarget, detailTarget?.workout.id, explicitOverride, postParam, selectedGroup]);
+  }, [clearPostSelection, deleteTarget, detailTarget?.workout.id, explicitOverride, hideFeedItems, postParam, selectedGroup]);
 
   if (!layoutPreview && loading && !data) {
     return (
@@ -636,6 +682,7 @@ export default function CommunityTabScreen() {
             fallback="hide-right"
             keyboardShouldPersistTaps="handled"
             leftAnchorKey={communityFeedAnchorKey}
+            onLeftScroll={handleBoardScroll}
             scrollableRight={false}
             left={(
               <View style={styles.paneColumn}>
@@ -670,23 +717,25 @@ export default function CommunityTabScreen() {
                 <Text style={styles.boardTitle}>Community Board</Text>
                 <CommunityNewPostButton gap={newPostGap} onPress={openNewPost} />
                 {pinnedPost ? (
-                  <Pressable
-                    accessibilityLabel={generalPostFeedCardLabel(isOwnPost(pinnedPost.userId, viewerUserId))}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: pinnedPost.id === (generalDetail?.id ?? openSessionId) }}
-                    onPress={() => openGeneralPostDetail(pinnedPost)}
-                  >
-                    <GeneralPostSummaryCard
-                      isPinned
-                      menuItems={generalMenu(pinnedPost)}
-                      post={pinnedPost}
-                      selected={pinnedPost.id === (generalDetail?.id ?? openSessionId)}
-                      showCommentCount
-                      showReactionSummary
-                      timestamp={pinnedTimestamp ?? undefined}
-                      viewerUserId={viewerUserId}
-                    />
-                  </Pressable>
+                  <ScrollAnchor id={pinnedPost.id}>
+                    <Pressable
+                      accessibilityLabel={generalPostFeedCardLabel(isOwnPost(pinnedPost.userId, viewerUserId))}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: pinnedPost.id === (generalDetail?.id ?? openSessionId) }}
+                      onPress={() => openGeneralPostDetail(pinnedPost)}
+                    >
+                      <GeneralPostSummaryCard
+                        isPinned
+                        menuItems={generalMenu(pinnedPost)}
+                        post={pinnedPost}
+                        selected={pinnedPost.id === (generalDetail?.id ?? openSessionId)}
+                        showCommentCount
+                        showReactionSummary
+                        timestamp={pinnedTimestamp ?? undefined}
+                        viewerUserId={viewerUserId}
+                      />
+                    </Pressable>
+                  </ScrollAnchor>
                 ) : null}
                 {boardRows.map((row, index) => {
                   if (row.type === "day") {
@@ -753,6 +802,13 @@ export default function CommunityTabScreen() {
                     </ScrollAnchor>
                   );
                 })}
+                <CommunityBoardPager
+                  hasItems={mixedFeed.length > 0 || Boolean(pinnedPost)}
+                  loadingMore={loadingMore}
+                  loadMoreError={loadMoreError}
+                  nextCursor={board?.nextCursor ?? null}
+                  onRetry={() => void loadMoreCommunity()}
+                />
               </View>
             )}
             right={generalDetail ? (
@@ -777,8 +833,8 @@ export default function CommunityTabScreen() {
                 key={openSessionId}
                 fixture={previewFixture}
                 groupId={selectedGroup.id}
-                onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}
-                onUserBlocked={(userId) => hideWorkouts((workout) => workout.userId === userId)}
+                onPostHidden={(sessionId) => hideFeedItems((item) => communityFeedItemMatchesId(item, sessionId))}
+                onUserBlocked={(userId) => hideFeedItems((item) => item.userId === userId)}
                 paneHeader={(
                   <View style={styles.panePostHeader}>
                     <Text style={styles.panePostTitle}>Post</Text>
@@ -835,6 +891,7 @@ export default function CommunityTabScreen() {
                 groupId: selectedGroup.id,
                 postId: generalDelete.id,
               });
+              hideFeedItems((item) => communityFeedItemMatchesId(item, generalDelete.id));
               setGeneralDelete(null);
               setDeleteCrewNames([]);
               if (generalDetail?.id === generalDelete.id) {
@@ -966,24 +1023,39 @@ export default function CommunityTabScreen() {
                 <View style={styles.feedState}><StateCard actionLabel={generalPostCopy.tryAgain} message={error} onAction={() => void loadCommunity()} title={generalPostCopy.loadErrorTitle} /></View>
               ) : mixedFeed.length || pinnedPost ? (
                 boardHeight > 0 ? (
-                  <ScrollView style={{ height: boardHeight }} contentContainerStyle={styles.mixedFeed}>
+                  <ScrollView
+                    contentContainerStyle={styles.mixedFeed}
+                    onContentSizeChange={compactScroll.onContentSizeChange}
+                    onLayout={compactScroll.onViewportLayout}
+                    onScroll={(event) => {
+                      compactScroll.onScroll(event);
+                      handleBoardScroll(event);
+                    }}
+                    ref={compactScroll.scrollRef}
+                    scrollEventThrottle={16}
+                    style={{ height: boardHeight }}
+                  >
+                    <View collapsable={false} ref={compactScroll.contentRef}>
+                    <ScrollAnchorProvider contentRef={compactScroll.contentRef} onItemLayout={compactScroll.onItemLayout} pane={null}>
                     {offline ? <Text style={styles.offline}>{generalPostCopy.offline}</Text> : null}
                     {pinnedPost ? (
-                      <Pressable
-                        accessibilityLabel={generalPostFeedCardLabel(isOwnPost(pinnedPost.userId, viewerUserId))}
-                        accessibilityRole="button"
-                        onPress={() => openGeneralPostDetail(pinnedPost)}
-                      >
-                        <GeneralPostSummaryCard
-                          isPinned
-                          menuItems={generalMenu(pinnedPost)}
-                          post={pinnedPost}
-                          showCommentCount
-                          showReactionSummary
-                          timestamp={pinnedTimestamp ?? undefined}
-                          viewerUserId={viewerUserId}
-                        />
-                      </Pressable>
+                      <ScrollAnchor id={pinnedPost.id}>
+                        <Pressable
+                          accessibilityLabel={generalPostFeedCardLabel(isOwnPost(pinnedPost.userId, viewerUserId))}
+                          accessibilityRole="button"
+                          onPress={() => openGeneralPostDetail(pinnedPost)}
+                        >
+                          <GeneralPostSummaryCard
+                            isPinned
+                            menuItems={generalMenu(pinnedPost)}
+                            post={pinnedPost}
+                            showCommentCount
+                            showReactionSummary
+                            timestamp={pinnedTimestamp ?? undefined}
+                            viewerUserId={viewerUserId}
+                          />
+                        </Pressable>
+                      </ScrollAnchor>
                     ) : null}
                     {boardRows.map((row, index) => {
                       if (row.type === "day") {
@@ -1000,48 +1072,59 @@ export default function CommunityTabScreen() {
                       if (row.item.kind === "general") {
                         const post = row.item;
                         return (
-                          <Pressable
-                            accessibilityLabel={generalPostFeedCardLabel(isOwnPost(post.userId, viewerUserId))}
-                            accessibilityRole="button"
-                            key={row.key}
-                            onPress={() => openGeneralPostDetail(post)}
-                            style={previous?.type === "day" ? undefined : styles.feedPost}
-                          >
-                            <GeneralPostSummaryCard
-                              menuItems={generalMenu(post)}
-                              post={post}
-                              showCommentCount
-                              showReactionSummary
-                              timestamp={row.timestamp}
-                              viewerUserId={viewerUserId}
-                            />
-                          </Pressable>
+                          <ScrollAnchor id={post.id} key={row.key}>
+                            <Pressable
+                              accessibilityLabel={generalPostFeedCardLabel(isOwnPost(post.userId, viewerUserId))}
+                              accessibilityRole="button"
+                              onPress={() => openGeneralPostDetail(post)}
+                              style={previous?.type === "day" ? undefined : styles.feedPost}
+                            >
+                              <GeneralPostSummaryCard
+                                menuItems={generalMenu(post)}
+                                post={post}
+                                showCommentCount
+                                showReactionSummary
+                                timestamp={row.timestamp}
+                                viewerUserId={viewerUserId}
+                              />
+                            </Pressable>
+                          </ScrollAnchor>
                         );
                       }
                       const workout = row.item;
                       const isOwn = isOwnPost(workout.userId, viewerUserId);
                       const title = workout.name?.trim() || workout.title;
                       return (
-                        <Pressable
-                          accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
-                          accessibilityRole="button"
-                          key={row.key}
-                          onPress={() => openWorkoutDetail(workout)}
-                          style={previous?.type === "day" ? undefined : styles.feedPost}
-                        >
-                          <WorkoutSummaryCard
-                            isOwn={isOwn}
-                            menuItems={feedMenu(workout)}
-                            selected={false}
-                            showCommentCount
-                            showReactionSummary
-                            timestamp={row.timestamp}
-                            variant="full"
-                            workout={workout}
-                          />
-                        </Pressable>
+                        <ScrollAnchor id={workout.id} key={row.key}>
+                          <Pressable
+                            accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
+                            accessibilityRole="button"
+                            onPress={() => openWorkoutDetail(workout)}
+                            style={previous?.type === "day" ? undefined : styles.feedPost}
+                          >
+                            <WorkoutSummaryCard
+                              isOwn={isOwn}
+                              menuItems={feedMenu(workout)}
+                              selected={false}
+                              showCommentCount
+                              showReactionSummary
+                              timestamp={row.timestamp}
+                              variant="full"
+                              workout={workout}
+                            />
+                          </Pressable>
+                        </ScrollAnchor>
                       );
                     })}
+                    <CommunityBoardPager
+                      hasItems={mixedFeed.length > 0 || Boolean(pinnedPost)}
+                      loadingMore={loadingMore}
+                      loadMoreError={loadMoreError}
+                      nextCursor={board?.nextCursor ?? null}
+                      onRetry={() => void loadMoreCommunity()}
+                    />
+                    </ScrollAnchorProvider>
+                    </View>
                   </ScrollView>
                 ) : null
               ) : (
@@ -1067,10 +1150,10 @@ export default function CommunityTabScreen() {
         viewerUserId={viewerUserId}
         onCommentCountChange={updateFeedCommentCount}
         onEditWorkout={editWorkout}
-        onPostHidden={(sessionId) => hideWorkouts((workout) => workout.id === sessionId)}
+        onPostHidden={(sessionId) => hideFeedItems((item) => communityFeedItemMatchesId(item, sessionId))}
         onGoalBadgesChange={updateFeedGoalBadges}
         onPrBadgesChange={updateFeedPrBadges}
-        onUserBlocked={(userId) => hideWorkouts((workout) => workout.userId === userId)}
+        onUserBlocked={(userId) => hideFeedItems((item) => item.userId === userId)}
         onDismiss={() => {
           setDetailTarget(null);
           setExplicitOverride(null);
@@ -1118,6 +1201,7 @@ export default function CommunityTabScreen() {
               groupId: selectedGroup.id,
               postId: generalDelete.id,
             });
+            hideFeedItems((item) => communityFeedItemMatchesId(item, generalDelete.id));
             setGeneralDelete(null);
             setDeleteCrewNames([]);
             if (generalDetail?.id === generalDelete.id) {
@@ -1188,6 +1272,44 @@ export default function CommunityTabScreen() {
     </SafeAreaView>
     </View>
   );
+}
+
+function CommunityBoardPager({
+  hasItems,
+  loadingMore,
+  loadMoreError,
+  nextCursor,
+  onRetry,
+}: {
+  hasItems: boolean;
+  loadingMore: boolean;
+  loadMoreError: string | null;
+  nextCursor: string | null;
+  onRetry: () => void;
+}) {
+  if (loadingMore) {
+    return (
+      <View style={styles.pager}>
+        <LoadingState message={generalPostCopy.loadingMore} />
+      </View>
+    );
+  }
+  if (loadMoreError) {
+    return (
+      <View style={styles.pager}>
+        <StateCard
+          actionLabel={generalPostCopy.tryAgain}
+          message={loadMoreError}
+          onAction={onRetry}
+          title={generalPostCopy.loadMoreErrorTitle}
+        />
+      </View>
+    );
+  }
+  if (hasItems && !nextCursor) {
+    return <Text style={styles.end}>{generalPostCopy.endOfBoard}</Text>;
+  }
+  return null;
 }
 
 function CommunityNewPostButton({ gap, onPress }: { gap: number; onPress: () => void }) {
@@ -1364,6 +1486,8 @@ const styles = StyleSheet.create({
   newPost: { alignSelf: "stretch", width: "100%" },
   mixedFeed: { paddingBottom: spacing.huge, paddingHorizontal: spacing.lg, paddingTop: 0 },
   feedPost: { marginTop: spacing.md },
+  pager: { paddingVertical: spacing.lg },
+  end: { color: colors.muted, paddingVertical: spacing.xxl, textAlign: "center", ...type.bodySmall },
   offline: { color: colors.muted, ...type.bodySmall },
   // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
   boardArea: { backgroundColor: colors.surfaceMuted, borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },

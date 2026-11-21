@@ -10,6 +10,7 @@ import {
   gte,
   inArray,
   lt,
+  lte,
   sql,
 } from "drizzle-orm";
 
@@ -118,6 +119,7 @@ export async function listCrewMembers(input: {
   viewerUserId: string;
   weekStart: Date;
   weekEnd: Date;
+  now?: Date;
 }) {
   const members = await getDatabase()
     .select({
@@ -146,22 +148,17 @@ export async function listCrewMembers(input: {
     })
     .from(schema.communityPosts)
     .innerJoin(
-      schema.groupMembers,
-      and(
-        eq(schema.groupMembers.groupId, schema.communityPosts.groupId),
-        eq(schema.groupMembers.userId, schema.communityPosts.userId),
-        activeMembership,
-        gte(
-          schema.communityPosts.createdAt,
-          schema.groupMembers.contentVisibleAfter,
-        ),
-      ),
+      schema.workoutSessions,
+      eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
     )
     .where(
       and(
         eq(schema.communityPosts.groupId, input.groupId),
-        gte(schema.communityPosts.createdAt, input.weekStart),
-        lt(schema.communityPosts.createdAt, input.weekEnd),
+        eq(schema.communityPosts.kind, "workout"),
+        sql`${schema.communityPosts.workoutSessionId} is not null`,
+        gte(schema.workoutSessions.occurredAt, input.weekStart),
+        input.now ? lte(schema.workoutSessions.occurredAt, input.now) : undefined,
+        lt(schema.workoutSessions.occurredAt, input.weekEnd),
         communityPostVisibleToSql(input.viewerUserId, schema.communityPosts.id),
         inArray(
           schema.communityPosts.userId,

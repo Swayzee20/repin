@@ -15,7 +15,12 @@ import type {
   HomeCrewHighlights,
   WorkoutFeedItem,
 } from "@repin/types";
-import { HOME_ACTIVITY_LIMIT, homeLocalBounds, homeQuerySchema } from "@repin/validation";
+import {
+  HOME_ACTIVITY_LIMIT,
+  homeLocalBounds,
+  homeQuerySchema,
+  skipLegacyCommunityWorkoutsQuery,
+} from "@repin/validation";
 
 import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
@@ -48,6 +53,7 @@ export async function GET(request: Request) {
       end: url.searchParams.get("end") ?? undefined,
       includeReactions: url.searchParams.get("includeReactions") ?? undefined,
       includeComments: url.searchParams.get("includeComments") ?? undefined,
+      v: url.searchParams.get("v") ?? undefined,
     });
 
     if (!query.success) {
@@ -99,7 +105,12 @@ export async function GET(request: Request) {
     const now = new Date();
     const bounds = homeLocalBounds(now, query.data);
     const homeFeed = view === "home";
-    const authorizedCommunityWorkouts = selectedGroup
+    const skipLegacyCommunityWorkouts = skipLegacyCommunityWorkoutsQuery({
+      view,
+      feed: query.data.feed,
+      v: query.data.v,
+    });
+    const authorizedCommunityWorkouts = selectedGroup && !skipLegacyCommunityWorkouts
       ? ((await timing.measure("db", () =>
           listRecentWorkoutsForAuthorizedGroup({
             groupId: selectedGroup.id,
@@ -115,7 +126,7 @@ export async function GET(request: Request) {
               : query.data.end ? new Date(query.data.end) : undefined,
           }))) ?? [])
       : [];
-    const workoutsWithPhotos = view === "community"
+    const workoutsWithPhotos = view === "community" && !skipLegacyCommunityWorkouts
       ? await timing.measure("photo", () =>
           addAuthorizedWorkoutPhotoUrls(authorizedCommunityWorkouts))
       : authorizedCommunityWorkouts;
@@ -248,6 +259,7 @@ async function listMixedCommunityFeed(input: {
         groupId: input.groupId,
         viewerUserId: input.viewerUserId,
         sessionIds: workoutSessionIds,
+        limit: workoutSessionIds.length,
         includeReactionCounts: true,
         includeCommentCounts: true,
       })) ?? [])
@@ -276,10 +288,12 @@ async function listMixedCommunityFeed(input: {
     if (item) communityFeed.push(item);
   }
 
-  const pinned = await getPinnedGeneralPostForMember({
-    viewerUserId: input.viewerUserId,
-    groupId: input.groupId,
-  });
+  const pinned = input.cursor
+    ? null
+    : await getPinnedGeneralPostForMember({
+      viewerUserId: input.viewerUserId,
+      groupId: input.groupId,
+    });
   const pinnedPost = pinned ? (await signGeneralPostPhotos([pinned]))[0] ?? null : null;
 
   return {

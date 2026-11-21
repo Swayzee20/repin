@@ -2939,7 +2939,7 @@ test("API and RLS share one workout visibility predicate", async () => {
     }), null);
     assert.equal(await db.isWorkoutSessionVisibleTo(ada.id, shared.id), true);
     await client.query("update groups set closed_at = null where id = $1", [alpha.id]);
-    await loggedWorkout(db, ada, alpha.id, "Counted run");
+    await loggedWorkout(db, ada, alpha.id, "Counted run", new Date());
 
     const weekStart = new Date(Date.now() - 24 * 60 * 60 * 1000);
     const weekEnd = new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -3145,7 +3145,7 @@ async function assertViewerParity(db, client, input) {
   }
 }
 
-async function loggedWorkout(db, user, groupId, title) {
+async function loggedWorkout(db, user, groupId, title, occurredAt = new Date("2026-10-01T12:00:00.000Z")) {
   return db.createWorkoutForMember({
     userId: user.id,
     displayName: user.displayName,
@@ -3157,7 +3157,7 @@ async function loggedWorkout(db, user, groupId, title) {
     effort: 3,
     caption: title,
     photoPath: null,
-    occurredAt: new Date("2026-10-01T12:00:00.000Z"),
+    occurredAt,
     metrics: [{ metricType: "distance", numericValue: 3, unit: "km" }],
     segments: [{ position: 0, segmentType: "work", durationSeconds: 60 }],
     movements: [{

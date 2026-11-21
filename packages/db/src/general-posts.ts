@@ -831,7 +831,7 @@ export async function listCommunityFeedForMember(input: {
   const limit = input.limit ?? 20;
   const cursor = decodeCommunityFeedCursor(input.cursor);
 
-  const [pinnedRow] = input.includePinned !== false && !cursor
+  const [pinnedRow] = input.includePinned !== false
     ? await database
       .select({
         postId: schema.crewPinnedPosts.postId,
