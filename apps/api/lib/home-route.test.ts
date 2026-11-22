@@ -32,10 +32,13 @@ test("mixed Community v=2 skips the legacy workout query and hydrates the page b
 });
 
 test("crew highlights go through the shared visibility predicate and posts, not other members' sessions", () => {
-  assert.match(dbHome, /communityPostVisibleToSql/);
-  assert.match(dbHome, /communityPosts/);
-  assert.match(dbHome, /workoutSessionId/);
+  assert.match(dbHome, /listCrewHighlightsForMember/);
+  assert.match(dbHome, /homeHighlightsFromCrew/);
   assert.equal(dbHome.includes("bypassrls"), false);
+  const dbRevamp = readFileSync(fileURLToPath(new URL("../../../packages/db/src/community-revamp.ts", import.meta.url)), "utf8");
+  assert.match(dbRevamp, /communityPostVisibleToSql/);
+  assert.match(dbRevamp, /communityPosts/);
+  assert.match(dbRevamp, /workoutSessionId/);
   assert.match(dbGoals, /listActiveGoalSnapshotsForHome/);
   assert.match(dbGoals, /eq\(schema\.goals\.userId, userId\)/);
   assert.equal(dbGoals.includes("settleUserGoalReads"), true);

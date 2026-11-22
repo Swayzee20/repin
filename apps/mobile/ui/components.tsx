@@ -1,4 +1,4 @@
-import { getUserInitials, resolveUserDisplayName, workoutTypeLabels, type WorkoutFeedItem } from "@repin/types";
+import { getUserInitials, resolveUserDisplayName, workoutTypeLabels, type CommunityReactionType, type WorkoutFeedItem } from "@repin/types";
 import { LinearGradient } from "expo-linear-gradient";
 import { useCallback, useRef, useState, type ReactNode } from "react";
 import type { StyleProp, ViewInstance, ViewProps, ViewStyle } from "react-native";
@@ -50,6 +50,8 @@ import { useOverlayOccupancy } from "./use-overlay-occupancy";
 import { keyboardScrollProps } from "./keyboard";
 import { colors, elevation, fonts, radii, size, spacing, type } from "./theme";
 import { WorkoutPhoto } from "./workout-photo";
+import { CardReactionBar } from "./card-reaction-bar";
+import { CommentPreviewLine } from "./comment-preview-line";
 
 const webFeedScrollerStyle =
   Platform.OS === "web"
@@ -308,6 +310,9 @@ export function WorkoutSummaryCard({
   menuItems,
   onDelete,
   onEdit,
+  onOpenWhoReacted,
+  onToggleReaction,
+  reactionPending = false,
   selected = false,
   showCommentCount = false,
   showReactionSummary = false,
@@ -320,6 +325,9 @@ export function WorkoutSummaryCard({
   menuItems?: ContentMenuItem[];
   onDelete?: () => void;
   onEdit?: () => void;
+  onOpenWhoReacted?: (type: CommunityReactionType) => void;
+  onToggleReaction?: (type: CommunityReactionType) => void;
+  reactionPending?: boolean;
   selected?: boolean;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
@@ -390,11 +398,20 @@ export function WorkoutSummaryCard({
         ) : null}
         {caption && variant === "full" ? <Text numberOfLines={3} style={styles.caption}>{caption}</Text> : null}
         {workout.photoUrl && variant === "full" ? <WorkoutPhoto onError={() => console.warn("Authorized workout photo failed to render", { workoutId: workout.id, hasPhotoUrl: true })} uri={workout.photoUrl} variant="feed" /> : null}
-        {socialSummary.length ? (
+        {onToggleReaction ? (
+          <CardReactionBar
+            counts={workout.reactionCounts ?? { clap: 0, fire: 0, strong: 0 }}
+            disabled={reactionPending}
+            onOpenWhoReacted={onOpenWhoReacted}
+            onToggle={onToggleReaction}
+            viewerReaction={workout.viewerReaction ?? null}
+          />
+        ) : socialSummary.length ? (
           <Text accessibilityLabel={socialSummary.map((item) => item.accessibility).join(", ")} numberOfLines={1} style={styles.reactionSummary}>
             {socialSummary.map((item) => item.text).join("   ")}
           </Text>
         ) : null}
+        {workout.latestComment ? <CommentPreviewLine comment={workout.latestComment} /> : null}
       </Card>
     </View>
   );

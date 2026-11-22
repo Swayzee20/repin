@@ -14,10 +14,9 @@ import {
   type WorkoutFeedItem,
 } from "@repin/types";
 import { goalCopy } from "@repin/validation";
-import { Feather } from "@expo/vector-icons";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useEffect, useRef, useState, type ComponentRef, type ReactNode } from "react";
-import { ActivityIndicator, Animated, Easing, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from "react-native";
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, type ViewStyle } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { commentMenuItems, postMenuItems } from "../lib/content-menu";
@@ -73,6 +72,7 @@ import {
 import { scheduleKeyboardAccessoryReset, setKeyboardAccessory } from "./keyboard-accessory";
 import { keyboardScrollProps, multilineAccessoryProps } from "./keyboard";
 import { TwoPane, useLayoutMode, WideColumn } from "./layout";
+import { CardReactionBar } from "./card-reaction-bar";
 import { colors, fonts, radii, size, spacing, type } from "./theme";
 import { PhotoViewer } from "./photo-viewer";
 import { ScrollAnchor, ScrollAnchorProvider, useScrollAnchor } from "./scroll-anchor";
@@ -110,6 +110,7 @@ export function WorkoutDetailView({
   onPostHidden,
   onGoalBadgesChange,
   onPrBadgesChange,
+  onOpenWhoReacted,
   onReactionSummaryChange,
   onUnavailable,
   onUserBlocked,
@@ -129,6 +130,7 @@ export function WorkoutDetailView({
   onPostHidden?: (sessionId: string) => void;
   onGoalBadgesChange?: (sessionId: string, badges: GoalBadge[]) => void;
   onPrBadgesChange?: (sessionId: string, badges: PrBadge[]) => void;
+  onOpenWhoReacted?: (type: CommunityReactionType) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUnavailable?: () => void;
   onUserBlocked?: (userId: string) => void;
@@ -619,6 +621,7 @@ export function WorkoutDetailView({
       onRemovePrBadge={canRemovePrBadge ? () => void prUndo.remove(workout) : undefined}
       postMenu={postItems.length ? <ContentOptionsMenu accessibilityLabel="Post options" items={postItems} /> : null}
       onCommentsRetry={() => void loadComments(true)}
+      onOpenWhoReacted={onOpenWhoReacted}
       onReactionPress={(reactionType) => void toggleReaction(reactionType)}
       part={part}
       presentation={presentation}
@@ -795,6 +798,7 @@ export function WorkoutDetailContent({
   onCommentSubmit,
   onCommentsRetry,
   moderationUi = null,
+  onOpenWhoReacted,
   onReactionPress,
   onRemoveGoalBadge,
   onRemovePrBadge,
@@ -820,6 +824,7 @@ export function WorkoutDetailContent({
   onCommentSubmit?: () => void;
   onCommentsRetry?: () => void;
   moderationUi?: ReactNode;
+  onOpenWhoReacted?: (reactionType: CommunityReactionType) => void;
   onReactionPress?: (reactionType: CommunityReactionType) => void;
   onRemoveGoalBadge?: () => void;
   onRemovePrBadge?: () => void;
@@ -1032,10 +1037,12 @@ export function WorkoutDetailContent({
             {isCommunitySheet ? (
               <View style={styles.sheetMetaRow}>
                 <View style={styles.sheetReactions}>
-                  <CommunityModalReactionRow
-                    onReactionPress={onReactionPress}
-                    reactionPending={reactionPending}
-                    reactions={workout.reactions}
+                  <CardReactionBar
+                    counts={workout.reactions.counts}
+                    disabled={reactionPending || !onReactionPress}
+                    onOpenWhoReacted={onOpenWhoReacted}
+                    onToggle={(reactionType) => onReactionPress?.(reactionType)}
+                    viewerReaction={workout.reactions.viewerReaction}
                   />
                   {reactionError ? <Text style={styles.reactionError}>{reactionError}</Text> : null}
                 </View>
@@ -1272,153 +1279,6 @@ const reactionOptions: Record<CommunityReactionType, { emoji: string; label: str
   strong: { emoji: "💪", label: "Strong" },
   clap: { emoji: "👏", label: "Clap" },
 };
-
-function CommunityModalReactionRow({
-  onReactionPress,
-  reactionPending,
-  reactions,
-}: {
-  onReactionPress?: (reactionType: CommunityReactionType) => void;
-  reactionPending: boolean;
-  reactions: CommunityReactionSummary;
-}) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerVisible, setPickerVisible] = useState(false);
-  const pickerProgress = useRef(new Animated.Value(0)).current;
-  const visibleReactions = communityReactionTypes.filter(
-    (reactionType) => reactions.counts[reactionType] > 0,
-  );
-
-  useEffect(() => () => pickerProgress.stopAnimation(), [pickerProgress]);
-
-  const openPicker = useCallback(() => {
-    setPickerVisible(true);
-    setPickerOpen(true);
-    pickerProgress.stopAnimation();
-    pickerProgress.setValue(0);
-    Animated.timing(pickerProgress, {
-      duration: 160,
-      easing: Easing.out((value) => Easing.cubic(value)),
-      toValue: 1,
-      useNativeDriver: true,
-    }).start();
-  }, [pickerProgress]);
-
-  const closePicker = useCallback(() => {
-    setPickerOpen(false);
-    pickerProgress.stopAnimation();
-    Animated.timing(pickerProgress, {
-      duration: 120,
-      easing: Easing.in((value) => Easing.quad(value)),
-      toValue: 0,
-      useNativeDriver: true,
-    }).start(({ finished }) => {
-      if (finished) setPickerVisible(false);
-    });
-  }, [pickerProgress]);
-
-  const chooseReaction = useCallback((reactionType: CommunityReactionType) => {
-    closePicker();
-    onReactionPress?.(reactionType);
-  }, [closePicker, onReactionPress]);
-
-  return (
-    <View style={styles.compactReactionRow}>
-      {visibleReactions.length ? (
-        <View style={styles.reactionSummaryRow}>
-          {visibleReactions.map((reactionType) => {
-            const option = reactionOptions[reactionType];
-            const count = reactions.counts[reactionType];
-            const selected = reactions.viewerReaction === reactionType;
-            return (
-              <Pressable
-                accessibilityLabel={`React with ${option.label}, ${count} reaction${count === 1 ? "" : "s"}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected, disabled: reactionPending }}
-                disabled={reactionPending || !onReactionPress}
-                key={reactionType}
-                onPress={() => chooseReaction(reactionType)}
-                style={({ pressed }) => [
-                  styles.compactReactionChoice,
-                  pressed && styles.reactionButtonPressed,
-                ]}
-              >
-                <View style={[styles.compactReactionSummary, selected && styles.compactReactionSummarySelected]}>
-                  <Text style={styles.compactReactionEmoji}>{option.emoji}</Text>
-                  <Text style={[styles.compactReactionCount, selected && styles.reactionCountSelected]}>{count}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-
-      <Pressable
-        accessibilityLabel="Add reaction"
-        accessibilityRole="button"
-        accessibilityState={{ disabled: reactionPending, expanded: pickerOpen }}
-        disabled={reactionPending || !onReactionPress}
-        onPress={pickerOpen ? closePicker : openPicker}
-        style={({ pressed }) => [
-          styles.addReactionButton,
-          pressed && styles.reactionButtonPressed,
-        ]}
-      >
-        <Feather color={pickerOpen ? colors.muted : colors.subtle} name="smile" size={17} />
-        <Text style={[styles.addReactionPlus, pickerOpen && styles.addReactionPlusOpen]}>+</Text>
-      </Pressable>
-
-      {pickerVisible ? (
-        <Animated.View
-          pointerEvents={pickerOpen ? "auto" : "none"}
-          style={[
-            styles.reactionPicker,
-            {
-              opacity: pickerProgress,
-              transform: [
-                {
-                  translateX: pickerProgress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [-14, 0],
-                  }),
-                },
-                {
-                  scaleX: pickerProgress.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [0.82, 1],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
-          {communityReactionTypes.map((reactionType) => {
-            const option = reactionOptions[reactionType];
-            const selected = reactions.viewerReaction === reactionType;
-            return (
-              <Pressable
-                accessibilityLabel={`React with ${option.label}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected, disabled: reactionPending }}
-                disabled={reactionPending}
-                key={reactionType}
-                onPress={() => chooseReaction(reactionType)}
-                style={({ pressed }) => [
-                  styles.reactionPickerChoice,
-                  pressed && styles.reactionButtonPressed,
-                ]}
-              >
-                <View style={[styles.reactionPickerCircle, selected && styles.reactionPickerCircleSelected]}>
-                  <Text style={styles.reactionPickerEmoji}>{option.emoji}</Text>
-                </View>
-              </Pressable>
-            );
-          })}
-        </Animated.View>
-      ) : null}
-    </View>
-  );
-}
 
 function getOptimisticReactionSummary(
   previous: CommunityReactionSummary,

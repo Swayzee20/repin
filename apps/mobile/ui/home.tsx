@@ -5,6 +5,7 @@ import {
   type WorkoutFeedItem,
 } from "@repin/types";
 import {
+  communityRevampCopy,
   crewPromptLine,
   foldedDeadlineLine,
   homeCopy,
@@ -248,8 +249,10 @@ export function HomeCrewEyebrow({ name }: { name?: string | null }) {
 }
 
 export function HomeHighlights({
+  onSeeAll,
   rows,
 }: {
+  onSeeAll?: () => void;
   rows: Array<
     | { kind: "first"; userId: string; displayName: string }
     | { kind: "count"; userId: string; displayName: string; count: number }
@@ -258,7 +261,19 @@ export function HomeHighlights({
   if (!rows.length) return null;
   return (
     <View>
-      <SectionLabel style={styles.highlightsLabel}>{homeCopy.highlights}</SectionLabel>
+      <View style={styles.activityHeader}>
+        <SectionLabel>{homeCopy.highlights}</SectionLabel>
+        {onSeeAll ? (
+          <Pressable
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onSeeAll}
+            style={(state) => [styles.viewAllHit, webFocusRing(pressableFocused(state))]}
+          >
+            <Text style={styles.viewAll}>{communityRevampCopy.seeAll}</Text>
+          </Pressable>
+        ) : null}
+      </View>
       <Card>
         {rows.map((row, index) => (
           <View key={`${row.kind}-${row.userId}`} style={[styles.highlightRow, index > 0 && styles.highlightDivider]}>

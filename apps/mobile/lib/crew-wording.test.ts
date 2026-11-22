@@ -32,15 +32,30 @@ test("user-visible account-deletion and crew screens say crew, not group", () =>
         "create a group",
       ],
       required: [
-        "Close crew menu",
-        "Open crew menu",
-        "Switch crew",
-        "View crew",
-        "Back to crew menu",
         "from the crew",
         "Join a crew",
         "create a crew",
       ],
+    },
+    {
+      file: "apps/mobile/ui/community-revamp.tsx",
+      forbidden: [
+        "Close group menu",
+        "Open group menu",
+        "Switch group",
+        "View group",
+      ],
+      required: [
+        "Close crew switcher",
+        "Open crew switcher",
+        "communityRevampCopy.switchCrew",
+        "communityRevampCopy.viewCrew",
+      ],
+    },
+    {
+      file: "packages/validation/src/community-revamp.ts",
+      forbidden: ["Switch group", "View group"],
+      required: ["Switch crew", "View crew"],
     },
     {
       file: "apps/mobile/ui/block-sheet.tsx",

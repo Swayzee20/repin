@@ -159,7 +159,9 @@ test("home crew numbers count shared posts only and never leak goals or streaks"
       viewerUserId: ada.id,
       todayStart,
       weekStart,
+      weekEnd: new Date("2026-11-22T06:00:00.000Z"),
       now,
+      timeZone: "America/Chicago",
     });
     assert.equal(highlights.firstToRepInToday?.userId, byron.id);
     const byronCount = highlights.weekly.find((row) => row.userId === byron.id)?.count ?? 0;
@@ -173,7 +175,9 @@ test("home crew numbers count shared posts only and never leak goals or streaks"
       viewerUserId: ada.id,
       todayStart,
       weekStart,
+      weekEnd: new Date("2026-11-22T06:00:00.000Z"),
       now,
+      timeZone: "America/Chicago",
     });
     assert.equal(blocked.firstToRepInToday?.userId === byron.id, false);
     assert.equal(blocked.weekly.some((row) => row.userId === byron.id), false);
@@ -190,7 +194,9 @@ test("home crew numbers count shared posts only and never leak goals or streaks"
       viewerUserId: ada.id,
       todayStart,
       weekStart,
+      weekEnd: new Date("2026-11-22T06:00:00.000Z"),
       now,
+      timeZone: "America/Chicago",
     });
     assert.equal(reported.firstToRepInToday?.userId, ada.id);
 

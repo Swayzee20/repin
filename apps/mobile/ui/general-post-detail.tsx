@@ -1,5 +1,4 @@
 import {
-  communityReactionTypes,
   type CommunityPostComment,
   type CommunityReactionSummary,
   type CommunityReactionType,
@@ -32,12 +31,14 @@ import { colors, radii, size, spacing, type } from "./theme";
 
 export function GeneralPostDetailView({
   groupId,
+  onOpenWhoReacted,
   paneHeader = null,
   post,
   presentation = "community-pane",
   viewerUserId,
 }: {
   groupId: string;
+  onOpenWhoReacted?: (type: CommunityReactionType) => void;
   paneHeader?: ReactNode;
   post: GeneralPostFeedItem;
   presentation?: "community-modal" | "community-pane";
@@ -126,21 +127,12 @@ export function GeneralPostDetailView({
         keyboardShouldPersistTaps="handled"
         style={isModal ? styles.modalScroller : styles.paneScroller}
       >
-        <GeneralPostSummaryCard post={current} showCommentCount showReactionSummary viewerUserId={viewerUserId} />
-        <View style={styles.reactions}>
-          {communityReactionTypes.map((reaction) => (
-            <Pressable
-              key={reaction}
-              onPress={() => void toggleReaction(reaction)}
-              style={[
-                styles.reaction,
-                current.reactions.viewerReaction === reaction && styles.reactionOn,
-              ]}
-            >
-              <Text>{reaction === "fire" ? "🔥" : reaction === "strong" ? "💪" : "👏"}</Text>
-            </Pressable>
-          ))}
-        </View>
+        <GeneralPostSummaryCard
+          onOpenWhoReacted={onOpenWhoReacted}
+          onToggleReaction={(reaction) => void toggleReaction(reaction)}
+          post={current}
+          viewerUserId={viewerUserId}
+        />
         <View style={styles.commentsBlock}>
           <CommentsSectionLabel />
           <View style={styles.commentsAfterLabel}>

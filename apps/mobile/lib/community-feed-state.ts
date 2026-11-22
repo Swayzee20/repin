@@ -1,7 +1,9 @@
 import type {
   CommunityData,
   CommunityFeedItem,
+  CommunityLatestComment,
   CommunityReactionCounts,
+  CommunityReactionType,
   GoalBadge,
   GroupSummary,
   PrBadge,
@@ -15,8 +17,18 @@ export type CommunityFeedAction =
   | { type: "replace"; data: CommunityData }
   | { type: "append"; items: CommunityFeedItem[]; nextCursor: string | null }
   | { type: "hide"; matches: (item: CommunityFeedItem) => boolean }
-  | { type: "updateReaction"; id: string; counts: CommunityReactionCounts }
-  | { type: "updateCommentCount"; id: string; commentCount: number }
+  | {
+    type: "updateReaction";
+    id: string;
+    counts: CommunityReactionCounts;
+    viewerReaction?: CommunityReactionType | null;
+  }
+  | {
+    type: "updateCommentCount";
+    id: string;
+    commentCount: number;
+    latestComment?: CommunityLatestComment | null;
+  }
   | { type: "updatePrBadges"; id: string; prBadges: PrBadge[] }
   | { type: "updateGoalBadges"; id: string; goalBadges: GoalBadge[] };
 
@@ -121,11 +133,17 @@ export function reduceCommunityFeed(
       return mapFeedItem(state, action.id, (item) => ({
         ...item,
         reactionCounts: action.counts,
+        viewerReaction: action.viewerReaction === undefined
+          ? item.viewerReaction
+          : action.viewerReaction,
       }));
     case "updateCommentCount":
       return mapFeedItem(state, action.id, (item) => ({
         ...item,
         commentCount: action.commentCount,
+        latestComment: action.latestComment === undefined
+          ? item.latestComment
+          : action.latestComment,
       }));
     case "updatePrBadges":
       return mapFeedItem(state, action.id, (item) => (

@@ -1,6 +1,7 @@
 import {
   getUserInitials,
   resolveUserDisplayName,
+  type CommunityReactionType,
   type GeneralPostFeedItem,
 } from "@repin/types";
 import { generalPostCopy } from "@repin/validation";
@@ -9,6 +10,8 @@ import { StyleSheet, Text, View, type StyleProp, type ViewStyle } from "react-na
 import type { ContentMenuItem } from "../lib/content-menu";
 import { formatPostTimestamp } from "../lib/workout-date";
 import { isOwnPost, ownPostAuthorNameRowStyle, ownPostAuthorNameStyle } from "./community-feed-layout";
+import { CardReactionBar } from "./card-reaction-bar";
+import { CommentPreviewLine } from "./comment-preview-line";
 import { Card, ContentOptionsMenu } from "./components";
 import { KindChip } from "./kind-chip";
 import { OwnPostYouTag } from "./own-post-you-tag";
@@ -22,6 +25,9 @@ export { generalPostFeedCardLabel } from "./community-feed-layout";
 export function GeneralPostSummaryCard({
   isPinned = false,
   menuItems = [],
+  onOpenWhoReacted,
+  onToggleReaction,
+  reactionPending = false,
   selected = false,
   showCommentCount = false,
   showReactionSummary = false,
@@ -32,6 +38,9 @@ export function GeneralPostSummaryCard({
 }: {
   isPinned?: boolean;
   menuItems?: ContentMenuItem[];
+  onOpenWhoReacted?: (type: CommunityReactionType) => void;
+  onToggleReaction?: (type: CommunityReactionType) => void;
+  reactionPending?: boolean;
   selected?: boolean;
   showCommentCount?: boolean;
   showReactionSummary?: boolean;
@@ -100,7 +109,15 @@ export function GeneralPostSummaryCard({
         </View>
         <GeneralPostBody body={post.body} numberOfLines={6} />
         <GeneralPostPhotoGrid photos={post.photos} />
-        {socialSummary.length ? (
+        {onToggleReaction ? (
+          <CardReactionBar
+            counts={post.reactionCounts ?? { clap: 0, fire: 0, strong: 0 }}
+            disabled={reactionPending}
+            onOpenWhoReacted={onOpenWhoReacted}
+            onToggle={onToggleReaction}
+            viewerReaction={post.viewerReaction ?? null}
+          />
+        ) : socialSummary.length ? (
           <Text
             accessibilityLabel={socialSummary.map((item) => item.accessibility).join(", ")}
             numberOfLines={1}
@@ -109,6 +126,7 @@ export function GeneralPostSummaryCard({
             {socialSummary.map((item) => item.text).join("   ")}
           </Text>
         ) : null}
+        {post.latestComment ? <CommentPreviewLine comment={post.latestComment} /> : null}
       </Card>
     </View>
   );

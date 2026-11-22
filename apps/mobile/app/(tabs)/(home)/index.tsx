@@ -338,7 +338,17 @@ export default function HomeScreen() {
                 </>
               ) : dashboardData ? (
                 <>
-                  <HomeHighlights rows={highlightItems} />
+                  <HomeHighlights
+                    onSeeAll={selectedGroup ? () => {
+                      setTabGroupId(selectedGroup.id);
+                      if (mode === "twoPane") {
+                        router.navigate({ pathname: "/community", params: { groupId: selectedGroup.id, pane: "highlights" } });
+                        return;
+                      }
+                      router.navigate({ pathname: "/community/highlights", params: { groupId: selectedGroup.id } });
+                    } : undefined}
+                    rows={highlightItems}
+                  />
                   <HomeActivity
                     menuFor={(workout) => workoutMenuItems({
                       onBlock: (item) => moderation.askBlock(item.userId, item.displayName, {

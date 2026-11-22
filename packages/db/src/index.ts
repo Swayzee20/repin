@@ -2696,6 +2696,19 @@ export {
 export type { DashboardSessionContribution } from "./profile-dashboard-stats";
 
 export {
+  countActiveMembersByGroupIds,
+  getCrewBoardSummary,
+  getCrewProgressForMember,
+  listCrewActivityForMember,
+  listCrewHighlightsForMember,
+  listLatestCommentsForPosts,
+  listViewerReactionsForPosts,
+  listVisibleReactionsForPost,
+  listVisibleWorkoutPostsInWeek,
+  requireGroupForMember,
+} from "./community-revamp";
+
+export {
   getUserWeeklyStreak,
   listCrewHighlightsForHome,
 } from "./home";

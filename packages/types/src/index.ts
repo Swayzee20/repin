@@ -225,6 +225,116 @@ export interface CommunityReactionSummary {
   viewerReaction: CommunityReactionType | null;
 }
 
+export interface CommunityLatestComment {
+  displayName: string;
+  text: string;
+  createdAt: string;
+}
+
+export interface CommunityReactor {
+  userId: string;
+  displayName: string;
+  isYou: boolean;
+  createdAt: string;
+}
+
+export interface CommunityReactionGroup {
+  reactionType: CommunityReactionType;
+  reactors: CommunityReactor[];
+}
+
+export interface CommunityWhoReacted {
+  groups: CommunityReactionGroup[];
+}
+
+export interface CommunityCrewWeekPulse {
+  activeMembers: number;
+  sharedWorkouts: number;
+}
+
+export interface CommunityCrewSummary {
+  photoUrl: string | null;
+  memberCount: number;
+  weekPulse: CommunityCrewWeekPulse;
+  highlightCount: number;
+}
+
+export interface CommunityProgressDay {
+  weekday: string;
+  weekdayIndex: number;
+  activeMembers: number;
+  isToday: boolean;
+  isFuture: boolean;
+}
+
+export interface CommunityProgressMember {
+  userId: string;
+  displayName: string;
+  role: GroupRole;
+  isYou: boolean;
+  isOwner: boolean;
+  workouts: number;
+  days: number;
+}
+
+export interface CommunityProgress {
+  memberCount: number;
+  activeMembers: number;
+  sharedWorkouts: number;
+  recordedSeconds: number | null;
+  recordedMeters: number | null;
+  days: CommunityProgressDay[];
+  members: CommunityProgressMember[];
+}
+
+export interface CommunityHighlightPerson {
+  userId: string;
+  displayName: string;
+}
+
+export interface CommunityHighlightCount extends CommunityHighlightPerson {
+  count: number;
+}
+
+export interface CommunityHighlightBadge extends CommunityHighlightPerson {
+  label: string;
+}
+
+export interface CommunityHighlightPost extends CommunityHighlightPerson {
+  postId: string;
+  sessionId: string | null;
+  title: string;
+  reactionCount: number;
+}
+
+export interface CommunityHighlights {
+  firstToRepInToday: CommunityHighlightPerson | null;
+  weekly: CommunityHighlightCount[];
+  consistent: CommunityHighlightCount[];
+  sharedPrs: CommunityHighlightBadge[];
+  sharedGoals: CommunityHighlightBadge[];
+  mostCheered: CommunityHighlightPost | null;
+}
+
+export type CommunityActivityKind = "reaction" | "comment";
+
+export interface CommunityActivityItem {
+  id: string;
+  kind: CommunityActivityKind;
+  createdAt: string;
+  actorUserId: string;
+  actorDisplayName: string;
+  reactionType?: CommunityReactionType;
+  commentText?: string;
+  postId: string;
+  sessionId: string | null;
+  postTitle: string;
+}
+
+export interface CommunityActivity {
+  items: CommunityActivityItem[];
+}
+
 export interface CommunityPostComment {
   id: string;
   userId: string;
@@ -619,7 +729,9 @@ export interface GeneralPostFeedItem {
   updatedAt: string;
   displayName: string;
   reactionCounts?: CommunityReactionCounts;
+  viewerReaction?: CommunityReactionType | null;
   commentCount?: number;
+  latestComment?: CommunityLatestComment | null;
   destinationCrewNames?: string[];
   revision?: number;
 }
@@ -647,7 +759,9 @@ export interface WorkoutFeedItem {
   updatedAt: string;
   displayName: string;
   reactionCounts?: CommunityReactionCounts;
+  viewerReaction?: CommunityReactionType | null;
   commentCount?: number;
+  latestComment?: CommunityLatestComment | null;
   prBadges?: PrBadge[];
   goalBadges?: GoalBadge[];
 }
@@ -772,6 +886,7 @@ export interface CommunityData {
   communityFeed?: CommunityFeedItem[];
   pinnedPost?: GeneralPostFeedItem | null;
   nextCursor?: string | null;
+  crew?: CommunityCrewSummary | null;
   stale?: boolean;
 }
 

@@ -85,6 +85,14 @@ test("in-place updates map communityFeed, including general posts and pin", () =
     id: "w1",
     counts: { clap: 1, fire: 2, strong: 0 },
   });
+  const reactedWithViewer = reduceCommunityFeed(state, {
+    type: "updateReaction",
+    id: "w1",
+    counts: { clap: 1, fire: 2, strong: 0 },
+    viewerReaction: "fire",
+  });
+  assert.equal(reactedWithViewer?.communityFeed?.[0]?.reactionCounts?.fire, 2);
+  assert.equal(reactedWithViewer?.communityFeed?.[0]?.viewerReaction, "fire");
   assert.equal(reacted?.communityFeed?.[0]?.reactionCounts?.fire, 2);
   assert.equal(reacted?.communityWorkouts.length, 0);
 
