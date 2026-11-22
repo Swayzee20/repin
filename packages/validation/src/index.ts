@@ -12,6 +12,7 @@ import {
 } from "@repin/types";
 
 import { isValidTimeZone } from "./calendar";
+import { COMMUNITY_FEED_CLIENT_VERSION } from "./general-posts";
 import {
   canonicalWorkoutFormatSchema,
   durationMinutesFromFormat,
@@ -201,6 +202,8 @@ export {
 } from "./push";
 
 export {
+  COMMUNITY_FEED_CLIENT_VERSION,
+  COMMUNITY_FEED_PAGE_SIZE,
   communityFeedQuerySchema,
   completeGeneralPostPhotoSchema,
   createGeneralPostSchema,
@@ -639,6 +642,7 @@ export const homeQuerySchema = z.object({
   feed: z.enum(["day", "mixed"]).optional(),
   cursor: z.string().trim().min(1).max(80).optional(),
   limit: z.coerce.number().int().min(1).max(50).optional(),
+  v: z.coerce.number().int().min(1).max(10).optional(),
   groupId: z.uuid().optional(),
   timeZone: z.string().trim().min(1).max(64).optional().superRefine((value, context) => {
     if (value && !isValidTimeZone(value)) {
@@ -675,3 +679,18 @@ export const homeQuerySchema = z.object({
     context.addIssue({ code: "custom", message: "The requested range must represent one calendar day", path: ["end"] });
   }
 });
+
+/**
+ * Older Community clients still read `communityWorkouts`. Mixed-feed clients
+ * that send `v=2` hydrate workouts from `communityFeed` instead, so the extra
+ * workout-only query can be skipped (D17).
+ */
+export function skipLegacyCommunityWorkoutsQuery(query: {
+  view?: "home" | "community" | "profile";
+  feed?: "day" | "mixed";
+  v?: number;
+}) {
+  return query.view === "community"
+    && query.feed === "mixed"
+    && (query.v ?? 0) >= COMMUNITY_FEED_CLIENT_VERSION;
+}

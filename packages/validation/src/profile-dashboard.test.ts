@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 
 import { monthBounds, sundayWeekBounds, zonedLocalToUtc, zonedParts } from "./calendar";
-import { homeQuerySchema } from "./index";
+import { homeQuerySchema, skipLegacyCommunityWorkoutsQuery } from "./index";
 import {
   decodeWorkoutCursor,
   encodeWorkoutCursor,
@@ -75,6 +75,41 @@ test("calendar months stay first-to-next-first in the device zone across DST", (
 
   const november = monthBounds(new Date("2026-11-11T18:00:00.000Z"), zone);
   assert.equal(formatMonthRangeLabel(november.monthStart, november.monthEnd, zone), "Nov 1 – 30");
+});
+
+test("older Community clients keep the legacy workout list until they send v=2", () => {
+  const olderMixed = homeQuerySchema.safeParse({
+    timezoneOffsetMinutes: "300",
+    view: "community",
+    feed: "mixed",
+  });
+  assert.equal(olderMixed.success, true);
+  if (!olderMixed.success) return;
+  assert.equal(skipLegacyCommunityWorkoutsQuery(olderMixed.data), false);
+
+  const reactionsOnly = homeQuerySchema.safeParse({
+    timezoneOffsetMinutes: "300",
+    includeReactions: "true",
+  });
+  assert.equal(reactionsOnly.success, true);
+  if (!reactionsOnly.success) return;
+  assert.equal(skipLegacyCommunityWorkoutsQuery({
+    view: "community",
+    feed: reactionsOnly.data.feed,
+    v: reactionsOnly.data.v,
+  }), false);
+
+  const current = homeQuerySchema.safeParse({
+    timezoneOffsetMinutes: "300",
+    view: "community",
+    feed: "mixed",
+    v: "2",
+    limit: "20",
+  });
+  assert.equal(current.success, true);
+  if (!current.success) return;
+  assert.equal(skipLegacyCommunityWorkoutsQuery(current.data), true);
+  assert.equal(skipLegacyCommunityWorkoutsQuery({ view: "home", feed: "mixed", v: 2 }), false);
 });
 
 test("Home query prefers IANA timeZone over offset arithmetic", () => {

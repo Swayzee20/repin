@@ -1,5 +1,15 @@
 import { useRef, type ReactNode } from "react";
-import { Platform, ScrollView, StyleSheet, View, useWindowDimensions, type StyleProp, type ViewStyle } from "react-native";
+import {
+  Platform,
+  ScrollView,
+  StyleSheet,
+  View,
+  useWindowDimensions,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { useReservedRegions } from "./reserved-regions";
 
@@ -121,6 +131,7 @@ export function TwoPane({
   leadingFill,
   left,
   leftAnchorKey = null,
+  onLeftScroll,
   right,
   rightAnchorKey = null,
   scrollableLeft = true,
@@ -134,6 +145,7 @@ export function TwoPane({
   leadingFill?: string;
   left: ReactNode;
   leftAnchorKey?: string | null;
+  onLeftScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   right: ReactNode;
   rightAnchorKey?: string | null;
   scrollableLeft?: boolean;
@@ -188,6 +200,7 @@ export function TwoPane({
                 anchor={leftScroll}
                 frame={bleedLeading ? { width: split.splitX, x: 0 } : split.left}
                 keyboardShouldPersistTaps={keyboardShouldPersistTaps}
+                onScrollExtra={onLeftScroll}
                 paddingBottom={contentPaddingBottom}
                 pane="left"
                 pointerEvents={bleedLeading ? "none" : "auto"}
@@ -230,6 +243,7 @@ function PaneScroll({
   children,
   frame,
   keyboardShouldPersistTaps,
+  onScrollExtra,
   paddingBottom,
   pane,
   pointerEvents = "auto",
@@ -239,6 +253,7 @@ function PaneScroll({
   children: ReactNode;
   frame: { width: number; x: number };
   keyboardShouldPersistTaps: "always" | "handled" | "never";
+  onScrollExtra?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
   paddingBottom: number;
   pane: "left" | "right";
   pointerEvents?: "auto" | "none";
@@ -267,7 +282,10 @@ function PaneScroll({
       keyboardShouldPersistTaps={keyboardShouldPersistTaps}
       onContentSizeChange={anchor.onContentSizeChange}
       onLayout={anchor.onViewportLayout}
-      onScroll={anchor.onScroll}
+      onScroll={(event) => {
+        anchor.onScroll(event);
+        onScrollExtra?.(event);
+      }}
       pointerEvents={pointerEvents}
       ref={anchor.scrollRef}
       scrollEventThrottle={16}

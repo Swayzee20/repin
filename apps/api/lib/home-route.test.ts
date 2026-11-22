@@ -25,6 +25,12 @@ test("home activity is this week's shared posts, not the latest 20", () => {
   assert.match(route, /homeFeed\s*\n\s*\? bounds\.weekStart/);
 });
 
+test("mixed Community v=2 skips the legacy workout query and hydrates the page by session id", () => {
+  assert.match(route, /skipLegacyCommunityWorkoutsQuery/);
+  assert.match(route, /limit: workoutSessionIds\.length/);
+  assert.equal(route.includes("limit ?? 30"), false);
+});
+
 test("crew highlights go through the shared visibility predicate and posts, not other members' sessions", () => {
   assert.match(dbHome, /communityPostVisibleToSql/);
   assert.match(dbHome, /communityPosts/);

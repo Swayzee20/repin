@@ -100,6 +100,9 @@ export function formatReplacePinBody(crewName: string) {
   return `This takes the place of the post that's pinned now on ${crewName}'s board.`;
 }
 
+export const COMMUNITY_FEED_PAGE_SIZE = 20;
+export const COMMUNITY_FEED_CLIENT_VERSION = 2;
+
 export const generalPostCopy = {
   newPost: "New post",
   editPost: "Edit post",
@@ -117,6 +120,9 @@ export const generalPostCopy = {
   pickerLoading: "Loading crews…",
   pickerLoadErrorTitle: "Couldn't load your crews.",
   loadErrorTitle: "Couldn't load the board",
+  loadingMore: "Loading more…",
+  loadMoreErrorTitle: "Couldn't load more posts",
+  endOfBoard: "You're all caught up",
   tryAgain: "Try again",
   offline: "You're offline. Showing what we have.",
   postFailed: "Couldn't post. Try again.",
