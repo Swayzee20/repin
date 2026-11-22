@@ -3,40 +3,43 @@ import {
   personFirstName,
   resolveUserDisplayName,
   type CommunityActivityItem,
-  type CommunityCrewSummary,
   type CommunityHighlights,
-  type CommunityProgress,
-  type CommunityProgressMember,
   type CommunityReactionType,
   type CommunityWhoReacted,
   type GroupSummary,
 } from "@repin/types";
 import {
+  activityEntryLabel,
   activityItemLine,
   communityHighlightRows,
   communityRevampCopy,
+  ENTRY_ROW_DIVIDER_INSET,
+  ENTRY_ROW_HALF_INSET,
+  ENTRY_ROW_HEIGHT,
+  ENTRY_ROW_PAIR_GAP,
+  formatEntryCount,
+  generalPostCopy,
   groupActivityItems,
   groupWhoReacted,
   highlightCheeredLine,
   highlightConsistentLine,
   highlightCountLine,
-  highlightsRowSubtitle,
-  progressMembersLine,
-  progressMemberStatsLine,
-  progressPulseLine,
-  progressTotalsLine,
+  highlightsEntryLabel,
   type CrewWeekQuery,
 } from "@repin/validation";
+import { type ReactNode } from "react";
 import { Image, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Card, LoadingState, StateCard } from "./components";
+import { Button, Card, LoadingState, StateCard } from "./components";
 import { pressableFocused, webFocusRing } from "./focus-ring";
+import { StaleBanner } from "./home";
 import { Chevron } from "./icons";
 import { OwnPostYouTag } from "./own-post-you-tag";
 import { SegmentedControl } from "./primitives";
 import { SectionLabel } from "./section-label";
 import { BottomSheet } from "./sheet";
 import { colors, fonts, radii, size, spacing, type } from "./theme";
+import type { LastKnownLayout } from "../lib/last-known-layout";
 
 function initialsFor(displayName: string) {
   return getUserInitials({ displayName });
@@ -113,82 +116,159 @@ export function CrewHeaderStrip({
   );
 }
 
+export const crewHeaderStripPadding = spacing.md;
+export const crewHeaderStripRowMinHeight = size.hit;
+export const crewHeaderStripCompactHeight = crewHeaderStripPadding * 2 + crewHeaderStripRowMinHeight;
+export const crewHeaderStripTwoLineCopyHeight = type.heading.lineHeight + type.bodySmall.lineHeight;
+export const crewHeaderStripTwoLineHeight = crewHeaderStripPadding * 2
+  + Math.max(crewHeaderStripRowMinHeight, crewHeaderStripTwoLineCopyHeight);
+export const communityEntryRowHeight = ENTRY_ROW_HEIGHT;
+export const communityEntryRowGap = spacing.sm;
+export const communityBoardLabelGap = spacing.md;
+
 export function CrewEntryRows({
-  activitySubtitle = communityRevampCopy.last14Days,
+  activityCount,
   highlightCount,
   onOpenActivity,
   onOpenHighlights,
-  onOpenProgress,
-  pulse,
-  selected,
+  selected = null,
 }: {
-  activitySubtitle?: string;
+  activityCount: number;
   highlightCount: number;
   onOpenActivity: () => void;
   onOpenHighlights: () => void;
-  onOpenProgress: () => void;
-  pulse: string;
-  selected?: "progress" | "highlights" | "activity" | null;
+  selected?: "highlights" | "activity" | null;
 }) {
   return (
     <Card style={styles.entryCard}>
-      <EntryRow
-        label={communityRevampCopy.progress}
-        onPress={onOpenProgress}
-        selected={selected === "progress"}
-        subtitle={pulse}
-      />
-      {highlightCount > 0 ? (
-        <EntryRow
+      <View style={styles.entryRow}>
+        <EntryHalf
+          accessibilityLabel={highlightsEntryLabel(highlightCount)}
+          count={highlightCount}
+          edge="start"
           label={communityRevampCopy.highlights}
           onPress={onOpenHighlights}
           selected={selected === "highlights"}
-          subtitle={highlightsRowSubtitle(highlightCount)}
         />
-      ) : null}
-      <EntryRow
-        last
-        label={communityRevampCopy.activity}
-        onPress={onOpenActivity}
-        selected={selected === "activity"}
-        subtitle={activitySubtitle}
-      />
+        <View pointerEvents="none" style={styles.entryDivider} />
+        <EntryHalf
+          accessibilityLabel={activityEntryLabel(activityCount)}
+          count={activityCount}
+          edge="end"
+          label={communityRevampCopy.activity}
+          onPress={onOpenActivity}
+          selected={selected === "activity"}
+        />
+      </View>
     </Card>
   );
 }
 
-function EntryRow({
+function EntryHalf({
+  accessibilityLabel,
+  count,
+  edge,
   label,
-  last = false,
   onPress,
-  selected = false,
-  subtitle,
+  selected,
 }: {
+  accessibilityLabel: string;
+  count: number;
+  edge: "start" | "end";
   label: string;
-  last?: boolean;
   onPress: () => void;
-  selected?: boolean;
-  subtitle: string;
+  selected: boolean;
 }) {
   return (
     <Pressable
-      accessibilityLabel={`${label}, ${subtitle}`}
+      accessibilityLabel={accessibilityLabel}
       accessibilityRole="button"
       onPress={onPress}
-      style={(state) => [
-        styles.entryRow,
-        selected && styles.entrySelected,
-        !last && styles.entryDivider,
-        webFocusRing(pressableFocused(state)),
-        state.pressed && styles.pressed,
-      ]}
+      style={(state) => {
+        const active = state.pressed || selected;
+        return [
+          styles.entryHalf,
+          edge === "start" ? styles.entryHalfStart : styles.entryHalfEnd,
+          active && styles.entryHalfSelected,
+          webFocusRing(pressableFocused(state)),
+        ];
+      }}
     >
-      <View style={styles.entryCopy}>
-        <Text style={styles.entryLabel}>{label}</Text>
-        <Text style={styles.entrySubtitle}>{subtitle}</Text>
-      </View>
-      <Chevron />
+      {(state) => {
+        const active = state.pressed || selected;
+        return (
+          <>
+            <Text
+              adjustsFontSizeToFit
+              minimumFontScale={type.ringLabel.fontSize / type.body.fontSize}
+              numberOfLines={1}
+              style={[styles.entryNumber, active && styles.entrySelectedType]}
+            >
+              {formatEntryCount(count)}
+            </Text>
+            <Text numberOfLines={1} style={[styles.entryLabel, active && styles.entrySelectedType]}>{label}</Text>
+          </>
+        );
+      }}
     </Pressable>
+  );
+}
+
+export function CommunityBoardHeader({
+  compact,
+  entryRow,
+  memberCount,
+  newPostGap,
+  onNewPost,
+  onOpenCrew,
+  onOpenSwitcher,
+  onRetryStale,
+  photoUrl,
+  selectedGroup,
+  staleAt,
+}: {
+  compact: boolean;
+  entryRow: ReactNode;
+  memberCount: number;
+  newPostGap: number;
+  onNewPost: () => void;
+  onOpenCrew: () => void;
+  onOpenSwitcher: () => void;
+  onRetryStale: () => void;
+  photoUrl?: string | null;
+  selectedGroup: GroupSummary;
+  staleAt: string | null;
+}) {
+  return (
+    <View>
+      <CommunityScreenTitle />
+      {staleAt ? <StaleBanner onRetry={onRetryStale} time={staleAt} /> : null}
+      <CrewHeaderStrip
+        compact={compact}
+        memberCount={memberCount}
+        onOpenCrew={onOpenCrew}
+        onOpenSwitcher={onOpenSwitcher}
+        photoUrl={photoUrl}
+        selectedGroup={selectedGroup}
+      />
+      {entryRow}
+      <CommunityBoardLabel />
+      <CommunityNewPostButton gap={newPostGap} onPress={onNewPost} />
+    </View>
+  );
+}
+
+export function CommunityNewPostButton({ gap, onPress }: { gap: number; onPress: () => void }) {
+  return (
+    <Button
+      accessibilityLabel={generalPostCopy.newPost}
+      icon="pencil"
+      onPress={onPress}
+      style={{ ...styles.newPost, marginBottom: gap, marginTop: gap }}
+      variant="compact-primary"
+    >
+      {generalPostCopy.newPost}
+    </Button>
   );
 }
 
@@ -297,88 +377,6 @@ export function WhoReactedSheet({
         ))
       )}
     </BottomSheet>
-  );
-}
-
-export function CrewProgressView({
-  compactTitle = false,
-  onRetry,
-  progress,
-  state,
-}: {
-  compactTitle?: boolean;
-  onRetry: () => void;
-  progress: CommunityProgress | null;
-  state: "loading" | "error" | "ready";
-}) {
-  return (
-    <View>
-      {compactTitle ? <Text style={styles.paneTitle}>{communityRevampCopy.progress}</Text> : null}
-      {state === "loading" ? <ProgressSkeleton /> : null}
-      {state === "error" ? (
-        <StateCard
-          actionLabel={communityRevampCopy.tryAgain}
-          message={communityRevampCopy.errorBody}
-          onAction={onRetry}
-          title={communityRevampCopy.loadProgress}
-        />
-      ) : null}
-      {state === "ready" && progress ? <CrewProgressCard progress={progress} /> : null}
-    </View>
-  );
-}
-
-export function CrewProgressCard({ progress }: { progress: CommunityProgress }) {
-  return (
-    <Card>
-      <Text style={styles.progressHeadline}>
-        {progressMembersLine(progress.activeMembers, progress.memberCount)}
-      </Text>
-      <Text style={styles.progressTotals}>
-        {progressTotalsLine({
-          recordedMeters: progress.recordedMeters,
-          recordedSeconds: progress.recordedSeconds,
-          sharedWorkouts: progress.sharedWorkouts,
-        })}
-      </Text>
-      <View accessibilityRole="list" style={styles.weekRow}>
-        {progress.days.map((day) => (
-          <View
-            accessibilityLabel={`${day.weekday}, ${day.activeMembers} members`}
-            accessible
-            key={`${day.weekday}-${day.weekdayIndex}`}
-            style={styles.weekDay}
-          >
-            <Text style={[styles.weekLetter, day.isToday && styles.weekLetterToday]}>{day.weekday}</Text>
-            <View style={[styles.weekMark, day.isToday && styles.weekMarkToday]}>
-              <Text style={styles.weekCount}>
-                {day.isFuture || day.activeMembers <= 0 ? "–" : String(day.activeMembers)}
-              </Text>
-            </View>
-          </View>
-        ))}
-      </View>
-      {progress.members.map((member) => (
-        <CrewMemberWeekRow key={member.userId} member={member} />
-      ))}
-    </Card>
-  );
-}
-
-export function CrewMemberWeekRow({ member }: { member: CommunityProgressMember }) {
-  const name = resolveUserDisplayName({ displayName: member.displayName });
-  return (
-    <View style={styles.memberRow}>
-      <Avatar displayName={member.displayName} size={size.avatars.sm} />
-      <View style={styles.memberCopy}>
-        <View style={styles.memberNameRow}>
-          <Text numberOfLines={1} style={styles.memberName}>{name}</Text>
-          {member.isYou ? <OwnPostYouTag /> : null}
-          {member.isOwner ? <Text style={styles.ownerLabel}>{communityRevampCopy.owner}</Text> : null}
-        </View>
-        <Text style={styles.memberStats}>{progressMemberStatsLine(member.workouts, member.days)}</Text>
-      </View>
-    </View>
   );
 }
 
@@ -574,26 +572,52 @@ export function CommunityBoardLabel() {
   return <SectionLabel style={styles.boardLabel}>{communityRevampCopy.board}</SectionLabel>;
 }
 
-export function CommunityLoadingSkeleton({ twoPane }: { twoPane: boolean }) {
+export function CommunityLoadingSkeleton({
+  cache,
+  compact,
+}: {
+  cache: LastKnownLayout | null;
+  compact: boolean;
+}) {
+  const headerHeight = compact ? crewHeaderStripCompactHeight : crewHeaderStripTwoLineHeight;
+  const showPinned = cache?.pinnedPostShown === true;
   return (
     <View>
       <CommunityScreenTitle />
-      <Card style={styles.skelCard}>
-        <View style={styles.skelRow}>
+      <Card style={[styles.headerCard, { minHeight: headerHeight }]}>
+        <View style={styles.skelHeaderRow}>
           <View style={styles.skelAvatar} />
           <View style={styles.skelCopy}>
-            <View style={styles.skelLine} />
-            <View style={[styles.skelLine, styles.skelShort]} />
+            <View style={styles.skelCrewName} />
+            {compact ? null : <View style={[styles.skelLine, styles.skelShort]} />}
           </View>
         </View>
       </Card>
-      <Card style={styles.skelCard}>
-        <View style={styles.skelLine} />
-        <View style={[styles.skelLine, styles.skelShort]} />
-        <View style={styles.skelLine} />
+      <Card style={styles.entryCard}>
+        <View style={styles.entryRow}>
+          <View style={styles.entryHalf}>
+            <View style={styles.skelEntryPair} />
+          </View>
+          <View pointerEvents="none" style={styles.entryDivider} />
+          <View style={styles.entryHalf}>
+            <View style={styles.skelEntryPair} />
+          </View>
+        </View>
       </Card>
       <CommunityBoardLabel />
-      <Card style={styles.skelCard}>
+      <View style={styles.skelNewPost} />
+      {showPinned ? (
+        <Card style={styles.skelPostCard}>
+          <View style={styles.skelRow}>
+            <View style={styles.skelAvatar} />
+            <View style={styles.skelCopy}>
+              <View style={styles.skelLine} />
+              <View style={[styles.skelLine, styles.skelShort]} />
+            </View>
+          </View>
+        </Card>
+      ) : null}
+      <Card style={styles.skelPostCard}>
         <View style={styles.skelRow}>
           <View style={styles.skelAvatar} />
           <View style={styles.skelCopy}>
@@ -602,31 +626,13 @@ export function CommunityLoadingSkeleton({ twoPane }: { twoPane: boolean }) {
           </View>
         </View>
       </Card>
-      {twoPane ? (
-        <Card style={styles.skelCard}>
-          <View style={styles.skelLine} />
-          <View style={styles.skelLine} />
-        </Card>
-      ) : null}
     </View>
-  );
-}
-
-function ProgressSkeleton() {
-  return (
-    <Card style={styles.skelCard}>
-      <View style={styles.skelLine} />
-      <View style={[styles.skelLine, styles.skelShort]} />
-      <View style={styles.skelDots}>
-        {Array.from({ length: 7 }, (_, index) => <View key={index} style={styles.skelDot} />)}
-      </View>
-    </Card>
   );
 }
 
 function HighlightsSkeleton() {
   return (
-    <Card style={styles.skelCard}>
+    <Card style={styles.skelPostCard}>
       <View style={styles.skelRow}>
         <View style={styles.skelAvatar} />
         <View style={styles.skelCopy}>
@@ -652,15 +658,10 @@ export function CommunityErrorCard({ onRetry }: { onRetry: () => void }) {
   );
 }
 
-export function communityPulseFromSummary(crew: CommunityCrewSummary | null | undefined) {
-  if (!crew) return communityRevampCopy.emptyPulse;
-  return progressPulseLine(crew.weekPulse.activeMembers, crew.memberCount);
-}
-
 const styles = StyleSheet.create({
   screenTitle: { color: colors.ink, ...type.screenTitle },
   paneTitle: { color: colors.ink, marginBottom: spacing.md, ...type.screenTitle },
-  headerCard: { marginTop: spacing.md, padding: spacing.md },
+  headerCard: { marginTop: spacing.md, padding: crewHeaderStripPadding },
   headerRow: { alignItems: "center", flexDirection: "row", gap: spacing.md },
   photoHit: {
     alignItems: "center",
@@ -693,22 +694,54 @@ const styles = StyleSheet.create({
   },
   avatarImage: { borderRadius: radii.pill },
   avatarText: { color: colors.brand, fontFamily: fonts.bold, fontSize: type.label.fontSize },
-  entryCard: { marginTop: spacing.md, overflow: "hidden", padding: 0 },
+  entryCard: { marginTop: communityEntryRowGap, overflow: "hidden", padding: 0 },
   entryRow: {
-    alignItems: "center",
     flexDirection: "row",
-    minHeight: size.hit + spacing.sm,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.md,
+    height: communityEntryRowHeight,
+    overflow: "hidden",
+    position: "relative",
   },
-  entrySelected: { backgroundColor: colors.brandTint },
+  entryHalf: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: ENTRY_ROW_PAIR_GAP,
+    height: communityEntryRowHeight,
+    justifyContent: "center",
+    paddingHorizontal: ENTRY_ROW_HALF_INSET,
+  },
+  entryHalfStart: {
+    borderBottomLeftRadius: radii.lg,
+    borderTopLeftRadius: radii.lg,
+  },
+  entryHalfEnd: {
+    borderBottomRightRadius: radii.lg,
+    borderTopRightRadius: radii.lg,
+  },
+  entryHalfSelected: { backgroundColor: colors.brandTint },
   entryDivider: {
-    borderBottomColor: colors.border,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    backgroundColor: colors.border,
+    bottom: ENTRY_ROW_DIVIDER_INSET,
+    left: "50%",
+    marginLeft: -0.5,
+    position: "absolute",
+    top: ENTRY_ROW_DIVIDER_INSET,
+    width: 1,
   },
-  entryCopy: { flex: 1, minWidth: 0 },
-  entryLabel: { color: colors.ink, fontFamily: fonts.bold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
-  entrySubtitle: { color: colors.muted, marginTop: spacing.xs, ...type.bodySmall },
+  entryNumber: {
+    color: colors.ink,
+    fontFamily: fonts.display,
+    fontSize: type.body.fontSize,
+    lineHeight: type.body.fontSize,
+  },
+  entryLabel: {
+    color: colors.muted,
+    fontFamily: fonts.semibold,
+    fontSize: type.calendarWeekday.fontSize,
+    lineHeight: type.calendarWeekday.lineHeight,
+  },
+  entrySelectedType: { color: colors.brandPressed },
+  newPost: { alignSelf: "stretch", width: "100%" },
   switcherList: { gap: spacing.xs },
   switcherRow: {
     alignItems: "center",
@@ -737,36 +770,6 @@ const styles = StyleSheet.create({
   whoHeading: { color: colors.brand, fontFamily: fonts.bold, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight, marginBottom: spacing.sm },
   whoRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: size.hit },
   whoName: { color: colors.ink, flexShrink: 1, fontFamily: fonts.bold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
-  progressHeadline: { color: colors.ink, fontFamily: fonts.bold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
-  progressTotals: { color: colors.muted, marginTop: spacing.xs, ...type.bodySmall },
-  weekRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginTop: spacing.md,
-    marginBottom: spacing.md,
-  },
-  weekDay: { alignItems: "center", minWidth: size.avatars.xs + spacing.sm },
-  weekLetter: { color: colors.muted, fontFamily: fonts.extrabold, fontSize: type.calendarWeekday.fontSize, lineHeight: type.calendarWeekday.lineHeight },
-  weekLetterToday: { color: colors.brand },
-  weekMark: {
-    alignItems: "center",
-    backgroundColor: colors.brandTint,
-    borderColor: colors.border,
-    borderRadius: radii.sm,
-    borderWidth: 1,
-    height: size.hit - spacing.md,
-    justifyContent: "center",
-    marginTop: spacing.xs,
-    minWidth: size.hit - spacing.md,
-  },
-  weekMarkToday: { borderColor: colors.brand, borderWidth: 2 },
-  weekCount: { color: colors.brand, fontFamily: fonts.bold, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight },
-  memberRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, marginTop: spacing.md },
-  memberCopy: { flex: 1, minWidth: 0 },
-  memberNameRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, minWidth: 0 },
-  memberName: { color: colors.ink, flexShrink: 1, fontFamily: fonts.bold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
-  ownerLabel: { color: colors.muted, ...type.bodySmall },
-  memberStats: { color: colors.muted, marginTop: spacing.xs / 2, ...type.bodySmall },
   weekToggle: { alignSelf: "stretch", marginBottom: spacing.md },
   highlightRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: size.hit, paddingVertical: spacing.sm },
   highlightDivider: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
@@ -778,8 +781,34 @@ const styles = StyleSheet.create({
   activityRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, minHeight: size.hit, paddingVertical: spacing.sm },
   activityDivider: { borderTopColor: colors.border, borderTopWidth: StyleSheet.hairlineWidth },
   activityLine: { color: colors.ink, flex: 1, fontFamily: fonts.medium, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight },
-  boardLabel: { marginBottom: spacing.sm, marginTop: spacing.lg },
-  skelCard: { marginTop: spacing.md },
+  boardLabel: { marginBottom: spacing.sm, marginTop: communityBoardLabelGap },
+  skelHeaderRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: spacing.md,
+    minHeight: crewHeaderStripRowMinHeight,
+  },
+  skelCrewName: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    height: type.heading.lineHeight,
+    width: "40%",
+  },
+  skelEntryPair: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    height: type.body.fontSize,
+    width: "55%",
+  },
+  skelNewPost: {
+    alignSelf: "stretch",
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.lg,
+    height: size.hit,
+    marginBottom: spacing.md,
+    marginTop: spacing.md,
+  },
+  skelPostCard: { marginTop: spacing.md },
   skelRow: { alignItems: "center", flexDirection: "row", gap: spacing.md },
   skelAvatar: {
     backgroundColor: colors.surfaceMuted,
@@ -788,14 +817,7 @@ const styles = StyleSheet.create({
     width: size.avatars.md,
   },
   skelCopy: { flex: 1, gap: spacing.sm },
-  skelLine: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, height: spacing.md },
+  skelLine: { backgroundColor: colors.surfaceMuted, borderRadius: radii.sm, height: type.body.lineHeight },
   skelShort: { width: "40%" },
-  skelDots: { flexDirection: "row", gap: spacing.sm, marginTop: spacing.md },
-  skelDot: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radii.pill,
-    height: size.avatars.xs,
-    width: size.avatars.xs,
-  },
   pressed: { opacity: 0.72 },
 });

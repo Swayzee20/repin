@@ -211,3 +211,19 @@ test("near-end detection uses the remaining content height", () => {
     layoutMeasurement: { height: 100 },
   }, 50), false);
 });
+
+test("load-more near-end still fires when the board header makes the compact feed taller", () => {
+  const header = 220;
+  const feed = 800;
+  const viewport = 466;
+  assert.equal(communityFeedNearEnd({
+    contentOffset: { y: header + feed - viewport - 10 },
+    contentSize: { height: header + feed },
+    layoutMeasurement: { height: viewport },
+  }), true);
+  assert.equal(communityFeedNearEnd({
+    contentOffset: { y: 40 },
+    contentSize: { height: header + feed },
+    layoutMeasurement: { height: viewport },
+  }), false);
+});

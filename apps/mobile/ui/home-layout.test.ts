@@ -39,10 +39,14 @@ import {
   ringStartRotationDeg,
   ringStrokeDasharray,
 } from "./progress-ring-math";
-import { colors, fonts, progressRing, size, type } from "./theme";
+import { colors, fonts, progressRing, size, spacing, type } from "./theme";
 
-const homeScreen = readFileSync(new URL("../app/(tabs)/(home)/index.tsx", import.meta.url), "utf8");
-const homeUi = readFileSync(new URL("./home.tsx", import.meta.url), "utf8");
+function source(name: string) {
+  return readFileSync(new URL(name, import.meta.url), "utf8");
+}
+
+const homeScreen = source("../app/(tabs)/(home)/index.tsx");
+const homeUi = source("./home.tsx");
 const ring = readFileSync(new URL("./progress-ring.tsx", import.meta.url), "utf8");
 const goalsApi = readFileSync(new URL("../lib/goals-api.ts", import.meta.url), "utf8");
 
@@ -129,6 +133,39 @@ test("react-native-svg provides a Metro web entry so the ring can render on Verc
 
 test("Home layout file exists next to the screen", () => {
   assert.equal(fileURLToPath(new URL("./home-layout.ts", import.meta.url)).includes("home-layout.ts"), true);
+});
+
+test("Home loading skeleton uses the loaded snapshot dimensions and last-known cache", () => {
+  const snapshotHeight = spacing.lg * 2
+    + progressRing.rowHeight
+    + spacing.md
+    + type.heading.lineHeight
+    + spacing.sm
+    + type.micro.lineHeight
+    + spacing.xs
+    + 34
+    + spacing.md
+    + size.hit;
+  assert.equal(progressRing.rowHeight, 68);
+  assert.equal(snapshotHeight, 253);
+  assert.ok(snapshotHeight > 200);
+  assert.match(homeUi, /homeStreakDotMarker = 34/);
+  assert.match(homeUi, /homeStreakDotCircle = 26/);
+  assert.match(homeUi, /export function homeSnapshotSkeletonHeight/);
+  assert.match(homeUi, /skelGoalRow/);
+  assert.match(homeUi, /progressRing\.rowHeight/);
+  assert.match(homeUi, /homeStreakDotMarker/);
+  assert.match(homeUi, /skelViewGoals/);
+  assert.match(homeUi, /skelCrewChip/);
+  assert.match(homeUi, /cache\?\.highlightsShown === true/);
+  assert.match(homeUi, /cache == null \? 1/);
+  assert.match(homeScreen, /writeLastKnownLayout/);
+  assert.match(homeScreen, /readLastKnownLayout/);
+  assert.match(homeScreen, /cache: layoutCache/);
+  assert.match(source("../app/(tabs)/community/index.tsx"), /CommunityLoadingSkeleton cache=\{layoutCache\}/);
+  assert.match(source("./community-revamp.tsx"), /communityEntryRowHeight/);
+  assert.match(source("./community-revamp.tsx"), /crewHeaderStripCompactHeight/);
+  assert.match(source("./community-revamp.tsx"), /cache\?\.pinnedPostShown === true/);
 });
 
 test("Highlights and Activity share the same brand Bold 13 section-label style", () => {

@@ -20,7 +20,6 @@ import {
   Text,
   View,
   useWindowDimensions,
-  type LayoutChangeEvent,
   type NativeScrollEvent,
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
@@ -72,30 +71,33 @@ import {
 } from "../../../ui/community-feed-layout";
 import { fetchWhoReacted, toggleFeedReaction } from "../../../lib/community-revamp-api";
 import {
+  readLastKnownLayout,
+  writeLastKnownLayout,
+  type LastKnownLayout,
+} from "../../../lib/last-known-layout-store";
+import {
   communityContextOpensPushed,
   communityContextRoute,
   communityHeaderIsCompact,
   isCommunityContextPane,
+  type CommunityContextPane,
 } from "../../../lib/community-revamp-layout";
 import { applyOptimisticReaction, reduceWhoReactedSheet } from "../../../lib/community-reaction-state";
 import { Button, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
 import { CommunityDayDivider } from "../../../ui/community-day-divider";
 import { CommunityContextBody } from "../../../ui/community-context-screen";
 import {
-  CommunityBoardLabel,
+  CommunityBoardHeader,
   CommunityErrorCard,
   CommunityLoadingSkeleton,
   CommunityScreenTitle,
-  communityPulseFromSummary,
   CrewEntryRows,
-  CrewHeaderStrip,
   CrewSwitcherSheet,
   WhoReactedSheet,
 } from "../../../ui/community-revamp";
 import { ConfirmSheet } from "../../../ui/crew-sheets";
 import { GeneralPostSummaryCard } from "../../../ui/general-post-card";
 import { GeneralPostDetailView } from "../../../ui/general-post-detail";
-import { StaleBanner } from "../../../ui/home";
 import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { Dialog } from "../../../ui/dialog";
@@ -137,7 +139,7 @@ export default function CommunityTabScreen() {
   const [reactionPendingId, setReactionPendingId] = useState<string | null>(null);
   const [staleAt, setStaleAt] = useState<string | null>(null);
   const [localDayKey, setLocalDayKey] = useState(() => localDateKey(new Date()));
-  const [boardHeight, setBoardHeight] = useState(0);
+  const [layoutCache, setLayoutCache] = useState<LastKnownLayout | null>(null);
   const [detailTarget, setDetailTarget] = useState<{
     groupId: string;
     workout: WorkoutFeedItem;
@@ -180,7 +182,10 @@ export default function CommunityTabScreen() {
       dataRef.current = null;
       lastSuccessfulLoad.current = null;
       setData(null);
+      setLayoutCache(null);
     }
+    const cachedLayout = await readLastKnownLayout(auth.session.user.id);
+    if (cachedLayout) setLayoutCache((current) => current ?? cachedLayout);
 
     const groupKey = `community:${auth.session.user.id}:${selectedGroupId ?? "auto"}:mixed`;
     const workoutRevision = getWorkoutDataRevision();
@@ -229,6 +234,17 @@ export default function CommunityTabScreen() {
       setStaleAt(null);
       setData(next);
       setSelectedGroupId(body.selectedGroupId);
+      const selected = body.groups.find((group) => group.id === body.selectedGroupId);
+      const previous = await readLastKnownLayout(auth.session.user.id);
+      const snapshot: LastKnownLayout = {
+        activityRowCount: body.crew?.activityCount ?? 0,
+        crewName: selected?.name ?? null,
+        firstName: previous?.firstName ?? null,
+        highlightsShown: (body.crew?.highlightCount ?? 0) > 0,
+        pinnedPostShown: Boolean(body.pinnedPost),
+      };
+      setLayoutCache(snapshot);
+      await writeLastKnownLayout(auth.session.user.id, snapshot);
       } catch (loadError) {
         if (latestRequestKey.current === requestKey) {
           const message = loadError instanceof Error ? loadError.message : communityRevampCopy.loadCommunity;
@@ -489,10 +505,6 @@ export default function CommunityTabScreen() {
     }
   }, [mode, paneParam, router]);
 
-  const handleBoardLayout = useCallback((event: LayoutChangeEvent) => {
-    const nextHeight = Math.floor(event.nativeEvent.layout.height);
-    setBoardHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
-  }, []);
 
   const openWorkoutDetail = useCallback((workout: WorkoutFeedItem) => {
     if (!selectedGroup) return;
@@ -530,7 +542,7 @@ export default function CommunityTabScreen() {
     });
   }, [applyFeed]);
 
-  const openContextPane = useCallback((pane: "progress" | "highlights" | "activity") => {
+  const openContextPane = useCallback((pane: CommunityContextPane) => {
     setSwitcherOpen(false);
     setDetailTarget(null);
     setGeneralDetail(null);
@@ -807,13 +819,23 @@ export default function CommunityTabScreen() {
     }
   }, [clearPostSelection, deleteTarget, detailTarget?.workout.id, explicitOverride, hideFeedItems, postParam, selectedGroup]);
 
+  const entryRows = selectedGroup ? (
+    <CrewEntryRows
+      activityCount={board?.crew?.activityCount ?? 0}
+      highlightCount={board?.crew?.highlightCount ?? 0}
+      onOpenActivity={() => openContextPane("activity")}
+      onOpenHighlights={() => openContextPane("highlights")}
+      selected={mode === "twoPane" ? paneParam : null}
+    />
+  ) : null;
+
   if (!layoutPreview && loading && !data) {
     return (
       <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
         <SafeAreaView edges={["left", "right"]} style={styles.flex}>
           <WideColumn fill>
             <View style={styles.content}>
-              <CommunityLoadingSkeleton twoPane={mode === "twoPane"} />
+              <CommunityLoadingSkeleton cache={layoutCache} compact={communityHeaderIsCompact(mode)} />
             </View>
           </WideColumn>
         </SafeAreaView>
@@ -852,27 +874,20 @@ export default function CommunityTabScreen() {
             left={(
               <View style={styles.paneColumn}>
                 <ScrollAnchor id="community-header">
-                  <CommunityScreenTitle />
-                  {staleAt ? <StaleBanner onRetry={() => void loadCommunity()} time={staleAt} /> : null}
-                  <CrewHeaderStrip
+                  <CommunityBoardHeader
                     compact={communityHeaderIsCompact(mode)}
+                    entryRow={entryRows}
                     memberCount={board?.crew?.memberCount ?? selectedGroup.memberCount ?? 1}
+                    newPostGap={newPostGap}
+                    onNewPost={openNewPost}
                     onOpenCrew={() => router.push(`/groups/${selectedGroup.id}`)}
                     onOpenSwitcher={() => setSwitcherOpen(true)}
+                    onRetryStale={() => void loadCommunity()}
                     photoUrl={board?.crew?.photoUrl ?? selectedGroup.photoUrl}
                     selectedGroup={selectedGroup}
-                  />
-                  <CrewEntryRows
-                    highlightCount={board?.crew?.highlightCount ?? 0}
-                    onOpenActivity={() => openContextPane("activity")}
-                    onOpenHighlights={() => openContextPane("highlights")}
-                    onOpenProgress={() => openContextPane("progress")}
-                    pulse={communityPulseFromSummary(board?.crew)}
-                    selected={paneParam}
+                    staleAt={staleAt}
                   />
                 </ScrollAnchor>
-                <CommunityBoardLabel />
-                <CommunityNewPostButton gap={newPostGap} onPress={openNewPost} />
                 {pinnedPost ? (
                   <ScrollAnchor id={pinnedPost.id}>
                     <Pressable
@@ -1182,161 +1197,150 @@ export default function CommunityTabScreen() {
     <SafeAreaView edges={["left", "right"]} style={styles.flex}>
       <WideColumn fill>
       <View style={styles.content}>
-        <CommunityScreenTitle />
-        {staleAt ? <StaleBanner onRetry={() => void loadCommunity()} time={staleAt} /> : null}
-
         {selectedGroup ? (
-          <>
-            <CrewHeaderStrip
-              compact={communityHeaderIsCompact(mode)}
-              memberCount={board?.crew?.memberCount ?? selectedGroup.memberCount ?? 1}
-              onOpenCrew={() => router.push(`/groups/${selectedGroup.id}`)}
-              onOpenSwitcher={() => setSwitcherOpen(true)}
-              photoUrl={board?.crew?.photoUrl ?? selectedGroup.photoUrl}
-              selectedGroup={selectedGroup}
-            />
-            <CrewEntryRows
-              highlightCount={board?.crew?.highlightCount ?? 0}
-              onOpenActivity={() => openContextPane("activity")}
-              onOpenHighlights={() => openContextPane("highlights")}
-              onOpenProgress={() => openContextPane("progress")}
-              pulse={communityPulseFromSummary(board?.crew)}
-            />
-
-            <CommunityBoardLabel />
-            <CommunityNewPostButton gap={newPostGap} onPress={openNewPost} />
-
-            <View onLayout={handleBoardLayout} style={styles.boardArea}>
-              {loading ? (
-                <View style={styles.feedState}><LoadingState message="Loading activity…" /></View>
-              ) : error ? (
-                <View style={styles.feedState}><StateCard actionLabel={generalPostCopy.tryAgain} message={error} onAction={() => void loadCommunity()} title={generalPostCopy.loadErrorTitle} /></View>
-              ) : mixedFeed.length || pinnedPost ? (
-                boardHeight > 0 ? (
-                  <ScrollView
-                    contentContainerStyle={styles.mixedFeed}
-                    onContentSizeChange={compactScroll.onContentSizeChange}
-                    onLayout={compactScroll.onViewportLayout}
-                    onScroll={(event) => {
-                      compactScroll.onScroll(event);
-                      handleBoardScroll(event);
-                    }}
-                    ref={compactScroll.scrollRef}
-                    scrollEventThrottle={16}
-                    style={{ height: boardHeight }}
-                  >
-                    <View collapsable={false} ref={compactScroll.contentRef}>
-                    <ScrollAnchorProvider contentRef={compactScroll.contentRef} onItemLayout={compactScroll.onItemLayout} pane={null}>
-                    {offline ? <Text style={styles.offline}>{generalPostCopy.offline}</Text> : null}
-                    {pinnedPost ? (
-                      <ScrollAnchor id={pinnedPost.id}>
+          <ScrollView
+            contentContainerStyle={styles.mixedFeed}
+            onContentSizeChange={compactScroll.onContentSizeChange}
+            onLayout={compactScroll.onViewportLayout}
+            onScroll={(event) => {
+              compactScroll.onScroll(event);
+              handleBoardScroll(event);
+            }}
+            ref={compactScroll.scrollRef}
+            scrollEventThrottle={16}
+            style={styles.flex}
+          >
+            <View collapsable={false} ref={compactScroll.contentRef}>
+            <ScrollAnchorProvider contentRef={compactScroll.contentRef} onItemLayout={compactScroll.onItemLayout} pane={null}>
+            <ScrollAnchor id="community-header">
+              <CommunityBoardHeader
+                compact={communityHeaderIsCompact(mode)}
+                entryRow={entryRows}
+                memberCount={board?.crew?.memberCount ?? selectedGroup.memberCount ?? 1}
+                newPostGap={newPostGap}
+                onNewPost={openNewPost}
+                onOpenCrew={() => router.push(`/groups/${selectedGroup.id}`)}
+                onOpenSwitcher={() => setSwitcherOpen(true)}
+                onRetryStale={() => void loadCommunity()}
+                photoUrl={board?.crew?.photoUrl ?? selectedGroup.photoUrl}
+                selectedGroup={selectedGroup}
+                staleAt={staleAt}
+              />
+            </ScrollAnchor>
+            {loading && !(mixedFeed.length || pinnedPost) ? (
+              <View style={styles.feedState}><LoadingState message="Loading activity…" /></View>
+            ) : error && !(mixedFeed.length || pinnedPost) ? (
+              <View style={styles.feedState}><StateCard actionLabel={generalPostCopy.tryAgain} message={error} onAction={() => void loadCommunity()} title={generalPostCopy.loadErrorTitle} /></View>
+            ) : mixedFeed.length || pinnedPost ? (
+              <>
+                {offline ? <Text style={styles.offline}>{generalPostCopy.offline}</Text> : null}
+                {pinnedPost ? (
+                  <ScrollAnchor id={pinnedPost.id}>
+                    <Pressable
+                      accessibilityLabel={generalPostFeedCardLabel(isOwnPost(pinnedPost.userId, viewerUserId))}
+                      accessibilityRole="button"
+                      onPress={() => openGeneralPostDetail(pinnedPost)}
+                    >
+                      <GeneralPostSummaryCard
+                        isPinned
+                        menuItems={generalMenu(pinnedPost)}
+                        onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: pinnedPost.id })}
+                        onToggleReaction={(type) => void toggleCardReaction(pinnedPost, type)}
+                        post={pinnedPost}
+                        reactionPending={reactionPendingId === pinnedPost.id}
+                        showCommentCount
+                        showReactionSummary
+                        timestamp={pinnedTimestamp ?? undefined}
+                        viewerUserId={viewerUserId}
+                      />
+                    </Pressable>
+                  </ScrollAnchor>
+                ) : null}
+                {boardRows.map((row, index) => {
+                  if (row.type === "day") {
+                    return (
+                      <CommunityDayDivider
+                        accessibilityLabel={row.accessibilityLabel}
+                        first={index === 0 && !pinnedPost}
+                        key={row.key}
+                        label={row.label}
+                      />
+                    );
+                  }
+                  const previous = boardRows[index - 1];
+                  if (row.item.kind === "general") {
+                    const post = row.item;
+                    return (
+                      <ScrollAnchor id={post.id} key={row.key}>
                         <Pressable
-                          accessibilityLabel={generalPostFeedCardLabel(isOwnPost(pinnedPost.userId, viewerUserId))}
+                          accessibilityLabel={generalPostFeedCardLabel(isOwnPost(post.userId, viewerUserId))}
                           accessibilityRole="button"
-                          onPress={() => openGeneralPostDetail(pinnedPost)}
+                          onPress={() => openGeneralPostDetail(post)}
+                          style={previous?.type === "day" ? undefined : styles.feedPost}
                         >
                           <GeneralPostSummaryCard
-                            isPinned
-                            menuItems={generalMenu(pinnedPost)}
-                            onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: pinnedPost.id })}
-                            onToggleReaction={(type) => void toggleCardReaction(pinnedPost, type)}
-                            post={pinnedPost}
-                            reactionPending={reactionPendingId === pinnedPost.id}
+                            menuItems={generalMenu(post)}
+                            onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: post.id })}
+                            onToggleReaction={(type) => void toggleCardReaction(post, type)}
+                            post={post}
+                            reactionPending={reactionPendingId === post.id}
                             showCommentCount
                             showReactionSummary
-                            timestamp={pinnedTimestamp ?? undefined}
+                            timestamp={row.timestamp}
                             viewerUserId={viewerUserId}
                           />
                         </Pressable>
                       </ScrollAnchor>
-                    ) : null}
-                    {boardRows.map((row, index) => {
-                      if (row.type === "day") {
-                        return (
-                          <CommunityDayDivider
-                            accessibilityLabel={row.accessibilityLabel}
-                            first={index === 0 && !pinnedPost}
-                            key={row.key}
-                            label={row.label}
-                          />
-                        );
-                      }
-                      const previous = boardRows[index - 1];
-                      if (row.item.kind === "general") {
-                        const post = row.item;
-                        return (
-                          <ScrollAnchor id={post.id} key={row.key}>
-                            <Pressable
-                              accessibilityLabel={generalPostFeedCardLabel(isOwnPost(post.userId, viewerUserId))}
-                              accessibilityRole="button"
-                              onPress={() => openGeneralPostDetail(post)}
-                              style={previous?.type === "day" ? undefined : styles.feedPost}
-                            >
-                              <GeneralPostSummaryCard
-                                menuItems={generalMenu(post)}
-                                onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: post.id })}
-                                onToggleReaction={(type) => void toggleCardReaction(post, type)}
-                                post={post}
-                                reactionPending={reactionPendingId === post.id}
-                                showCommentCount
-                                showReactionSummary
-                                timestamp={row.timestamp}
-                                viewerUserId={viewerUserId}
-                              />
-                            </Pressable>
-                          </ScrollAnchor>
-                        );
-                      }
-                      const workout = row.item;
-                      const isOwn = isOwnPost(workout.userId, viewerUserId);
-                      const title = workout.name?.trim() || workout.title;
-                      return (
-                        <ScrollAnchor id={workout.id} key={row.key}>
-                          <Pressable
-                            accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
-                            accessibilityRole="button"
-                            onPress={() => openWorkoutDetail(workout)}
-                            style={previous?.type === "day" ? undefined : styles.feedPost}
-                          >
-                            <WorkoutSummaryCard
-                              isOwn={isOwn}
-                              menuItems={feedMenu(workout)}
-                              onOpenWhoReacted={(type) => openWhoReacted({
-                                focus: type,
-                                postId: workout.communityPostId,
-                                sessionId: workout.id,
-                              })}
-                              onToggleReaction={(type) => void toggleCardReaction(workout, type)}
-                              reactionPending={reactionPendingId === workout.id}
-                              selected={false}
-                              showCommentCount
-                              showReactionSummary
-                              timestamp={row.timestamp}
-                              variant="full"
-                              workout={workout}
-                            />
-                          </Pressable>
-                        </ScrollAnchor>
-                      );
-                    })}
-                    <CommunityBoardPager
-                      hasItems={mixedFeed.length > 0 || Boolean(pinnedPost)}
-                      loadingMore={loadingMore}
-                      loadMoreError={loadMoreError}
-                      nextCursor={board?.nextCursor ?? null}
-                      onRetry={() => void loadMoreCommunity()}
-                    />
-                    </ScrollAnchorProvider>
-                    </View>
-                  </ScrollView>
-                ) : null
-              ) : (
-                <View style={styles.todayEmpty}>
-                  <StateCard message="" title={formatEmptyBoard(selectedGroup.name)} />
-                </View>
-              )}
+                    );
+                  }
+                  const workout = row.item;
+                  const isOwn = isOwnPost(workout.userId, viewerUserId);
+                  const title = workout.name?.trim() || workout.title;
+                  return (
+                    <ScrollAnchor id={workout.id} key={row.key}>
+                      <Pressable
+                        accessibilityLabel={workoutFeedCardLabel({ isOwn, title })}
+                        accessibilityRole="button"
+                        onPress={() => openWorkoutDetail(workout)}
+                        style={previous?.type === "day" ? undefined : styles.feedPost}
+                      >
+                        <WorkoutSummaryCard
+                          isOwn={isOwn}
+                          menuItems={feedMenu(workout)}
+                          onOpenWhoReacted={(type) => openWhoReacted({
+                            focus: type,
+                            postId: workout.communityPostId,
+                            sessionId: workout.id,
+                          })}
+                          onToggleReaction={(type) => void toggleCardReaction(workout, type)}
+                          reactionPending={reactionPendingId === workout.id}
+                          selected={false}
+                          showCommentCount
+                          showReactionSummary
+                          timestamp={row.timestamp}
+                          variant="full"
+                          workout={workout}
+                        />
+                      </Pressable>
+                    </ScrollAnchor>
+                  );
+                })}
+                <CommunityBoardPager
+                  hasItems={mixedFeed.length > 0 || Boolean(pinnedPost)}
+                  loadingMore={loadingMore}
+                  loadMoreError={loadMoreError}
+                  nextCursor={board?.nextCursor ?? null}
+                  onRetry={() => void loadMoreCommunity()}
+                />
+              </>
+            ) : (
+              <View style={styles.todayEmpty}>
+                <StateCard message="" title={formatEmptyBoard(selectedGroup.name)} />
+              </View>
+            )}
+            </ScrollAnchorProvider>
             </View>
-          </>
+          </ScrollView>
         ) : (
           <StateCard actionLabel="Join a crew" message="Join or create a crew to start training with your community." onAction={() => router.push("/groups/join")} title="Find your crew" />
         )}
@@ -1552,20 +1556,6 @@ function CommunityBoardPager({
   return null;
 }
 
-function CommunityNewPostButton({ gap, onPress }: { gap: number; onPress: () => void }) {
-  return (
-    <Button
-      accessibilityLabel={generalPostCopy.newPost}
-      icon="pencil"
-      onPress={onPress}
-      style={{ ...styles.newPost, marginBottom: gap, marginTop: gap }}
-      variant="compact-primary"
-    >
-      {generalPostCopy.newPost}
-    </Button>
-  );
-}
-
 function DeleteWorkoutModal({
   error,
   onDeletePost,
@@ -1630,14 +1620,11 @@ const styles = StyleSheet.create({
   dateLabelButton: { alignItems: "center", justifyContent: "center", minHeight: size.hit, minWidth: 128, paddingHorizontal: spacing.md },
   dateLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.body.fontSize, lineHeight: type.body.lineHeight },
   boardTitle: { color: colors.ink, fontFamily: fonts.semibold, fontSize: type.section.fontSize, lineHeight: type.section.lineHeight, marginBottom: 0, marginTop: spacing.sm },
-  newPost: { alignSelf: "stretch", width: "100%" },
-  mixedFeed: { paddingBottom: spacing.huge, paddingHorizontal: spacing.lg, paddingTop: 0 },
+  mixedFeed: { paddingBottom: spacing.huge, paddingTop: 0 },
   feedPost: { marginTop: spacing.md },
   pager: { paddingVertical: spacing.lg },
   end: { color: colors.muted, paddingVertical: spacing.xxl, textAlign: "center", ...type.bodySmall },
   offline: { color: colors.muted, ...type.bodySmall },
-  // eslint-disable-next-line repin/no-style-literals -- flex shrink floor, not a control size
-  boardArea: { backgroundColor: colors.surfaceMuted, borderTopColor: colors.border, borderTopWidth: 1, flex: 1, marginHorizontal: -spacing.xxl, minHeight: 0 },
   feedState: { flex: 1, justifyContent: "center", padding: spacing.xxl },
   todayEmpty: { alignItems: "center", flex: 1, justifyContent: "center", padding: spacing.xxl },
   historicalEmpty: { flex: 1, justifyContent: "center", padding: spacing.xxl },
@@ -1749,6 +1736,7 @@ function layoutPreviewCommunity(): CommunityData {
     pinnedPost,
     communityWorkouts,
     crew: {
+      activityCount: 2,
       highlightCount: 4,
       memberCount: 6,
       photoUrl: null,

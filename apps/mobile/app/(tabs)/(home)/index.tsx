@@ -11,6 +11,7 @@ import {
 import {
   goalCopy,
   highlightRows,
+  HOME_HIGHLIGHT_LIMIT,
   homeComingUp,
   homeGoalRowModel,
   selectHomeGoals,
@@ -23,6 +24,11 @@ import { Platform, StyleSheet, useWindowDimensions, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { supabase } from "../../../lib/supabase";
+import {
+  readLastKnownLayout,
+  writeLastKnownLayout,
+  type LastKnownLayout,
+} from "../../../lib/last-known-layout-store";
 import { normalizeInviteRedirect } from "../../../lib/invite-route";
 import { isLayoutPreview } from "../../../lib/layout-preview";
 import {
@@ -84,6 +90,7 @@ export default function HomeScreen() {
   const [staleAt, setStaleAt] = useState<string | null>(null);
   const [localDayKey, setLocalDayKey] = useState(() => localDateKey(new Date()));
   const [detailWorkout, setDetailWorkout] = useState<WorkoutFeedItem | null>(null);
+  const [layoutCache, setLayoutCache] = useState<LastKnownLayout | null>(null);
   const homeDataRef = useRef<HomeData | null>(null);
   const lastSuccessfulLoad = useRef<FreshnessRecord | null>(null);
   const inFlightRequests = useRef(new Map<string, Promise<void>>());
@@ -91,8 +98,14 @@ export default function HomeScreen() {
 
   useEffect(() => {
     if (!supabase) { setAuthLoading(false); return; }
-    void supabase.auth.getSession().then(({ data }) => {
+    void supabase.auth.getSession().then(async ({ data }) => {
       setSession(data.session);
+      if (data.session) {
+        const cached = await readLastKnownLayout(data.session.user.id);
+        if (cached) setLayoutCache(cached);
+      } else {
+        setLayoutCache(null);
+      }
       setAuthLoading(false);
       if (data.session && inviteRedirect) router.replace(inviteRedirect);
     });
@@ -101,6 +114,8 @@ export default function HomeScreen() {
       homeDataRef.current = null;
       lastSuccessfulLoad.current = null;
       setStaleAt(null);
+      if (!nextSession) setLayoutCache(null);
+      else void readLastKnownLayout(nextSession.user.id).then((cached) => setLayoutCache(cached));
       if (nextSession && inviteRedirect) router.replace(inviteRedirect);
     });
     return () => subscription.subscription.unsubscribe();
@@ -148,6 +163,23 @@ export default function HomeScreen() {
       };
       setHomeData(body); setSelectedGroupId(body.selectedGroupId); setTabGroupId(body.selectedGroupId);
       setStaleAt(null);
+      const previous = await readLastKnownLayout(session.user.id);
+      const firstName = greetingFirstName(body.user.displayName);
+      const crewName = body.groups.find((group) => group.id === body.selectedGroupId)?.name ?? null;
+      const shownHighlights = highlightRows({
+        firstToRepInToday: body.crewHighlights?.firstToRepInToday ?? null,
+        weekly: body.crewHighlights?.weekly ?? [],
+        limit: HOME_HIGHLIGHT_LIMIT,
+      }).length > 0;
+      const snapshot: LastKnownLayout = {
+        activityRowCount: body.communityWorkouts.length,
+        crewName,
+        firstName: firstName || null,
+        highlightsShown: shownHighlights,
+        pinnedPostShown: previous?.pinnedPostShown ?? false,
+      };
+      setLayoutCache(snapshot);
+      await writeLastKnownLayout(session.user.id, snapshot);
       } catch (error) {
         if (latestRequestKey.current === requestKey) {
           setHomeError(error instanceof Error ? error.message : "Home could not be loaded.");
@@ -250,7 +282,10 @@ export default function HomeScreen() {
   const showSkeletons = firstLoad && homeLoading;
   const showError = firstLoad && Boolean(homeError);
   const errors = HomeErrorCards({ onRetry: () => void loadHome(), showCrewAction: false });
-  const skeletons = HomeLoadingSkeleton({ twoPane });
+  const skeletons = HomeLoadingSkeleton({ cache: layoutCache, twoPane });
+  const skeletonName = layoutCache?.firstName ?? "";
+  const skeletonCrewName = layoutCache?.crewName ?? null;
+  const greetPlaceholder = showSkeletons && !layoutCache?.firstName;
   const goals = dashboardData?.goals ?? [];
   const visibleGoals = selectHomeGoals(goals, now, homeGoalLimit(mode, shortScreen)).map((goal) =>
     homeGoalRowModel(goal, now),
@@ -281,7 +316,10 @@ export default function HomeScreen() {
             <View style={styles.personalZone}>
               <ScrollAnchor id="home-greeting">
                 <View style={styles.header}>
-                  <HomeGreeting name={greetingName} />
+                  <HomeGreeting
+                    name={showSkeletons ? skeletonName : greetingName}
+                    placeholder={greetPlaceholder}
+                  />
                 </View>
               </ScrollAnchor>
               {staleAt ? <StaleBanner onRetry={() => void loadHome()} time={staleAt} /> : null}
@@ -329,7 +367,10 @@ export default function HomeScreen() {
           right={(
             <View style={styles.communityZone}>
               <ScrollAnchor id="home-crew">
-                <HomeCrewEyebrow name={selectedGroup?.name ?? null} />
+                <HomeCrewEyebrow
+                  name={showSkeletons ? skeletonCrewName : selectedGroup?.name ?? null}
+                  placeholder={showSkeletons && !layoutCache?.crewName}
+                />
               </ScrollAnchor>
               {showError ? errors.crew : showSkeletons ? (
                 <>

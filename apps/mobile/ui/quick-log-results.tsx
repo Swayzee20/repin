@@ -22,6 +22,7 @@ import {
   validateQuickLogResults,
   type QuickLogResultsDraft,
 } from "./logging-form-state";
+import { distanceMetricFieldStyle, distanceMetricRowStyle } from "./distance-metric-layout";
 import { SegmentedControl } from "./primitives";
 import { size, spacing } from "./theme";
 
@@ -68,7 +69,7 @@ export function WorkoutMetricFields({
           <View style={styles.metricRow}>
             <NumberField
               accessibilityLabel="Distance"
-              containerStyle={styles.metricField}
+              containerStyle={distanceMetricFieldStyle}
               kind="decimal"
               onChangeText={(distance) => update({ distance })}
               placeholder={distancePlaceholder(workoutType, value.distanceUnit)}
@@ -233,8 +234,7 @@ export function WorkoutTimeInput({
 
 const styles = StyleSheet.create({
   section: { marginTop: spacing.lg },
-  metricRow: { alignItems: "center", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm },
-  metricField: { flexGrow: 1, flexShrink: 1, minWidth: size.control },
+  metricRow: { ...distanceMetricRowStyle, marginTop: spacing.sm },
   resultField: { marginTop: spacing.sm },
   timeRow: { alignItems: "flex-start", flexDirection: "row", flexWrap: "wrap", gap: spacing.sm, marginTop: spacing.sm, width: "100%" },
   timeField: { flexGrow: 1, flexShrink: 1, minWidth: size.control },

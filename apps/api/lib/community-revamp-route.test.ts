@@ -40,6 +40,9 @@ test("Home and Community Highlights share one server definition", () => {
   assert.match(home, /weekEnd: bounds.weekEnd/);
   assert.match(home, /attachFeedSocial/);
   assert.match(home, /getCrewBoardSummary/);
+  assert.match(dbRevamp, /countVisibleCrewActivity/);
+  assert.match(dbRevamp, /activityCount/);
+  assert.match(dbRevamp, /weekPulse/);
   assert.match(dbRevamp, /occurredAt/);
   assert.match(dbRevamp, /HIGHLIGHT_WEEKLY_MIN/);
   assert.equal(dbRevamp.includes("rank"), false);

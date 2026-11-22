@@ -22,6 +22,7 @@ import { runWalkDistanceUnitOptions, type QuickLogResultsDraft } from "./logging
 import { WorkoutTimeInput } from "./quick-log-results";
 import { formatDurationSeconds } from "../lib/workout-detail-format";
 import { getDurationSeconds } from "../lib/workout-time";
+import { distanceMetricFieldStyle, distanceMetricRowStyle } from "./distance-metric-layout";
 import { colors, elevation, fonts, radii, size, spacing, type } from "./theme";
 
 const runSubtypeOptions: { label: string; value: RunWorkoutSubtype }[] = [
@@ -115,7 +116,7 @@ export function RunResultEditor({
               <View style={styles.intervalMetricControls}>
                 <NumberField
                   accessibilityLabel="Distance"
-                  containerStyle={styles.metricField}
+                  containerStyle={distanceMetricFieldStyle}
                   kind="decimal"
                   onChangeText={(distance) => updateResults({ distance })}
                   placeholder="3.2"
@@ -243,7 +244,7 @@ function IntervalEditor({
             <View style={styles.intervalMetricControls}>
               <NumberField
                 accessibilityLabel="Distance"
-                containerStyle={styles.metricField}
+                containerStyle={distanceMetricFieldStyle}
                 kind="decimal"
                 onChangeText={(distance) => updateInterval(interval.id, { distance })}
                 placeholder="400"
@@ -279,7 +280,7 @@ function IntervalEditor({
             <View style={styles.intervalMetricControls}>
               <NumberField
                 accessibilityLabel="Recovery seconds"
-                containerStyle={styles.metricField}
+                containerStyle={distanceMetricFieldStyle}
                 kind="number"
                 onChangeText={(recoverySeconds) => updateInterval(interval.id, { recoverySeconds })}
                 placeholder="90"
@@ -407,7 +408,6 @@ const styles = StyleSheet.create({
   intervalNeedsDetails: { color: colors.brand, fontFamily: fonts.medium },
   removeButton: { alignItems: "center", flexShrink: 0, justifyContent: "center", minHeight: size.hit, paddingLeft: spacing.sm },
   removeAction: { color: colors.danger, ...type.label },
-  metricField: { flex: 1, flexShrink: 1, marginTop: 0, minWidth: 0 },
   unitSegment: { alignSelf: "center" },
   intervalMetricRow: { alignItems: "center", columnGap: spacing.sm, flexDirection: "row", flexWrap: "wrap", marginTop: spacing.sm, rowGap: spacing.xs },
   firstMetricRow: { marginTop: 0 },
@@ -415,7 +415,7 @@ const styles = StyleSheet.create({
   metricRowSurface: { boxShadow: elevation.glass, backgroundColor: colors.surface, borderColor: colors.border, borderRadius: radii.sm, borderWidth: 1, minHeight: 56, paddingHorizontal: spacing.sm, paddingVertical: spacing.xs },
   intervalMetricLabel: { color: colors.inkSoft, fontFamily: fonts.semibold, fontSize: type.bodySmall.fontSize, lineHeight: type.bodySmall.lineHeight, width: 64 },
   intervalMetricHeading: { flex: 1, minWidth: 120 },
-  intervalMetricControls: { alignItems: "center", flex: 1, flexDirection: "row", flexWrap: "wrap", gap: spacing.xs, minWidth: 0 },
+  intervalMetricControls: { ...distanceMetricRowStyle, flex: 1, gap: spacing.xs },
   intervalTimeControls: { flex: 1, flexShrink: 1, marginTop: 0, minWidth: 0 },
   inlineError: { color: colors.danger, ...type.bodySmall, marginTop: spacing.xs },
   quantityRow: { alignItems: "center", flexDirection: "row", gap: spacing.sm, justifyContent: "space-between", marginTop: spacing.sm },

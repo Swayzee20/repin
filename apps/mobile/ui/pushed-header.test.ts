@@ -5,14 +5,14 @@ import { test } from "node:test";
 /* eslint-disable @typescript-eslint/no-floating-promises */
 
 import {
-  crewMeasuredHeaderClearance,
-  crewMeasuredHeaderClearanceMax,
-  crewPushedHeaderInset,
   pushedHeaderClearance,
   pushedHeaderScreenOptions,
   pushedNativeHeaderEnabled,
   pushedNavigationBarHeight,
   pushedShowsRoundBack,
+  titledPushedHeaderClearance,
+  titledPushedHeaderClearanceMax,
+  titledPushedHeaderInset,
 } from "./pushed-header";
 import { colors, size } from "./theme";
 import { stripPresent, type StripState } from "./vertical-bar-edge-store";
@@ -56,18 +56,18 @@ test("a transparent bar clears content only when it sits on top", () => {
   }
 });
 
-test("crew inset clears the native bar on a strip without doubling phone padding", () => {
+test("titled inset clears the native bar on a strip without doubling phone padding", () => {
   for (const strip of strips) {
     const clearance = pushedHeaderClearance("ios", strip);
-    const inset = crewPushedHeaderInset("ios", strip);
+    const inset = titledPushedHeaderInset("ios", strip);
     assert.equal(inset, size.hit);
     if (stripPresent(strip)) {
       assert.equal(clearance, 0);
     } else {
       assert.equal(inset, clearance);
     }
-    assert.equal(crewPushedHeaderInset("android", strip), 0);
-    assert.equal(crewPushedHeaderInset("web", strip), 0);
+    assert.equal(titledPushedHeaderInset("android", strip), 0);
+    assert.equal(titledPushedHeaderInset("web", strip), 0);
   }
 });
 
@@ -81,7 +81,7 @@ function measure(
   headerHeight: number,
   safeTop: number,
 ) {
-  return crewMeasuredHeaderClearance({ headerHeight, platform, safeTop, strip });
+  return titledPushedHeaderClearance({ headerHeight, platform, safeTop, strip });
 }
 
 test("crew measured extra subtracts SafeArea top instead of stacking it", () => {
@@ -115,7 +115,7 @@ test("crew measured extra follows header height across rotation inputs", () => {
 });
 
 test("crew measured extra keeps the 44 floor on every strip state and platform", () => {
-  assert.equal(crewMeasuredHeaderClearanceMax, size.hit * 4);
+  assert.equal(titledPushedHeaderClearanceMax, size.hit * 4);
   for (const strip of strips) {
     assert.equal(measure("ios", strip, size.hit, 0), size.hit);
     assert.equal(measure("ios", strip, 20, 0), size.hit);
@@ -127,7 +127,7 @@ test("crew measured extra keeps the 44 floor on every strip state and platform",
 
 test("crew measured extra falls back when header height or safeTop is not a usable number", () => {
   for (const strip of strips) {
-    const fallback = crewPushedHeaderInset("ios", strip);
+    const fallback = titledPushedHeaderInset("ios", strip);
     assert.equal(fallback, size.hit);
     for (const headerHeight of [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 0, -1, -44]) {
       assert.equal(measure("ios", strip, headerHeight, 0), fallback);
@@ -147,11 +147,11 @@ test("crew measured extra falls back when header height or safeTop is not a usab
 
 test("crew measured extra clamps extremes and never exceeds the token cap", () => {
   for (const strip of strips) {
-    assert.equal(measure("ios", strip, 400, 0), crewMeasuredHeaderClearanceMax);
-    assert.equal(measure("ios", strip, 400, 59), crewMeasuredHeaderClearanceMax);
-    assert.equal(measure("ios", strip, 1_000, 0), crewMeasuredHeaderClearanceMax);
+    assert.equal(measure("ios", strip, 400, 0), titledPushedHeaderClearanceMax);
+    assert.equal(measure("ios", strip, 400, 59), titledPushedHeaderClearanceMax);
+    assert.equal(measure("ios", strip, 1_000, 0), titledPushedHeaderClearanceMax);
     assert.equal(measure("ios", strip, 1_000, -50), size.hit);
-    assert.ok(measure("ios", strip, 400, 0) <= crewMeasuredHeaderClearanceMax);
+    assert.ok(measure("ios", strip, 400, 0) <= titledPushedHeaderClearanceMax);
     assert.ok(measure("ios", strip, 400, 0) >= size.hit);
   }
 });
@@ -197,8 +197,8 @@ test("crew page keeps the pushed back control and page-local invite actions", ()
   assert.equal(code.includes("useStripState"), true);
   assert.equal(code.includes("pushedNativeHeaderEnabled"), true);
   assert.equal(code.includes("pushedShowsRoundBack"), true);
-  assert.equal(code.includes("crewMeasuredHeaderClearance"), true);
-  assert.equal(code.includes("crewPushedHeaderInset"), false);
+  assert.equal(code.includes("titledPushedHeaderClearance"), true);
+  assert.equal(code.includes("titledPushedHeaderInset"), false);
   assert.equal(code.includes("pushedHeaderClearance"), false);
   assert.equal(code.includes("pushedHeaderScreenOptions"), true);
   assert.equal(code.includes('headerTitle: "Crew"'), true);
@@ -225,7 +225,7 @@ test("crew page wires measured clearance on one outer wrapper and does not chang
   assert.equal((crew.match(/useSafeAreaInsets\(/g) ?? []).length, 1);
   assert.match(
     crew,
-    /const headerClearance = crewMeasuredHeaderClearance\(\{\s+headerHeight,\s+platform: Platform\.OS,\s+safeTop: insets\.top,\s+strip,\s+\}\);/,
+    /const headerClearance = titledPushedHeaderClearance\(\{\s+headerHeight,\s+platform: Platform\.OS,\s+safeTop: insets\.top,\s+strip,\s+\}\);/,
   );
   assert.equal((crew.match(/paddingTop: headerClearance/g) ?? []).length, 1);
   assert.match(
@@ -239,12 +239,12 @@ test("crew page wires measured clearance on one outer wrapper and does not chang
   assert.equal(crew.includes("paddingTop: headerHeight"), false);
   assert.equal(crew.includes("headerClearance +"), false);
 
-  assert.equal(layout.includes("crewMeasuredHeaderClearance"), false);
+  assert.equal(layout.includes("titledPushedHeaderClearance"), false);
   assert.equal(layout.includes("useHeaderHeight"), false);
   assert.equal(layout.includes("contentInsetAdjustmentBehavior"), false);
 
   for (const other of [settings, join, blocked]) {
-    assert.equal(other.includes("crewMeasuredHeaderClearance"), false);
+    assert.equal(other.includes("titledPushedHeaderClearance"), false);
     assert.equal(other.includes("useHeaderHeight"), false);
     assert.equal(other.includes("pushedHeaderClearance"), true);
   }
@@ -313,5 +313,42 @@ test("history, bests, and personal workout detail keep pushed-header chrome", ()
     assert.equal(code.includes("pushedHeaderClearance"), true);
     assert.equal(code.includes("pushedHeaderScreenOptions"), true);
     assert.equal(code.includes("<Stack.Toolbar"), false);
+  }
+});
+
+test("Highlights and Activity use titled measured clearance like Crew, and untitled screens stay on pushedHeaderClearance", () => {
+  const context = sourceOf("./community-context-screen.tsx");
+  const highlights = sourceOf("../app/(tabs)/community/highlights.tsx");
+  const activity = sourceOf("../app/(tabs)/community/activity.tsx");
+
+  assert.match(context, /from "expo-router\/react-navigation"/);
+  assert.match(context, /const insets = useSafeAreaInsets\(\);/);
+  assert.match(context, /const headerHeight = useHeaderHeight\(\);/);
+  assert.equal((context.match(/useHeaderHeight\(/g) ?? []).length, 1);
+  assert.match(
+    context,
+    /const headerClearance = titledPushedHeaderClearance\(\{\s+headerHeight,\s+platform: Platform\.OS,\s+safeTop: insets\.top,\s+strip,\s+\}\);/,
+  );
+  assert.equal(context.includes("pushedHeaderClearance"), false);
+  assert.equal(context.includes("tabScreenTopStyle"), true);
+  assert.match(context, /paddingTop: headerClearance/);
+
+  for (const route of [highlights, activity]) {
+    assert.match(route, /headerTitle: "/);
+    assert.match(route, /pushedHeaderScreenOptions/);
+  }
+
+  for (const strip of strips) {
+    assert.equal(measure("ios", strip, 96, 0) >= size.hit, true);
+    assert.equal(measure("android", strip, 96, 0), 0);
+    assert.equal(measure("web", strip, 96, 24), 0);
+    if (stripPresent(strip)) {
+      assert.equal(pushedHeaderClearance("ios", strip), 0);
+      assert.equal(titledPushedHeaderInset("ios", strip), size.hit);
+      assert.equal(measure("ios", strip, 96, 0), 96);
+    } else {
+      assert.equal(pushedHeaderClearance("ios", strip), size.hit);
+      assert.equal(measure("ios", strip, 103, 59), size.hit);
+    }
   }
 });

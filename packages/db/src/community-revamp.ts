@@ -135,7 +135,7 @@ export async function getCrewBoardSummary(input: {
 }): Promise<Omit<CommunityCrewSummary, "photoUrl"> | null> {
   const group = await requireGroupForMember({ groupId: input.groupId, userId: input.viewerUserId });
   if (!group) return null;
-  const [memberCount, posts, highlights] = await Promise.all([
+  const [memberCount, posts, highlights, activityCount] = await Promise.all([
     countActiveMembers(input.groupId),
     listVisibleWorkoutPostsInWeek(input),
     listCrewHighlightsForMember(input).then((value) => value ?? {
@@ -146,6 +146,11 @@ export async function getCrewBoardSummary(input: {
       sharedGoals: [],
       mostCheered: null,
     }),
+    countVisibleCrewActivity({
+      groupId: input.groupId,
+      viewerUserId: input.viewerUserId,
+      now: input.rangeEnd,
+    }),
   ]);
   const activeMembers = new Set(posts.map((post) => post.userId)).size;
   return {
@@ -155,6 +160,7 @@ export async function getCrewBoardSummary(input: {
       sharedWorkouts: posts.length,
     },
     highlightCount: highlightCountOf(highlights, memberCount),
+    activityCount,
   };
 }
 
@@ -325,6 +331,85 @@ export async function listCrewHighlightsForMember(input: {
   };
 }
 
+function crewActivityWindow(now: Date, before?: Date) {
+  return {
+    before: before ?? now,
+    since: new Date(now.getTime() - CREW_ACTIVITY_DAYS * 24 * 60 * 60 * 1000),
+  };
+}
+
+function crewActivityReactionWhere(input: {
+  before: Date;
+  groupId: string;
+  since: Date;
+  viewerUserId: string;
+}) {
+  return and(
+    eq(schema.communityPosts.groupId, input.groupId),
+    eq(schema.communityPosts.userId, input.viewerUserId),
+    ne(schema.communityPostReactions.userId, input.viewerUserId),
+    gte(schema.communityPostReactions.createdAt, input.since),
+    lt(schema.communityPostReactions.createdAt, input.before),
+    communityPostVisibleToSql(input.viewerUserId, schema.communityPosts.id),
+    communityReactionVisibleToSql(input.viewerUserId, schema.communityPostReactions.id),
+  );
+}
+
+function crewActivityCommentWhere(input: {
+  before: Date;
+  groupId: string;
+  since: Date;
+  viewerUserId: string;
+}) {
+  return and(
+    eq(schema.communityPosts.groupId, input.groupId),
+    eq(schema.communityPosts.userId, input.viewerUserId),
+    ne(schema.communityPostComments.userId, input.viewerUserId),
+    gte(schema.communityPostComments.createdAt, input.since),
+    lt(schema.communityPostComments.createdAt, input.before),
+    communityPostVisibleToSql(input.viewerUserId, schema.communityPosts.id),
+    communityCommentVisibleToSql(input.viewerUserId, schema.communityPostComments.id),
+  );
+}
+
+async function countVisibleCrewActivity(input: {
+  groupId: string;
+  now: Date;
+  viewerUserId: string;
+}) {
+  const window = crewActivityWindow(input.now);
+  const database = getDatabase();
+  const [reactions, comments] = await Promise.all([
+    database
+      .select({ value: count() })
+      .from(schema.communityPostReactions)
+      .innerJoin(
+        schema.communityPosts,
+        eq(schema.communityPostReactions.communityPostId, schema.communityPosts.id),
+      )
+      .where(crewActivityReactionWhere({
+        before: window.before,
+        groupId: input.groupId,
+        since: window.since,
+        viewerUserId: input.viewerUserId,
+      })),
+    database
+      .select({ value: count() })
+      .from(schema.communityPostComments)
+      .innerJoin(
+        schema.communityPosts,
+        eq(schema.communityPostComments.communityPostId, schema.communityPosts.id),
+      )
+      .where(crewActivityCommentWhere({
+        before: window.before,
+        groupId: input.groupId,
+        since: window.since,
+        viewerUserId: input.viewerUserId,
+      })),
+  ]);
+  return (reactions[0]?.value ?? 0) + (comments[0]?.value ?? 0);
+}
+
 export async function listCrewActivityForMember(input: {
   groupId: string;
   viewerUserId: string;
@@ -334,8 +419,7 @@ export async function listCrewActivityForMember(input: {
   const group = await requireGroupForMember({ groupId: input.groupId, userId: input.viewerUserId });
   if (!group) return null;
 
-  const since = new Date(input.now.getTime() - CREW_ACTIVITY_DAYS * 24 * 60 * 60 * 1000);
-  const before = input.before ?? input.now;
+  const window = crewActivityWindow(input.now, input.before);
   const database = getDatabase();
 
   const reactions = await database
@@ -359,15 +443,12 @@ export async function listCrewActivityForMember(input: {
       schema.workoutSessions,
       eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
     )
-    .where(and(
-      eq(schema.communityPosts.groupId, input.groupId),
-      eq(schema.communityPosts.userId, input.viewerUserId),
-      ne(schema.communityPostReactions.userId, input.viewerUserId),
-      gte(schema.communityPostReactions.createdAt, since),
-      lt(schema.communityPostReactions.createdAt, before),
-      communityPostVisibleToSql(input.viewerUserId, schema.communityPosts.id),
-      communityReactionVisibleToSql(input.viewerUserId, schema.communityPostReactions.id),
-    ))
+    .where(crewActivityReactionWhere({
+      before: window.before,
+      groupId: input.groupId,
+      since: window.since,
+      viewerUserId: input.viewerUserId,
+    }))
     .orderBy(desc(schema.communityPostReactions.createdAt), desc(schema.communityPostReactions.id))
     .limit(CREW_ACTIVITY_LIMIT);
 
@@ -392,15 +473,12 @@ export async function listCrewActivityForMember(input: {
       schema.workoutSessions,
       eq(schema.communityPosts.workoutSessionId, schema.workoutSessions.id),
     )
-    .where(and(
-      eq(schema.communityPosts.groupId, input.groupId),
-      eq(schema.communityPosts.userId, input.viewerUserId),
-      ne(schema.communityPostComments.userId, input.viewerUserId),
-      gte(schema.communityPostComments.createdAt, since),
-      lt(schema.communityPostComments.createdAt, before),
-      communityPostVisibleToSql(input.viewerUserId, schema.communityPosts.id),
-      communityCommentVisibleToSql(input.viewerUserId, schema.communityPostComments.id),
-    ))
+    .where(crewActivityCommentWhere({
+      before: window.before,
+      groupId: input.groupId,
+      since: window.since,
+      viewerUserId: input.viewerUserId,
+    }))
     .orderBy(desc(schema.communityPostComments.createdAt), desc(schema.communityPostComments.id))
     .limit(CREW_ACTIVITY_LIMIT);
 
