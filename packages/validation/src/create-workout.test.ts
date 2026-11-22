@@ -9,6 +9,8 @@ import {
   createWorkoutSchema,
   movementLastSessionQuerySchema,
   movementSearchQuerySchema,
+  parseWorkoutWrite,
+  WORKOUT_OCCURRED_AT_FUTURE_MESSAGE,
 } from "./index";
 
 const occurredAt = "2026-11-04T12:30:00.000Z";
@@ -511,6 +513,56 @@ test("legacy functional fitness still rejects movements and stays metrics-only",
   }));
   assert.equal(legacy.success, true);
   if (legacy.success) assert.equal(legacy.data.format, null);
+});
+
+test("past, now, and a couple of minutes of clock skew parse", () => {
+  const now = new Date();
+  assert.equal(parseWorkout(validWorkout({
+    occurredAt: new Date(now.getTime() - 86_400_000).toISOString(),
+  })).success, true);
+  assert.equal(parseWorkout(validWorkout({
+    occurredAt: now.toISOString(),
+  })).success, true);
+  assert.equal(parseWorkout(validWorkout({
+    occurredAt: new Date(now.getTime() + 2 * 60_000).toISOString(),
+  })).success, true);
+});
+
+test("a workout dated next week is rejected on occurredAt and completedAt", () => {
+  const nextWeek = new Date(Date.now() + 7 * 86_400_000).toISOString();
+  const occurred = parseWorkout(validWorkout({ occurredAt: nextWeek }));
+  assert.equal(occurred.success, false);
+  if (!occurred.success) {
+    assert.equal(
+      occurred.error.issues.some((issue) => (
+        issue.path[0] === "occurredAt" && issue.message === WORKOUT_OCCURRED_AT_FUTURE_MESSAGE
+      )),
+      true,
+    );
+  }
+
+  const completedOnly = parseWorkout(validWorkout({
+    occurredAt: undefined,
+    completedAt: nextWeek,
+  }));
+  assert.equal(completedOnly.success, false);
+});
+
+test("an offset datetime may be today in that zone and not tomorrow", () => {
+  const now = new Date("2020-01-15T18:00:00.000Z");
+  const todayLa = parseWorkoutWrite(validWorkout({
+    occurredAt: "2020-01-15T23:59:00.000-08:00",
+  }), now);
+  assert.equal(todayLa.success, true);
+
+  const tomorrowLa = parseWorkoutWrite(validWorkout({
+    occurredAt: "2020-01-16T00:01:00.000-08:00",
+  }), now);
+  assert.equal(tomorrowLa.success, false);
+  if (!tomorrowLa.success) {
+    assert.equal(tomorrowLa.error.issues[0]?.message, WORKOUT_OCCURRED_AT_FUTURE_MESSAGE);
+    assert.deepEqual(tomorrowLa.error.issues[0]?.path, ["occurredAt"]);
+  }
 });
 
 test("last-session query requires movementId or movementName", () => {

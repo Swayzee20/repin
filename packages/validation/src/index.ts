@@ -20,6 +20,11 @@ import {
   normalizeFormat,
   workoutFormatSchema,
 } from "./workout-format";
+import {
+  isWorkoutOccurredAtAllowed,
+  workoutOccurredAtFutureIssue,
+  WORKOUT_OCCURRED_AT_FUTURE_MESSAGE,
+} from "./workout-occurred-at";
 
 export {
   amrapFormatSchema,
@@ -33,6 +38,15 @@ export {
   roundsFormatSchema,
   workoutFormatSchema,
 } from "./workout-format";
+
+export {
+  WORKOUT_OCCURRED_AT_CLOCK_SKEW_MS,
+  WORKOUT_OCCURRED_AT_FUTURE_MESSAGE,
+  WORKOUT_OCCURRED_AT_LATEST_ZONE,
+  isoDatetimeOffsetMinutesEastOfUtc,
+  isWorkoutOccurredAtAllowed,
+  workoutOccurredAtFutureIssue,
+} from "./workout-occurred-at";
 
 export {
   addCalendarDays,
@@ -500,7 +514,7 @@ const canonicalWorkoutSchema = z.object({
   effort: z.number().int().min(1).max(5).nullable(),
   caption: z.string().max(2_000).nullable(),
   photoPath: z.string().max(500).nullable(),
-  occurredAt: z.iso.datetime(),
+  occurredAt: z.iso.datetime({ offset: true }),
   logVersion: z.number().int().positive().nullable(),
   format: canonicalWorkoutFormatSchema.nullable(),
   metrics: z.array(workoutMetricSchema).max(20),
@@ -596,6 +610,14 @@ const canonicalWorkoutSchema = z.object({
     }
     segmentPositions.add(segment.position);
   });
+}).superRefine((workout, context) => {
+  if (!isWorkoutOccurredAtAllowed(workout.occurredAt)) {
+    context.addIssue({
+      code: "custom",
+      message: WORKOUT_OCCURRED_AT_FUTURE_MESSAGE,
+      path: ["occurredAt"],
+    });
+  }
 });
 
 export const createWorkoutSchema = z.object({
@@ -614,13 +636,13 @@ export const createWorkoutSchema = z.object({
     .max(2_000)
     .optional(),
   photoPath: z.string().trim().max(500).nullable().optional().default(null),
-  occurredAt: z.iso.datetime().optional(),
+  occurredAt: z.iso.datetime({ offset: true }).optional(),
   logVersion: z.number().int().positive().nullable().optional().default(null),
   format: workoutFormatSchema.nullable().optional(),
   // Accepted only to normalize requests from clients deployed before v1.
   title: z.string().trim().max(120).optional(),
   notes: z.string().trim().max(2_000).optional(),
-  completedAt: z.iso.datetime().optional(),
+  completedAt: z.iso.datetime({ offset: true }).optional(),
   metrics: z.array(workoutMetricSchema).max(20).optional().default([]),
   movements: z.array(workoutMovementInputSchema).max(50).optional().default([]),
   segments: z.array(workoutSessionSegmentSchema).max(500).optional().default([]),
@@ -652,6 +674,16 @@ export const createWorkoutSchema = z.object({
     segments: workout.segments,
   };
 }).pipe(canonicalWorkoutSchema);
+
+export function parseWorkoutWrite(body: unknown, now = new Date()) {
+  const parsed = createWorkoutSchema.safeParse(body);
+  if (!parsed.success) return parsed;
+  if (isWorkoutOccurredAtAllowed(parsed.data.occurredAt, now)) return parsed;
+  return {
+    success: false as const,
+    error: { issues: [workoutOccurredAtFutureIssue()] },
+  };
+}
 
 export function workoutWriteFields(
   workout: z.infer<typeof createWorkoutSchema>,

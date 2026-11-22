@@ -4,7 +4,7 @@ import {
   WorkoutRequestError,
 } from "@repin/db";
 import { workoutTypeLabels } from "@repin/types";
-import { createWorkoutSchema, groupIdSchema, workoutWriteFields } from "@repin/validation";
+import { groupIdSchema, parseWorkoutWrite, workoutWriteFields } from "@repin/validation";
 import { NextResponse } from "next/server";
 
 import {
@@ -72,7 +72,7 @@ export async function POST(request: Request, context: RouteContext) {
     }
 
     const body: unknown = await request.json().catch(() => null);
-    const input = createWorkoutSchema.safeParse(body);
+    const input = parseWorkoutWrite(body, new Date());
 
     if (!input.success) {
       if (process.env.NODE_ENV !== "production") {
