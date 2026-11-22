@@ -257,6 +257,7 @@ export interface CommunityCrewSummary {
   memberCount: number;
   weekPulse: CommunityCrewWeekPulse;
   highlightCount: number;
+  activityCount: number;
 }
 
 export interface CommunityProgressDay {

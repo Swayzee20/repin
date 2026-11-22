@@ -17,11 +17,12 @@ import {
   emptyReactionSummary,
   groupActivityItems,
   groupWhoReacted,
+  formatEntryCount,
   highlightCountOf,
+  highlightsEntryLabel,
+  activityEntryLabel,
   homeHighlightsFromCrew,
   optimisticReactionSummary,
-  progressMembersLine,
-  progressPulseLine,
   reactionAccessibilityLabel,
   reactionPillHitSlop,
   reactionPillWidth,
@@ -97,8 +98,13 @@ test("Home and Community Highlights share Sun-Sat workout threshold and hide cre
   assert.equal(communityHighlightRows(highlights, { crewSize: 6, week: "current" }).some((row) => row.kind === "consistent"), true);
   assert.equal(highlightCountOf(emptyHighlights, 6), 0);
   assert.equal(communityRevampCopy.seeAll, "See all");
-  assert.equal(progressPulseLine(0, 6), communityRevampCopy.emptyPulse);
-  assert.equal(progressMembersLine(1, 1), "1 of 1 members repped in");
+  assert.equal(communityRevampCopy.activity, "Activity");
+  assert.equal(highlightsEntryLabel(0), "Highlights, 0");
+  assert.equal(activityEntryLabel(2), "Activity on your posts, 2");
+  assert.equal(formatEntryCount(4), "4");
+  assert.equal(formatEntryCount(999), "999");
+  assert.equal(formatEntryCount(1000), "1k");
+  assert.equal(formatEntryCount(1200), "1.2k");
 });
 
 test("activity grouping is today vs earlier and who-reacted stays grouped by type", () => {

@@ -9,6 +9,7 @@ import { listBlockedUsers } from "../lib/moderation-api";
 import { removePushTokenForSession } from "../lib/push-notifications";
 import { isSentryTestActionVisible, sendSentryTestError } from "../lib/sentry";
 import { useAuthSession } from "../lib/use-auth-session";
+import { clearLastKnownLayout } from "../lib/last-known-layout-store";
 import { supabase } from "../lib/supabase";
 import { Button, Card } from "../ui/components";
 import {
@@ -94,6 +95,7 @@ export default function SettingsScreen() {
     setAccountError(null);
     const { data } = await supabase.auth.getSession();
     await removePushTokenForSession(data.session?.access_token);
+    if (data.session?.user.id) await clearLastKnownLayout(data.session.user.id);
     const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
     setSigningOut(false);
     if (signOutError) setAccountError(signOutError.message);
@@ -139,7 +141,10 @@ export default function SettingsScreen() {
       await signOutAfterAccountDeleted({
         accessToken: data.session.access_token,
         unregisterPushToken: removePushTokenForSession,
-        signOut: () => client.auth.signOut({ scope: "local" }),
+        signOut: async () => {
+          await clearLastKnownLayout(data.session.user.id);
+          return client.auth.signOut({ scope: "local" });
+        },
       });
       router.replace("/");
     } catch {

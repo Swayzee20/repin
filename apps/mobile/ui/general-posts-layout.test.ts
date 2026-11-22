@@ -12,9 +12,11 @@ function source(name: string) {
 
 test("Community drops the day stepper and keeps New post above the pin slot", () => {
   const community = source("../app/(tabs)/community/index.tsx");
-  assert.match(community, /generalPostCopy\.newPost/);
-  assert.match(community, /variant="compact-primary"/);
-  assert.match(community, /icon="pencil"/);
+  const revamp = source("./community-revamp.tsx");
+  assert.match(community, /CommunityBoardHeader/);
+  assert.match(revamp, /generalPostCopy\.newPost/);
+  assert.match(revamp, /variant="compact-primary"/);
+  assert.match(revamp, /icon="pencil"/);
   assert.match(community, /buildCommunityBoardRows/);
   assert.match(community, /CommunityDayDivider/);
   assert.equal(community.includes('variant="tonal"'), false);

@@ -1,18 +1,17 @@
 import type {
   CommunityActivityItem,
   CommunityHighlights,
-  CommunityProgress,
 } from "@repin/types";
 import { communityRevampCopy, type CrewWeekQuery } from "@repin/validation";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
+import { useHeaderHeight } from "expo-router/react-navigation";
 import { Platform, StyleSheet, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 
 import {
   fetchCrewActivity,
   fetchCrewHighlights,
-  fetchCrewProgress,
 } from "../lib/community-revamp-api";
 import {
   communityContextOpensPushed,
@@ -21,7 +20,7 @@ import {
 import { supabase } from "../lib/supabase";
 import { communityDeviceTimeZone } from "../lib/community-feed-days";
 import { RoundIconButton } from "./primitives";
-import { pushedHeaderClearance, pushedNativeHeaderEnabled, pushedShowsRoundBack } from "./pushed-header";
+import { pushedNativeHeaderEnabled, pushedShowsRoundBack, titledPushedHeaderClearance } from "./pushed-header";
 import { tabScreenTopStyle, useLayoutMode } from "./layout";
 import { useMainTabs } from "./main-tabs-context";
 import { useStripState } from "./vertical-bar-edge";
@@ -29,7 +28,6 @@ import { colors, spacing, type } from "./theme";
 import {
   CrewActivityView,
   CrewHighlightsView,
-  CrewProgressView,
 } from "./community-revamp";
 
 export function CommunityContextScreen({
@@ -51,12 +49,16 @@ export function CommunityContextScreen({
   }, [groupParam, selectedGroupId, setSelectedGroupId]);
   const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
   const roundBack = pushedShowsRoundBack(Platform.OS);
-  const headerClearance = pushedHeaderClearance(Platform.OS, strip);
-  const title = pane === "progress"
-    ? communityRevampCopy.progress
-    : pane === "highlights"
-      ? communityRevampCopy.highlights
-      : communityRevampCopy.activityTitle;
+  const headerHeight = useHeaderHeight();
+  const headerClearance = titledPushedHeaderClearance({
+    headerHeight,
+    platform: Platform.OS,
+    safeTop: insets.top,
+    strip,
+  });
+  const title = pane === "highlights"
+    ? communityRevampCopy.highlights
+    : communityRevampCopy.activityTitle;
 
   useEffect(() => {
     if (communityContextOpensPushed(mode)) return;
@@ -100,7 +102,6 @@ export function CommunityContextBody({
   pane: CommunityContextPane;
 }) {
   const [week, setWeek] = useState<CrewWeekQuery>("current");
-  const [progress, setProgress] = useState<CommunityProgress | null>(null);
   const [highlights, setHighlights] = useState<CommunityHighlights | null>(null);
   const [memberCount, setMemberCount] = useState(1);
   const [items, setItems] = useState<CommunityActivityItem[]>([]);
@@ -117,15 +118,7 @@ export function CommunityContextBody({
     try {
       const { data: auth } = await supabase.auth.getSession();
       if (!auth.session) throw new Error("unauthorized");
-      if (pane === "progress") {
-        const body = await fetchCrewProgress({
-          accessToken: auth.session.access_token,
-          groupId,
-          week,
-        });
-        setProgress(body.progress);
-        setMemberCount(body.progress.memberCount);
-      } else if (pane === "highlights") {
+      if (pane === "highlights") {
         const body = await fetchCrewHighlights({
           accessToken: auth.session.access_token,
           groupId,
@@ -150,16 +143,6 @@ export function CommunityContextBody({
     void load();
   }, [load]));
 
-  if (pane === "progress") {
-    return (
-      <CrewProgressView
-        compactTitle={compactTitle}
-        onRetry={() => void load()}
-        progress={progress}
-        state={state}
-      />
-    );
-  }
   if (pane === "highlights") {
     return (
       <CrewHighlightsView

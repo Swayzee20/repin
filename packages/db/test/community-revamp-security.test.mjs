@@ -99,6 +99,22 @@ test("non-members, blocked authors, and reported posts never appear in Progress,
       postId: adaWorkout.communityPostId,
     }), null);
 
+    const activityNow = new Date();
+    assert.equal(await db.getCrewBoardSummary({
+      groupId: crew.id,
+      viewerUserId: outsider.id,
+      ...bounds,
+      rangeEnd: activityNow,
+    }), null);
+    const memberSummary = await db.getCrewBoardSummary({
+      groupId: crew.id,
+      viewerUserId: ada.id,
+      ...bounds,
+      rangeEnd: activityNow,
+    });
+    assert.ok(memberSummary);
+    assert.equal(memberSummary.activityCount, 2);
+
     const memberProgress = await db.getCrewProgressForMember({
       groupId: crew.id,
       viewerUserId: ada.id,
@@ -164,6 +180,14 @@ test("non-members, blocked authors, and reported posts never appear in Progress,
       now,
     });
     assert.equal(blockedActivity.items.some((item) => item.actorUserId === maya.id), false);
+    const blockedSummary = await db.getCrewBoardSummary({
+      groupId: crew.id,
+      viewerUserId: ada.id,
+      ...bounds,
+      rangeEnd: activityNow,
+    });
+    assert.ok(blockedSummary);
+    assert.equal(blockedSummary.activityCount, 0);
 
     await db.unblockUserForMember({ blockerId: ada.id, blockedId: maya.id });
     await db.createContentReportForMember({

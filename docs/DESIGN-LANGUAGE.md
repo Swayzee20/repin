@@ -341,3 +341,4 @@ There is no width threshold and no platform check in this logic. Its only strip 
 - **Nov 14, 2026:** added Notice banner component and danger button recipe, approved by Josue.
 - **Nov 19, 2026:** added Progress ring component, approved by Josue.
 - **Nov 21, 2026:** tab screens share Profile's top inset, approved by Josue.
+- **Nov 22, 2026:** Duo QA fixes for Community/Home, Progress removed, entry row D, approved by Josue.

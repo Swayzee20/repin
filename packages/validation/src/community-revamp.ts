@@ -10,7 +10,7 @@ import { z } from "zod";
 
 import { addZonedDays, isValidTimeZone, startOfZonedDay, sundayWeekBounds, sundayWeekBoundsFromOffset, zonedParts } from "./calendar";
 import { formatRelativeShort, HOME_HIGHLIGHT_LIMIT } from "./home";
-import { formatDashboardDistance, formatRecordedDuration, homeLocalBounds } from "./profile-dashboard";
+import { homeLocalBounds } from "./profile-dashboard";
 
 export const HIGHLIGHT_WEEKLY_MIN = 2;
 export const HIGHLIGHT_CONSISTENT_DAYS = 3;
@@ -41,13 +41,11 @@ export const communityReactionOptions: Record<
 
 export const communityRevampCopy = {
   title: "Community",
-  progress: "Progress",
   highlights: "Highlights",
-  activity: "Activity on your posts",
+  activity: "Activity",
   activityTitle: "Activity",
   thisWeek: "This week",
   lastWeek: "Last week",
-  last14Days: "Last 14 days",
   seeAll: "See all",
   switchCrew: "Switch crew",
   viewCrew: "View crew",
@@ -55,11 +53,9 @@ export const communityRevampCopy = {
   new: "New",
   earlier: "Earlier",
   reactions: "Reactions",
-  emptyPulse: "No one's repped in yet this week",
   emptyHighlights: "No highlights this week",
   emptyActivity: "No activity on your posts in the last 14 days.",
   loadCommunity: "Couldn't load Community",
-  loadProgress: "Couldn't load Progress",
   loadHighlights: "Couldn't load Highlights",
   loadActivity: "Couldn't load activity",
   loadPost: "Couldn't load this post.",
@@ -72,6 +68,11 @@ export const communityRevampCopy = {
   mostCheered: "Most-cheered post",
   owner: "Owner",
 } as const;
+
+export const ENTRY_ROW_HEIGHT = 44;
+export const ENTRY_ROW_PAIR_GAP = 6;
+export const ENTRY_ROW_HALF_INSET = 8;
+export const ENTRY_ROW_DIVIDER_INSET = 10;
 
 export const crewWeekQuerySchemaValues = ["current", "previous"] as const;
 export type CrewWeekQuery = (typeof crewWeekQuerySchemaValues)[number];
@@ -207,38 +208,19 @@ export function homeHighlightsFromCrew(highlights: CommunityHighlights) {
   };
 }
 
-export function progressPulseLine(activeMembers: number, memberCount: number) {
-  if (activeMembers <= 0) return communityRevampCopy.emptyPulse;
-  return `${activeMembers} of ${memberCount} repped in this week`;
+export function formatEntryCount(count: number) {
+  const safe = Math.max(0, Math.floor(count));
+  if (safe < 1000) return String(safe);
+  const tenths = Math.round(safe / 100) / 10;
+  return Number.isInteger(tenths) ? `${tenths}k` : `${tenths.toFixed(1)}k`;
 }
 
-export function progressMembersLine(activeMembers: number, memberCount: number) {
-  return `${activeMembers} of ${memberCount} members repped in`;
+export function highlightsEntryLabel(count: number) {
+  return `${communityRevampCopy.highlights}, ${count}`;
 }
 
-export function progressMemberStatsLine(workouts: number, days: number) {
-  return `${workouts} workout${workouts === 1 ? "" : "s"} · ${days} day${days === 1 ? "" : "s"}`;
-}
-
-export function progressTotalsLine(input: {
-  sharedWorkouts: number;
-  recordedMeters: number | null;
-  recordedSeconds: number | null;
-}) {
-  const parts = [`${input.sharedWorkouts} workout${input.sharedWorkouts === 1 ? "" : "s"}`];
-  if (input.recordedMeters != null && input.recordedMeters > 0) {
-    const distance = formatDashboardDistance(input.recordedMeters, "mi");
-    if (distance) parts.push(distance);
-  }
-  if (input.recordedSeconds != null && input.recordedSeconds > 0) {
-    const time = formatRecordedDuration(input.recordedSeconds);
-    if (time) parts.push(time);
-  }
-  return parts.join(" · ");
-}
-
-export function highlightsRowSubtitle(count: number) {
-  return `${communityRevampCopy.thisWeek} · ${count}`;
+export function activityEntryLabel(count: number) {
+  return `Activity on your posts, ${count}`;
 }
 
 export function highlightCountLine(name: string, count: number) {

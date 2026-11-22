@@ -1,7 +1,6 @@
 import type {
   CommunityActivity,
   CommunityHighlights,
-  CommunityProgress,
   CommunityReactionSummary,
   CommunityReactionType,
   CommunityWhoReacted,
@@ -34,18 +33,6 @@ async function getJson<T>(path: string, accessToken: string, search?: Record<str
     throw error;
   }
   return body;
-}
-
-export function fetchCrewProgress(input: {
-  accessToken: string;
-  groupId: string;
-  week?: "current" | "previous";
-}) {
-  return getJson<{ progress: CommunityProgress }>(
-    `/api/groups/${encodeURIComponent(input.groupId)}/progress`,
-    input.accessToken,
-    { week: input.week },
-  );
 }
 
 export function fetchCrewHighlights(input: {

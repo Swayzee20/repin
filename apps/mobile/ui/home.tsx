@@ -23,11 +23,36 @@ import { GoalProgressRing } from "./progress-ring";
 import { ListRow } from "./primitives";
 import { StaleBanner } from "./profile-dashboard";
 import { SectionLabel } from "./section-label";
+import type { LastKnownLayout } from "../lib/last-known-layout";
 import { colors, fonts, progressRing, radii, size, spacing, type } from "./theme";
 
 export { StaleBanner };
 
-export function HomeGreeting({ name }: { name: string }) {
+export const homeGoalTitleLineHeight = type.body.lineHeight;
+export const homeGoalNudgeLineHeight = type.label.lineHeight;
+export const homeStreakTitleLineHeight = type.heading.lineHeight;
+export const homeStreakDotMarker = 34;
+export const homeStreakDotCircle = 26;
+export const homeSnapshotCardPadding = spacing.lg;
+export const homeViewGoalsHeight = size.hit;
+
+export function homeSnapshotSkeletonHeight() {
+  return homeSnapshotCardPadding * 2
+    + progressRing.rowHeight
+    + spacing.md
+    + homeStreakTitleLineHeight
+    + spacing.sm
+    + type.micro.lineHeight
+    + spacing.xs
+    + homeStreakDotMarker
+    + spacing.md
+    + homeViewGoalsHeight;
+}
+
+export function HomeGreeting({ name, placeholder = false }: { name: string; placeholder?: boolean }) {
+  if (placeholder) {
+    return <View style={styles.skelGreeting} />;
+  }
   return <Text numberOfLines={1} style={styles.greeting}>{homeCopy.greeting(name)}</Text>;
 }
 
@@ -239,12 +264,22 @@ export function HomeViewGoals({ onPress }: { onPress: () => void }) {
   );
 }
 
-export function HomeCrewEyebrow({ name }: { name?: string | null }) {
+export function HomeCrewEyebrow({
+  name,
+  placeholder = false,
+}: {
+  name?: string | null;
+  placeholder?: boolean;
+}) {
   return (
-    <Text style={styles.crewEyebrow}>
-      {homeCopy.yourCrew}
-      {name ? <Text style={styles.crewName}>{`  ·  ${name}`}</Text> : null}
-    </Text>
+    <View style={styles.crewEyebrowRow}>
+      <Text style={styles.crewEyebrow}>{homeCopy.yourCrew}</Text>
+      {placeholder ? (
+        <View style={styles.skelCrewChip} />
+      ) : name ? (
+        <Text style={styles.crewName}>{`  ·  ${name}`}</Text>
+      ) : null}
+    </View>
   );
 }
 
@@ -364,48 +399,63 @@ export function HomeActivity({
   );
 }
 
-export function HomeLoadingSkeleton({ twoPane }: { twoPane: boolean }) {
+export function HomeLoadingSkeleton({
+  cache,
+  twoPane,
+}: {
+  cache: LastKnownLayout | null;
+  twoPane: boolean;
+}) {
+  const activityRows = cache == null ? 1 : Math.max(0, cache.activityRowCount);
+  const showHighlights = cache?.highlightsShown === true;
   const snapshot = (
-    <Card>
-      <View style={styles.skelRow}>
-        <View style={styles.skelRing} />
-        <View style={styles.skelCopy}>
-          <View style={styles.skelLine} />
-          <View style={[styles.skelLine, styles.skelShort]} />
+    <View>
+      <Card>
+        <View style={styles.skelGoalRow}>
+          <View style={styles.skelRing} />
+          <View style={styles.skelCopy}>
+            <View style={styles.skelGoalTitle} />
+            <View style={styles.skelGoalNudge} />
+          </View>
         </View>
-      </View>
-      <View style={styles.skelDots}>
-        {Array.from({ length: 7 }, (_, index) => <View key={index} style={styles.skelDot} />)}
-      </View>
-      <View style={[styles.skelLine, styles.skelFooter]} />
-    </Card>
+        <View style={styles.skelStreak}>
+          <View style={styles.skelStreakTitle} />
+          <View style={styles.skelDots}>
+            {Array.from({ length: 7 }, (_, index) => (
+              <View key={index} style={styles.skelDotDay}>
+                <View style={styles.skelDotWeekday} />
+                <View style={styles.skelDotMarker}>
+                  <View style={styles.skelDot} />
+                </View>
+              </View>
+            ))}
+          </View>
+        </View>
+        <View style={styles.skelFooterHit} />
+      </Card>
+      <View style={styles.skelViewGoals} />
+    </View>
   );
-  const highlights = (
+  const highlights = showHighlights ? (
     <View>
       <SectionLabel style={styles.highlightsLabel}>{homeCopy.highlights}</SectionLabel>
       <Card>
-        <View style={styles.skelRow}>
+        <View style={styles.skelHighlightRow}>
           <View style={styles.skelAvatar} />
           <View style={styles.skelCopy}>
             <View style={styles.skelLine} />
             <View style={[styles.skelLine, styles.skelShort]} />
           </View>
         </View>
-        <View style={styles.skelRow}>
-          <View style={styles.skelAvatar} />
-          <View style={styles.skelCopy}>
-            <View style={styles.skelLine} />
-          </View>
-        </View>
       </Card>
     </View>
-  );
+  ) : null;
   const activity = (
     <View>
       <SectionLabel style={styles.activityLabel}>{homeCopy.activity}</SectionLabel>
       <Card>
-        {Array.from({ length: twoPane ? 3 : 2 }, (_, index) => (
-          <View key={index} style={styles.skelRow}>
+        {activityRows === 0 ? null : Array.from({ length: Math.min(activityRows, twoPane ? 5 : 3) }, (_, index) => (
+          <View key={index} style={styles.skelHighlightRow}>
             <View style={styles.skelAvatar} />
             <View style={styles.skelCopy}>
               <View style={styles.skelLine} />
@@ -452,6 +502,12 @@ function homeStreakLabelSafe(weeks: number) {
 
 const styles = StyleSheet.create({
   greeting: { color: colors.ink, ...type.display },
+  skelGreeting: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    height: type.display.lineHeight,
+    width: size.hit * 3,
+  },
   goalRow: {
     alignItems: "center",
     flexDirection: "row",
@@ -476,14 +532,20 @@ const styles = StyleSheet.create({
   dotDay: { alignItems: "center", flex: 1 },
   dotWeekday: { color: colors.muted, ...type.micro, letterSpacing: 0.6 },
   dotWeekdayToday: { color: colors.brand },
-  dotMarker: { alignItems: "center", height: 34, justifyContent: "center", marginTop: spacing.xs, width: 34 },
+  dotMarker: {
+    alignItems: "center",
+    height: homeStreakDotMarker,
+    justifyContent: "center",
+    marginTop: spacing.xs,
+    width: homeStreakDotMarker,
+  },
   dotCircle: {
     alignItems: "center",
     borderRadius: radii.pill,
     borderWidth: 1,
-    height: 26,
+    height: homeStreakDotCircle,
     justifyContent: "center",
-    width: 26,
+    width: homeStreakDotCircle,
   },
   dotCompleted: { backgroundColor: colors.brand, borderColor: colors.brand },
   dotEmpty: { backgroundColor: colors.surface, borderColor: colors.border },
@@ -501,8 +563,15 @@ const styles = StyleSheet.create({
   },
   viewGoals: { alignSelf: "flex-end", justifyContent: "center", minHeight: size.hit },
   viewGoalsText: { color: colors.brand, ...type.label },
+  crewEyebrowRow: { alignItems: "baseline", flexDirection: "row", gap: spacing.sm },
   crewEyebrow: { color: colors.brand, ...type.heading },
   crewName: { color: colors.inkSoft, ...type.bodySmall, fontFamily: fonts.semibold },
+  skelCrewChip: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.pill,
+    height: type.bodySmall.lineHeight,
+    width: size.hit * 2 + spacing.md,
+  },
   highlightsLabel: { marginBottom: spacing.sm, marginTop: spacing.lg },
   activityLabel: { marginBottom: spacing.sm, marginTop: spacing.lg },
   highlightRow: { alignItems: "center", flexDirection: "row", minHeight: size.hit, paddingVertical: spacing.sm },
@@ -550,32 +619,78 @@ const styles = StyleSheet.create({
   emptyCrew: { alignItems: "center", paddingVertical: spacing.xxl },
   emptyTitle: { color: colors.ink, textAlign: "center", ...type.heading },
   emptyBody: { color: colors.muted, marginTop: spacing.sm, textAlign: "center", ...type.bodySmall },
-  skelRow: { alignItems: "center", flexDirection: "row", gap: spacing.md, marginBottom: spacing.md },
+  skelGoalRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: progressRing.titleGap,
+    minHeight: progressRing.rowHeight,
+  },
   skelRing: {
     backgroundColor: colors.surfaceMuted,
     borderRadius: radii.pill,
     height: progressRing.diameter,
     width: progressRing.diameter,
   },
+  skelCopy: { flex: 1, gap: spacing.xs },
+  skelGoalTitle: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    height: homeGoalTitleLineHeight,
+    width: "70%",
+  },
+  skelGoalNudge: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    height: homeGoalNudgeLineHeight,
+    marginTop: spacing.xs,
+    width: "55%",
+  },
+  skelStreak: { marginTop: spacing.md },
+  skelStreakTitle: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    height: homeStreakTitleLineHeight,
+    width: "50%",
+  },
+  skelDots: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.sm },
+  skelDotDay: { alignItems: "center", flex: 1 },
+  skelDotWeekday: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.sm,
+    height: type.micro.lineHeight,
+    width: spacing.md,
+  },
+  skelDotMarker: {
+    alignItems: "center",
+    height: homeStreakDotMarker,
+    justifyContent: "center",
+    marginTop: spacing.xs,
+    width: homeStreakDotMarker,
+  },
+  skelDot: {
+    backgroundColor: colors.surfaceMuted,
+    borderRadius: radii.pill,
+    height: homeStreakDotCircle,
+    width: homeStreakDotCircle,
+  },
+  skelFooterHit: { height: size.hit, marginTop: spacing.md },
+  skelViewGoals: { alignSelf: "flex-end", height: homeViewGoalsHeight },
   skelAvatar: {
     backgroundColor: colors.surfaceMuted,
     borderRadius: radii.pill,
     height: size.avatars.sm,
     width: size.avatars.sm,
   },
-  skelCopy: { flex: 1, gap: spacing.sm },
+  skelHighlightRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    minHeight: size.hit,
+    paddingVertical: spacing.sm,
+  },
   skelLine: {
     backgroundColor: colors.surfaceMuted,
     borderRadius: radii.sm,
-    height: spacing.md,
+    height: type.bodySmall.lineHeight,
   },
   skelShort: { width: "55%" },
-  skelFooter: { marginTop: spacing.sm, width: "40%" },
-  skelDots: { flexDirection: "row", justifyContent: "space-between", marginTop: spacing.md },
-  skelDot: {
-    backgroundColor: colors.surfaceMuted,
-    borderRadius: radii.pill,
-    height: spacing.lg,
-    width: spacing.lg,
-  },
 });

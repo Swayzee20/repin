@@ -179,7 +179,7 @@ test("own-post VoiceOver uses the visible You text and selected stays a 2 pt rin
   assert.match(community, /workoutFeedCardLabel/);
   assert.match(community, /isOwn=\{isOwn\}/);
   assert.match(community, /selected=\{selected\}/);
-  assert.match(community, /generalPostCopy\.newPost/);
+  assert.match(source("community-revamp.tsx"), /generalPostCopy\.newPost/);
   assert.equal(community.includes("CommunityDatePicker"), false);
   assert.match(community, /generalPostFeedCardLabel\(isOwnPost/);
   assert.match(community, /workoutFeedCardLabel\(\{[\s\S]*isOwn/);
@@ -199,4 +199,21 @@ test("Community board pages the mixed feed and keeps communityFeed as the only b
   assert.match(community, /useScrollAnchor\(`\$\{mode\}:\$\{windowWidth\}:\$\{windowHeight\}`, communityFeedAnchorKey\)/);
   assert.equal(community.includes("communityWorkouts.map"), false);
   assert.equal(community.includes("communityWorkouts: current.communityWorkouts"), false);
+});
+
+test("compact Community scrolls the board header with the feed and restores the anchor on fold", () => {
+  const community = source("../app/(tabs)/community/index.tsx");
+  const compactStart = community.indexOf("return (\n    <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>\n    <SafeAreaView");
+  assert.ok(compactStart >= 0, "compact Community return missing");
+  const compact = community.slice(compactStart);
+  assert.match(compact, /<ScrollView/);
+  assert.match(compact, /<CommunityBoardHeader/);
+  assert.match(compact, /id="community-header"/);
+  assert.match(compact, /formatEmptyBoard/);
+  assert.match(compact, /LoadingState message="Loading activity/);
+  assert.equal(compact.includes("boardHeight"), false);
+  assert.match(community, /readStoredScrollAnchor\(communityFeedAnchorKey\)/);
+  assert.match(community, /compactAnchorRef\.current = stored/);
+  assert.match(community, /restoreCompactScroll\(\)/);
+  assert.match(community, /onScroll=\{\(event\) => \{\s+compactScroll\.onScroll\(event\);\s+handleBoardScroll\(event\);/);
 });

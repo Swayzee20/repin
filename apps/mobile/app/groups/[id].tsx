@@ -42,10 +42,10 @@ import { TwoPane, useLayoutMode } from "../../ui/layout";
 import { ListRow, RoundIconButton } from "../../ui/primitives";
 import { usePushPermission } from "../../ui/push-notifications-host";
 import {
-  crewMeasuredHeaderClearance,
   pushedHeaderScreenOptions,
   pushedNativeHeaderEnabled,
   pushedShowsRoundBack,
+  titledPushedHeaderClearance,
 } from "../../ui/pushed-header";
 import { colors, fonts, radii, size, spacing, type } from "../../ui/theme";
 import { useStripState } from "../../ui/vertical-bar-edge";
@@ -75,7 +75,7 @@ export default function CrewPageScreen() {
   const headerHeight = useHeaderHeight();
   const nativeHeader = pushedNativeHeaderEnabled(Platform.OS);
   const roundBack = pushedShowsRoundBack(Platform.OS);
-  const headerClearance = crewMeasuredHeaderClearance({
+  const headerClearance = titledPushedHeaderClearance({
     headerHeight,
     platform: Platform.OS,
     safeTop: insets.top,

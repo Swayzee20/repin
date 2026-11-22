@@ -10,7 +10,7 @@ import { stripPresent, type StripState } from "./vertical-bar-edge-store";
  *
  * A transparent bar floats over the screen. A phone with no side strip needs
  * `pushedNavigationBarHeight` of extra padding below the safe area. The Duo
- * strip hosts the back button, so that case adds nothing.
+ * strip hosts the back button, so untitled screens add nothing.
  */
 export const pushedNavigationBarHeight = size.hit;
 
@@ -35,37 +35,38 @@ export function pushedHeaderClearance(platform: string, strip: StripState): numb
 }
 
 /**
- * Crew page only. Duo still paints the translucent native "Crew" title over
- * the content when the strip is present, so this screen needs `size.hit`
- * there. Other pushed screens keep using `pushedHeaderClearance` (0 on a
- * strip). Do not add this on top of clearance: that double-pads phones.
+ * Titled pushed screens (Crew, Highlights, Activity). Duo still paints the
+ * translucent native title over the content when the strip is present, so
+ * these screens need `size.hit` there. Untitled pushed screens keep using
+ * `pushedHeaderClearance` (0 on a strip). Do not add this on top of
+ * clearance: that double-pads phones.
  *
- * `crewMeasuredHeaderClearance` uses this as the floor when the navigator
+ * `titledPushedHeaderClearance` uses this as the floor when the navigator
  * height is missing or shorter than today's 44.
  */
-export function crewPushedHeaderInset(platform: string, strip: StripState): number {
+export function titledPushedHeaderInset(platform: string, strip: StripState): number {
   if (pushedNativeHeaderEnabled(platform) && stripPresent(strip)) {
     return pushedNavigationBarHeight;
   }
   return pushedHeaderClearance(platform, strip);
 }
 
-/** Upper bound on crew extra pad. Four hit targets, from existing tokens. */
-export const crewMeasuredHeaderClearanceMax = pushedNavigationBarHeight * 4;
+/** Upper bound on titled extra pad. Four hit targets, from existing tokens. */
+export const titledPushedHeaderClearanceMax = pushedNavigationBarHeight * 4;
 
 /**
- * Crew page only. Extra pad below an already-applied SafeArea top, so the
- * total offset equals the navigator header height. Do not pass the raw
+ * Titled pushed screens. Extra pad below an already-applied SafeArea top, so
+ * the total offset equals the navigator header height. Do not pass the raw
  * header height into a view that also has a top safe-area inset: that
  * double-counts the status bar.
  *
  * Missing, non-finite, or non-positive header height, and missing,
- * non-finite, or negative safeTop, fall back to `crewPushedHeaderInset`
+ * non-finite, or negative safeTop, fall back to `titledPushedHeaderInset`
  * (44 on iOS, 0 on Android/web). A measured safeTop of 0 is valid and is
  * not a fallback. A short measurement never goes below that floor. The
  * cap stops a bad native event from exploding the layout.
  */
-export function crewMeasuredHeaderClearance({
+export function titledPushedHeaderClearance({
   headerHeight,
   platform,
   safeTop,
@@ -76,12 +77,12 @@ export function crewMeasuredHeaderClearance({
   safeTop: number;
   strip: StripState;
 }): number {
-  const fallback = crewPushedHeaderInset(platform, strip);
+  const fallback = titledPushedHeaderInset(platform, strip);
   if (!pushedNativeHeaderEnabled(platform)) return fallback;
   if (!Number.isFinite(headerHeight) || headerHeight <= 0) return fallback;
   if (!Number.isFinite(safeTop) || safeTop < 0) return fallback;
   const extra = Math.max(0, headerHeight - safeTop);
-  return Math.max(fallback, Math.min(extra, crewMeasuredHeaderClearanceMax));
+  return Math.max(fallback, Math.min(extra, titledPushedHeaderClearanceMax));
 }
 
 export function pushedHeaderScreenOptions() {

@@ -1,9 +1,9 @@
 import type { LayoutMode } from "../ui/layout-math";
 
-export type CommunityContextPane = "progress" | "highlights" | "activity";
+export type CommunityContextPane = "highlights" | "activity";
 
 export function isCommunityContextPane(value: string | null | undefined): value is CommunityContextPane {
-  return value === "progress" || value === "highlights" || value === "activity";
+  return value === "highlights" || value === "activity";
 }
 
 export function communityHeaderIsCompact(mode: LayoutMode) {
@@ -23,7 +23,6 @@ export function communitySwitcherInBoardPane(mode: LayoutMode) {
 }
 
 export function communityContextRoute(pane: CommunityContextPane) {
-  if (pane === "progress") return "/community/progress";
   if (pane === "highlights") return "/community/highlights";
   return "/community/activity";
 }

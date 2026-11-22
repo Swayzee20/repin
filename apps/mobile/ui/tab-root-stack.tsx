@@ -60,7 +60,6 @@ export default function TabRootStack() {
           </Stack.Toolbar>
         ) : null}
       </Stack.Screen>
-      <Stack.Screen name="progress" options={{ headerShown: chrome.headerShown, title: "Progress" }} />
       <Stack.Screen name="highlights" options={{ headerShown: chrome.headerShown, title: "Highlights" }} />
       <Stack.Screen name="activity" options={{ headerShown: chrome.headerShown, title: "Activity" }} />
     </Stack>
