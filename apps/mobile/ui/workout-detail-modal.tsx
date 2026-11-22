@@ -12,7 +12,7 @@ import {
   useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import type { CommunityReactionSummary, GeneralPostFeedItem, GoalBadge, PrBadge, WorkoutFeedItem } from "@repin/types";
+import type { CommunityReactionSummary, CommunityReactionType, GeneralPostFeedItem, GoalBadge, PrBadge, WorkoutFeedItem } from "@repin/types";
 
 import { clearComposerFocus } from "./composer-focus";
 import { GeneralPostDetailView } from "./general-post-detail";
@@ -35,6 +35,7 @@ export function WorkoutDetailModal({
   onEditWorkout,
   onPostHidden,
   onGoalBadgesChange,
+  onOpenWhoReacted,
   onPrBadgesChange,
   onReactionSummaryChange,
   onUserBlocked,
@@ -52,6 +53,7 @@ export function WorkoutDetailModal({
   onEditWorkout?: (workout: WorkoutFeedItem) => void;
   onPostHidden?: (sessionId: string) => void;
   onGoalBadgesChange?: (sessionId: string, badges: GoalBadge[]) => void;
+  onOpenWhoReacted?: (type: CommunityReactionType) => void;
   onPrBadgesChange?: (sessionId: string, badges: PrBadge[]) => void;
   onReactionSummaryChange?: (sessionId: string, reactions: CommunityReactionSummary) => void;
   onUserBlocked?: (userId: string) => void;
@@ -183,6 +185,7 @@ export function WorkoutDetailModal({
                   {groupId && generalPost ? (
                     <GeneralPostDetailView
                       groupId={groupId}
+                      onOpenWhoReacted={onOpenWhoReacted}
                       post={generalPost}
                       presentation="community-modal"
                       viewerUserId={viewerUserId}
@@ -196,6 +199,7 @@ export function WorkoutDetailModal({
                       seedWorkout={initialWorkout ?? undefined}
                       onCommentCountChange={onCommentCountChange}
                       onEditWorkout={onEditWorkout}
+                      onOpenWhoReacted={onOpenWhoReacted}
                       onPostHidden={onPostHidden}
                       onGoalBadgesChange={onGoalBadgesChange}
                       onPrBadgesChange={onPrBadgesChange}

@@ -118,7 +118,8 @@ test("tapping a pinned general post opens the same detail as any other post", ()
   assert.match(community, /pinnedPost,/);
   assert.match(community, /generalPost=\{detailTarget \? null : generalDetail\}/);
   assert.match(community, /visible=\{detailTarget !== null \|\| generalDetail !== null\}/);
-  assert.match(community, /right=\{generalDetail \?/);
+  assert.match(community, /right=\{paneParam \?/);
+  assert.match(community, /generalDetail \? \(/);
   assert.match(community, /presentation="community-pane"/);
   assert.equal(community.includes("openWorkoutDetail(pinnedPost)"), false);
 });
@@ -136,7 +137,8 @@ test("general post detail uses the workout modal on compact and the trailing pan
   assert.match(community, /visible=\{detailTarget !== null \|\| generalDetail !== null\}/);
   assert.equal(community.includes("StyleSheet.absoluteFill"), false);
   assert.match(community, /presentation="community-pane"/);
-  assert.match(community, /right=\{generalDetail \?/);
+  assert.match(community, /right=\{paneParam \?/);
+  assert.match(community, /generalDetail \? \(/);
 
   assert.match(modal, /presentationStyle="overFullScreen"/);
   assert.match(modal, /CenteredCard/);

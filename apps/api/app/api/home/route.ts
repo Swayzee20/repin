@@ -1,4 +1,6 @@
 import {
+  countActiveMembersByGroupIds,
+  getCrewBoardSummary,
   getPinnedGeneralPostForMember,
   getUserWeeklyStreak,
   getUserWorkoutSnapshot,
@@ -7,7 +9,9 @@ import {
   listCommunityFeedForMember,
   listCrewHighlightsForHome,
   listGroupsForUser,
+  listLatestCommentsForPosts,
   listRecentWorkoutsForAuthorizedGroup,
+  listViewerReactionsForPosts,
 } from "@repin/db";
 import type {
   CommunityFeedItem,
@@ -22,6 +26,7 @@ import {
   skipLegacyCommunityWorkoutsQuery,
 } from "@repin/validation";
 
+import { signCrewPhotoUrl } from "../../../lib/crew-photos";
 import { reportUnexpectedRouteError } from "../../../lib/sentry";
 import {
   AuthenticationError,
@@ -134,6 +139,7 @@ export async function GET(request: Request) {
       workoutsWithPhotos.map(withResolvedDisplayName));
 
     if (view === "community") {
+      const groupsWithCounts = await timing.measure("db", () => withMemberCounts(groups));
       if (query.data.feed === "mixed" && selectedGroup) {
         const mixed = await timing.measure("db", () =>
           listMixedCommunityFeed({
@@ -142,15 +148,25 @@ export async function GET(request: Request) {
             cursor: query.data.cursor,
             limit: query.data.limit,
           }));
+        const crew = query.data.cursor
+          ? undefined
+          : await timing.measure("db", () => loadCrewSummary({
+            groupId: selectedGroup.id,
+            viewerUserId: identity.id,
+            photoPath: selectedGroup.photoPath,
+            bounds,
+            timeZone: query.data.timeZone ?? "UTC",
+          }));
         return jsonNoStore(timing, {
-          groups,
+          groups: groupsWithCounts,
           selectedGroupId: selectedGroup.id,
           communityWorkouts,
+          crew,
           ...mixed,
         });
       }
       return jsonNoStore(timing, {
-        groups,
+        groups: groupsWithCounts,
         selectedGroupId: selectedGroup?.id ?? null,
         communityWorkouts,
       });
@@ -169,7 +185,9 @@ export async function GET(request: Request) {
           viewerUserId: identity.id,
           todayStart: bounds.todayStart,
           weekStart: bounds.weekStart,
+          weekEnd: bounds.weekEnd,
           now,
+          timeZone: query.data.timeZone ?? "UTC",
         }))
         : Promise.resolve({ firstToRepInToday: null, weekly: [] } satisfies HomeCrewHighlights),
     ]);
@@ -295,12 +313,72 @@ async function listMixedCommunityFeed(input: {
       groupId: input.groupId,
     });
   const pinnedPost = pinned ? (await signGeneralPostPhotos([pinned]))[0] ?? null : null;
+  const withSocial = await attachFeedSocial(input.viewerUserId, communityFeed, pinnedPost);
 
   return {
-    communityFeed,
-    pinnedPost,
+    communityFeed: withSocial.communityFeed,
+    pinnedPost: withSocial.pinnedPost,
     nextCursor: page.nextCursor,
   };
+}
+
+async function attachFeedSocial(
+  viewerUserId: string,
+  communityFeed: CommunityFeedItem[],
+  pinnedPost: GeneralPostFeedItem | null,
+) {
+  const items = pinnedPost ? [pinnedPost, ...communityFeed] : communityFeed;
+  const postIds = items.map(feedPostId).filter((id): id is string => Boolean(id));
+  const [comments, reactions] = await Promise.all([
+    listLatestCommentsForPosts({ viewerUserId, postIds }),
+    listViewerReactionsForPosts({ viewerUserId, postIds }),
+  ]);
+  const apply = <T extends CommunityFeedItem>(item: T): T => {
+    const postId = feedPostId(item);
+    return {
+      ...item,
+      latestComment: (postId ? comments.get(postId) : null) ?? null,
+      viewerReaction: (postId ? reactions.get(postId) : null) ?? null,
+    };
+  };
+  return {
+    communityFeed: communityFeed.map(apply),
+    pinnedPost: pinnedPost ? apply(pinnedPost) : null,
+  };
+}
+
+function feedPostId(item: CommunityFeedItem) {
+  if (item.kind === "general") return item.id;
+  return item.communityPostId ?? null;
+}
+
+async function withMemberCounts<T extends { id: string }>(groups: T[]) {
+  const counts = await countActiveMembersByGroupIds(groups.map((group) => group.id));
+  return groups.map((group) => ({
+    ...group,
+    memberCount: counts.get(group.id) ?? 0,
+  }));
+}
+
+async function loadCrewSummary(input: {
+  groupId: string;
+  viewerUserId: string;
+  photoPath?: string | null;
+  bounds: ReturnType<typeof homeLocalBounds>;
+  timeZone: string;
+}) {
+  const summary = await getCrewBoardSummary({
+    groupId: input.groupId,
+    viewerUserId: input.viewerUserId,
+    weekStart: input.bounds.weekStart,
+    weekEnd: input.bounds.weekEnd,
+    rangeEnd: new Date(),
+    todayStart: input.bounds.todayStart,
+    timeZone: input.timeZone,
+  });
+  if (!summary) return null;
+  const photoUrl = await signCrewPhotoUrl(input.photoPath ?? null).catch(() => null);
+  return { ...summary, photoUrl };
 }
 
 function toIso(value: Date | string | null | undefined) {

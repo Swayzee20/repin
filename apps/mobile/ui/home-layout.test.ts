@@ -152,7 +152,7 @@ test("Highlights and Activity share the same brand Bold 13 section-label style",
   assert.match(label, /style=\{\[sectionLabelStyle, style\]\}/);
 
   assert.match(homeUi, /import \{ SectionLabel \} from "\.\/section-label"/);
-  assert.match(homeUi, /<SectionLabel style=\{styles.highlightsLabel\}>\{homeCopy\.highlights\}/);
+  assert.match(homeUi, /<SectionLabel>\{homeCopy\.highlights\}/);
   assert.match(homeUi, /<SectionLabel>\{homeCopy\.activity\}/);
   assert.match(homeUi, /<SectionLabel style=\{styles.sectionLabel\}>\{homeCopy\.thisWeek\}/);
   assert.match(homeUi, /<SectionLabel style=\{styles.sectionLabel\}>\{homeCopy\.comingUp\}/);

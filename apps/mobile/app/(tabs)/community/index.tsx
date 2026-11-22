@@ -1,16 +1,18 @@
-import type { CommunityData, CommunityFeedItem, CommunityPostComment, CommunityReactionSummary, CommunityWorkoutDetail, GeneralPostFeedItem, GoalBadge, GroupSummary, PrBadge, WorkoutFeedItem } from "@repin/types";
+import type { CommunityData, CommunityFeedItem, CommunityPostComment, CommunityReactionSummary, CommunityReactionType, CommunityWorkoutDetail, GeneralPostFeedItem, GoalBadge, PrBadge, WorkoutFeedItem } from "@repin/types";
 import {
   COMMUNITY_FEED_CLIENT_VERSION,
   COMMUNITY_FEED_PAGE_SIZE,
+  communityRevampCopy,
   formatDeletePostBody,
   formatEmptyBoard,
   formatPinBody,
   formatReplacePinBody,
   generalPostCopy,
   goalCopy,
+  staleBannerTime,
 } from "@repin/validation";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import {
   Pressable,
   ScrollView,
@@ -68,17 +70,37 @@ import {
   isOwnPost,
   workoutFeedCardLabel,
 } from "../../../ui/community-feed-layout";
-import { BrandHeader, Button, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
+import { fetchWhoReacted, toggleFeedReaction } from "../../../lib/community-revamp-api";
+import {
+  communityContextOpensPushed,
+  communityContextRoute,
+  communityHeaderIsCompact,
+  isCommunityContextPane,
+} from "../../../lib/community-revamp-layout";
+import { applyOptimisticReaction, reduceWhoReactedSheet } from "../../../lib/community-reaction-state";
+import { Button, LoadingState, StateCard, WorkoutSummaryCard } from "../../../ui/components";
 import { CommunityDayDivider } from "../../../ui/community-day-divider";
+import { CommunityContextBody } from "../../../ui/community-context-screen";
+import {
+  CommunityBoardLabel,
+  CommunityErrorCard,
+  CommunityLoadingSkeleton,
+  CommunityScreenTitle,
+  communityPulseFromSummary,
+  CrewEntryRows,
+  CrewHeaderStrip,
+  CrewSwitcherSheet,
+  WhoReactedSheet,
+} from "../../../ui/community-revamp";
 import { ConfirmSheet } from "../../../ui/crew-sheets";
 import { GeneralPostSummaryCard } from "../../../ui/general-post-card";
 import { GeneralPostDetailView } from "../../../ui/general-post-detail";
+import { StaleBanner } from "../../../ui/home";
 import { prCopy } from "../../../ui/pr-copy";
 import { PrUndoToast } from "../../../ui/pr-undo-toast";
 import { Dialog } from "../../../ui/dialog";
-import { Chevron } from "../../../ui/icons";
 import { tabScreenTopStyle, TwoPane, useLayoutMode, WideColumn } from "../../../ui/layout";
-import { Menu, MenuItem } from "../../../ui/menu";
+import { MenuItem } from "../../../ui/menu";
 import { CheckInEmptyContent } from "../../../ui/check-in-empty-content";
 import { useMainTabs } from "../../../ui/main-tabs-context";
 import { readStoredScrollAnchor, ScrollAnchor, ScrollAnchorProvider, useScrollAnchor } from "../../../ui/scroll-anchor";
@@ -95,9 +117,11 @@ const layoutPreviewViewerUserId = "user-jordan";
 export default function CommunityTabScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const params = useLocalSearchParams<{ groupId?: string | string[]; post?: string | string[] }>();
+  const params = useLocalSearchParams<{ groupId?: string | string[]; pane?: string | string[]; post?: string | string[] }>();
   const postParam = readCommunityPostParam(params.post);
   const groupParam = readCommunityPostParam(params.groupId);
+  const paneRaw = readCommunityPostParam(params.pane);
+  const paneParam = isCommunityContextPane(paneRaw) ? paneRaw : null;
   const { mode } = useLayoutMode();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const compactScroll = useScrollAnchor(`${mode}:${windowWidth}:${windowHeight}`, communityFeedAnchorKey);
@@ -108,7 +132,11 @@ export default function CommunityTabScreen() {
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [groupMenuView, setGroupMenuView] = useState<"actions" | "groups" | null>(null);
+  const [switcherOpen, setSwitcherOpen] = useState(false);
+  const [whoReacted, dispatchWhoReacted] = useReducer(reduceWhoReactedSheet, { status: "closed" });
+  const [reactionPendingId, setReactionPendingId] = useState<string | null>(null);
+  const [staleAt, setStaleAt] = useState<string | null>(null);
+  const [localDayKey, setLocalDayKey] = useState(() => localDateKey(new Date()));
   const [boardHeight, setBoardHeight] = useState(0);
   const [detailTarget, setDetailTarget] = useState<{
     groupId: string;
@@ -171,6 +199,7 @@ export default function CommunityTabScreen() {
       setError(null);
       try {
       const search = new URLSearchParams({
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
         view: "community",
         feed: "mixed",
@@ -197,18 +226,20 @@ export default function CommunityTabScreen() {
         workoutRevision,
       };
       setLoadMoreError(null);
+      setStaleAt(null);
       setData(next);
       setSelectedGroupId(body.selectedGroupId);
       } catch (loadError) {
         if (latestRequestKey.current === requestKey) {
-          const message = loadError instanceof Error ? loadError.message : generalPostCopy.loadErrorTitle;
+          const message = loadError instanceof Error ? loadError.message : communityRevampCopy.loadCommunity;
           if (dataRef.current) {
             setOffline(true);
+            setStaleAt(staleBannerTime());
             setError(null);
           } else {
             setError(message === "Failed to fetch" || /network|offline/i.test(message)
               ? generalPostCopy.offline
-              : generalPostCopy.loadErrorTitle);
+              : communityRevampCopy.loadCommunity);
           }
         }
       } finally {
@@ -238,6 +269,7 @@ export default function CommunityTabScreen() {
     const generation = feedGeneration.current;
     try {
       const search = new URLSearchParams({
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
         timezoneOffsetMinutes: String(new Date().getTimezoneOffset()),
         view: "community",
         feed: "mixed",
@@ -431,6 +463,32 @@ export default function CommunityTabScreen() {
     void loadCommunity();
   }, [layoutPreview, loadCommunity]));
 
+  useEffect(() => {
+    const now = new Date();
+    const nextMidnight = new Date(now);
+    nextMidnight.setHours(24, 0, 0, 0);
+    const timeout = setTimeout(() => {
+      markWorkoutDataStale();
+      setLocalDayKey(localDateKey(new Date()));
+    }, nextMidnight.getTime() - now.getTime());
+    return () => clearTimeout(timeout);
+  }, [localDayKey]);
+
+  useEffect(() => {
+    if (layoutPreview) return;
+    void loadCommunity();
+  }, [layoutPreview, loadCommunity, localDayKey]);
+
+  const previousLayoutMode = useRef(mode);
+  useEffect(() => {
+    const previous = previousLayoutMode.current;
+    previousLayoutMode.current = mode;
+    if (previous === "twoPane" && communityContextOpensPushed(mode) && paneParam) {
+      router.push(communityContextRoute(paneParam));
+      router.setParams({ pane: "" });
+    }
+  }, [mode, paneParam, router]);
+
   const handleBoardLayout = useCallback((event: LayoutChangeEvent) => {
     const nextHeight = Math.floor(event.nativeEvent.layout.height);
     setBoardHeight((currentHeight) => currentHeight === nextHeight ? currentHeight : nextHeight);
@@ -438,20 +496,22 @@ export default function CommunityTabScreen() {
 
   const openWorkoutDetail = useCallback((workout: WorkoutFeedItem) => {
     if (!selectedGroup) return;
-    setGroupMenuView(null);
+    setSwitcherOpen(false);
     setGeneralDetail(null);
+    if (mode === "twoPane" && paneParam) router.setParams({ pane: "" });
     if (mode === "twoPane") {
       setExplicitOverride(workout.id);
       router.setParams({ post: workout.id });
       return;
     }
     setDetailTarget({ groupId: selectedGroup.id, workout });
-  }, [mode, router, selectedGroup]);
+  }, [mode, paneParam, router, selectedGroup]);
 
   const openGeneralPostDetail = useCallback((post: GeneralPostFeedItem) => {
     if (!selectedGroup) return;
-    setGroupMenuView(null);
+    setSwitcherOpen(false);
     setDetailTarget(null);
+    if (mode === "twoPane" && paneParam) router.setParams({ pane: "" });
     if (mode === "twoPane") {
       setGeneralDetail(post);
       setExplicitOverride(post.id);
@@ -459,11 +519,111 @@ export default function CommunityTabScreen() {
       return;
     }
     setGeneralDetail(post);
-  }, [mode, router, selectedGroup]);
+  }, [mode, paneParam, router, selectedGroup]);
 
   const updateFeedReactionSummary = useCallback((sessionId: string, reactions: CommunityReactionSummary) => {
-    applyFeed({ type: "updateReaction", id: sessionId, counts: reactions.counts });
+    applyFeed({
+      type: "updateReaction",
+      id: sessionId,
+      counts: reactions.counts,
+      viewerReaction: reactions.viewerReaction,
+    });
   }, [applyFeed]);
+
+  const openContextPane = useCallback((pane: "progress" | "highlights" | "activity") => {
+    setSwitcherOpen(false);
+    setDetailTarget(null);
+    setGeneralDetail(null);
+    setExplicitOverride(null);
+    if (communityContextOpensPushed(mode)) {
+      router.push(communityContextRoute(pane));
+      return;
+    }
+    router.setParams({ pane, post: "" });
+  }, [mode, router]);
+
+  const openWhoReacted = useCallback((input: {
+    focus: CommunityReactionType;
+    postId?: string;
+    sessionId?: string;
+  }) => {
+    dispatchWhoReacted({ type: "open", ...input });
+  }, []);
+
+  const loadWhoReacted = useCallback(async () => {
+    if (whoReacted.status !== "open" || !selectedGroup || !supabase) return;
+    const postId = whoReacted.postId;
+    const sessionId = whoReacted.sessionId;
+    try {
+      const { data: auth } = await supabase.auth.getSession();
+      if (!auth.session) throw new Error("Sign in to see who reacted.");
+      const body = await fetchWhoReacted({
+        accessToken: auth.session.access_token,
+        groupId: selectedGroup.id,
+        postId,
+        sessionId,
+      });
+      dispatchWhoReacted({ type: "loaded", data: body.reactions });
+    } catch (loadError) {
+      dispatchWhoReacted({
+        type: "failed",
+        error: loadError instanceof Error ? loadError.message : communityRevampCopy.loadPost,
+      });
+    }
+  }, [selectedGroup, whoReacted]);
+
+  useEffect(() => {
+    if (whoReacted.status !== "open") return;
+    if (whoReacted.data || whoReacted.error || !whoReacted.loading) return;
+    void loadWhoReacted();
+  }, [loadWhoReacted, whoReacted]);
+
+  const toggleCardReaction = useCallback(async (
+    item: CommunityFeedItem,
+    reactionType: CommunityReactionType,
+  ) => {
+    if (!selectedGroup || !supabase || reactionPendingId) return;
+    const previous = {
+      counts: item.reactionCounts ?? { clap: 0, fire: 0, strong: 0 },
+      total: 0,
+      viewerReaction: item.viewerReaction ?? null,
+    };
+    const optimistic = applyOptimisticReaction(previous, reactionType);
+    setReactionPendingId(item.id);
+    applyFeed({
+      type: "updateReaction",
+      id: item.id,
+      counts: optimistic.counts,
+      viewerReaction: optimistic.viewerReaction,
+    });
+    try {
+      const { data: auth } = await supabase.auth.getSession();
+      if (!auth.session) throw new Error("Sign in to react.");
+      const reactions = await toggleFeedReaction({
+        accessToken: auth.session.access_token,
+        groupId: selectedGroup.id,
+        postId: item.kind === "general" ? item.id : item.communityPostId,
+        sessionId: item.kind === "general" ? undefined : item.id,
+        reactionType,
+        removing: previous.viewerReaction === reactionType,
+      });
+      applyFeed({
+        type: "updateReaction",
+        id: item.id,
+        counts: reactions.counts,
+        viewerReaction: reactions.viewerReaction,
+      });
+    } catch {
+      applyFeed({
+        type: "updateReaction",
+        id: item.id,
+        counts: previous.counts,
+        viewerReaction: previous.viewerReaction,
+      });
+    } finally {
+      setReactionPendingId(null);
+    }
+  }, [applyFeed, reactionPendingId, selectedGroup]);
 
   const updateFeedCommentCount = useCallback((sessionId: string, commentCount: number) => {
     applyFeed({ type: "updateCommentCount", id: sessionId, commentCount });
@@ -651,7 +811,11 @@ export default function CommunityTabScreen() {
     return (
       <View style={[styles.safeArea, tabScreenTopStyle(insets.top)]}>
         <SafeAreaView edges={["left", "right"]} style={styles.flex}>
-          <WideColumn fill><LoadingState message="Loading Community…" /></WideColumn>
+          <WideColumn fill>
+            <View style={styles.content}>
+              <CommunityLoadingSkeleton twoPane={mode === "twoPane"} />
+            </View>
+          </WideColumn>
         </SafeAreaView>
       </View>
     );
@@ -662,7 +826,8 @@ export default function CommunityTabScreen() {
         <SafeAreaView edges={["left", "right"]} style={styles.flex}>
           <WideColumn fill>
             <View style={styles.state}>
-              <StateCard actionLabel="Try again" message={error} onAction={() => void loadCommunity()} title="Community unavailable" />
+              <CommunityScreenTitle />
+              <CommunityErrorCard onRetry={() => void loadCommunity()} />
             </View>
           </WideColumn>
         </SafeAreaView>
@@ -686,35 +851,27 @@ export default function CommunityTabScreen() {
             scrollableRight={false}
             left={(
               <View style={styles.paneColumn}>
-                {groupMenuView ? (
-                  <Pressable
-                    accessibilityLabel="Close crew menu"
-                    accessibilityRole="button"
-                    onPress={() => setGroupMenuView(null)}
-                    style={styles.pickerBackdrop}
-                  />
-                ) : null}
                 <ScrollAnchor id="community-header">
-                  <BrandHeader />
-                  <CommunityGroupControls
-                    groupMenuView={groupMenuView}
-                    groups={board?.groups ?? []}
-                    onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}
-                    onSelectGroup={(groupId) => {
-                      if (communitySelectionClears({
-                        nextDayKey: "mixed",
-                        nextGroupId: groupId,
-                        previousDayKey: "mixed",
-                        previousGroupId: selectedGroup.id,
-                      })) clearPostSelection();
-                      clearFeed(groupId);
-                      setSelectedGroupId(groupId);
-                    }}
-                    onToggleMenu={setGroupMenuView}
+                  <CommunityScreenTitle />
+                  {staleAt ? <StaleBanner onRetry={() => void loadCommunity()} time={staleAt} /> : null}
+                  <CrewHeaderStrip
+                    compact={communityHeaderIsCompact(mode)}
+                    memberCount={board?.crew?.memberCount ?? selectedGroup.memberCount ?? 1}
+                    onOpenCrew={() => router.push(`/groups/${selectedGroup.id}`)}
+                    onOpenSwitcher={() => setSwitcherOpen(true)}
+                    photoUrl={board?.crew?.photoUrl ?? selectedGroup.photoUrl}
                     selectedGroup={selectedGroup}
                   />
+                  <CrewEntryRows
+                    highlightCount={board?.crew?.highlightCount ?? 0}
+                    onOpenActivity={() => openContextPane("activity")}
+                    onOpenHighlights={() => openContextPane("highlights")}
+                    onOpenProgress={() => openContextPane("progress")}
+                    pulse={communityPulseFromSummary(board?.crew)}
+                    selected={paneParam}
+                  />
                 </ScrollAnchor>
-                <Text style={styles.boardTitle}>Community Board</Text>
+                <CommunityBoardLabel />
                 <CommunityNewPostButton gap={newPostGap} onPress={openNewPost} />
                 {pinnedPost ? (
                   <ScrollAnchor id={pinnedPost.id}>
@@ -727,7 +884,10 @@ export default function CommunityTabScreen() {
                       <GeneralPostSummaryCard
                         isPinned
                         menuItems={generalMenu(pinnedPost)}
+                        onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: pinnedPost.id })}
+                        onToggleReaction={(type) => void toggleCardReaction(pinnedPost, type)}
                         post={pinnedPost}
+                        reactionPending={reactionPendingId === pinnedPost.id}
                         selected={pinnedPost.id === (generalDetail?.id ?? openSessionId)}
                         showCommentCount
                         showReactionSummary
@@ -764,7 +924,10 @@ export default function CommunityTabScreen() {
                         >
                           <GeneralPostSummaryCard
                             menuItems={generalMenu(post)}
+                            onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: post.id })}
+                            onToggleReaction={(type) => void toggleCardReaction(post, type)}
                             post={post}
+                            reactionPending={reactionPendingId === post.id}
                             selected={selected}
                             showCommentCount
                             showReactionSummary
@@ -791,6 +954,13 @@ export default function CommunityTabScreen() {
                         <WorkoutSummaryCard
                           isOwn={isOwn}
                           menuItems={feedMenu(workout)}
+                          onOpenWhoReacted={(type) => openWhoReacted({
+                            focus: type,
+                            postId: workout.communityPostId,
+                            sessionId: workout.id,
+                          })}
+                          onToggleReaction={(type) => void toggleCardReaction(workout, type)}
+                          reactionPending={reactionPendingId === workout.id}
                           selected={selected}
                           showCommentCount
                           showReactionSummary
@@ -811,9 +981,19 @@ export default function CommunityTabScreen() {
                 />
               </View>
             )}
-            right={generalDetail ? (
+            right={paneParam ? (
+              <CommunityContextBody
+                compactTitle
+                groupId={selectedGroup.id}
+                onOpenPost={(input) => {
+                  router.setParams({ pane: "", post: input.sessionId ?? input.postId });
+                }}
+                pane={paneParam}
+              />
+            ) : generalDetail ? (
               <GeneralPostDetailView
                 groupId={selectedGroup.id}
+                onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: generalDetail.id })}
                 paneHeader={(
                   <View style={styles.panePostHeader}>
                     <Text style={styles.panePostTitle}>Post</Text>
@@ -847,6 +1027,10 @@ export default function CommunityTabScreen() {
                 onCommentCountChange={updateFeedCommentCount}
                 onEditWorkout={editWorkout}
                 onGoalBadgesChange={updateFeedGoalBadges}
+                onOpenWhoReacted={(type) => openWhoReacted({
+                  focus: type,
+                  sessionId: openSessionId ?? undefined,
+                })}
                 onPrBadgesChange={updateFeedPrBadges}
                 onReactionSummaryChange={updateFeedReactionSummary}
               />
@@ -959,6 +1143,36 @@ export default function CommunityTabScreen() {
           }}
           visible={unpinToast !== null && !prToastVisible && !goalToastVisible}
         />
+        <CrewSwitcherSheet
+          groups={board?.groups ?? []}
+          onDismiss={() => setSwitcherOpen(false)}
+          onOpenCrew={() => {
+            setSwitcherOpen(false);
+            if (selectedGroup) router.push(`/groups/${selectedGroup.id}`);
+          }}
+          onSelectGroup={(groupId) => {
+            if (selectedGroup && communitySelectionClears({
+              nextDayKey: "mixed",
+              nextGroupId: groupId,
+              previousDayKey: "mixed",
+              previousGroupId: selectedGroup.id,
+            })) clearPostSelection();
+            clearFeed(groupId);
+            setSelectedGroupId(groupId);
+            setSwitcherOpen(false);
+          }}
+          selectedGroupId={selectedGroup.id}
+          visible={switcherOpen}
+        />
+        <WhoReactedSheet
+          data={whoReacted.status === "open" ? whoReacted.data : null}
+          error={whoReacted.status === "open" ? whoReacted.error : null}
+          focus={whoReacted.status === "open" ? whoReacted.focus : undefined}
+          loading={whoReacted.status === "open" && whoReacted.loading}
+          onDismiss={() => dispatchWhoReacted({ type: "close" })}
+          onRetry={() => void loadWhoReacted()}
+          visible={whoReacted.status === "open"}
+        />
       </View>
     );
   }
@@ -968,52 +1182,28 @@ export default function CommunityTabScreen() {
     <SafeAreaView edges={["left", "right"]} style={styles.flex}>
       <WideColumn fill>
       <View style={styles.content}>
-        <BrandHeader />
+        <CommunityScreenTitle />
+        {staleAt ? <StaleBanner onRetry={() => void loadCommunity()} time={staleAt} /> : null}
 
         {selectedGroup ? (
           <>
-            {groupMenuView ? (
-              <Pressable
-                accessibilityLabel="Close crew menu"
-                accessibilityRole="button"
-                onPress={() => setGroupMenuView(null)}
-                style={styles.pickerBackdrop}
-              />
-            ) : null}
-            <View style={styles.groupHeaderRow}>
-              <View style={styles.selectorAnchor}>
-                <Pressable
-                  accessibilityLabel={`Selected crew: ${selectedGroup.name}. Open crew menu`}
-                  accessibilityRole="button"
-                  onPress={() => setGroupMenuView((view) => view ? null : "actions")}
-                  style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
-                >
-                  <Text numberOfLines={1} style={styles.groupName}>{selectedGroup.name}</Text>
-                  <View style={styles.chevron}><Chevron color={colors.brand} direction={groupMenuView ? "up" : "down"} /></View>
-                </Pressable>
-                {groupMenuView ? (
-                  <GroupActionsMenu
-                    groupMenuView={groupMenuView}
-                    groups={board?.groups ?? []}
-                    onOpenGroup={(groupId) => router.push(`/groups/${groupId}`)}
-                    onSelectGroup={(groupId) => {
-                      if (communitySelectionClears({
-                        nextDayKey: "mixed",
-                        nextGroupId: groupId,
-                        previousDayKey: "mixed",
-                        previousGroupId: selectedGroup.id,
-                      })) clearPostSelection();
-                      clearFeed(groupId);
-                      setSelectedGroupId(groupId);
-                    }}
-                    onToggleMenu={setGroupMenuView}
-                    selectedGroupId={selectedGroup.id}
-                  />
-                ) : null}
-              </View>
-            </View>
+            <CrewHeaderStrip
+              compact={communityHeaderIsCompact(mode)}
+              memberCount={board?.crew?.memberCount ?? selectedGroup.memberCount ?? 1}
+              onOpenCrew={() => router.push(`/groups/${selectedGroup.id}`)}
+              onOpenSwitcher={() => setSwitcherOpen(true)}
+              photoUrl={board?.crew?.photoUrl ?? selectedGroup.photoUrl}
+              selectedGroup={selectedGroup}
+            />
+            <CrewEntryRows
+              highlightCount={board?.crew?.highlightCount ?? 0}
+              onOpenActivity={() => openContextPane("activity")}
+              onOpenHighlights={() => openContextPane("highlights")}
+              onOpenProgress={() => openContextPane("progress")}
+              pulse={communityPulseFromSummary(board?.crew)}
+            />
 
-            <Text style={styles.boardTitle}>Community Board</Text>
+            <CommunityBoardLabel />
             <CommunityNewPostButton gap={newPostGap} onPress={openNewPost} />
 
             <View onLayout={handleBoardLayout} style={styles.boardArea}>
@@ -1048,7 +1238,10 @@ export default function CommunityTabScreen() {
                           <GeneralPostSummaryCard
                             isPinned
                             menuItems={generalMenu(pinnedPost)}
+                            onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: pinnedPost.id })}
+                            onToggleReaction={(type) => void toggleCardReaction(pinnedPost, type)}
                             post={pinnedPost}
+                            reactionPending={reactionPendingId === pinnedPost.id}
                             showCommentCount
                             showReactionSummary
                             timestamp={pinnedTimestamp ?? undefined}
@@ -1081,7 +1274,10 @@ export default function CommunityTabScreen() {
                             >
                               <GeneralPostSummaryCard
                                 menuItems={generalMenu(post)}
+                                onOpenWhoReacted={(type) => openWhoReacted({ focus: type, postId: post.id })}
+                                onToggleReaction={(type) => void toggleCardReaction(post, type)}
                                 post={post}
+                                reactionPending={reactionPendingId === post.id}
                                 showCommentCount
                                 showReactionSummary
                                 timestamp={row.timestamp}
@@ -1105,6 +1301,13 @@ export default function CommunityTabScreen() {
                             <WorkoutSummaryCard
                               isOwn={isOwn}
                               menuItems={feedMenu(workout)}
+                              onOpenWhoReacted={(type) => openWhoReacted({
+                                focus: type,
+                                postId: workout.communityPostId,
+                                sessionId: workout.id,
+                              })}
+                              onToggleReaction={(type) => void toggleCardReaction(workout, type)}
+                              reactionPending={reactionPendingId === workout.id}
                               selected={false}
                               showCommentCount
                               showReactionSummary
@@ -1160,6 +1363,11 @@ export default function CommunityTabScreen() {
           setGeneralDetail(null);
           if (postParam) router.setParams({ post: "" });
         }}
+        onOpenWhoReacted={(type) => openWhoReacted({
+          focus: type,
+          postId: generalDetail?.id,
+          sessionId: detailTarget?.workout.id,
+        })}
         onReactionSummaryChange={updateFeedReactionSummary}
         sessionId={detailTarget?.workout.id ?? null}
         visible={detailTarget !== null || generalDetail !== null}
@@ -1269,6 +1477,38 @@ export default function CommunityTabScreen() {
         }}
         visible={unpinToast !== null && !prToastVisible && !goalToastVisible}
       />
+      {selectedGroup ? (
+        <CrewSwitcherSheet
+          groups={board?.groups ?? []}
+          onDismiss={() => setSwitcherOpen(false)}
+          onOpenCrew={() => {
+            setSwitcherOpen(false);
+            router.push(`/groups/${selectedGroup.id}`);
+          }}
+          onSelectGroup={(groupId) => {
+            if (communitySelectionClears({
+              nextDayKey: "mixed",
+              nextGroupId: groupId,
+              previousDayKey: "mixed",
+              previousGroupId: selectedGroup.id,
+            })) clearPostSelection();
+            clearFeed(groupId);
+            setSelectedGroupId(groupId);
+            setSwitcherOpen(false);
+          }}
+          selectedGroupId={selectedGroup.id}
+          visible={switcherOpen}
+        />
+      ) : null}
+      <WhoReactedSheet
+        data={whoReacted.status === "open" ? whoReacted.data : null}
+        error={whoReacted.status === "open" ? whoReacted.error : null}
+        focus={whoReacted.status === "open" ? whoReacted.focus : undefined}
+        loading={whoReacted.status === "open" && whoReacted.loading}
+        onDismiss={() => dispatchWhoReacted({ type: "close" })}
+        onRetry={() => void loadWhoReacted()}
+        visible={whoReacted.status === "open"}
+      />
     </SafeAreaView>
     </View>
   );
@@ -1323,99 +1563,6 @@ function CommunityNewPostButton({ gap, onPress }: { gap: number; onPress: () => 
     >
       {generalPostCopy.newPost}
     </Button>
-  );
-}
-
-function GroupActionsMenu({
-  groupMenuView,
-  groups,
-  onOpenGroup,
-  onSelectGroup,
-  onToggleMenu,
-  selectedGroupId,
-}: {
-  groupMenuView: "actions" | "groups";
-  groups: GroupSummary[];
-  onOpenGroup: (groupId: string) => void;
-  onSelectGroup: (groupId: string) => void;
-  onToggleMenu: (view: "actions" | "groups" | null) => void;
-  selectedGroupId: string;
-}) {
-  return (
-    <Menu style={styles.groupDrawer}>
-      {groupMenuView === "actions" ? (
-        <>
-          <MenuItem icon="arrow.triangle.2.circlepath" label="Switch crew" onPress={() => onToggleMenu("groups")} showChevron />
-          <MenuItem
-            icon="person.2"
-            label="View crew"
-            onPress={() => {
-              onToggleMenu(null);
-              onOpenGroup(selectedGroupId);
-            }}
-          />
-        </>
-      ) : (
-        <>
-          <MenuItem accessibilityLabel="Back to crew menu" icon="chevron.left" label="Switch crew" onPress={() => onToggleMenu("actions")} />
-          {groups.map((group) => (
-            <MenuItem
-              key={group.id}
-              label={group.name}
-              onPress={() => {
-                onSelectGroup(group.id);
-                onToggleMenu(null);
-              }}
-              selected={group.id === selectedGroupId}
-            />
-          ))}
-        </>
-      )}
-    </Menu>
-  );
-}
-
-function CommunityGroupControls({
-  groupMenuView,
-  groups,
-  onOpenGroup,
-  onSelectGroup,
-  onToggleMenu,
-  selectedGroup,
-}: {
-  groupMenuView: "actions" | "groups" | null;
-  groups: GroupSummary[];
-  onOpenGroup: (groupId: string) => void;
-  onSelectGroup: (groupId: string) => void;
-  onToggleMenu: (view: "actions" | "groups" | null) => void;
-  selectedGroup: GroupSummary;
-}) {
-  return (
-    <>
-      <View style={styles.groupHeaderRow}>
-        <View style={styles.selectorAnchor}>
-          <Pressable
-            accessibilityLabel={`Selected crew: ${selectedGroup.name}. Open crew menu`}
-            accessibilityRole="button"
-            onPress={() => onToggleMenu(groupMenuView ? null : "actions")}
-            style={({ pressed }) => [styles.selector, pressed && styles.pressed]}
-          >
-            <Text numberOfLines={1} style={styles.groupName}>{selectedGroup.name}</Text>
-            <View style={styles.chevron}><Chevron color={colors.brand} direction={groupMenuView ? "up" : "down"} /></View>
-          </Pressable>
-          {groupMenuView ? (
-            <GroupActionsMenu
-              groupMenuView={groupMenuView}
-              groups={groups}
-              onOpenGroup={onOpenGroup}
-              onSelectGroup={onSelectGroup}
-              onToggleMenu={onToggleMenu}
-              selectedGroupId={selectedGroup.id}
-            />
-          ) : null}
-        </View>
-      </View>
-    </>
   );
 }
 
@@ -1506,6 +1653,10 @@ const styles = StyleSheet.create({
   panePostFrom: { color: colors.muted, ...type.bodySmall },
 });
 
+function localDateKey(date: Date) {
+  return `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`;
+}
+
 function atLocalTime(hours: number, minutes: number, daysAgo = 0) {
   const date = new Date();
   date.setDate(date.getDate() - daysAgo);
@@ -1544,6 +1695,7 @@ function layoutPreviewCommunity(): CommunityData {
       notes: caption,
       occurredAt,
       photoPath: null,
+      latestComment: { createdAt: occurredAt, displayName: "Maya L.", text: "Nice pace!" },
       reactionCounts: reactions,
       resultSummary,
       title,
@@ -1566,6 +1718,7 @@ function layoutPreviewCommunity(): CommunityData {
     links: [],
     photos: [],
     publicationId: "pub-1",
+    latestComment: { createdAt: occurredAt, displayName: "Maya L.", text: "Nice pace!" },
     reactionCounts: reactions,
     updatedAt: occurredAt,
     userId: "user-maya",
@@ -1595,9 +1748,16 @@ function layoutPreviewCommunity(): CommunityData {
     communityFeed: [generalPost, ...communityWorkouts],
     pinnedPost,
     communityWorkouts,
+    crew: {
+      highlightCount: 4,
+      memberCount: 6,
+      photoUrl: null,
+      weekPulse: { activeMembers: 4, sharedWorkouts: 18 },
+    },
     groups: [{
       createdAt: "2026-01-01T00:00:00.000Z",
       id: "group-1",
+      memberCount: 6,
       name: "Morning Crew",
       ownerId: "user-maya",
       role: "owner",
