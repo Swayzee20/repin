@@ -6,8 +6,8 @@ import {
   WorkoutRequestError,
 } from "@repin/db";
 import {
-  createWorkoutSchema,
   groupIdSchema,
+  parseWorkoutWrite,
   requiresUpdatedClient,
   workoutSessionIdSchema,
   workoutWriteFields,
@@ -105,7 +105,7 @@ export async function PATCH(request: Request, context: RouteContext) {
     if (!identifiers) return NextResponse.json({ error: "Workout not found" }, { status: 404 });
 
     const body: unknown = await request.json().catch(() => null);
-    const input = createWorkoutSchema.safeParse(body);
+    const input = parseWorkoutWrite(body, new Date());
     if (!input.success) {
       return NextResponse.json(
         { error: "Workout details are invalid", issues: input.error.issues },
